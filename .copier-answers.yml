@@ -1,0 +1,15 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v4.3.8
+_src_path: https://github.com/jupyterlab/extension-template
+author_email: correxit@darian.link
+author_name: A. T. Darian
+has_binder: false
+has_settings: true
+kind: server
+labextension_name: correxit
+project_short_description: correxit is a JupyterLab extension and the third-person singular
+    perfect active indicative conjugation of the Latin verb corrigere
+python_name: correxit
+repository: https://github.com/notebook-link/correxit
+test: true
+
