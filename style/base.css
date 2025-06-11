@@ -1,5 +1,27 @@
-/*
-    See the JupyterLab Developer Guide for useful CSS Patterns:
+.correxit h4 {
+  margin: 5px 0;
+}
 
-    https://jupyterlab.readthedocs.io/en/stable/developer/css.html
-*/
+.correxit > section {
+  padding: 5px;
+}
+
+.correxit .correxit-header .correxit-path,
+.correxit .correxit-header .correxit-digest,
+.correxit .correxit-controls .correxit-notebook-id,
+.correxit .correxit-controls .correxit-cell-id {
+  background-color: var(--jp-layout-color2);
+  font-family: var(--jp-code-font-family);
+  font-size: small;
+  overflow: hidden;
+  margin: 2px 0;
+  padding: 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correxit .correxit-footer .jp-ToolbarButtonComponent {
+  display: block;
+  margin: 0 0 5px;
+  padding: 0 0 7px;
+}
