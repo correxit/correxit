@@ -8,8 +8,8 @@ import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { IDisposable } from '@lumino/disposable';
 import React from 'react';
-import { Controls } from './controls';
 import { Correxit } from '../correxit';
+import { Body } from './body';
 import { Footer } from './footer';
 import { Header } from './header';
 
@@ -57,8 +57,8 @@ export class Sidebar extends ReactWidget {
       <UseSignal key={key} signal={model.metadataChanged} initialSender={model}>
         {() => (
           <>
-            <Header trans={trans} workbook={workbook} />
-            <Controls trans={trans} workbook={workbook} />
+            <Header commands={commands} trans={trans} workbook={workbook} />
+            <Body commands={commands} trans={trans} workbook={workbook} />
             <Footer commands={commands} />
           </>
         )}

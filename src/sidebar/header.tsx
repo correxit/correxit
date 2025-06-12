@@ -1,19 +1,27 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { UseSignal } from '@jupyterlab/ui-components';
+import {
+  CommandToolbarButtonComponent,
+  UseSignal
+} from '@jupyterlab/ui-components';
+import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-
-const BLANKSPACE = String.fromCharCode(8207);
+import { Sidebar } from './sidebar';
 
 export const Header: React.FC<{
+  commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
-}> = ({ trans, workbook }) => {
+}> = ({ commands, trans, workbook }) => {
+  const { convert, lock, unlock } = Sidebar.CommandIDs;
   return (
     <section className="correxit-header">
       <File trans={trans} workbook={workbook} />
+      <CommandToolbarButtonComponent commands={commands} id={convert} />
       <ID trans={trans} workbook={workbook} />
+      <CommandToolbarButtonComponent commands={commands} id={lock} />
+      <CommandToolbarButtonComponent commands={commands} id={unlock} />
       <Key trans={trans} workbook={workbook} />
     </section>
   );
@@ -40,7 +48,10 @@ const ID: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ trans, workbook }) => {
-  const id = workbook.content.model?.getMetadata('correxit')?.id || BLANKSPACE;
+  const id = workbook.content.model?.getMetadata('correxit')?.id;
+  if (!id) {
+    return <></>;
+  }
   return (
     <>
       <h4>{trans.__('Workbook ID:')}</h4>
@@ -55,7 +66,10 @@ const Key: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ trans, workbook }) => {
-  const key = Correxit.Rubric.get(workbook)?.key || BLANKSPACE;
+  const key = Correxit.Rubric.get(workbook)?.key;
+  if (!key) {
+    return <></>;
+  }
   return (
     <>
       <h4>{trans.__('Workbook private key:')}</h4>
