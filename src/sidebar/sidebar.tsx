@@ -4,7 +4,7 @@ import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
-import { ReactWidget } from '@jupyterlab/ui-components';
+import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { IDisposable } from '@lumino/disposable';
 import React from 'react';
@@ -43,20 +43,26 @@ export class Sidebar extends ReactWidget {
   protected commands: CommandRegistry;
 
   protected render() {
-    if (this.workbook === null || this.workbook.content.model === null) {
-      const DISCONNECTED = '[correxit idle, waiting for notebook]';
+    const { commands, trans, workbook } = this;
+    if (workbook === null || workbook.content.model === null) {
       return (
         <section>
-          <small>{this.trans.__(DISCONNECTED)}</small>
+          <small>{trans.__('[correxit idle, waiting for notebook]')}</small>
         </section>
       );
     }
+    const { model } = workbook.content;
+    const key = model.cells.get(0).id;
     return (
-      <>
-        <Header trans={this.trans} workbook={this.workbook} />
-        <Controls trans={this.trans} workbook={this.workbook} />
-        <Footer commands={this.commands} workbook={this.workbook} />
-      </>
+      <UseSignal key={key} signal={model.metadataChanged} initialSender={model}>
+        {() => (
+          <>
+            <Header trans={trans} workbook={workbook} />
+            <Controls trans={trans} workbook={workbook} />
+            <Footer commands={commands} />
+          </>
+        )}
+      </UseSignal>
     );
   }
 
@@ -99,7 +105,10 @@ export namespace Sidebar {
         return false;
       },
       [CommandIDs.reset]: () => {
-        return !!sidebar.workbook?.content.model?.getMetadata('correxit');
+        if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
+          return Correxit.Rubric.get(sidebar.workbook)?.locked === false;
+        }
+        return false;
       },
       [CommandIDs.unlock]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
@@ -112,7 +121,8 @@ export namespace Sidebar {
     return [
       commands.addCommand(CommandIDs.convert, {
         isEnabled: enabled[CommandIDs.convert],
-        label: trans.__('Convert notebook to a workbook'),
+        isVisible: enabled[CommandIDs.convert],
+        label: trans.__('Convert notebook to a workbook...'),
         execute: async () => {
           if (enabled[CommandIDs.convert]()) {
             Correxit.unlock({ trans, workbook: sidebar.workbook! }).catch(noop);
@@ -121,25 +131,31 @@ export namespace Sidebar {
       }),
       commands.addCommand(CommandIDs.lock, {
         isEnabled: enabled[CommandIDs.lock],
-        label: trans.__('Lock workbook'),
+        isVisible: enabled[CommandIDs.lock],
+        label: trans.__('Deactivate grader mode (PGP encrypt)'),
         execute: async () => {
           if (enabled[CommandIDs.lock]()) {
-            Correxit.lock({ workbook: sidebar.workbook! }).catch(noop);
+            return Correxit.lock({ workbook: sidebar.workbook! }).catch(noop);
           }
         }
       }),
       commands.addCommand(CommandIDs.reset, {
         isEnabled: enabled[CommandIDs.reset],
-        label: trans.__('Reset workbook back to a notebook'),
+        isVisible: enabled[CommandIDs.reset],
+        caption: 'Delete correxit metadata, leave notebook cells unmodified',
+        label: trans.__('Revert workbook to notebook (delete metadata)...'),
         execute: async () => {
+          const title = trans.__('Revert notebook');
+          const body = commands.caption(CommandIDs.reset);
           if (enabled[CommandIDs.reset]()) {
-            Correxit.reset({ trans, workbook: sidebar.workbook! }).catch(noop);
+            return Correxit.reset({ body, title, workbook: sidebar.workbook! });
           }
         }
       }),
       commands.addCommand(CommandIDs.unlock, {
         isEnabled: enabled[CommandIDs.unlock],
-        label: trans.__('Unlock workbook'),
+        isVisible: enabled[CommandIDs.unlock],
+        label: trans.__('Switch to grader mode (PGP decrypt)...'),
         execute: async () => {
           if (!enabled[CommandIDs.unlock]()) {
             return;

@@ -1,11 +1,10 @@
 import { InputDialog, showDialog } from '@jupyterlab/apputils';
-import { PathExt } from '@jupyterlab/coreutils';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import { INotebookModel, Notebook } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { UUID } from '@lumino/coreutils';
-import * as pgp from 'openpgp';
 import * as description from './description';
+import { decrypt, encrypt, keygen } from './security';
 
 export namespace Correxit {
   export type Locked = 0;
@@ -112,31 +111,10 @@ export namespace Correxit {
       title: trans.__('Enter a passphrase'),
       label: trans.__('Enter a passphrase for this workbook')
     });
-    if (passphrase.button.accept) {
-      if (passphrase.value) {
-        const hash = await digest(passphrase.value);
-        const salt = await digest('correxit:salt');
-        return await digest(`${hash}:${salt}`);
-      }
+    if (passphrase.button.accept && passphrase.value) {
+      return await keygen(passphrase.value);
     }
     return '';
-  }
-
-  export async function decrypt(encrypted: string, password: string) {
-    const message = await pgp.readMessage({ armoredMessage: encrypted });
-    return (await pgp.decrypt({ message, passwords: [password] })).data;
-  }
-
-  export async function digest(text: string) {
-    const encoded = new TextEncoder().encode(text);
-    const hash = await crypto.subtle.digest('SHA-256', encoded);
-    const hexadecimal = (x: number) => x.toString(16).padStart(2, '0');
-    return Array.from(new Uint8Array(hash)).map(hexadecimal).join('');
-  }
-
-  export async function encrypt(text: string, password: string) {
-    const message = await pgp.createMessage({ text });
-    return await pgp.encrypt({ message, passwords: [password] });
   }
 
   const CREATE_NEW = new Error('no correxit data available, create new');
@@ -172,16 +150,14 @@ export namespace Correxit {
     return Rubric.normalize(rubric);
   }
 
-  export async function reset({ quiet, trans, workbook } : {
+  export async function reset({ body, quiet, title, workbook } : {
+    body?: string,
     quiet?: boolean;
-    trans: IRenderMime.TranslationBundle;
+    title?: string;
     workbook: Workbook;
   }) {
     if (quiet !== true) {
-      const prompt = await showDialog({
-        title: trans.__('Reset workbook'),
-        body: trans.__('Reset workbook back to a notebook')
-      });
+      const prompt = await showDialog({ title, body });
       if (prompt.button.accept === false) {
         return;
       }
@@ -191,27 +167,14 @@ export namespace Correxit {
     await workbook.context.save();
   }
 
-  export async function save({ key, quiet, rubric, trans, workbook } : {
+  export async function save({ key, rubric, trans, workbook } : {
     key: string;
-    quiet?: boolean;
     trans: IRenderMime.TranslationBundle;
     rubric: Rubric<Locked | Unlocked> | null,
     workbook: Workbook;
   }): Promise<void> {
+    rubric = rubric || Rubric.create(key);
     const { content: { model }, context } = workbook;
-    if (rubric === null) {
-      if (quiet !== true) {
-        const file = PathExt.basename(workbook.context.path);
-        const prompt = await showDialog({
-          title: trans.__('Turn this notebook into a workbook?'),
-          body: trans.__('Turn this notebook (%1) into a workbook?', file)
-        });
-        if (prompt.button.accept === false) {
-          return;
-        }
-      }
-      rubric = Rubric.create(key);
-    }
     const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
     model!.setMetadata('correxit', locked);
     await context.save();
@@ -231,11 +194,11 @@ export namespace Correxit {
       const rubric = await open(workbook);
       const unlocked = await Rubric.unlock(rubric, key);
       Private.set(workbook, unlocked);
-      await save({ key, quiet: true, rubric: unlocked, trans, workbook });
+      await save({ key, rubric: unlocked, trans, workbook });
       return unlocked;
     } catch (error) {
       if (error === CREATE_NEW) {
-        await save({ key, quiet: true, rubric: null, trans, workbook });
+        await save({ key, rubric: null, trans, workbook });
         return unlock({ key, trans, workbook });
       }
       throw error;

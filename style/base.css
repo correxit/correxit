@@ -25,3 +25,7 @@
   margin: 0 0 5px;
   padding: 0 0 7px;
 }
+
+.correxit .correxit-footer .jp-ToolbarButtonComponent.lm-mod-hidden {
+  display: none;
+}
