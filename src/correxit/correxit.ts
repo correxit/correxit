@@ -2,18 +2,14 @@ import { InputDialog, showDialog } from '@jupyterlab/apputils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import * as description from './description';
 import {
-  type Locked as LOCKED,
-  type Unlocked as UNLOCKED,
+  type Locked,
   Rubric as RUBRIC,
-  type Workbook as WORKBOOK
+  type Workbook as WORKBOOK,
+  type Unlocked,
 } from './rubric';
 import { keygen } from './security';
 
 export namespace Correxit {
-  export type Locked = LOCKED;
-
-  export type Unlocked = UNLOCKED;
-
   export import Rubric = RUBRIC;
 
   export type Workbook = WORKBOOK;
@@ -59,33 +55,32 @@ export namespace Correxit {
   }
 
   export async function reset({ body, quiet, title, workbook } : {
-    body?: string,
+    body?: string;
     quiet?: boolean;
     title?: string;
     workbook: Workbook;
   }) {
-    if (quiet !== true) {
-      const prompt = await showDialog({ title, body });
-      if (prompt.button.accept === false) {
+    if (!quiet && body || title) {
+      const { button: { accept } } = await showDialog({ body, title });
+      if (!accept) {
         return;
       }
     }
     Rubric.clear(workbook);
     workbook.content.model?.deleteMetadata('correxit');
-    await workbook.context.save();
+    return workbook.context.save();
   }
 
-  export async function save({ key, rubric, trans, workbook } : {
+  export async function save({ key, rubric, workbook } : {
     key: string;
-    trans: IRenderMime.TranslationBundle;
-    rubric: Rubric<Locked | Unlocked> | null,
+    rubric: Rubric<Locked | Unlocked> | null;
     workbook: Workbook;
   }): Promise<void> {
     rubric = rubric || Rubric.create(key);
     const { content: { model }, context } = workbook;
     const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
-    model!.setMetadata('correxit', locked);
-    await context.save();
+    model?.setMetadata('correxit', locked);
+    return context.save();
   }
 
 
@@ -94,7 +89,10 @@ export namespace Correxit {
     trans: IRenderMime.TranslationBundle;
     workbook: Workbook;
   }): Promise<Rubric<Unlocked> | null> {
-    key = key ?? await Private.prompt({ trans });
+    key = key ?? await Private.prompt({
+      title: trans.__('Enter a passphrase'),
+      label: trans.__('Enter a passphrase for this workbook')
+    });
     if (key.length !== 64) {
       throw new Error('cannot unlock a workbook without a valid key');
     }
@@ -102,11 +100,11 @@ export namespace Correxit {
       const rubric = await open(workbook);
       const unlocked = await Rubric.unlock(rubric, key);
       Rubric.set(workbook, unlocked);
-      await save({ key, rubric: unlocked, trans, workbook });
+      await save({ key, rubric: unlocked, workbook });
       return unlocked;
     } catch (error) {
       if (error === Private.CREATE_NEW) {
-        await save({ key, rubric: null, trans, workbook });
+        await save({ key, rubric: null, workbook });
         return unlock({ key, trans, workbook });
       }
       throw error;
@@ -117,13 +115,9 @@ export namespace Correxit {
 namespace Private {
   export const CREATE_NEW = new Error('no correxit metadata, create new');
 
-  export const prompt = async ({ trans }: {
-    trans: IRenderMime.TranslationBundle
+  export const prompt = async ({ label, title }: { label?: string; title: string;
   }) => {
-    const passphrase = await InputDialog.getText({
-      title: trans.__('Enter a passphrase'),
-      label: trans.__('Enter a passphrase for this workbook')
-    });
+    const passphrase = await InputDialog.getText({ label, title });
     if (passphrase.button.accept && passphrase.value) {
       return await keygen(passphrase.value);
     }

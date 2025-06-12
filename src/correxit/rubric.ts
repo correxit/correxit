@@ -8,19 +8,20 @@ export type Locked = 0 & Record<string, never>;
 
 export type Unlocked = 1 & Record<string, never>;
 
-export type Rubric<T extends Locked | Unlocked> = {
+export type Rubric<Secure extends Locked | Unlocked> = {
   readonly id: string;
 
-  readonly key: T extends Locked ? null : string;
+  readonly key: Secure extends Locked ? null : string;
 
-  readonly locked: T extends Locked ? true : false;
+  readonly locked: Secure extends Locked ? true : false;
 
-  readonly secret: T extends Locked ? string : Rubric.Section;
+  readonly secret: Secure extends Locked ? string : Rubric.Section;
 
   readonly shared: Rubric.Section;
 };
 
 export namespace Rubric {
+
   export type Section = { cells: { [id: string]: Workbook.Cell; }; };
 
   export const clear = (key: Workbook) => Private.rubrics.delete(key);
