@@ -11,7 +11,7 @@ export const Footer: React.FC<{
   commands: CommandRegistry;
   workbook: Correxit.Workbook;
 }> = ({ commands, workbook }) => {
-  const { convert, reset, unlock } = Sidebar.CommandIDs;
+  const { convert, lock, reset, unlock } = Sidebar.CommandIDs;
   const { model } = workbook.content;
   if (model === null) {
     return <section></section>;
@@ -22,8 +22,9 @@ export const Footer: React.FC<{
       {() => (
         <section className="correxit-footer">
           <CommandToolbarButtonComponent commands={commands} id={convert} />
-          <CommandToolbarButtonComponent commands={commands} id={reset} />
+          <CommandToolbarButtonComponent commands={commands} id={lock} />
           <CommandToolbarButtonComponent commands={commands} id={unlock} />
+          <CommandToolbarButtonComponent commands={commands} id={reset} />
         </section>
       )}
     </UseSignal>

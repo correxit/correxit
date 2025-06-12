@@ -1,5 +1,6 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { showErrorMessage } from '@jupyterlab/apputils';
+import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
@@ -72,6 +73,7 @@ export namespace Sidebar {
 
   export namespace CommandIDs {
     export const convert = 'correxit:convert';
+    export const lock = 'correxit:lock';
     export const reset = 'correxit:reset';
     export const unlock = 'correxit:unlock';
   }
@@ -90,12 +92,18 @@ export namespace Sidebar {
         const model = sidebar.workbook?.content.model;
         return !!(model && !model.getMetadata('correxit'));
       },
+      [CommandIDs.lock]: () => {
+        if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
+          return Correxit.Rubric.get(sidebar.workbook)?.locked === false;
+        }
+        return false;
+      },
       [CommandIDs.reset]: () => {
         return !!sidebar.workbook?.content.model?.getMetadata('correxit');
       },
       [CommandIDs.unlock]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          const rubric = Correxit.Rubric.get(sidebar.workbook!);
+          const rubric = Correxit.Rubric.get(sidebar.workbook);
           return rubric ? rubric.locked : true;
         }
         return false;
@@ -108,6 +116,15 @@ export namespace Sidebar {
         execute: async () => {
           if (enabled[CommandIDs.convert]()) {
             Correxit.unlock({ trans, workbook: sidebar.workbook! }).catch(noop);
+          }
+        }
+      }),
+      commands.addCommand(CommandIDs.lock, {
+        isEnabled: enabled[CommandIDs.lock],
+        label: trans.__('Lock workbook'),
+        execute: async () => {
+          if (enabled[CommandIDs.lock]()) {
+            Correxit.lock({ workbook: sidebar.workbook! }).catch(noop);
           }
         }
       }),
@@ -130,9 +147,10 @@ export namespace Sidebar {
           try {
             await Correxit.unlock({ trans, workbook: sidebar.workbook! });
           } catch (error) {
+            const file = PathExt.basename(sidebar.workbook!.context.path);
             void showErrorMessage(
               trans.__('Could not unlock.'),
-              trans.__('Correxit was unable to unlock a workbook.')
+              trans.__('Correxit could not unlock this workbook (%1)', file)
             );
           }
         }

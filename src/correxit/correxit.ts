@@ -8,94 +8,88 @@ import * as pgp from 'openpgp';
 import * as description from './description';
 
 export namespace Correxit {
-    export type Locked = 0;
+  export type Locked = 0;
 
-    export type Unlocked = 1;
+  export type Unlocked = 1;
 
-    export type Rubric<T extends Locked | Unlocked = Locked | Unlocked> = {
-      readonly id: string;
+  export type Rubric<T extends Locked | Unlocked> = {
+    readonly id: string;
 
-      readonly key: T extends Locked ? null : string;
+    readonly key: T extends Locked ? null : string;
 
-      readonly locked: T extends Locked ? true : false;
+    readonly locked: T extends Locked ? true : false;
 
-      readonly secret: T extends Locked ? string : Rubric.Section;
+    readonly secret: T extends Locked ? string : Rubric.Section;
 
-      readonly shared: Rubric.Section;
-    };
+    readonly shared: Rubric.Section;
+  };
 
-    export namespace Rubric {
-      export type Section = {
-        cells: Record<string, never>;
+  export namespace Rubric {
+    export type Section = { cells: Record<string, never>; };
+
+    export function create(key: string): Rubric<Unlocked> {
+      return {
+        id: `wb-${UUID.uuid4()}`, key,
+        locked: false,
+        secret: { cells: {} },
+        shared: { cells: {} }
       };
-
-      export function create(key: string): Rubric<Unlocked> {
-        return {
-          id: `wb-${UUID.uuid4()}`, key,
-          locked: false,
-          secret: { cells: {} },
-          shared: { cells: {} }
-        };
-      }
-
-      export function get(workbook: Workbook): Rubric | null {
-        return Private.get(workbook) || null;
-      }
-
-      export function has(workbook: Workbook) {
-        return Private.has(workbook);
-      }
-
-      export async function lock(
-        rubric: Rubric<Unlocked>,
-        key: string
-      ): Promise<Rubric<Locked>> {
-        if (key.length !== 64) {
-          throw new Error('cannot unlock a workbook without a valid key');
-        }
-        return {
-          id: rubric.id,
-          key: null,
-          locked: true,
-          secret: await encrypt(JSON.stringify(rubric.secret), key),
-          shared: rubric.shared
-        };
-      }
-
-      export function normalize(
-        { id, key, locked, secret, shared }: Partial<Rubric<Locked>>
-      ): Rubric<Locked> {
-        if (!id) {
-          throw new Error('invalid rubric, missing id');
-        }
-        if (key !== null) {
-          throw new Error('invalid rubric, missing null key');
-        }
-        if (locked !== true) {
-          throw new Error('invalid rubric, must be locked');
-        }
-        if (typeof secret !== 'string' || secret.length === 0) {
-          throw new Error('invalid rubric, missing secret section');
-        }
-        if (!(shared && shared.cells)) {
-          throw new Error('invalid rubric, invalid shared section')
-        }
-        return { id, key, locked, secret, shared };
-      }
-
-      export async function unlock(
-        rubric: Rubric<Locked>,
-        key: string
-      ): Promise<Rubric<Unlocked>> {
-        return {
-          id: rubric.id,
-          key,
-          locked: false,
-          secret: JSON.parse(await decrypt(rubric.secret as string, key)),
-          shared: rubric.shared
-        };
-      }
     }
+
+    export function get(workbook: Workbook): Rubric<Locked | Unlocked> | null {
+      return Private.get(workbook) || null;
+    }
+
+    export function has(workbook: Workbook) {
+      return Private.has(workbook);
+    }
+
+    export async function lock(
+      rubric: Rubric<Unlocked>
+    ): Promise<Rubric<Locked>> {
+      const { id, key, secret, shared } = rubric;
+      return {
+        id, key: null,
+        locked: true,
+        secret: await encrypt(JSON.stringify(secret), key),
+        shared
+      };
+    }
+
+    export function normalize(
+      { id, key, locked, secret, shared }: Partial<Rubric<Locked>>
+    ): Rubric<Locked> {
+      if (!id) {
+        throw new Error('invalid rubric, missing id');
+      }
+      if (key !== null) {
+        throw new Error('invalid rubric, missing null key');
+      }
+      if (locked !== true) {
+        throw new Error('invalid rubric, must be locked');
+      }
+      if (typeof secret !== 'string' || secret.length === 0) {
+        throw new Error('invalid rubric, missing secret section');
+      }
+      if (!(shared && shared.cells)) {
+        throw new Error('invalid rubric, invalid shared section')
+      }
+      return { id, key, locked, secret, shared };
+    }
+
+    export async function unlock(
+      rubric: Rubric<Locked>,
+      key: string
+    ): Promise<Rubric<Unlocked>> {
+      return {
+        id: rubric.id,
+        key,
+        locked: false,
+        secret: JSON.parse(await decrypt(rubric.secret as string, key)),
+        shared: rubric.shared
+      };
+    }
+  }
 
   export type Workbook = {
     readonly content: Notebook;
@@ -147,7 +141,22 @@ export namespace Correxit {
 
   const CREATE_NEW = new Error('no correxit data available, create new');
 
-  export async function open(workbook: Workbook): Promise<Rubric> {
+  export async function lock({ workbook }: {
+    workbook: Workbook;
+  }): Promise<void> {
+    const rubric = Private.get(workbook);
+    if (!rubric || !workbook.content.model) {
+      return;
+    }
+    const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
+    Private.set(workbook, locked);
+    workbook.content.model.setMetadata('correxit', locked);
+    return workbook.context.save();
+  }
+
+  export async function open(
+    workbook: Workbook
+  ): Promise<Rubric<Locked | Unlocked>> {
     if (Private.has(workbook)) {
       return Private.get(workbook)!;
     }
@@ -186,28 +195,28 @@ export namespace Correxit {
     key: string;
     quiet?: boolean;
     trans: IRenderMime.TranslationBundle;
-    rubric: Rubric | null,
+    rubric: Rubric<Locked | Unlocked> | null,
     workbook: Workbook;
-  }): Promise<Rubric<Unlocked> | null> {
+  }): Promise<void> {
     const { content: { model }, context } = workbook;
     if (rubric === null) {
       if (quiet !== true) {
-        const path = PathExt.basename(workbook.context.path);
+        const file = PathExt.basename(workbook.context.path);
         const prompt = await showDialog({
           title: trans.__('Turn this notebook into a workbook?'),
-          body: trans.__('Turn this notebook (%1) into a workbook?', path)
+          body: trans.__('Turn this notebook (%1) into a workbook?', file)
         });
         if (prompt.button.accept === false) {
-          return null;
+          return;
         }
       }
       rubric = Rubric.create(key);
     }
-    rubric = await Rubric.lock(rubric, key);
-    model!.setMetadata('correxit', rubric);
+    const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
+    model!.setMetadata('correxit', locked);
     await context.save();
-    return rubric;
   }
+
 
   export async function unlock({ key, trans, workbook }: {
     key?: string;
@@ -222,10 +231,12 @@ export namespace Correxit {
       const rubric = await open(workbook);
       const unlocked = await Rubric.unlock(rubric, key);
       Private.set(workbook, unlocked);
-      return save({ key, quiet: true, rubric: unlocked, trans, workbook });
+      await save({ key, quiet: true, rubric: unlocked, trans, workbook });
+      return unlocked;
     } catch (error) {
       if (error === CREATE_NEW) {
-        return save({ key, quiet: true, rubric: null, trans, workbook });
+        await save({ key, quiet: true, rubric: null, trans, workbook });
+        return unlock({ key, trans, workbook });
       }
       throw error;
     }
@@ -233,7 +244,10 @@ export namespace Correxit {
 }
 
 namespace Private {
-  const rubrics = new WeakMap<Correxit.Workbook, Correxit.Rubric>();
+  const rubrics = new WeakMap<
+    Correxit.Workbook,
+    Correxit.Rubric<Correxit.Locked | Correxit.Unlocked>
+  >();
 
   export const clear = (key: Correxit.Workbook) => rubrics.delete(key);
 
@@ -243,6 +257,6 @@ namespace Private {
 
   export const set = (
     index: Correxit.Workbook,
-    value: Correxit.Rubric
+    value: Correxit.Rubric<Correxit.Locked | Correxit.Unlocked>
   ) => rubrics.set(index, value);
 }
