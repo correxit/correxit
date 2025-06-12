@@ -142,10 +142,10 @@ export namespace Sidebar {
       commands.addCommand(CommandIDs.reset, {
         isEnabled: enabled[CommandIDs.reset],
         isVisible: enabled[CommandIDs.reset],
-        caption: 'Delete correxit metadata, leave notebook cells unmodified',
-        label: trans.__('Revert workbook to notebook (delete metadata)...'),
+        caption: 'Delete workbook metadata, leave notebook cells unmodified',
+        label: trans.__('Revert to notebook (delete workbook metadata)...'),
         execute: async () => {
-          const title = trans.__('Revert notebook');
+          const title = trans.__('Revert to notebook');
           const body = commands.caption(CommandIDs.reset);
           if (enabled[CommandIDs.reset]()) {
             return Correxit.reset({ body, title, workbook: sidebar.workbook! });
@@ -155,7 +155,7 @@ export namespace Sidebar {
       commands.addCommand(CommandIDs.unlock, {
         isEnabled: enabled[CommandIDs.unlock],
         isVisible: enabled[CommandIDs.unlock],
-        label: trans.__('Switch to grader mode (PGP decrypt)...'),
+        label: trans.__('Activate grader mode (PGP decrypt)...'),
         execute: async () => {
           if (!enabled[CommandIDs.unlock]()) {
             return;
