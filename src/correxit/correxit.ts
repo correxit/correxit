@@ -27,21 +27,6 @@ export namespace Correxit {
 
   export const SIDEBAR = 'correxit:sidebar';
 
-  const prompt = async ({ trans }: {
-    trans: IRenderMime.TranslationBundle
-  }) => {
-    const passphrase = await InputDialog.getText({
-      title: trans.__('Enter a passphrase'),
-      label: trans.__('Enter a passphrase for this workbook')
-    });
-    if (passphrase.button.accept && passphrase.value) {
-      return await keygen(passphrase.value);
-    }
-    return '';
-  }
-
-  const CREATE_NEW = new Error('no correxit data available, create new');
-
   export async function lock({ workbook }: {
     workbook: Workbook;
   }): Promise<void> {
@@ -68,7 +53,7 @@ export namespace Correxit {
     const rubric: Rubric<Locked> | null =
       workbook.content.model.getMetadata('correxit') || null;
     if (rubric === null) {
-      throw CREATE_NEW;
+      throw Private.CREATE_NEW;
     }
     return Rubric.normalize(rubric);
   }
@@ -109,7 +94,7 @@ export namespace Correxit {
     trans: IRenderMime.TranslationBundle;
     workbook: Workbook;
   }): Promise<Rubric<Unlocked> | null> {
-    key = key ?? await prompt({ trans });
+    key = key ?? await Private.prompt({ trans });
     if (key.length !== 64) {
       throw new Error('cannot unlock a workbook without a valid key');
     }
@@ -120,11 +105,28 @@ export namespace Correxit {
       await save({ key, rubric: unlocked, trans, workbook });
       return unlocked;
     } catch (error) {
-      if (error === CREATE_NEW) {
+      if (error === Private.CREATE_NEW) {
         await save({ key, rubric: null, trans, workbook });
         return unlock({ key, trans, workbook });
       }
       throw error;
     }
+  }
+}
+
+namespace Private {
+  export const CREATE_NEW = new Error('no correxit metadata, create new');
+
+  export const prompt = async ({ trans }: {
+    trans: IRenderMime.TranslationBundle
+  }) => {
+    const passphrase = await InputDialog.getText({
+      title: trans.__('Enter a passphrase'),
+      label: trans.__('Enter a passphrase for this workbook')
+    });
+    if (passphrase.button.accept && passphrase.value) {
+      return await keygen(passphrase.value);
+    }
+    return '';
   }
 }

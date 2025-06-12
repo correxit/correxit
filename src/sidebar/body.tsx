@@ -4,7 +4,7 @@ import { UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-import { Rubric, Workbook } from '../correxit/rubric';
+import { Workbook } from '../correxit/rubric';
 
 export const Body: React.FC<{
   commands: CommandRegistry;
@@ -23,7 +23,7 @@ const CellControls: React.FC<{
   trans: IRenderMime.TranslationBundle;
 }> = ({ workbook, trans }) => {
   const { activeCell, activeCellChanged, id, model } = workbook.content;
-  if (!model || !activeCell || !Rubric.get(workbook)) {
+  if (!model || !activeCell || !model.getMetadata('correxit')) {
     return <></>;
   }
   return (

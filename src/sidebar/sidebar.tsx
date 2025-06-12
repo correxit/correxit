@@ -132,7 +132,7 @@ export namespace Sidebar {
       commands.addCommand(CommandIDs.lock, {
         isEnabled: enabled[CommandIDs.lock],
         isVisible: enabled[CommandIDs.lock],
-        label: trans.__('Deactivate grader mode (PGP encrypt)'),
+        label: trans.__('Lock grader mode (PGP encrypt)'),
         execute: async () => {
           if (enabled[CommandIDs.lock]()) {
             return Correxit.lock({ workbook: sidebar.workbook! }).catch(noop);
@@ -155,7 +155,7 @@ export namespace Sidebar {
       commands.addCommand(CommandIDs.unlock, {
         isEnabled: enabled[CommandIDs.unlock],
         isVisible: enabled[CommandIDs.unlock],
-        label: trans.__('Activate grader mode (PGP decrypt)...'),
+        label: trans.__('Unlock grader mode (PGP decrypt)...'),
         execute: async () => {
           if (!enabled[CommandIDs.unlock]()) {
             return;

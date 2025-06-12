@@ -34,10 +34,12 @@ const File: React.FC<{
   const { context } = workbook;
   return (
     <>
-      <h4>{trans.__('Workbook file:')}</h4>
+      <h4>{trans.__('Notebook file:')}</h4>
       <UseSignal signal={context.pathChanged} initialSender={context}>
         {() => (
-          <div className="correxit-path">{PathExt.basename(context.path)}</div>
+          <div className="correxit-basename">
+            {PathExt.basename(context.path)}
+          </div>
         )}
       </UseSignal>
     </>

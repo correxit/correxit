@@ -15,10 +15,9 @@
   flex: 1;
 }
 
-.correxit .correxit-header .correxit-path,
-.correxit .correxit-header .correxit-digest,
-.correxit .correxit-controls .correxit-notebook-id,
-.correxit .correxit-controls .correxit-cell-id {
+.correxit .correxit-cell-id,
+.correxit .correxit-digest,
+.correxit .correxit-basename {
   background-color: var(--jp-layout-color2);
   font-family: var(--jp-code-font-family);
   font-size: small;
@@ -29,16 +28,12 @@
   white-space: nowrap;
 }
 
-.correxit .correxit-header .jp-ToolbarButtonComponent,
-.correxit .correxit-body .jp-ToolbarButtonComponent,
-.correxit .correxit-footer .jp-ToolbarButtonComponent {
+.correxit .jp-ToolbarButtonComponent {
   display: block;
   margin: 0 0 5px;
   padding: 0 0 7px;
 }
 
-.correxit .correxit-header .jp-ToolbarButtonComponent.lm-mod-hidden,
-.correxit .correxit-body .jp-ToolbarButtonComponent.lm-mod-hidden,
-.correxit .correxit-footer .jp-ToolbarButtonComponent.lm-mod-hidden {
+.correxit .jp-ToolbarButtonComponent.lm-mod-hidden {
   display: none;
 }
