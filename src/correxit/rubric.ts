@@ -1,4 +1,5 @@
 import { DocumentRegistry } from '@jupyterlab/docregistry';
+import { CellType } from '@jupyterlab/nbformat';
 import { INotebookModel, Notebook } from '@jupyterlab/notebook';
 import { UUID } from '@lumino/coreutils';
 import { decrypt, encrypt } from './security';
@@ -20,7 +21,7 @@ export type Rubric<T extends Locked | Unlocked> = {
 };
 
 export namespace Rubric {
-  export type Section = { cells: Record<string, never>; };
+  export type Section = { cells: { [id: string]: Workbook.Cell; }; };
 
   export const clear = (key: Workbook) => Private.rubrics.delete(key);
 
@@ -93,6 +94,10 @@ export type Workbook = {
   readonly content: Notebook;
   readonly context: DocumentRegistry.IContext<INotebookModel>;
 };
+
+export namespace Workbook {
+  export type Cell = { type: CellType; }
+}
 
 namespace Private {
   export const rubrics = new WeakMap<Workbook, Rubric<Locked | Unlocked>>();

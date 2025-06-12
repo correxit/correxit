@@ -4468,6 +4468,7 @@ __metadata:
     "@jupyterlab/cells": ^4.4.3
     "@jupyterlab/coreutils": ^6.4.3
     "@jupyterlab/docregistry": ^4.4.3
+    "@jupyterlab/nbformat": ^4.4.3
     "@jupyterlab/notebook": ^4.4.2
     "@jupyterlab/rendermime": ^4.4.3
     "@jupyterlab/services": ^7.0.0
