@@ -4,32 +4,22 @@ import { UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-import { Workbook } from '../correxit/rubric';
 
 export const Body: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ trans, workbook }) => {
-  return (
-    <section className="correxit-body">
-      <CellControls workbook={workbook} trans={trans} />
-    </section>
-  );
-};
-
-const CellControls: React.FC<{
-  workbook: Workbook;
-  trans: IRenderMime.TranslationBundle;
-}> = ({ workbook, trans }) => {
   const { activeCell, activeCellChanged, id, model } = workbook.content;
   if (!model || !activeCell || !model.getMetadata('correxit')) {
-    return <></>;
+    return <section className="correxit-body"></section>;
   }
   return (
-    <UseSignal initialArgs={activeCell} key={id} signal={activeCellChanged}>
-      {(_, cell) => (cell ? <ActiveCell cell={cell} trans={trans} /> : <></>)}
-    </UseSignal>
+    <section className="correxit-body">
+      <UseSignal initialArgs={activeCell} key={id} signal={activeCellChanged}>
+        {(_, cell) => (cell ? <ActiveCell cell={cell} trans={trans} /> : <></>)}
+      </UseSignal>
+    </section>
   );
 };
 

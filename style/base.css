@@ -34,6 +34,10 @@
   padding: 0 0 7px;
 }
 
+.correxit .jp-ToolbarButtonComponent svg {
+  margin-right: 5px;
+}
+
 .correxit .jp-ToolbarButtonComponent.lm-mod-hidden {
   display: none;
 }

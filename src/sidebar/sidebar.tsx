@@ -1,14 +1,19 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
-import { showErrorMessage } from '@jupyterlab/apputils';
+import { InputDialog, showErrorMessage } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
-import { lockIcon, ReactWidget, UseSignal } from '@jupyterlab/ui-components';
+import {
+  lockIcon,
+  notebookIcon,
+  ReactWidget,
+  UseSignal
+} from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { IDisposable } from '@lumino/disposable';
 import React from 'react';
 import { Correxit } from '../correxit';
+import { keygen } from '../correxit/security';
 import { Body } from './body';
 import { Footer } from './footer';
 import { Header } from './header';
@@ -90,7 +95,7 @@ export namespace Sidebar {
   }: {
     commands: CommandRegistry;
     sidebar: Sidebar;
-  }): IDisposable[] {
+  }) {
     const { trans } = sidebar;
     const noop = () => undefined;
     const enabled = {
@@ -124,8 +129,16 @@ export namespace Sidebar {
         isVisible: enabled[CommandIDs.convert],
         label: trans.__('Convert notebook to a workbook...'),
         execute: async () => {
-          if (enabled[CommandIDs.convert]()) {
-            Correxit.unlock({ trans, workbook: sidebar.workbook! }).catch(noop);
+          if (!enabled[CommandIDs.convert]()) {
+            return;
+          }
+          const workbook = sidebar.workbook!;
+          const key = await Private.prompt({
+            title: trans.__('Enter a passphrase'),
+            label: trans.__('Enter a passphrase for this workbook')
+          });
+          if (key) {
+            return Correxit.unlock({ key, trans, workbook });
           }
         }
       }),
@@ -141,6 +154,7 @@ export namespace Sidebar {
         }
       }),
       commands.addCommand(CommandIDs.reset, {
+        icon: notebookIcon,
         isEnabled: enabled[CommandIDs.reset],
         isVisible: enabled[CommandIDs.reset],
         caption: 'Delete workbook metadata, leave notebook cells unmodified',
@@ -163,7 +177,14 @@ export namespace Sidebar {
             return;
           }
           try {
-            await Correxit.unlock({ trans, workbook: sidebar.workbook! });
+            const workbook = sidebar.workbook!;
+            const key = await Private.prompt({
+              title: trans.__('Enter a passphrase to unlock'),
+              label: trans.__('Enter a passphrase to unlock this workbook')
+            });
+            if (key) {
+              await Correxit.unlock({ key, trans, workbook });
+            }
           } catch (error) {
             const file = PathExt.basename(sidebar.workbook!.context.path);
             void showErrorMessage(
@@ -175,4 +196,14 @@ export namespace Sidebar {
       })
     ];
   }
+}
+
+namespace Private {
+  export const prompt = async ({ label, title }: InputDialog.ITextOptions) => {
+    const passphrase = await InputDialog.getText({ label, title });
+    if (passphrase.button.accept && passphrase.value) {
+      return await keygen(passphrase.value);
+    }
+    return '';
+  };
 }

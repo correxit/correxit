@@ -1,4 +1,4 @@
-import { InputDialog, showDialog } from '@jupyterlab/apputils';
+import { showDialog } from '@jupyterlab/apputils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import * as description from './description';
 import {
@@ -7,7 +7,6 @@ import {
   type Workbook as WORKBOOK,
   type Unlocked,
 } from './rubric';
-import { keygen } from './security';
 
 export namespace Correxit {
   export import Rubric = RUBRIC;
@@ -22,6 +21,18 @@ export namespace Correxit {
   export const PLUGIN = 'correxit:plugin';
 
   export const SIDEBAR = 'correxit:sidebar';
+
+
+  export async function convert({ key, trans, workbook }: {
+    key: string;
+    trans: IRenderMime.TranslationBundle;
+    workbook: Workbook;
+  }) {
+    if (key.length !== 64) {
+      throw new Error('cannot unlock a workbook without a valid key');
+    }
+    return unlock({ key, trans, workbook });
+  }
 
   export async function lock({ workbook }: {
     workbook: Workbook;
@@ -83,16 +94,11 @@ export namespace Correxit {
     return context.save();
   }
 
-
   export async function unlock({ key, trans, workbook }: {
-    key?: string;
+    key: string;
     trans: IRenderMime.TranslationBundle;
     workbook: Workbook;
   }): Promise<Rubric<Unlocked> | null> {
-    key = key ?? await Private.prompt({
-      title: trans.__('Enter a passphrase'),
-      label: trans.__('Enter a passphrase for this workbook')
-    });
     if (key.length !== 64) {
       throw new Error('cannot unlock a workbook without a valid key');
     }
@@ -114,13 +120,4 @@ export namespace Correxit {
 
 namespace Private {
   export const CREATE_NEW = new Error('no correxit metadata, create new');
-
-  export const prompt = async ({ label, title }: { label?: string; title: string;
-  }) => {
-    const passphrase = await InputDialog.getText({ label, title });
-    if (passphrase.button.accept && passphrase.value) {
-      return await keygen(passphrase.value);
-    }
-    return '';
-  }
 }

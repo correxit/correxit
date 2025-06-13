@@ -1,4 +1,4 @@
-import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
+import { CommandToolbarButtonComponent as CommandButton } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Sidebar } from './sidebar';
@@ -9,7 +9,7 @@ export const Footer: React.FC<{
   const { reset } = Sidebar.CommandIDs;
   return (
     <section className="correxit-footer">
-      <CommandToolbarButtonComponent commands={commands} id={reset} />
+      <CommandButton commands={commands} id={reset} />
     </section>
   );
 };
