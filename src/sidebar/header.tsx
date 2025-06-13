@@ -31,18 +31,21 @@ const File: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ trans, workbook }) => {
-  const { context } = workbook;
+  const { content, context } = workbook;
+  const heading = content.model?.getMetadata('correxit')
+    ? trans.__('Workbook file:')
+    : trans.__('Notebook file:');
   return (
-    <>
-      <h4>{trans.__('Notebook file:')}</h4>
-      <UseSignal signal={context.pathChanged} initialSender={context}>
-        {() => (
+    <UseSignal signal={context.pathChanged} initialSender={context}>
+      {() => (
+        <>
+          <h4>{heading}</h4>
           <div className="correxit-basename">
             {PathExt.basename(context.path)}
           </div>
-        )}
-      </UseSignal>
-    </>
+        </>
+      )}
+    </UseSignal>
   );
 };
 
