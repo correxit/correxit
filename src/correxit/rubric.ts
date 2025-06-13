@@ -20,17 +20,6 @@ export namespace Rubric {
 
   export type Section = { cells: { [id: string]: Workbook.Cell; }; };
 
-  export const clear = (key: Workbook) => Private.rubrics.delete(key);
-
-  export const get = (key: Workbook) => Private.rubrics.get(key);
-
-  export const has = (key: Workbook) => Private.rubrics.has(key);
-
-  export const set = (
-    workbook: Workbook,
-    rubric: Rubric<'locked'> | Rubric<'unlocked'>
-  ) => Private.rubrics.set(workbook, rubric);
-
   export function create(key: string): Rubric<'unlocked'> {
     return {
       id: `wb-${UUID.uuid4()}`, key,
@@ -53,8 +42,9 @@ export namespace Rubric {
   }
 
   export function normalize(
-    { id, key, locked, secret, shared }: Partial<Rubric<'locked'>>
+    rubric: Partial<Rubric<'locked'>>
   ): Rubric<'locked'> {
+    const { id, key, locked, secret, shared } = rubric;
     if (!id) {
       throw new Error('invalid rubric, missing id');
     }
@@ -94,11 +84,4 @@ export type Workbook = {
 
 export namespace Workbook {
   export type Cell = { type: CellType; }
-}
-
-namespace Private {
-  export const rubrics = new WeakMap<
-    Workbook,
-    Rubric<'locked'> | Rubric<'unlocked'>
-  >();
 }

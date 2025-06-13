@@ -15,10 +15,11 @@ export namespace Correxit {
 
   export const SIDEBAR = 'correxit:sidebar';
 
-  export async function convert({ key, workbook }: {
-    key: string;
-    workbook: Workbook;
-  }) {
+  export function cached(workbook: Workbook) {
+    return Private.rubrics.get(workbook);
+  }
+
+  export async function convert(workbook: Workbook, key: string) {
     if (key.length !== 64) {
       throw new Error('cannot unlock a workbook without a valid key');
     }
@@ -26,27 +27,25 @@ export namespace Correxit {
       const opened = await open(workbook);
       const unlocked = opened.locked && await Rubric.unlock(opened, key);
       const rubric = unlocked || opened;
-      Rubric.set(workbook, rubric);
-      await save({ key, rubric, workbook });
+      Private.rubrics.set(workbook, rubric);
+      await save(workbook, key, rubric);
       return rubric;
     } catch (error) {
-      if (error === Private.CREATE_NEW) {
-        await save({ key, rubric: null, workbook });
-        return unlock({ key, workbook });
+      if (error === Private.NO_CORREXIT_METADATA) {
+        await save(workbook, key);
+        return unlock(workbook, key);
       }
       throw error;
     }
   }
 
-  export async function lock({ workbook }: {
-    workbook: Workbook;
-  }): Promise<void> {
-    const rubric = Rubric.get(workbook);
+  export async function lock(workbook: Workbook): Promise<void> {
+    const rubric = Private.rubrics.get(workbook);
     if (!rubric || !workbook.content.model) {
       return;
     }
     const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
-    Rubric.set(workbook, locked);
+    Private.rubrics.set(workbook, locked);
     workbook.content.model.setMetadata('correxit', locked);
     return workbook.context.save();
   }
@@ -54,8 +53,8 @@ export namespace Correxit {
   export async function open(
     workbook: Workbook
   ): Promise<Rubric<'locked'> | Rubric<'unlocked'>> {
-    if (Rubric.has(workbook)) {
-      return Rubric.get(workbook)!;
+    if (Private.rubrics.has(workbook)) {
+      return Private.rubrics.get(workbook)!;
     }
     if (workbook.content.model === null) {
       throw new Error('workbook model is null');
@@ -64,22 +63,22 @@ export namespace Correxit {
     const rubric: Rubric<'locked'> | null =
       workbook.content.model.getMetadata('correxit') || null;
     if (rubric === null) {
-      throw Private.CREATE_NEW;
+      throw Private.NO_CORREXIT_METADATA;
     }
     return Rubric.normalize(rubric);
   }
 
   export async function reset(workbook: Workbook) {
-    Rubric.clear(workbook);
+    Private.rubrics.delete(workbook);
     workbook.content.model?.deleteMetadata('correxit');
     return workbook.context.save();
   }
 
-  export async function save({ key, rubric, workbook } : {
-    key: string;
-    rubric: Rubric<'locked'> | Rubric<'unlocked'> | null;
-    workbook: Workbook;
-  }): Promise<void> {
+  export async function save(
+    workbook: Workbook,
+    key: string,
+    rubric?: Rubric<'locked'> | Rubric<'unlocked'>
+  ): Promise<void> {
     rubric = rubric || Rubric.create(key);
     const { content: { model }, context } = workbook;
     const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
@@ -87,18 +86,23 @@ export namespace Correxit {
     return context.save();
   }
 
-  export async function unlock({ key, workbook }: {
-    key: string;
-    workbook: Workbook;
-  }): Promise<Rubric<'unlocked'> | null> {
+  export async function unlock(
+    workbook: Workbook,
+    key: string
+  ): Promise<Rubric<'unlocked'>> {
     const opened = await open(workbook);
     const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
-    Rubric.set(workbook, rubric);
-    await save({ key, rubric, workbook });
+    Private.rubrics.set(workbook, rubric);
+    await save(workbook, key, rubric);
     return rubric;
   }
 }
 
 namespace Private {
-  export const CREATE_NEW = new Error('no correxit metadata, create new');
+  export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
+
+  export const rubrics = new WeakMap<
+    Correxit.Workbook,
+    Correxit.Rubric<'locked'> | Correxit.Rubric<'unlocked'>
+  >();
 }

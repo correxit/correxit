@@ -71,7 +71,7 @@ const Key: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ trans, workbook }) => {
-  const key = Correxit.Rubric.get(workbook)?.key;
+  const key = Correxit.cached(workbook)?.key;
   if (!key) {
     return <></>;
   }

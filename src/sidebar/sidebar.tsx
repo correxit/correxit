@@ -109,20 +109,19 @@ export namespace Sidebar {
       },
       [CommandIDs.lock]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          return Correxit.Rubric.get(sidebar.workbook)?.locked === false;
+          return Correxit.cached(sidebar.workbook)?.locked === false;
         }
         return false;
       },
       [CommandIDs.reset]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          return Correxit.Rubric.get(sidebar.workbook)?.locked === false;
+          return Correxit.cached(sidebar.workbook)?.locked === false;
         }
         return false;
       },
       [CommandIDs.unlock]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          const rubric = Correxit.Rubric.get(sidebar.workbook);
-          return rubric ? rubric.locked : true;
+          return Correxit.cached(sidebar.workbook)?.locked ?? true;
         }
         return false;
       }
@@ -142,7 +141,7 @@ export namespace Sidebar {
             label: trans.__('Enter a passphrase for this workbook')
           });
           if (key) {
-            return Correxit.convert({ key, workbook });
+            return Correxit.convert(workbook, key);
           }
         }
       }),
@@ -153,7 +152,7 @@ export namespace Sidebar {
         label: trans.__('Lock grader mode (PGP encrypt)'),
         execute: async () => {
           if (enabled[CommandIDs.lock]()) {
-            return Correxit.lock({ workbook: sidebar.workbook! }).catch(noop);
+            return Correxit.lock(sidebar.workbook!).catch(noop);
           }
         }
       }),
@@ -180,26 +179,35 @@ export namespace Sidebar {
         isEnabled: enabled[CommandIDs.unlock],
         isVisible: enabled[CommandIDs.unlock],
         label: trans.__('Unlock grader mode (PGP decrypt)...'),
-        execute: async () => {
+        usage: `
+The command execute args type is: { key?: string }
+
+If no key is provided, the command invokes a user prompt dialog.
+
+The command execute return type is: Promise<Rubric<"unlocked"> | null>
+The returned promise never rejects.
+
+The command invokes an error message dialog if unlock fails.
+        `,
+        execute: async ({ key }: { key?: string }) => {
           if (!enabled[CommandIDs.unlock]()) {
-            return;
+            return null;
           }
           try {
             const workbook = sidebar.workbook!;
-            const key = await Private.prompt({
+            key ||= await Private.prompt({
               title: trans.__('Enter a passphrase to unlock'),
               label: trans.__('Enter a passphrase to unlock this workbook')
             });
-            if (key) {
-              await Correxit.unlock({ key, workbook });
-            }
+            return (key && (await Correxit.unlock(workbook, key))) || null;
           } catch (error) {
             const file = PathExt.basename(sidebar.workbook!.context.path);
             void showErrorMessage(
               trans.__('Could not unlock.'),
-              trans.__('Correxit could not unlock this workbook (%1)', file)
+              trans.__('Correxit could not unlock workbook (%1)', file)
             );
           }
+          return null;
         }
       })
     ];
