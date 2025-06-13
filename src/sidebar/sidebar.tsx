@@ -4,7 +4,7 @@ import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
-import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
+import { lockIcon, ReactWidget, UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { IDisposable } from '@lumino/disposable';
 import React from 'react';
@@ -130,6 +130,7 @@ export namespace Sidebar {
         }
       }),
       commands.addCommand(CommandIDs.lock, {
+        icon: lockIcon,
         isEnabled: enabled[CommandIDs.lock],
         isVisible: enabled[CommandIDs.lock],
         label: trans.__('Lock grader mode (PGP encrypt)'),
@@ -153,6 +154,7 @@ export namespace Sidebar {
         }
       }),
       commands.addCommand(CommandIDs.unlock, {
+        icon: lockIcon,
         isEnabled: enabled[CommandIDs.unlock],
         isVisible: enabled[CommandIDs.unlock],
         label: trans.__('Unlock grader mode (PGP decrypt)...'),
