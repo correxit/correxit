@@ -1,11 +1,5 @@
-import { IRenderMime } from '@jupyterlab/rendermime';
 import * as description from './description';
-import {
-  type Locked,
-  Rubric as RUBRIC,
-  type Workbook as WORKBOOK,
-  type Unlocked,
-} from './rubric';
+import { Rubric as RUBRIC, type Workbook as WORKBOOK } from './rubric';
 
 export namespace Correxit {
   export import Rubric = RUBRIC;
@@ -21,16 +15,27 @@ export namespace Correxit {
 
   export const SIDEBAR = 'correxit:sidebar';
 
-
-  export async function convert({ key, trans, workbook }: {
+  export async function convert({ key, workbook }: {
     key: string;
-    trans: IRenderMime.TranslationBundle;
     workbook: Workbook;
   }) {
     if (key.length !== 64) {
       throw new Error('cannot unlock a workbook without a valid key');
     }
-    return unlock({ key, trans, workbook });
+    try {
+      const opened = await open(workbook);
+      const unlocked = opened.locked && await Rubric.unlock(opened, key);
+      const rubric = unlocked || opened;
+      Rubric.set(workbook, rubric);
+      await save({ key, rubric, workbook });
+      return rubric;
+    } catch (error) {
+      if (error === Private.CREATE_NEW) {
+        await save({ key, rubric: null, workbook });
+        return unlock({ key, workbook });
+      }
+      throw error;
+    }
   }
 
   export async function lock({ workbook }: {
@@ -48,7 +53,7 @@ export namespace Correxit {
 
   export async function open(
     workbook: Workbook
-  ): Promise<Rubric<Locked | Unlocked>> {
+  ): Promise<Rubric<'locked'> | Rubric<'unlocked'>> {
     if (Rubric.has(workbook)) {
       return Rubric.get(workbook)!;
     }
@@ -56,7 +61,7 @@ export namespace Correxit {
       throw new Error('workbook model is null');
     }
 
-    const rubric: Rubric<Locked> | null =
+    const rubric: Rubric<'locked'> | null =
       workbook.content.model.getMetadata('correxit') || null;
     if (rubric === null) {
       throw Private.CREATE_NEW;
@@ -64,11 +69,7 @@ export namespace Correxit {
     return Rubric.normalize(rubric);
   }
 
-  export async function reset({ body, title, workbook } : {
-    body?: string;
-    title?: string;
-    workbook: Workbook;
-  }) {
+  export async function reset(workbook: Workbook) {
     Rubric.clear(workbook);
     workbook.content.model?.deleteMetadata('correxit');
     return workbook.context.save();
@@ -76,7 +77,7 @@ export namespace Correxit {
 
   export async function save({ key, rubric, workbook } : {
     key: string;
-    rubric: Rubric<Locked | Unlocked> | null;
+    rubric: Rubric<'locked'> | Rubric<'unlocked'> | null;
     workbook: Workbook;
   }): Promise<void> {
     rubric = rubric || Rubric.create(key);
@@ -86,27 +87,15 @@ export namespace Correxit {
     return context.save();
   }
 
-  export async function unlock({ key, trans, workbook }: {
+  export async function unlock({ key, workbook }: {
     key: string;
-    trans: IRenderMime.TranslationBundle;
     workbook: Workbook;
-  }): Promise<Rubric<Unlocked> | null> {
-    if (key.length !== 64) {
-      throw new Error('cannot unlock a workbook without a valid key');
-    }
-    try {
-      const rubric = await open(workbook);
-      const unlocked = await Rubric.unlock(rubric, key);
-      Rubric.set(workbook, unlocked);
-      await save({ key, rubric: unlocked, workbook });
-      return unlocked;
-    } catch (error) {
-      if (error === Private.CREATE_NEW) {
-        await save({ key, rubric: null, workbook });
-        return unlock({ key, trans, workbook });
-      }
-      throw error;
-    }
+  }): Promise<Rubric<'unlocked'> | null> {
+    const opened = await open(workbook);
+    const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
+    Rubric.set(workbook, rubric);
+    await save({ key, rubric, workbook });
+    return rubric;
   }
 }
 

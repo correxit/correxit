@@ -142,7 +142,7 @@ export namespace Sidebar {
             label: trans.__('Enter a passphrase for this workbook')
           });
           if (key) {
-            return Correxit.unlock({ key, trans, workbook });
+            return Correxit.convert({ key, workbook });
           }
         }
       }),
@@ -171,7 +171,7 @@ export namespace Sidebar {
           const body = commands.caption(CommandIDs.reset);
           const { button } = await showDialog({ body, title });
           if (button.accept) {
-            return Correxit.reset({ body, title, workbook: sidebar.workbook! });
+            return Correxit.reset(sidebar.workbook!);
           }
         }
       }),
@@ -191,7 +191,7 @@ export namespace Sidebar {
               label: trans.__('Enter a passphrase to unlock this workbook')
             });
             if (key) {
-              await Correxit.unlock({ key, trans, workbook });
+              await Correxit.unlock({ key, workbook });
             }
           } catch (error) {
             const file = PathExt.basename(sidebar.workbook!.context.path);

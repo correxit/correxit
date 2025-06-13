@@ -4,18 +4,14 @@ import { INotebookModel, Notebook } from '@jupyterlab/notebook';
 import { UUID } from '@lumino/coreutils';
 import { decrypt, encrypt } from './security';
 
-export type Locked = 0 & Record<string, never>;
-
-export type Unlocked = 1 & Record<string, never>;
-
-export type Rubric<Secure extends Locked | Unlocked> = {
+export type Rubric<Secure = 'locked' | 'unlocked'> = {
   readonly id: string;
 
-  readonly key: Secure extends Locked ? null : string;
+  readonly key: Secure extends 'locked' ? null : string;
 
-  readonly locked: Secure extends Locked ? true : false;
+  readonly locked: Secure extends 'locked' ? true : false;
 
-  readonly secret: Secure extends Locked ? string : Rubric.Section;
+  readonly secret: Secure extends 'locked' ? string : Rubric.Section;
 
   readonly shared: Rubric.Section;
 };
@@ -32,10 +28,10 @@ export namespace Rubric {
 
   export const set = (
     workbook: Workbook,
-    rubric: Rubric<Locked | Unlocked>
+    rubric: Rubric<'locked'> | Rubric<'unlocked'>
   ) => Private.rubrics.set(workbook, rubric);
 
-  export function create(key: string): Rubric<Unlocked> {
+  export function create(key: string): Rubric<'unlocked'> {
     return {
       id: `wb-${UUID.uuid4()}`, key,
       locked: false,
@@ -45,8 +41,8 @@ export namespace Rubric {
   }
 
   export async function lock(
-    rubric: Rubric<Unlocked>
-  ): Promise<Rubric<Locked>> {
+    rubric: Rubric<'unlocked'>
+  ): Promise<Rubric<'locked'>> {
     const { id, key, secret, shared } = rubric;
     return {
       id, key: null,
@@ -57,8 +53,8 @@ export namespace Rubric {
   }
 
   export function normalize(
-    { id, key, locked, secret, shared }: Partial<Rubric<Locked>>
-  ): Rubric<Locked> {
+    { id, key, locked, secret, shared }: Partial<Rubric<'locked'>>
+  ): Rubric<'locked'> {
     if (!id) {
       throw new Error('invalid rubric, missing id');
     }
@@ -78,9 +74,9 @@ export namespace Rubric {
   }
 
   export async function unlock(
-    rubric: Rubric<Locked>,
+    rubric: Rubric<'locked'>,
     key: string
-  ): Promise<Rubric<Unlocked>> {
+  ): Promise<Rubric<'unlocked'>> {
     return {
       id: rubric.id,
       key,
@@ -101,5 +97,8 @@ export namespace Workbook {
 }
 
 namespace Private {
-  export const rubrics = new WeakMap<Workbook, Rubric<Locked | Unlocked>>();
+  export const rubrics = new WeakMap<
+    Workbook,
+    Rubric<'locked'> | Rubric<'unlocked'>
+  >();
 }
