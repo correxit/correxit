@@ -1,5 +1,9 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
-import { InputDialog, showErrorMessage } from '@jupyterlab/apputils';
+import {
+  InputDialog,
+  showDialog,
+  showErrorMessage
+} from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
@@ -160,9 +164,13 @@ export namespace Sidebar {
         caption: 'Delete workbook metadata, leave notebook cells unmodified',
         label: trans.__('Revert to notebook (delete workbook metadata)...'),
         execute: async () => {
+          if (!enabled[CommandIDs.reset]()) {
+            return;
+          }
           const title = trans.__('Revert to notebook');
           const body = commands.caption(CommandIDs.reset);
-          if (enabled[CommandIDs.reset]()) {
+          const { button } = await showDialog({ body, title });
+          if (button.accept) {
             return Correxit.reset({ body, title, workbook: sidebar.workbook! });
           }
         }

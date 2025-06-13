@@ -1,4 +1,3 @@
-import { showDialog } from '@jupyterlab/apputils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import * as description from './description';
 import {
@@ -65,18 +64,11 @@ export namespace Correxit {
     return Rubric.normalize(rubric);
   }
 
-  export async function reset({ body, quiet, title, workbook } : {
+  export async function reset({ body, title, workbook } : {
     body?: string;
-    quiet?: boolean;
     title?: string;
     workbook: Workbook;
   }) {
-    if (!quiet && body || title) {
-      const { button: { accept } } = await showDialog({ body, title });
-      if (!accept) {
-        return;
-      }
-    }
     Rubric.clear(workbook);
     workbook.content.model?.deleteMetadata('correxit');
     return workbook.context.save();
