@@ -15,24 +15,12 @@ export namespace Correxit {
 
   export const SIDEBAR = 'correxit:sidebar';
 
-  export function cached(workbook: Workbook) {
-    if (Private.rubrics.has(workbook)) {
-      return Private.rubrics.get(workbook);
-    }
-    try {
-      const meta = workbook.content.model?.getMetadata('correxit');
-      Private.rubrics.set(workbook, Rubric.normalize(meta));
-    } catch (_) {
-      return;
-    }
-  }
-
   export async function convert(workbook: Workbook, key: string) {
     if (key.length !== 64) {
       throw new Error('cannot unlock a workbook without a valid key');
     }
     try {
-      const opened = await open(workbook);
+      const opened = open(workbook)!;
       const unlocked = opened.locked && await Rubric.unlock(opened, key);
       const rubric = unlocked || opened;
       Private.rubrics.set(workbook, rubric);
@@ -58,22 +46,36 @@ export namespace Correxit {
     return workbook.context.save();
   }
 
-  export async function open(
-    workbook: Workbook
-  ): Promise<Rubric<'locked'> | Rubric<'unlocked'>> {
+  export function open(
+    workbook: Workbook,
+    { quiet }: { quiet?: boolean } = {}
+  ): Rubric<'locked'> | Rubric<'unlocked'> | null {
     if (Private.rubrics.has(workbook)) {
       return Private.rubrics.get(workbook)!;
     }
     if (workbook.content.model === null) {
+      if (quiet) {
+        return null;
+      }
       throw new Error('workbook model is null');
     }
 
     const rubric: Rubric<'locked'> | null =
       workbook.content.model.getMetadata('correxit') || null;
     if (rubric === null) {
+      if (quiet) {
+        return null;
+      }
       throw Private.NO_CORREXIT_METADATA;
     }
-    return Rubric.normalize(rubric);
+    try {
+      return Rubric.normalize(rubric);
+    } catch (error) {
+      if (quiet) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   export async function reset(workbook: Workbook) {
@@ -98,7 +100,7 @@ export namespace Correxit {
     workbook: Workbook,
     key: string
   ): Promise<Rubric<'unlocked'>> {
-    const opened = await open(workbook);
+    const opened = open(workbook)!;
     const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
     Private.rubrics.set(workbook, rubric);
     await save(workbook, key, rubric);

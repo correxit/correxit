@@ -110,36 +110,32 @@ export namespace Sidebar {
         return !!(model && !model.getMetadata('correxit'));
       },
       [CommandIDs.correct]: ({ cell }: { cell?: string }) => {
-        const rubric = Correxit.cached(sidebar.workbook!);
+        const rubric = Correxit.open(sidebar.workbook!, { quiet: true });
         if (!rubric) {
           return false;
         }
-        const { locked, shared, secret } = rubric;
-        if (cell) {
-          return locked
-            ? !!shared.cells[cell]
-            : !!shared.cells[cell] || !!secret.cells[cell];
-        }
-        return locked
-          ? !!Object.keys(shared.cells).length
-          : !!Object.keys(shared.cells).length ||
-              !!Object.keys(secret.cells).length;
+        return cell
+          ? Correxit.Rubric.has(rubric, cell)
+          : Correxit.Rubric.empty(rubric);
       },
       [CommandIDs.lock]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          return Correxit.cached(sidebar.workbook)?.locked === false;
+          const rubric = Correxit.open(sidebar.workbook!, { quiet: true });
+          return rubric?.locked === false;
         }
         return false;
       },
       [CommandIDs.reset]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          return Correxit.cached(sidebar.workbook)?.locked === false;
+          const rubric = Correxit.open(sidebar.workbook!, { quiet: true });
+          return rubric?.locked === false;
         }
         return false;
       },
       [CommandIDs.unlock]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          return Correxit.cached(sidebar.workbook)?.locked ?? true;
+          const rubric = Correxit.open(sidebar.workbook!, { quiet: true });
+          return rubric?.locked ?? true;
         }
         return false;
       }
