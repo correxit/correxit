@@ -23,7 +23,7 @@ export namespace Correxit {
       const opened = open(workbook)!;
       const unlocked = opened.locked && await Rubric.unlock(opened, key);
       const rubric = unlocked || opened;
-      Private.rubrics.set(workbook, rubric);
+      Private.CACHE.set(workbook, rubric);
       await save(workbook, key, rubric);
       return rubric;
     } catch (error) {
@@ -36,12 +36,12 @@ export namespace Correxit {
   }
 
   export async function lock(workbook: Workbook): Promise<void> {
-    const rubric = Private.rubrics.get(workbook);
+    const rubric = Private.CACHE.get(workbook);
     if (!rubric || !workbook.content.model) {
       return;
     }
     const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
-    Private.rubrics.set(workbook, locked);
+    Private.CACHE.set(workbook, locked);
     workbook.content.model.setMetadata('correxit', locked);
     return workbook.context.save();
   }
@@ -50,36 +50,36 @@ export namespace Correxit {
     workbook: Workbook,
     { quiet }: { quiet?: boolean } = {}
   ): Rubric<'locked'> | Rubric<'unlocked'> | null {
-    if (Private.rubrics.has(workbook)) {
-      return Private.rubrics.get(workbook)!;
+    if (Private.CACHE.has(workbook)) {
+      return Private.CACHE.get(workbook)!;
     }
     if (workbook.content.model === null) {
-      if (quiet) {
-        return null;
+      if (!quiet) {
+        throw new Error('workbook model is null');
       }
-      throw new Error('workbook model is null');
+      return null;
     }
 
     const rubric: Rubric<'locked'> | null =
       workbook.content.model.getMetadata('correxit') || null;
     if (rubric === null) {
-      if (quiet) {
-        return null;
+      if (!quiet) {
+        throw Private.NO_CORREXIT_METADATA;
       }
-      throw Private.NO_CORREXIT_METADATA;
+      return null;
     }
     try {
       return Rubric.normalize(rubric);
     } catch (error) {
-      if (quiet) {
-        return null;
+      if (!quiet) {
+        throw error;
       }
-      throw error;
+      return null;
     }
   }
 
   export async function reset(workbook: Workbook) {
-    Private.rubrics.delete(workbook);
+    Private.CACHE.delete(workbook);
     workbook.content.model?.deleteMetadata('correxit');
     return workbook.context.save();
   }
@@ -102,17 +102,17 @@ export namespace Correxit {
   ): Promise<Rubric<'unlocked'>> {
     const opened = open(workbook)!;
     const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
-    Private.rubrics.set(workbook, rubric);
+    Private.CACHE.set(workbook, rubric);
     await save(workbook, key, rubric);
     return rubric;
   }
 }
 
 namespace Private {
-  export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
-
-  export const rubrics = new WeakMap<
+  export const CACHE = new WeakMap<
     Correxit.Workbook,
     Correxit.Rubric<'locked'> | Correxit.Rubric<'unlocked'>
   >();
+
+  export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 }
