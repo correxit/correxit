@@ -54,7 +54,7 @@ export namespace Rubric {
   export function normalize(
     rubric: Partial<Rubric<'locked'>>
   ): Rubric<'locked'> {
-    const { id, key, locked, secret, shared } = rubric;
+    const { id, key, locked, secret, shared } = rubric || {};
     if (!id) {
       throw new Error('invalid rubric, missing id');
     }

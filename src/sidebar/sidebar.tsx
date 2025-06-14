@@ -110,11 +110,20 @@ export namespace Sidebar {
         return !!(model && !model.getMetadata('correxit'));
       },
       [CommandIDs.correct]: ({ cell }: { cell?: string }) => {
-        const rubric = sidebar.workbook && Correxit.cached(sidebar.workbook);
-        if (rubric) {
-          return (cell && Correxit.Rubric.has(rubric, cell)) || !rubric.locked;
+        const rubric = Correxit.cached(sidebar.workbook!);
+        if (!rubric) {
+          return false;
         }
-        return false;
+        const { locked, shared, secret } = rubric;
+        if (cell) {
+          return locked
+            ? !!shared.cells[cell]
+            : !!shared.cells[cell] || !!secret.cells[cell];
+        }
+        return locked
+          ? !!Object.keys(shared.cells).length
+          : !!Object.keys(shared.cells).length ||
+              !!Object.keys(secret.cells).length;
       },
       [CommandIDs.lock]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
@@ -136,6 +145,18 @@ export namespace Sidebar {
       }
     };
     return [
+      commands.addCommand(CommandIDs.correct, {
+        isEnabled: enabled[CommandIDs.correct],
+        isVisible: enabled[CommandIDs.correct],
+        label: ({ cell }: { cell?: string }) =>
+          cell ? trans.__('Correct this cell') : trans.__('Correct workbook'),
+        execute: async ({ cell }: { cell?: string }) => {
+          if (!enabled[CommandIDs.correct]({ cell })) {
+            return;
+          }
+          console.log('implement correct function');
+        }
+      }),
       commands.addCommand(CommandIDs.convert, {
         isEnabled: enabled[CommandIDs.convert],
         isVisible: enabled[CommandIDs.convert],

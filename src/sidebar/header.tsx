@@ -1,7 +1,7 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import {
-  CommandToolbarButtonComponent as CommandButton,
+  CommandToolbarButtonComponent,
   UseSignal
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
@@ -18,10 +18,10 @@ export const Header: React.FC<{
   return (
     <section className="correxit-header">
       <File trans={trans} workbook={workbook} />
-      <CommandButton commands={commands} id={convert} />
+      <CommandToolbarButtonComponent commands={commands} id={convert} />
       <ID trans={trans} workbook={workbook} />
-      <CommandButton commands={commands} id={lock} />
-      <CommandButton commands={commands} id={unlock} />
+      <CommandToolbarButtonComponent commands={commands} id={lock} />
+      <CommandToolbarButtonComponent commands={commands} id={unlock} />
       <Key trans={trans} workbook={workbook} />
     </section>
   );

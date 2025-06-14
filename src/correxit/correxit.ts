@@ -16,7 +16,15 @@ export namespace Correxit {
   export const SIDEBAR = 'correxit:sidebar';
 
   export function cached(workbook: Workbook) {
-    return Private.rubrics.get(workbook);
+    if (Private.rubrics.has(workbook)) {
+      return Private.rubrics.get(workbook);
+    }
+    try {
+      const meta = workbook.content.model?.getMetadata('correxit');
+      Private.rubrics.set(workbook, Rubric.normalize(meta));
+    } catch (_) {
+      return;
+    }
   }
 
   export async function convert(workbook: Workbook, key: string) {
