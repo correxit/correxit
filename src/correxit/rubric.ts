@@ -1,8 +1,6 @@
-import { DocumentRegistry } from '@jupyterlab/docregistry';
-import { CellType } from '@jupyterlab/nbformat';
-import { INotebookModel, Notebook } from '@jupyterlab/notebook';
 import { UUID } from '@lumino/coreutils';
 import { decrypt, encrypt } from './security';
+import { Workbook } from './workbook';
 
 export type Rubric<Secure = 'locked' | 'unlocked'> = {
   readonly id: string;
@@ -93,13 +91,4 @@ export namespace Rubric {
       shared: rubric.shared
     };
   }
-}
-
-export type Workbook = {
-  readonly content: Notebook;
-  readonly context: DocumentRegistry.IContext<INotebookModel>;
-};
-
-export namespace Workbook {
-  export type Cell = { type: CellType; }
 }

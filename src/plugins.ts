@@ -57,7 +57,7 @@ export const sidebar: JupyterFrontEndPlugin<void> = {
       }
 
       // Add sidebar commands and keep track of their disposables.
-      const disposables = addCommands({ commands, sidebar });
+      const disposables = addCommands(commands, sidebar);
       disposables.push(sidebar);
       if (palette) {
         disposables.push(

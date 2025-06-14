@@ -95,13 +95,7 @@ export namespace Sidebar {
     export const unlock = 'correxit:unlock';
   }
 
-  export function addCommands({
-    commands,
-    sidebar
-  }: {
-    commands: CommandRegistry;
-    sidebar: Sidebar;
-  }) {
+  export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     const { trans } = sidebar;
     const noop = () => undefined;
     const enabled = {

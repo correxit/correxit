@@ -1,10 +1,11 @@
 import * as description from './description';
-import { Rubric as RUBRIC, type Workbook as WORKBOOK } from './rubric';
+import { Rubric as RUBRIC } from './rubric';
+import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
   export import Rubric = RUBRIC;
 
-  export type Workbook = WORKBOOK;
+  export import Workbook = WORKBOOK;
 
   export const DESCRIPTION = {
     PLUGIN: description.PLUGIN,
