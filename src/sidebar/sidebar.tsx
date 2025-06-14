@@ -87,7 +87,9 @@ export namespace Sidebar {
   }
 
   export namespace CommandIDs {
+    export const config = 'correxit:config'; // TODO: not implemented
     export const convert = 'correxit:convert';
+    export const correct = 'correxit:correct'; // TODO: partly implemented
     export const lock = 'correxit:lock';
     export const reset = 'correxit:reset';
     export const unlock = 'correxit:unlock';
@@ -106,6 +108,13 @@ export namespace Sidebar {
       [CommandIDs.convert]: () => {
         const model = sidebar.workbook?.content.model;
         return !!(model && !model.getMetadata('correxit'));
+      },
+      [CommandIDs.correct]: ({ cell }: { cell?: string }) => {
+        const rubric = sidebar.workbook && Correxit.cached(sidebar.workbook);
+        if (rubric) {
+          return (cell && Correxit.Rubric.has(rubric, cell)) || !rubric.locked;
+        }
+        return false;
       },
       [CommandIDs.lock]: () => {
         if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
@@ -216,10 +225,7 @@ The command invokes an error message dialog if unlock fails.
 
 namespace Private {
   export const prompt = async ({ label, title }: InputDialog.ITextOptions) => {
-    const passphrase = await InputDialog.getText({ label, title });
-    if (passphrase.button.accept && passphrase.value) {
-      return await keygen(passphrase.value);
-    }
-    return '';
+    const { button, value } = await InputDialog.getText({ label, title });
+    return (button.accept && value && (await keygen(value))) || '';
   };
 }

@@ -29,6 +29,16 @@ export namespace Rubric {
     };
   }
 
+  export function has(
+    rubric: Rubric<'locked'> | Rubric<'unlocked'>,
+    cell: string
+  ): boolean {
+    if (rubric.locked) {
+      return !!rubric.shared.cells[cell];
+    }
+    return !!(rubric.secret.cells[cell] || rubric.shared.cells[cell]);
+  }
+
   export async function lock(
     rubric: Rubric<'unlocked'>
   ): Promise<Rubric<'locked'>> {
