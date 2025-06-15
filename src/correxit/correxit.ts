@@ -23,14 +23,13 @@ export namespace Correxit {
       section: 'secret' | 'shared'
     }
   ) {
-    const rubric = Private.CACHE.get(workbook);
-    if (!workbook.content.model || !rubric || rubric.locked) {
+    const rubric = open(workbook, { quiet: true });
+    if (!rubric || rubric.locked) {
       return new Error('add error');
     }
     rubric[section].cells[cell.id] = cell;
-    Private.CACHE.set(workbook, rubric);
-    workbook.content.model.setMetadata('correxit', rubric);
-    return workbook.context.save();
+    await Private.write(workbook, rubric);
+    return unlock(workbook, rubric.key);
   }
 
   export async function convert(workbook: Workbook, key: string) {
@@ -39,14 +38,12 @@ export namespace Correxit {
     }
     try {
       const opened = open(workbook)!;
-      const unlocked = opened.locked && await Rubric.unlock(opened, key);
-      const rubric = unlocked || opened;
-      Private.CACHE.set(workbook, rubric);
-      await save(workbook, key, rubric);
-      return rubric;
+      const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
+      await Private.write(workbook, rubric);
+      return unlock(workbook, rubric.key);
     } catch (error) {
       if (error === Private.NO_CORREXIT_METADATA) {
-        await save(workbook, key);
+        await Private.write(workbook, Correxit.Rubric.create(key));
         return unlock(workbook, key);
       }
       throw error;
@@ -72,67 +69,58 @@ export namespace Correxit {
   }
 
   export async function lock(workbook: Workbook): Promise<void> {
-    const rubric = Private.CACHE.get(workbook);
-    if (!rubric || !workbook.content.model) {
-      return;
+    const rubric = open(workbook, { quiet: true });
+    if (rubric && !rubric.locked) {
+      return Private.write(workbook, rubric);
     }
-    const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
-    Private.CACHE.set(workbook, locked);
-    workbook.content.model.setMetadata('correxit', locked);
-    return workbook.context.save();
   }
 
+  /**
+   * Opens a workbook's rubric.
+   *
+   * @param workbook - The current workbook. May be `null`.
+   * @param options.quiet - Whether to return `null` instead of rejecting.
+   * @returns a promise that resolves to a rubric for a workbook.
+   *
+   * #### Notes
+   * If `quiet` is set to true, the promise resolves with `null` instead of
+   * rejecting. By default the promise either resolves with a rubric or rejects.
+   */
   export function open(
     workbook: Workbook | null,
     { quiet }: { quiet?: boolean } = {}
   ): Rubric<'locked'> | Rubric<'unlocked'> | null {
-    if (workbook === null) {
-      return null;
+    if (!workbook || !workbook.content.model) {
+      if (quiet) {
+        return null;
+      }
+      throw new Error('workbook or content model is null');
     }
     if (Private.CACHE.has(workbook)) {
       return Private.CACHE.get(workbook)!;
     }
-    if (workbook.content.model === null) {
-      if (!quiet) {
-        throw new Error('workbook model is null');
-      }
-      return null;
-    }
 
     const rubric: Rubric<'locked'> | null =
       workbook.content.model.getMetadata('correxit') || null;
-    if (rubric === null) {
-      if (!quiet) {
-        throw Private.NO_CORREXIT_METADATA;
+    if (!rubric) {
+      if (quiet) {
+        return null;
       }
-      return null;
+      throw Private.NO_CORREXIT_METADATA;
     }
     try {
       return Rubric.normalize(rubric);
     } catch (error) {
-      if (!quiet) {
-        throw error;
+      if (quiet) {
+        return null;
       }
-      return null;
+      throw error;
     }
   }
 
   export async function reset(workbook: Workbook) {
     Private.CACHE.delete(workbook);
     workbook.content.model?.deleteMetadata('correxit');
-    return workbook.context.save();
-  }
-
-  export async function save(
-    workbook: Workbook,
-    key: string,
-    rubric?: Rubric<'locked'> | Rubric<'unlocked'>
-  ): Promise<void> {
-    rubric = rubric || Rubric.create(key);
-    const { content: { model }, context } = workbook;
-    const locked = rubric.locked ? rubric : await Rubric.lock(rubric);
-    model?.setMetadata('correxit', locked);
-    return context.save();
   }
 
   export async function unlock(
@@ -140,9 +128,12 @@ export namespace Correxit {
     key: string
   ): Promise<Rubric<'unlocked'>> {
     const opened = open(workbook)!;
-    const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
+    if (!opened.locked) {
+      return opened;
+    }
+    const rubric = await Rubric.unlock(opened, key);
+    await Private.write(workbook, rubric);
     Private.CACHE.set(workbook, rubric);
-    await save(workbook, key, rubric);
     return rubric;
   }
 }
@@ -154,4 +145,22 @@ namespace Private {
   >();
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
+
+  /**
+   * Write rubric metadata to workbook.
+   * @param workbook
+   * @param rubric
+   *
+   * #### Notes
+   * This function always sets the workbook's cached rubric to locked.
+   */
+  export async function write(
+    workbook: Correxit.Workbook,
+    rubric: Correxit.Rubric<'unlocked'>
+  ): Promise<void> {
+    const { content: { model } } = workbook;
+    const locked = await Correxit.Rubric.lock(rubric);
+    CACHE.set(workbook, locked);
+    model?.setMetadata('correxit', locked);
+  }
 }

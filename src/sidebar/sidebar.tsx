@@ -98,7 +98,6 @@ export namespace Sidebar {
 
   export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     const { trans } = sidebar;
-    const noop = () => undefined;
     const quiet = true;
     const enabled = {
       [CommandIDs.convert]: () => {
@@ -141,7 +140,9 @@ export namespace Sidebar {
             label: trans.__('Enter a passphrase for this workbook')
           });
           if (key) {
-            return Correxit.convert(workbook, key);
+            const rubric = await Correxit.convert(workbook, key);
+            await workbook.context.save();
+            return rubric;
           }
         }
       }),
@@ -151,8 +152,15 @@ export namespace Sidebar {
         isVisible: enabled[CommandIDs.lock],
         label: trans.__('Lock grader mode (PGP encrypt)'),
         execute: async () => {
-          if (enabled[CommandIDs.lock]()) {
-            return Correxit.lock(sidebar.workbook!).catch(noop);
+          if (!enabled[CommandIDs.lock]()) {
+            return;
+          }
+          try {
+            const rubric = await Correxit.lock(sidebar.workbook!);
+            await sidebar.workbook!.context.save();
+            return rubric;
+          } catch (error) {
+            void showErrorMessage(trans.__('Could not lock'), error as Error);
           }
         }
       }),
@@ -170,7 +178,8 @@ export namespace Sidebar {
           const body = commands.caption(CommandIDs.reset);
           const { button } = await showDialog({ body, title });
           if (button.accept) {
-            return Correxit.reset(sidebar.workbook!);
+            await Correxit.reset(sidebar.workbook!);
+            await sidebar.workbook!.context.save();
           }
         }
       }),
@@ -199,15 +208,20 @@ The command invokes an error message dialog if unlock fails.
               title: trans.__('Enter a passphrase to unlock'),
               label: trans.__('Enter a passphrase to unlock this workbook')
             });
-            return (key && (await Correxit.unlock(workbook, key))) || null;
+            if (!key) {
+              return null;
+            }
+            const rubric = await Correxit.unlock(workbook, key);
+            await workbook.context.save();
+            return rubric;
           } catch (error) {
             const file = PathExt.basename(sidebar.workbook!.context.path);
             void showErrorMessage(
-              trans.__('Could not unlock.'),
-              trans.__('Correxit could not unlock workbook (%1)', file)
+              trans.__('Could not unlock %1', file),
+              error as Error
             );
+            return null;
           }
-          return null;
         }
       })
     ];
