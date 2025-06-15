@@ -27,14 +27,6 @@ export namespace Rubric {
     };
   }
 
-  export function empty(rubric: Rubric<'locked'> | Rubric<'unlocked'>): boolean {
-    if (rubric.locked) {
-      return !Object.keys(rubric.shared.cells).length;
-    }
-    return !(Object.keys(rubric.secret.cells)).length &&
-      !(Object.keys(rubric.shared.cells)).length;
-  }
-
   export function has(
     rubric: Rubric<'locked'> | Rubric<'unlocked'>,
     cell: string

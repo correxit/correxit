@@ -16,6 +16,23 @@ export namespace Correxit {
 
   export const SIDEBAR = 'correxit:sidebar';
 
+  export async function add(
+    workbook: Workbook,
+    { cell, section }: {
+      cell: Workbook.Cell,
+      section: 'secret' | 'shared'
+    }
+  ) {
+    const rubric = Private.CACHE.get(workbook);
+    if (!workbook.content.model || !rubric || rubric.locked) {
+      return new Error('add error');
+    }
+    rubric[section].cells[cell.id] = cell;
+    Private.CACHE.set(workbook, rubric);
+    workbook.content.model.setMetadata('correxit', rubric);
+    return workbook.context.save();
+  }
+
   export async function convert(workbook: Workbook, key: string) {
     if (key.length !== 64) {
       throw new Error('cannot unlock a workbook without a valid key');
@@ -36,6 +53,24 @@ export namespace Correxit {
     }
   }
 
+  export function correctable(
+    workbook: Workbook | null,
+    cell?: string
+  ): boolean {
+    const rubric = open(workbook, { quiet: true });
+    if (!rubric) {
+      return false;
+    }
+    if (cell) {
+      return Rubric.has(rubric, cell);
+    }
+    if (rubric.locked) {
+      return !!Object.keys(rubric.shared.cells).length;
+    }
+    return !!(Object.keys(rubric.secret.cells)).length ||
+           !!(Object.keys(rubric.shared.cells)).length;
+  }
+
   export async function lock(workbook: Workbook): Promise<void> {
     const rubric = Private.CACHE.get(workbook);
     if (!rubric || !workbook.content.model) {
@@ -48,9 +83,12 @@ export namespace Correxit {
   }
 
   export function open(
-    workbook: Workbook,
+    workbook: Workbook | null,
     { quiet }: { quiet?: boolean } = {}
   ): Rubric<'locked'> | Rubric<'unlocked'> | null {
+    if (workbook === null) {
+      return null;
+    }
     if (Private.CACHE.has(workbook)) {
       return Private.CACHE.get(workbook)!;
     }

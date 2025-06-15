@@ -1,5 +1,4 @@
 import { DocumentRegistry } from '@jupyterlab/docregistry';
-import { CellType } from '@jupyterlab/nbformat';
 import { INotebookModel, Notebook } from '@jupyterlab/notebook';
 
 export type Workbook = {
@@ -8,11 +7,19 @@ export type Workbook = {
 };
 
 export namespace Workbook {
-  export type Cell = {
-    readonly answer: {
-      readonly format: 'digest' | 'reference';
-      readonly values: string[];
-    };
-    readonly type: CellType;
+  export type Cell<Format = 'digest' | 'reference'> = {
+    readonly id: string;
+    readonly format: Format;
+    readonly payload: string[];
+    readonly section: 'secret' | 'shared';
   };
+
+  export function normalize(
+    cell: Workbook.Cell
+  ): Workbook.Cell {
+    // const { answer, id, type } = cell;
+
+    // return { answer, id, type };
+    throw new Error('normalize not implemented');
+  }
 }

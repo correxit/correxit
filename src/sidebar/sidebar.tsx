@@ -44,6 +44,7 @@ export class Sidebar extends ReactWidget {
   }
   protected set workbook(workbook: Correxit.Workbook | null) {
     if (this._workbook !== workbook) {
+      void Correxit.open(workbook, { quiet: true });
       this._workbook = workbook;
       this.update();
     }
@@ -98,41 +99,20 @@ export namespace Sidebar {
   export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     const { trans } = sidebar;
     const noop = () => undefined;
+    const quiet = true;
     const enabled = {
       [CommandIDs.convert]: () => {
         const model = sidebar.workbook?.content.model;
         return !!(model && !model.getMetadata('correxit'));
       },
-      [CommandIDs.correct]: ({ cell }: { cell?: string }) => {
-        const rubric = Correxit.open(sidebar.workbook!, { quiet: true });
-        if (!rubric) {
-          return false;
-        }
-        return cell
-          ? Correxit.Rubric.has(rubric, cell)
-          : Correxit.Rubric.empty(rubric);
-      },
-      [CommandIDs.lock]: () => {
-        if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          const rubric = Correxit.open(sidebar.workbook!, { quiet: true });
-          return rubric?.locked === false;
-        }
-        return false;
-      },
-      [CommandIDs.reset]: () => {
-        if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          const rubric = Correxit.open(sidebar.workbook!, { quiet: true });
-          return rubric?.locked === false;
-        }
-        return false;
-      },
-      [CommandIDs.unlock]: () => {
-        if (sidebar.workbook?.content.model?.getMetadata('correxit')) {
-          const rubric = Correxit.open(sidebar.workbook!, { quiet: true });
-          return rubric?.locked ?? true;
-        }
-        return false;
-      }
+      [CommandIDs.correct]: ({ cell }: { cell?: string }) =>
+        Correxit.correctable(sidebar.workbook, cell),
+      [CommandIDs.lock]: () =>
+        Correxit.open(sidebar.workbook, { quiet })?.locked === false,
+      [CommandIDs.reset]: () =>
+        Correxit.open(sidebar.workbook, { quiet })?.locked === false,
+      [CommandIDs.unlock]: () =>
+        Correxit.open(sidebar.workbook!, { quiet })?.locked ?? false
     };
     return [
       commands.addCommand(CommandIDs.correct, {
