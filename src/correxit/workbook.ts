@@ -11,7 +11,6 @@ export namespace Workbook {
     readonly id: string;
     readonly format: Format;
     readonly payload: string[];
-    readonly section: 'secret' | 'shared';
   };
 
   export function normalize(

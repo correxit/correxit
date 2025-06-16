@@ -118,6 +118,17 @@ export namespace Correxit {
     }
   }
 
+  export async function remove(workbook: Workbook, cell: string) {
+    const rubric = open(workbook, { quiet: true });
+    if (!rubric || rubric.locked) {
+      return new Error('remove error');
+    }
+    delete rubric.secret.cells[cell];
+    delete rubric.shared.cells[cell];
+    await Private.write(workbook, rubric);
+    return unlock(workbook, rubric.key);
+  }
+
   export async function reset(workbook: Workbook) {
     Private.CACHE.delete(workbook);
     workbook.content.model?.deleteMetadata('correxit');

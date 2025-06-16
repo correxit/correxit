@@ -43,11 +43,14 @@ const ActiveCell: React.FC<{
       <div className="correxit-cell-id" title={cell.model.id}>
         {cell.model.id}
       </div>
-      <CommandToolbarButtonComponent
-        args={{ cell: cell.model.id }}
-        commands={commands}
-        id={Sidebar.CommandIDs.correct}
-      />
+      {[Sidebar.CommandIDs.add, Sidebar.CommandIDs.correct].map(command => (
+        <CommandToolbarButtonComponent
+          args={{ cell: cell.model.id }}
+          commands={commands}
+          id={command}
+          key={command}
+        />
+      ))}
     </>
   );
 };

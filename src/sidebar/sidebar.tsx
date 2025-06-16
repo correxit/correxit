@@ -17,7 +17,7 @@ import {
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-import { keygen } from '../correxit/security';
+import { encrypt, keygen } from '../correxit/security';
 import { Body } from './body';
 import { Footer } from './footer';
 import { Header } from './header';
@@ -88,9 +88,9 @@ export namespace Sidebar {
   }
 
   export namespace CommandIDs {
-    export const config = 'correxit:config'; // TODO: not implemented
+    export const add = 'correxit:add';
     export const convert = 'correxit:convert';
-    export const correct = 'correxit:correct'; // TODO: partly implemented
+    export const correct = 'correxit:correct';
     export const lock = 'correxit:lock';
     export const reset = 'correxit:reset';
     export const unlock = 'correxit:unlock';
@@ -100,6 +100,8 @@ export namespace Sidebar {
     const { trans } = sidebar;
     const quiet = true;
     const enabled = {
+      [CommandIDs.add]: ({ cell }: { cell?: string }) =>
+        Correxit.open(sidebar.workbook, { quiet })?.locked === false && !!cell,
       [CommandIDs.convert]: () => {
         const model = sidebar.workbook?.content.model;
         return !!(model && !model.getMetadata('correxit'));
@@ -114,16 +116,22 @@ export namespace Sidebar {
         Correxit.open(sidebar.workbook!, { quiet })?.locked ?? false
     };
     return [
-      commands.addCommand(CommandIDs.correct, {
-        isEnabled: enabled[CommandIDs.correct],
-        isVisible: enabled[CommandIDs.correct],
-        label: ({ cell }: { cell?: string }) =>
-          cell ? trans.__('Correct this cell') : trans.__('Correct workbook'),
+      commands.addCommand(CommandIDs.add, {
+        isEnabled: enabled[CommandIDs.add],
+        isVisible: enabled[CommandIDs.add],
+        label: trans.__('Add an answer for this cell...'),
         execute: async ({ cell }: { cell?: string }) => {
-          if (!enabled[CommandIDs.correct]({ cell })) {
+          if (!enabled[CommandIDs.add]({ cell })) {
             return;
           }
-          console.log('implement correct function');
+          const workbook = sidebar.workbook!;
+          console.log('implement add functionality');
+          const rubric = Correxit.open(workbook);
+          const payload = [await (async () => encrypt('42', rubric!.key!))()];
+          Correxit.add(workbook, {
+            section: 'shared',
+            cell: { id: cell!, format: 'digest', payload }
+          });
         }
       }),
       commands.addCommand(CommandIDs.convert, {
@@ -144,6 +152,18 @@ export namespace Sidebar {
             await workbook.context.save();
             return rubric;
           }
+        }
+      }),
+      commands.addCommand(CommandIDs.correct, {
+        isEnabled: enabled[CommandIDs.correct],
+        isVisible: enabled[CommandIDs.correct],
+        label: ({ cell }: { cell?: string }) =>
+          cell ? trans.__('Correct cell...') : trans.__('Correct workbook...'),
+        execute: async ({ cell }: { cell?: string }) => {
+          if (!enabled[CommandIDs.correct]({ cell })) {
+            return;
+          }
+          console.log('implement correct functionality');
         }
       }),
       commands.addCommand(CommandIDs.lock, {

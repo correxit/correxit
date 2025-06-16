@@ -16,7 +16,7 @@ export type Rubric<Secure = 'locked' | 'unlocked'> = {
 
 export namespace Rubric {
 
-  export type Section = { cells: { [id: string]: Workbook.Cell; }; };
+  export type Section = { readonly cells: { [id: string]: Workbook.Cell; }; };
 
   export function create(key: string): Rubric<'unlocked'> {
     return {
