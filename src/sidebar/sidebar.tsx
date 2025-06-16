@@ -4,6 +4,7 @@ import {
   showDialog,
   showErrorMessage
 } from '@jupyterlab/apputils';
+import { Cell, ICodeCellModel } from '@jupyterlab/cells';
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
@@ -92,6 +93,7 @@ export namespace Sidebar {
     export const convert = 'correxit:convert';
     export const correct = 'correxit:correct';
     export const lock = 'correxit:lock';
+    export const remove = 'correxit:delete';
     export const reset = 'correxit:reset';
     export const unlock = 'correxit:unlock';
   }
@@ -103,18 +105,30 @@ export namespace Sidebar {
       [CommandIDs.add]: ({ cell }: { cell?: string }) => {
         const rubric = Correxit.open(sidebar.workbook, { quiet });
         if (!cell || !rubric || rubric.locked) {
-          return !Correxit.Rubric.has(rubric!, cell!);
+          return false;
         }
-        return false;
+        const active = sidebar.workbook!.content.activeCell;
+        if (active?.model.id !== cell || active.model.type !== 'code') {
+          return false;
+        }
+        return !Correxit.Rubric.has(rubric, cell);
       },
       [CommandIDs.convert]: () => {
         const model = sidebar.workbook?.content.model;
         return !!(model && !model.getMetadata('correxit'));
       },
-      [CommandIDs.correct]: ({ cell }: { cell?: string }) =>
-        Correxit.correctable(sidebar.workbook, cell),
+      [CommandIDs.correct]: ({ cell }: { cell?: string }) => {
+        const { has, size } = Correxit.Rubric;
+        const rubric = Correxit.open(sidebar.workbook, { quiet: true });
+        return !!rubric && (cell ? has(rubric, cell) : size(rubric) > 0);
+      },
       [CommandIDs.lock]: () =>
         Correxit.open(sidebar.workbook, { quiet })?.locked === false,
+      [CommandIDs.remove]: ({ cell }: { cell?: string }) => {
+        const { has } = Correxit.Rubric;
+        const rubric = Correxit.open(sidebar.workbook, { quiet });
+        return !!cell && !!rubric && !rubric.locked && has(rubric, cell);
+      },
       [CommandIDs.reset]: () =>
         Correxit.open(sidebar.workbook, { quiet })?.locked === false,
       [CommandIDs.unlock]: () =>
@@ -124,16 +138,16 @@ export namespace Sidebar {
       commands.addCommand(CommandIDs.add, {
         isEnabled: enabled[CommandIDs.add],
         isVisible: enabled[CommandIDs.add],
-        label: trans.__('Add expected output for this cell...'),
+        label: trans.__('Add expected (correct) output for this cell...'),
         execute: async (args: { cell?: string }) => {
           const { cell } = args;
           if (!enabled[CommandIDs.add]({ cell })) {
             return;
           }
           const workbook = sidebar.workbook!;
-          const rubric = Correxit.open(workbook);
+          const rubric = Correxit.open(workbook)!;
           const expected = await Private.prompt({
-            title: trans.__('Expected output'),
+            title: trans.__('Add expected output'),
             label: commands.label(CommandIDs.add, args)
           });
           if (!expected) {
@@ -144,7 +158,7 @@ export namespace Sidebar {
             cell: {
               format: 'digest',
               id: cell!,
-              payload: [await (async () => encrypt(expected, rubric!.key!))()]
+              payload: [await (async () => encrypt(expected, rubric.key!))()]
             }
           });
         }
@@ -178,7 +192,22 @@ export namespace Sidebar {
           if (!enabled[CommandIDs.correct]({ cell })) {
             return;
           }
-          console.log('implement correct functionality');
+          const content = sidebar.workbook!.content;
+          if (
+            !content.activeCell ||
+            content.activeCell.model.id !== cell ||
+            content.activeCell.model.type !== 'code'
+          ) {
+            return;
+          }
+          const model = (content.activeCell as Cell<ICodeCellModel>).model;
+          console.log(model);
+          const outputs = model.toJSON().outputs || [];
+          const correct = !!(Date.now() % 2);
+          console.log('outputs', outputs);
+          void showDialog({
+            title: correct ? trans.__('Correct!') : trans.__('Incorrect!')
+          });
         }
       }),
       commands.addCommand(CommandIDs.lock, {
@@ -197,6 +226,18 @@ export namespace Sidebar {
           } catch (error) {
             void showErrorMessage(trans.__('Could not lock'), error as Error);
           }
+        }
+      }),
+      commands.addCommand(CommandIDs.remove, {
+        isEnabled: enabled[CommandIDs.remove],
+        isVisible: enabled[CommandIDs.remove],
+        label: trans.__('Reset expected cell output'),
+        execute: async (args: { cell?: string }) => {
+          const { cell } = args;
+          if (!enabled[CommandIDs.remove]({ cell })) {
+            return;
+          }
+          Correxit.remove(sidebar.workbook!, cell!);
         }
       }),
       commands.addCommand(CommandIDs.reset, {

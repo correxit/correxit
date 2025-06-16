@@ -71,6 +71,12 @@ export namespace Rubric {
     return { id, key, locked, secret, shared };
   }
 
+  export function size(rubric: Rubric<'locked'> | Rubric<'unlocked'>): number {
+    const { locked, secret, shared } = rubric;
+    return (locked ? 0 : Object.keys(secret).length) +
+      Object.keys(shared).length;
+  }
+
   export async function unlock(
     rubric: Rubric<'locked'>,
     key: string

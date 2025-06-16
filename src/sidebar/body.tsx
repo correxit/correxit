@@ -37,14 +37,14 @@ const ActiveCell: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell, commands, trans }) => {
-  const { add, correct } = Sidebar.CommandIDs;
+  const { add, correct, remove } = Sidebar.CommandIDs;
   return (
     <>
       <h4>{trans.__('Active cell:')}</h4>
       <div className="correxit-cell-id" title={cell.model.id}>
         {cell.model.id}
       </div>
-      {[add, correct].map(command => (
+      {[add, correct, remove].map(command => (
         <CommandToolbarButtonComponent
           args={{ cell: cell.model.id }}
           commands={commands}

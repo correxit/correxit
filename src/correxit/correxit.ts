@@ -50,22 +50,11 @@ export namespace Correxit {
     }
   }
 
-  export function correctable(
-    workbook: Workbook | null,
-    cell?: string
-  ): boolean {
+  export async function correct(workbook: Workbook, cell?: string) {
     const rubric = open(workbook, { quiet: true });
     if (!rubric) {
-      return false;
+      throw new Error('correct error');
     }
-    if (cell) {
-      return Rubric.has(rubric, cell);
-    }
-    if (rubric.locked) {
-      return !!Object.keys(rubric.shared.cells).length;
-    }
-    return !!(Object.keys(rubric.secret.cells)).length ||
-           !!(Object.keys(rubric.shared.cells)).length;
   }
 
   export async function lock(workbook: Workbook): Promise<void> {
