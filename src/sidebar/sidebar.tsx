@@ -4,7 +4,7 @@ import {
   showDialog,
   showErrorMessage
 } from '@jupyterlab/apputils';
-import { Cell, ICodeCellModel } from '@jupyterlab/cells';
+import { CodeCell } from '@jupyterlab/cells';
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
@@ -99,28 +99,32 @@ export namespace Sidebar {
   }
 
   export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
+    const { has, size } = Correxit.Rubric;
     const { trans } = sidebar;
     const quiet = true;
     const enabled = {
-      [CommandIDs.add]: ({ cell }: { cell?: string }) => {
+      [CommandIDs.add]: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         const rubric = Correxit.open(sidebar.workbook, { quiet });
-        if (!cell || !rubric || rubric.locked) {
+        const model = sidebar.workbook?.content.activeCell?.model;
+        if (!id || !model || !rubric || rubric.locked) {
           return false;
         }
-        const active = sidebar.workbook!.content.activeCell;
-        if (active?.model.id !== cell || active.model.type !== 'code') {
-          return false;
-        }
-        return !Correxit.Rubric.has(rubric, cell);
+        return model.id === id && model.type === 'code' && !has(rubric, id);
       },
       [CommandIDs.convert]: () => {
         const model = sidebar.workbook?.content.model;
         return !!(model && !model.getMetadata('correxit'));
       },
-      [CommandIDs.correct]: ({ cell }: { cell?: string }) => {
-        const { has, size } = Correxit.Rubric;
+      [CommandIDs.correct]: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         const rubric = Correxit.open(sidebar.workbook, { quiet: true });
-        return !!rubric && (cell ? has(rubric, cell) : size(rubric) > 0);
+        if (!rubric) {
+          return false;
+        }
+        if (!id) {
+          return size(rubric) > 0;
+        }
+        const model = sidebar.workbook!.content.activeCell?.model;
+        return model?.id === id && model.type === 'code' && has(rubric, id);
       },
       [CommandIDs.lock]: () =>
         Correxit.open(sidebar.workbook, { quiet })?.locked === false,
@@ -139,13 +143,11 @@ export namespace Sidebar {
         isEnabled: enabled[CommandIDs.add],
         isVisible: enabled[CommandIDs.add],
         label: trans.__('Add expected (correct) output for this cell...'),
-        execute: async (args: { cell?: string }) => {
-          const { cell } = args;
-          if (!enabled[CommandIDs.add]({ cell })) {
+        execute: async (args: Partial<Correxit.Workbook.Cell>) => {
+          const { id } = args;
+          if (!enabled[CommandIDs.add]({ id })) {
             return;
           }
-          const workbook = sidebar.workbook!;
-          const rubric = Correxit.open(workbook)!;
           const expected = await Private.prompt({
             title: trans.__('Add expected output'),
             label: commands.label(CommandIDs.add, args)
@@ -153,12 +155,16 @@ export namespace Sidebar {
           if (!expected) {
             return;
           }
+          const workbook = sidebar.workbook!;
+          workbook.content.scrollToCell(workbook.content.activeCell!);
+          const rubric = Correxit.open(workbook) as Correxit.Rubric<'unlocked'>;
+          const payload = [await (async () => encrypt(expected, rubric.key))()];
           Correxit.add(workbook, {
             section: 'shared',
             cell: {
               format: 'digest',
-              id: cell!,
-              payload: [await (async () => encrypt(expected, rubric.key!))()]
+              id: id!,
+              payload
             }
           });
         }
@@ -186,25 +192,21 @@ export namespace Sidebar {
       commands.addCommand(CommandIDs.correct, {
         isEnabled: enabled[CommandIDs.correct],
         isVisible: enabled[CommandIDs.correct],
-        label: ({ cell }: { cell?: string }) =>
-          cell ? trans.__('Correct cell...') : trans.__('Correct workbook...'),
-        execute: async ({ cell }: { cell?: string }) => {
-          if (!enabled[CommandIDs.correct]({ cell })) {
+        label: ({ id }: Partial<Correxit.Workbook.Cell>) =>
+          id ? trans.__('Correct cell...') : trans.__('Correct workbook...'),
+        execute: async ({ id }: Partial<Correxit.Workbook.Cell>) => {
+          if (!enabled[CommandIDs.correct]({ id })) {
             return;
           }
-          const content = sidebar.workbook!.content;
-          if (
-            !content.activeCell ||
-            content.activeCell.model.id !== cell ||
-            content.activeCell.model.type !== 'code'
-          ) {
-            return;
-          }
-          const model = (content.activeCell as Cell<ICodeCellModel>).model;
-          console.log(model);
-          const outputs = model.toJSON().outputs || [];
+          const { content, context } = sidebar.workbook!;
+          content.scrollToCell(content.activeCell!);
+          const model = (content.activeCell as CodeCell).model;
+          const reply = await CodeCell.execute(
+            content.activeCell as CodeCell,
+            context.sessionContext
+          );
           const correct = !!(Date.now() % 2);
-          console.log('outputs', outputs);
+          console.log('outputs', model.outputs, 'reply', reply);
           void showDialog({
             title: correct ? trans.__('Correct!') : trans.__('Incorrect!')
           });

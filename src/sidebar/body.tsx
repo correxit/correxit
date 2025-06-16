@@ -46,7 +46,7 @@ const ActiveCell: React.FC<{
       </div>
       {[add, correct, remove].map(command => (
         <CommandToolbarButtonComponent
-          args={{ cell: cell.model.id }}
+          args={{ id: cell.model.id }}
           commands={commands}
           id={command}
           key={command}
