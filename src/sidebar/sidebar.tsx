@@ -100,8 +100,13 @@ export namespace Sidebar {
     const { trans } = sidebar;
     const quiet = true;
     const enabled = {
-      [CommandIDs.add]: ({ cell }: { cell?: string }) =>
-        Correxit.open(sidebar.workbook, { quiet })?.locked === false && !!cell,
+      [CommandIDs.add]: ({ cell }: { cell?: string }) => {
+        const rubric = Correxit.open(sidebar.workbook, { quiet });
+        if (!cell || !rubric || rubric.locked) {
+          return !Correxit.Rubric.has(rubric!, cell!);
+        }
+        return false;
+      },
       [CommandIDs.convert]: () => {
         const model = sidebar.workbook?.content.model;
         return !!(model && !model.getMetadata('correxit'));
@@ -119,18 +124,28 @@ export namespace Sidebar {
       commands.addCommand(CommandIDs.add, {
         isEnabled: enabled[CommandIDs.add],
         isVisible: enabled[CommandIDs.add],
-        label: trans.__('Add an answer for this cell...'),
-        execute: async ({ cell }: { cell?: string }) => {
+        label: trans.__('Add expected output for this cell...'),
+        execute: async (args: { cell?: string }) => {
+          const { cell } = args;
           if (!enabled[CommandIDs.add]({ cell })) {
             return;
           }
           const workbook = sidebar.workbook!;
-          console.log('implement add functionality');
           const rubric = Correxit.open(workbook);
-          const payload = [await (async () => encrypt('42', rubric!.key!))()];
+          const expected = await Private.prompt({
+            title: trans.__('Expected output'),
+            label: commands.label(CommandIDs.add, args)
+          });
+          if (!expected) {
+            return;
+          }
           Correxit.add(workbook, {
             section: 'shared',
-            cell: { id: cell!, format: 'digest', payload }
+            cell: {
+              format: 'digest',
+              id: cell!,
+              payload: [await (async () => encrypt(expected, rubric!.key!))()]
+            }
           });
         }
       }),
