@@ -15,6 +15,12 @@ export type Rubric<Secure = 'locked' | 'unlocked'> = {
 };
 
 export namespace Rubric {
+  export const UNSCORED: Score = [
+    Number.NEGATIVE_INFINITY,
+    Number.POSITIVE_INFINITY
+  ];
+
+  export type Score = readonly [numerator: number, denominator: number];
 
   export type Section = { readonly cells: { [id: string]: Workbook.Cell; }; };
 

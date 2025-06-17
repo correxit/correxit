@@ -50,11 +50,15 @@ export namespace Correxit {
     }
   }
 
-  export async function correct(workbook: Workbook, cell?: string) {
+  export async function correct(
+    workbook: Workbook,
+    cell?: string
+  ): Promise<Rubric.Score> {
     const rubric = open(workbook, { quiet: true });
     if (!rubric) {
-      throw new Error('correct error');
+      return Rubric.UNSCORED;
     }
+    return [0, 0];
   }
 
   export async function lock(workbook: Workbook): Promise<void> {

@@ -4,7 +4,6 @@ import {
   showDialog,
   showErrorMessage
 } from '@jupyterlab/apputils';
-import { CodeCell } from '@jupyterlab/cells';
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
@@ -18,7 +17,7 @@ import {
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-import { encrypt, keygen } from '../correxit/security';
+import { digest, keygen } from '../correxit/security';
 import { Body } from './body';
 import { Footer } from './footer';
 import { Header } from './header';
@@ -157,8 +156,7 @@ export namespace Sidebar {
           }
           const workbook = sidebar.workbook!;
           workbook.content.scrollToCell(workbook.content.activeCell!);
-          const rubric = Correxit.open(workbook) as Correxit.Rubric<'unlocked'>;
-          const payload = [await (async () => encrypt(expected, rubric.key))()];
+          const payload = [await (async () => digest(expected))()];
           Correxit.add(workbook, {
             section: 'shared',
             cell: {
@@ -198,17 +196,14 @@ export namespace Sidebar {
           if (!enabled[CommandIDs.correct]({ id })) {
             return;
           }
-          const { content, context } = sidebar.workbook!;
-          content.scrollToCell(content.activeCell!);
-          const model = (content.activeCell as CodeCell).model;
-          const reply = await CodeCell.execute(
-            content.activeCell as CodeCell,
-            context.sessionContext
-          );
-          const correct = !!(Date.now() % 2);
-          console.log('outputs', model.outputs, 'reply', reply);
+          const workbook = sidebar.workbook!;
+          workbook!.content.scrollToCell(workbook.content.activeCell!);
+          const score = await Correxit.correct(workbook, id);
+          const unscored = score === Correxit.Rubric.UNSCORED;
+          const [x, y] = score;
           void showDialog({
-            title: correct ? trans.__('Correct!') : trans.__('Incorrect!')
+            title: trans.__('Computed score'),
+            body: unscored ? trans.__('Unscored') : trans.__('%1 of %2', x, y)
           });
         }
       }),
