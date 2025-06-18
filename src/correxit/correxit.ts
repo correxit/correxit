@@ -1,6 +1,8 @@
+import { find } from '@lumino/algorithm';
 import * as description from './description';
 import { Rubric as RUBRIC } from './rubric';
 import { Workbook as WORKBOOK } from './workbook';
+import { ICodeCellModel } from '@jupyterlab/cells';
 
 export namespace Correxit {
   export import Rubric = RUBRIC;
@@ -18,10 +20,8 @@ export namespace Correxit {
 
   export async function add(
     workbook: Workbook,
-    { cell, section }: {
-      cell: Workbook.Cell,
-      section: 'secret' | 'shared'
-    }
+    cell: Workbook.Cell,
+    section: 'secret' | 'shared' = 'secret'
   ) {
     const rubric = open(workbook, { quiet: true });
     if (!rubric || rubric.locked) {
@@ -52,11 +52,21 @@ export namespace Correxit {
 
   export async function correct(
     workbook: Workbook,
-    cell?: string
+    id?: string
   ): Promise<Rubric.Score> {
     const rubric = open(workbook, { quiet: true });
     if (!rubric) {
       return Rubric.UNSCORED;
+    }
+    const model = workbook.content.model!;
+    const cell = find(model.cells, cell => cell.id === id) as ICodeCellModel;
+    if (!cell || cell.type !== 'code') {
+      return Rubric.UNSCORED;
+    }
+    console.log(cell, cell.outputs);
+    const outputs = cell.outputs.toJSON()
+    for (const output of outputs) {
+      console.log('output', output);
     }
     return [0, 0];
   }

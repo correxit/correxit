@@ -1,4 +1,4 @@
-import { Cell } from '@jupyterlab/cells';
+import { ICodeCellModel } from '@jupyterlab/cells';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import {
   UseSignal,
@@ -22,8 +22,14 @@ export const Body: React.FC<{
     <section className="correxit-body">
       <UseSignal initialArgs={activeCell} key={id} signal={activeCellChanged}>
         {(_, cell) => {
-          if (cell) {
-            return <ActiveCell cell={cell} commands={commands} trans={trans} />;
+          if (cell?.model && cell.model.type === 'code') {
+            return (
+              <ActiveCell
+                cell={cell.model as ICodeCellModel}
+                commands={commands}
+                trans={trans}
+              />
+            );
           }
           return <></>;
         }}
@@ -33,24 +39,36 @@ export const Body: React.FC<{
 };
 
 const ActiveCell: React.FC<{
-  cell: Cell;
+  cell: ICodeCellModel;
   commands: CommandRegistry;
+  reference?: ICodeCellModel;
   trans: IRenderMime.TranslationBundle;
-}> = ({ cell, commands, trans }) => {
+}> = ({ cell, commands, reference, trans }) => {
   const { add, correct, remove } = Sidebar.CommandIDs;
+  const ref = { ref: reference?.id || '' };
+  const buttons: CommandToolbarButtonComponent.IProps[] = [
+    { commands, id: add, args: { id: cell.id, is: 'answerable' } },
+    { commands, id: add, args: { id: cell.id, is: 'comparable', ...ref } },
+    { commands, id: add, args: { id: cell.id, is: 'correctable', ...ref } },
+    { commands, id: correct, args: { id: cell.id } },
+    { commands, id: remove, args: { id: cell.id } }
+  ];
   return (
     <>
-      <h4>{trans.__('Active cell:')}</h4>
-      <div className="correxit-cell-id" title={cell.model.id}>
-        {cell.model.id}
+      <h4>{trans.__('Current cell:')}</h4>
+      <div className="correxit-cell-id" title={cell.id}>
+        {cell.id}
       </div>
-      {[add, correct, remove].map(command => (
-        <CommandToolbarButtonComponent
-          args={{ id: cell.model.id }}
-          commands={commands}
-          id={command}
-          key={command}
-        />
+      {reference && (
+        <>
+          <h4>{trans.__('Reference cell:')}</h4>
+          <div className="correxit-cell-id" title={reference.id}>
+            {reference.id}
+          </div>
+        </>
+      )}
+      {buttons.map((props, index) => (
+        <CommandToolbarButtonComponent key={index} {...props} />
       ))}
     </>
   );

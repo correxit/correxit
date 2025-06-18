@@ -2,7 +2,6 @@ import {
   ILayoutRestorer,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-import { ICommandPalette } from '@jupyterlab/apputils';
 import { INotebookTracker } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
@@ -37,17 +36,15 @@ export const sidebar: JupyterFrontEndPlugin<void> = {
   id: Correxit.SIDEBAR,
   description: Correxit.DESCRIPTION.SIDEBAR,
   autoStart: true,
-  requires: [INotebookTracker, ITranslator],
-  optional: [ICommandPalette, ILayoutRestorer],
+  requires: [INotebookTracker],
+  optional: [ITranslator, ILayoutRestorer],
   ...((deactivator?: () => void) => ({
     activate: (
       { commands, shell },
       tracker: INotebookTracker,
       translator: ITranslator | null,
-      palette: ICommandPalette | null,
       restorer: ILayoutRestorer | null
     ) => {
-      const { addCommands, CommandIDs } = Sidebar;
       const sidebar = new Sidebar({ commands, shell, tracker, translator });
 
       sidebar.id = 'correxit-sidebar';
@@ -57,13 +54,8 @@ export const sidebar: JupyterFrontEndPlugin<void> = {
       }
 
       // Add sidebar commands and keep track of their disposables.
-      const disposables = addCommands(commands, sidebar);
+      const disposables = Sidebar.addCommands(commands, sidebar);
       disposables.push(sidebar);
-      if (palette) {
-        disposables.push(
-          palette.addItem({ category: 'Correxit', command: CommandIDs.unlock })
-        );
-      }
       deactivator = () => disposables.forEach(item => item.dispose());
     },
     deactivate: () => deactivator?.()
