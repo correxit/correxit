@@ -11,7 +11,8 @@ export namespace Workbook {
   export type Cell = {
     readonly id: ICodeCellModel['id'];
     readonly is: 'answerable' | 'comparable' | 'correctable';
-    readonly payload: string[];
-    readonly ref?: ICodeCellModel['id'];
+    readonly payload?: string[];
+    readonly reference?: ICodeCellModel['id'];
+    readonly shared?: boolean;
   };
 }

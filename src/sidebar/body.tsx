@@ -12,6 +12,7 @@ import { Sidebar } from './sidebar';
 export const Body: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
+  waiting?: ICodeCellModel['id'];
   workbook: Correxit.Workbook;
 }> = ({ commands, trans, workbook }) => {
   const { activeCell, activeCellChanged, id, model } = workbook.content;
@@ -24,7 +25,7 @@ export const Body: React.FC<{
         {(_, cell) => {
           if (cell?.model && cell.model.type === 'code') {
             return (
-              <ActiveCell
+              <WorkbookCell
                 cell={cell.model as ICodeCellModel}
                 commands={commands}
                 trans={trans}
@@ -38,20 +39,20 @@ export const Body: React.FC<{
   );
 };
 
-const ActiveCell: React.FC<{
+const WorkbookCell: React.FC<{
   cell: ICodeCellModel;
   commands: CommandRegistry;
   reference?: ICodeCellModel;
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell, commands, reference, trans }) => {
   const { add, correct, remove } = Sidebar.CommandIDs;
-  const ref = { ref: reference?.id || '' };
+  const args = { id: cell.id, reference: reference?.id || '' };
   const buttons: CommandToolbarButtonComponent.IProps[] = [
-    { commands, id: add, args: { id: cell.id, is: 'answerable' } },
-    { commands, id: add, args: { id: cell.id, is: 'comparable', ...ref } },
-    { commands, id: add, args: { id: cell.id, is: 'correctable', ...ref } },
-    { commands, id: correct, args: { id: cell.id } },
-    { commands, id: remove, args: { id: cell.id } }
+    { commands, id: add, args: { ...args, is: 'answerable' } },
+    { commands, id: add, args: { ...args, is: 'comparable' } },
+    { commands, id: add, args: { ...args, is: 'correctable' } },
+    { commands, id: correct, args },
+    { commands, id: remove, args }
   ];
   return (
     <>

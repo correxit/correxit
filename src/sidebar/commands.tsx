@@ -8,7 +8,7 @@ import { PathExt } from '@jupyterlab/coreutils';
 import { lockIcon, notebookIcon } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit } from '../correxit';
-import { keygen } from '../correxit/security';
+import { digest, keygen } from '../correxit/security';
 import { Sidebar } from '.';
 
 export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
@@ -16,7 +16,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
   const { has, size } = Correxit.Rubric;
   const { trans } = sidebar;
   const quiet = true;
-  const enabled = {
+  const validate = {
     [CommandIDs.add]: ({ id, is }: Partial<Correxit.Workbook.Cell>) => {
       const rubric = Correxit.open(sidebar.workbook, { quiet });
       const model = sidebar.workbook?.content.activeCell?.model;
@@ -54,10 +54,13 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
   };
   return [
     commands.addCommand(CommandIDs.add, {
-      isEnabled: enabled[CommandIDs.add],
-      isVisible: enabled[CommandIDs.add],
+      isEnabled: validate[CommandIDs.add],
+      isVisible: validate[CommandIDs.add],
       label: (cell: Partial<Correxit.Workbook.Cell>) => {
-        const waiting = sidebar.hasClass(Sidebar.WAITING);
+        if (!validate[CommandIDs.add](cell)) {
+          return '';
+        }
+        const waiting = sidebar.dataset.waiting;
         if (cell.is === 'answerable') {
           return trans.__('Expect output of this cell to match answer...');
         }
@@ -76,29 +79,35 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         return '';
       },
       execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
-        if (!enabled[CommandIDs.add](cell)) {
-          return;
-        }
-        const expected = await Private.prompt({
-          title: trans.__('Add expected output'),
-          label: commands.label(CommandIDs.add, cell)
-        });
-        if (!expected) {
+        if (!validate[CommandIDs.add](cell)) {
           return;
         }
         const id: ICellModel['id'] = cell.id!;
-        const payload: Correxit.Workbook.Cell['payload'] = [];
+        const is = cell.is!;
         const workbook = sidebar.workbook!;
-        workbook.content.scrollToCell(workbook.content.activeCell!);
-        Correxit.add(workbook, { id, is: 'answerable', payload }, 'shared');
+        if (is === 'answerable') {
+          const expected = await Private.prompt({
+            title: trans.__('Add expected output'),
+            label: commands.label(CommandIDs.add, cell)
+          });
+          if (!expected) {
+            return;
+          }
+          const payload = [await digest(expected)];
+          return Correxit.add(workbook, { id, is, payload });
+        }
+        if (is === 'comparable' || is === 'correctable') {
+          console.log('two step process');
+          return;
+        }
       }
     }),
     commands.addCommand(CommandIDs.convert, {
-      isEnabled: enabled[CommandIDs.convert],
-      isVisible: enabled[CommandIDs.convert],
+      isEnabled: validate[CommandIDs.convert],
+      isVisible: validate[CommandIDs.convert],
       label: trans.__('Convert notebook to a workbook...'),
       execute: async () => {
-        if (!enabled[CommandIDs.convert]()) {
+        if (!validate[CommandIDs.convert]()) {
           return;
         }
         const workbook = sidebar.workbook!;
@@ -114,12 +123,12 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       }
     }),
     commands.addCommand(CommandIDs.correct, {
-      isEnabled: enabled[CommandIDs.correct],
-      isVisible: enabled[CommandIDs.correct],
+      isEnabled: validate[CommandIDs.correct],
+      isVisible: validate[CommandIDs.correct],
       label: ({ id }: Partial<Correxit.Workbook.Cell>) =>
         id ? trans.__('Correct cell...') : trans.__('Correct workbook...'),
       execute: async ({ id }: { id?: ICellModel['id'] }) => {
-        if (!enabled[CommandIDs.correct]({ id: id ?? '' })) {
+        if (!validate[CommandIDs.correct]({ id: id ?? '' })) {
           return;
         }
         const workbook = sidebar.workbook!;
@@ -135,11 +144,11 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     }),
     commands.addCommand(CommandIDs.lock, {
       icon: lockIcon,
-      isEnabled: enabled[CommandIDs.lock],
-      isVisible: enabled[CommandIDs.lock],
+      isEnabled: validate[CommandIDs.lock],
+      isVisible: validate[CommandIDs.lock],
       label: trans.__('Lock grader mode (PGP encrypt)'),
       execute: async () => {
-        if (!enabled[CommandIDs.lock]()) {
+        if (!validate[CommandIDs.lock]()) {
           return;
         }
         try {
@@ -152,23 +161,23 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       }
     }),
     commands.addCommand(CommandIDs.remove, {
-      isEnabled: enabled[CommandIDs.remove],
-      isVisible: enabled[CommandIDs.remove],
+      isEnabled: validate[CommandIDs.remove],
+      isVisible: validate[CommandIDs.remove],
       label: trans.__('Reset expected cell output'),
       execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
-        if (enabled[CommandIDs.remove](cell)) {
+        if (validate[CommandIDs.remove](cell)) {
           return Correxit.remove(sidebar.workbook!, cell.id!);
         }
       }
     }),
     commands.addCommand(CommandIDs.reset, {
       icon: notebookIcon,
-      isEnabled: enabled[CommandIDs.reset],
-      isVisible: enabled[CommandIDs.reset],
+      isEnabled: validate[CommandIDs.reset],
+      isVisible: validate[CommandIDs.reset],
       caption: 'Delete workbook metadata, leave notebook cells unmodified',
       label: trans.__('Revert to notebook (delete workbook metadata)...'),
       execute: async () => {
-        if (!enabled[CommandIDs.reset]()) {
+        if (!validate[CommandIDs.reset]()) {
           return;
         }
         const title = trans.__('Revert to notebook');
@@ -182,8 +191,8 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     }),
     commands.addCommand(CommandIDs.unlock, {
       icon: lockIcon,
-      isEnabled: enabled[CommandIDs.unlock],
-      isVisible: enabled[CommandIDs.unlock],
+      isEnabled: validate[CommandIDs.unlock],
+      isVisible: validate[CommandIDs.unlock],
       label: trans.__('Unlock grader mode (PGP decrypt)...'),
       usage: `
 The command execute args type is: { key?: string }
@@ -196,7 +205,7 @@ The returned promise never rejects.
 The command invokes an error message dialog if unlock fails.
       `,
       execute: async ({ key }: { key?: string }) => {
-        if (!enabled[CommandIDs.unlock]()) {
+        if (!validate[CommandIDs.unlock]()) {
           return null;
         }
         try {

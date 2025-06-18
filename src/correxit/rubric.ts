@@ -83,6 +83,32 @@ export namespace Rubric {
       Object.keys(shared).length;
   }
 
+  export function toggle(
+    rubric: Rubric<'unlocked'>,
+    cell: Workbook.Cell
+  ): Rubric<'unlocked'> {
+    if (!has(rubric, cell.id)) {
+      throw new Error('cannot toggle cell unknown in rubric');
+    }
+    const add = (section: Section, cell: Workbook.Cell): Section => {
+      return {
+        cells: {
+          ...section.cells,
+          [cell.id]: { ...cell, shared: !cell.shared }
+        }
+      };
+    }
+    const remove = (section: Section, cell: Workbook.Cell): Section => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [cell.id]: _, ...cells } = section.cells;
+      return { cells };
+    }
+    const { id, key, locked } = rubric;
+    const secret = (cell.shared ? add : remove)(rubric.secret, cell);
+    const shared = (cell.shared ? remove : add)(rubric.shared, cell);
+    return { id, key, locked, secret, shared };
+  }
+
   export async function unlock(
     rubric: Rubric<'locked'>,
     key: string

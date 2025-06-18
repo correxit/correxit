@@ -52,12 +52,18 @@ export class Sidebar extends ReactWidget {
     }
     const { model } = workbook.content;
     const key = model.cells.get(0).id;
+    const waiting = this.dataset.waiting;
     return (
       <UseSignal key={key} signal={model.metadataChanged} initialSender={model}>
         {() => (
           <>
             <Header commands={commands} trans={trans} workbook={workbook} />
-            <Body commands={commands} trans={trans} workbook={workbook} />
+            <Body
+              commands={commands}
+              trans={trans}
+              waiting={waiting}
+              workbook={workbook}
+            />
             <Footer commands={commands} />
           </>
         )}
@@ -85,8 +91,6 @@ export namespace Sidebar {
     export const reset = 'correxit:reset';
     export const unlock = 'correxit:unlock';
   }
-
-  export const WAITING = 'correxit-mod-waiting';
 
   export const addCommands: typeof ADD_COMMANDS = ADD_COMMANDS;
 }

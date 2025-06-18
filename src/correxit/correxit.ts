@@ -20,14 +20,13 @@ export namespace Correxit {
 
   export async function add(
     workbook: Workbook,
-    cell: Workbook.Cell,
-    section: 'secret' | 'shared' = 'secret'
+    cell: Workbook.Cell
   ) {
     const rubric = open(workbook, { quiet: true });
     if (!rubric || rubric.locked) {
       return new Error('add error');
     }
-    rubric[section].cells[cell.id] = cell;
+    rubric[cell.shared ? 'shared' : 'secret'].cells[cell.id] = cell;
     await Private.write(workbook, rubric);
     return unlock(workbook, rubric.key);
   }
