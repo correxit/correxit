@@ -10,7 +10,6 @@ import { Body } from './body';
 import { addCommands as ADD_COMMANDS } from './commands';
 import { Footer } from './footer';
 import { Header } from './header';
-import { ICodeCellModel } from '@jupyterlab/cells';
 
 export class Sidebar extends ReactWidget {
   constructor({ commands, shell, tracker, translator }: Sidebar.IOptions) {
@@ -29,11 +28,11 @@ export class Sidebar extends ReactWidget {
 
   readonly trans: IRenderMime.TranslationBundle;
 
-  public get waiting(): ICodeCellModel['id'] | null {
+  public get waiting(): string | null {
     return this.dataset.waiting || null;
   }
-  public set waiting(id: ICodeCellModel['id'] | null) {
-    const current: ICodeCellModel['id'] | null = this.dataset.waiting || null;
+  public set waiting(id: string | null) {
+    const current: string | null = this.dataset.waiting || null;
     if (id === current) {
       return;
     }

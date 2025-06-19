@@ -16,6 +16,7 @@ export const Body: React.FC<{
   waiting: ICodeCellModel['id'] | null;
   workbook: Correxit.Workbook;
 }> = ({ commands, trans, waiting, workbook }) => {
+  const { Cell } = Correxit.Workbook;
   const { activeCell, activeCellChanged, id, model } = workbook.content;
   if (!model || !activeCell || !model.getMetadata('correxit')) {
     return <section className="correxit-body"></section>;
@@ -27,11 +28,11 @@ export const Body: React.FC<{
           if (
             !reference?.model ||
             reference.model.type !== 'code' ||
-            (reference.model as ICodeCellModel).id === waiting
+            Cell.id(reference.model) === waiting
           ) {
             return <></>;
           }
-          const cell = find(model.cells, cell => cell.id === waiting);
+          const cell = find(model.cells, cell => Cell.id(cell) === waiting);
           return (
             <WorkbookCell
               cell={(cell || reference.model) as ICodeCellModel}
@@ -52,8 +53,12 @@ const WorkbookCell: React.FC<{
   reference?: ICodeCellModel;
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell, commands, reference, trans }) => {
+  const { Cell } = Correxit.Workbook;
   const { add, correct, remove } = Sidebar.CommandIDs;
-  const args = { id: cell.id, reference: reference?.id || '' };
+  const args: Partial<Correxit.Workbook.Cell> = {
+    id: Cell.id(cell, true),
+    reference: reference ? Cell.id(reference, true) : ''
+  };
   const buttons: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: add, args: { ...args, is: 'answerable' } },
     { commands, id: add, args: { ...args, is: 'comparable' } },
@@ -64,14 +69,14 @@ const WorkbookCell: React.FC<{
   return (
     <>
       <h4>{trans.__('Workbook cell:')}</h4>
-      <div className="correxit-cell-id" title={cell.id}>
-        {cell.id}
+      <div className="correxit-cell-id" title={Cell.id(cell)}>
+        {Cell.id(cell)}
       </div>
       {reference && (
         <>
           <h4>{trans.__('Reference cell:')}</h4>
-          <div className="correxit-cell-id" title={reference.id}>
-            {reference.id}
+          <div className="correxit-cell-id" title={Cell.id(reference)}>
+            {Cell.id(reference)}
           </div>
         </>
       )}

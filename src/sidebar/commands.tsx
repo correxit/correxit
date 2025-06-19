@@ -3,7 +3,6 @@ import {
   showDialog,
   showErrorMessage
 } from '@jupyterlab/apputils';
-import { ICellModel } from '@jupyterlab/cells';
 import { PathExt } from '@jupyterlab/coreutils';
 import { lockIcon, notebookIcon } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
@@ -16,17 +15,18 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
   type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
   const { CommandIDs } = Sidebar;
   const { has, size } = Correxit.Rubric;
+  const { Cell } = Correxit.Workbook;
   const { trans } = sidebar;
   const quiet = true;
   const validate = {
     [CommandIDs.add]: ({ id, is }: CellCommandArgs) => {
       const rubric = Correxit.open(sidebar.workbook, { quiet });
       const cells = sidebar.workbook?.content.model?.cells || [];
-      const model = find(cells, cell => cell.id === id);
+      const model = find(cells, cell => Cell.id(cell) === id);
       if (!id || !is || !model || !rubric || rubric.locked) {
         return false;
       }
-      return model.id === id && model.type === 'code' && !has(rubric, id);
+      return model.type === 'code' && !has(rubric, id);
     },
     [CommandIDs.convert]: () => {
       const model = sidebar.workbook?.content.model;
@@ -41,7 +41,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         return size(rubric) > 0;
       }
       const model = sidebar.workbook!.content.activeCell?.model;
-      return model?.id === id && model.type === 'code' && has(rubric, id);
+      return Cell.id(model) === id && model?.type === 'code' && has(rubric, id);
     },
     [CommandIDs.lock]: () =>
       Correxit.open(sidebar.workbook, { quiet })?.locked === false,
@@ -84,7 +84,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         if (!validate[CommandIDs.add](cell)) {
           return;
         }
-        const id: ICellModel['id'] = cell.id!;
+        const id = cell.id!;
         const is = cell.is!;
         const { reference } = cell;
         const workbook = sidebar.workbook!;
@@ -137,7 +137,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       isVisible: validate[CommandIDs.correct],
       label: ({ id }: CellCommandArgs) =>
         id ? trans.__('Correct cell...') : trans.__('Correct workbook...'),
-      execute: async ({ id }: { id?: ICellModel['id'] }) => {
+      execute: async ({ id }: CellCommandArgs) => {
         if (!validate[CommandIDs.correct]({ id: id ?? '' })) {
           return;
         }
