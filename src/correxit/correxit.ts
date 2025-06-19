@@ -1,8 +1,10 @@
-import { find } from '@lumino/algorithm';
-import * as description from './description';
-import { Rubric as RUBRIC } from './rubric';
-import { Workbook as WORKBOOK } from './workbook';
 import { ICodeCellModel } from '@jupyterlab/cells';
+import { NotebookActions } from '@jupyterlab/notebook';
+import { find, findIndex } from '@lumino/algorithm';
+import * as description from './description';
+import { Rubric, Rubric as RUBRIC } from './rubric';
+import { encrypt } from './security';
+import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
   export import Rubric = RUBRIC;
@@ -13,6 +15,8 @@ export namespace Correxit {
     PLUGIN: description.PLUGIN,
     SIDEBAR: description.SIDEBAR
   };
+
+  export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
   export const PLUGIN = 'correxit:plugin';
 
@@ -27,7 +31,7 @@ export namespace Correxit {
       return new Error('add error');
     }
     rubric[cell.shared ? 'shared' : 'secret'].cells[cell.id] = cell;
-    await Private.write(workbook, rubric);
+    await Secure.metadata(workbook, rubric);
     return unlock(workbook, rubric.key);
   }
 
@@ -38,11 +42,11 @@ export namespace Correxit {
     try {
       const opened = open(workbook)!;
       const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
-      await Private.write(workbook, rubric);
+      await Secure.metadata(workbook, rubric);
       return unlock(workbook, rubric.key);
     } catch (error) {
-      if (error === Private.NO_CORREXIT_METADATA) {
-        await Private.write(workbook, Correxit.Rubric.create(key));
+      if (error === NO_CORREXIT_METADATA) {
+        await Secure.metadata(workbook, Correxit.Rubric.create(key));
         return unlock(workbook, key);
       }
       throw error;
@@ -58,12 +62,11 @@ export namespace Correxit {
       return Rubric.UNSCORED;
     }
     const model = workbook.content.model!;
-    const cell = find(model.cells, cell => cell.id === id) as ICodeCellModel;
-    if (!cell || cell.type !== 'code') {
+    const code = find(model.cells, cell => cell.id === id) as ICodeCellModel;
+    if (!code || code.type !== 'code') {
       return Rubric.UNSCORED;
     }
-    const outputs = cell.outputs.toJSON()
-    for (const output of outputs) {
+    for (const output of code.outputs.toJSON()) {
       console.log('output', output);
     }
     return [0, 0];
@@ -71,9 +74,12 @@ export namespace Correxit {
 
   export async function lock(workbook: Workbook): Promise<void> {
     const rubric = open(workbook, { quiet: true });
-    if (rubric && !rubric.locked) {
-      return Private.write(workbook, rubric);
+    if (!rubric || rubric.locked) {
+      return;
     }
+    await Secure.metadata(workbook, rubric);
+    await Secure.content(workbook, rubric);
+    Secure.CACHE.set(workbook, await Rubric.lock(rubric));
   }
 
   /**
@@ -97,8 +103,8 @@ export namespace Correxit {
       }
       throw new Error('workbook or content model is null');
     }
-    if (Private.CACHE.has(workbook)) {
-      return Private.CACHE.get(workbook)!;
+    if (Secure.CACHE.has(workbook)) {
+      return Secure.CACHE.get(workbook)!;
     }
 
     const rubric: Rubric<'locked'> | null =
@@ -107,7 +113,7 @@ export namespace Correxit {
       if (quiet) {
         return null;
       }
-      throw Private.NO_CORREXIT_METADATA;
+      throw NO_CORREXIT_METADATA;
     }
     try {
       return Rubric.normalize(rubric);
@@ -126,12 +132,12 @@ export namespace Correxit {
     }
     delete rubric.secret.cells[cell];
     delete rubric.shared.cells[cell];
-    await Private.write(workbook, rubric);
+    await Secure.metadata(workbook, rubric);
     return unlock(workbook, rubric.key);
   }
 
   export async function reset(workbook: Workbook) {
-    Private.CACHE.delete(workbook);
+    Secure.CACHE.delete(workbook);
     workbook.content.model?.deleteMetadata('correxit');
   }
 
@@ -144,19 +150,17 @@ export namespace Correxit {
       return opened;
     }
     const rubric = await Rubric.unlock(opened, key);
-    await Private.write(workbook, rubric);
-    Private.CACHE.set(workbook, rubric);
+    await Secure.metadata(workbook, rubric);
+    Secure.CACHE.set(workbook, rubric);
     return rubric;
   }
 }
 
-namespace Private {
+namespace Secure {
   export const CACHE = new WeakMap<
     Correxit.Workbook,
     Correxit.Rubric<'locked'> | Correxit.Rubric<'unlocked'>
   >();
-
-  export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
   /**
    * Write rubric metadata to workbook.
@@ -166,13 +170,33 @@ namespace Private {
    * #### Notes
    * This function always sets the workbook's cached rubric to locked.
    */
-  export async function write(
+  export async function metadata(
     workbook: Correxit.Workbook,
     rubric: Correxit.Rubric<'unlocked'>
   ): Promise<void> {
-    const { content: { model } } = workbook;
+    const notebook = workbook.content;
+    const model = notebook.model!;
     const locked = await Correxit.Rubric.lock(rubric);
-    CACHE.set(workbook, locked);
-    model?.setMetadata('correxit', locked);
+    model.setMetadata('correxit', locked);
+  }
+
+  export async function content(
+    workbook: Correxit.Workbook,
+    rubric: Rubric<'unlocked'>
+  ): Promise<void> {
+    const { key, secret } = rubric;
+    const notebook = workbook.content;
+    const model = notebook.model!;
+    NotebookActions.clearAllOutputs(notebook);
+    for (const id of Object.keys(secret.cells)) {
+      const index = findIndex(model.cells, cell => cell.id === id);
+      const cell = model.cells.get(index);
+      const source = cell.sharedModel.getSource();
+      const widget = find(notebook.widgets, ({ model }) => model === cell)!;
+      notebook.deselectAll();
+      notebook.select(widget);
+      cell.sharedModel.setSource(await encrypt(source, key));
+      NotebookActions.changeCellType(workbook.content, 'raw')
+    };
   }
 }
