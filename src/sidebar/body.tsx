@@ -4,6 +4,7 @@ import {
   UseSignal,
   CommandToolbarButtonComponent
 } from '@jupyterlab/ui-components';
+import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
@@ -12,9 +13,9 @@ import { Sidebar } from './sidebar';
 export const Body: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
-  waiting?: ICodeCellModel['id'];
+  waiting: ICodeCellModel['id'] | null;
   workbook: Correxit.Workbook;
-}> = ({ commands, trans, workbook }) => {
+}> = ({ commands, trans, waiting, workbook }) => {
   const { activeCell, activeCellChanged, id, model } = workbook.content;
   if (!model || !activeCell || !model.getMetadata('correxit')) {
     return <section className="correxit-body"></section>;
@@ -22,17 +23,23 @@ export const Body: React.FC<{
   return (
     <section className="correxit-body">
       <UseSignal initialArgs={activeCell} key={id} signal={activeCellChanged}>
-        {(_, cell) => {
-          if (cell?.model && cell.model.type === 'code') {
-            return (
-              <WorkbookCell
-                cell={cell.model as ICodeCellModel}
-                commands={commands}
-                trans={trans}
-              />
-            );
+        {(_, reference) => {
+          if (
+            !reference?.model ||
+            reference.model.type !== 'code' ||
+            (reference.model as ICodeCellModel).id === waiting
+          ) {
+            return <></>;
           }
-          return <></>;
+          const cell = find(model.cells, cell => cell.id === waiting);
+          return (
+            <WorkbookCell
+              cell={(cell || reference.model) as ICodeCellModel}
+              reference={cell ? (reference.model as ICodeCellModel) : undefined}
+              commands={commands}
+              trans={trans}
+            />
+          );
         }}
       </UseSignal>
     </section>
@@ -56,7 +63,7 @@ const WorkbookCell: React.FC<{
   ];
   return (
     <>
-      <h4>{trans.__('Current cell:')}</h4>
+      <h4>{trans.__('Workbook cell:')}</h4>
       <div className="correxit-cell-id" title={cell.id}>
         {cell.id}
       </div>

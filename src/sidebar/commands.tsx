@@ -10,16 +10,19 @@ import { CommandRegistry } from '@lumino/commands';
 import { Correxit } from '../correxit';
 import { digest, keygen } from '../correxit/security';
 import { Sidebar } from '.';
+import { find } from '@lumino/algorithm';
 
 export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
+  type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
   const { CommandIDs } = Sidebar;
   const { has, size } = Correxit.Rubric;
   const { trans } = sidebar;
   const quiet = true;
   const validate = {
-    [CommandIDs.add]: ({ id, is }: Partial<Correxit.Workbook.Cell>) => {
+    [CommandIDs.add]: ({ id, is }: CellCommandArgs) => {
       const rubric = Correxit.open(sidebar.workbook, { quiet });
-      const model = sidebar.workbook?.content.activeCell?.model;
+      const cells = sidebar.workbook?.content.model?.cells || [];
+      const model = find(cells, cell => cell.id === id);
       if (!id || !is || !model || !rubric || rubric.locked) {
         return false;
       }
@@ -29,7 +32,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       const model = sidebar.workbook?.content.model;
       return !!(model && !model.getMetadata('correxit'));
     },
-    [CommandIDs.correct]: ({ id }: Partial<Correxit.Workbook.Cell>) => {
+    [CommandIDs.correct]: ({ id }: CellCommandArgs) => {
       const rubric = Correxit.open(sidebar.workbook, { quiet: true });
       if (!rubric) {
         return false;
@@ -42,7 +45,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     },
     [CommandIDs.lock]: () =>
       Correxit.open(sidebar.workbook, { quiet })?.locked === false,
-    [CommandIDs.remove]: ({ id }: Partial<Correxit.Workbook.Cell>) => {
+    [CommandIDs.remove]: ({ id }: CellCommandArgs) => {
       const { has } = Correxit.Rubric;
       const rubric = Correxit.open(sidebar.workbook, { quiet });
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
@@ -56,34 +59,34 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     commands.addCommand(CommandIDs.add, {
       isEnabled: validate[CommandIDs.add],
       isVisible: validate[CommandIDs.add],
-      label: (cell: Partial<Correxit.Workbook.Cell>) => {
+      label: (cell: CellCommandArgs) => {
         if (!validate[CommandIDs.add](cell)) {
           return '';
         }
-        const waiting = sidebar.dataset.waiting;
         if (cell.is === 'answerable') {
           return trans.__('Expect output of this cell to match answer...');
         }
         if (cell.is === 'comparable') {
-          if (waiting) {
-            trans.__("Select this cell's output as expected value");
+          if (cell.id && cell.reference) {
+            return trans.__("Select this cell's output as expected value");
           }
           return trans.__('Select another cell for comparing cell output...');
         }
         if (cell.is === 'correctable') {
-          if (waiting) {
-            trans.__('Select this cell for correction');
+          if (cell.id && cell.reference) {
+            return trans.__('Select this cell for correction');
           }
           return trans.__('Select another cell that corrects this cell...');
         }
         return '';
       },
-      execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
+      execute: async (cell: CellCommandArgs) => {
         if (!validate[CommandIDs.add](cell)) {
           return;
         }
         const id: ICellModel['id'] = cell.id!;
         const is = cell.is!;
+        const { reference } = cell;
         const workbook = sidebar.workbook!;
         if (is === 'answerable') {
           const expected = await Private.prompt({
@@ -97,8 +100,15 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
           return Correxit.add(workbook, { id, is, payload });
         }
         if (is === 'comparable' || is === 'correctable') {
-          console.log('two step process');
-          return;
+          if (reference) {
+            sidebar.waiting = null;
+            return Correxit.add(workbook, { ...cell, id, is });
+          }
+          void showDialog({
+            title: trans.__('Select another cell to continue'),
+            body: trans.__('Select another cell for comparing or correcting')
+          });
+          sidebar.waiting = id;
         }
       }
     }),
@@ -125,7 +135,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     commands.addCommand(CommandIDs.correct, {
       isEnabled: validate[CommandIDs.correct],
       isVisible: validate[CommandIDs.correct],
-      label: ({ id }: Partial<Correxit.Workbook.Cell>) =>
+      label: ({ id }: CellCommandArgs) =>
         id ? trans.__('Correct cell...') : trans.__('Correct workbook...'),
       execute: async ({ id }: { id?: ICellModel['id'] }) => {
         if (!validate[CommandIDs.correct]({ id: id ?? '' })) {
@@ -164,7 +174,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       isEnabled: validate[CommandIDs.remove],
       isVisible: validate[CommandIDs.remove],
       label: trans.__('Reset expected cell output'),
-      execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
+      execute: async (cell: CellCommandArgs) => {
         if (validate[CommandIDs.remove](cell)) {
           return Correxit.remove(sidebar.workbook!, cell.id!);
         }

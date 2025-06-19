@@ -62,7 +62,6 @@ export namespace Correxit {
     if (!cell || cell.type !== 'code') {
       return Rubric.UNSCORED;
     }
-    console.log(cell, cell.outputs);
     const outputs = cell.outputs.toJSON()
     for (const output of outputs) {
       console.log('output', output);

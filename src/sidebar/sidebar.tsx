@@ -10,6 +10,7 @@ import { Body } from './body';
 import { addCommands as ADD_COMMANDS } from './commands';
 import { Footer } from './footer';
 import { Header } from './header';
+import { ICodeCellModel } from '@jupyterlab/cells';
 
 export class Sidebar extends ReactWidget {
   constructor({ commands, shell, tracker, translator }: Sidebar.IOptions) {
@@ -28,6 +29,22 @@ export class Sidebar extends ReactWidget {
 
   readonly trans: IRenderMime.TranslationBundle;
 
+  public get waiting(): ICodeCellModel['id'] | null {
+    return this.dataset.waiting || null;
+  }
+  public set waiting(id: ICodeCellModel['id'] | null) {
+    const current: ICodeCellModel['id'] | null = this.dataset.waiting || null;
+    if (id === current) {
+      return;
+    }
+    if (id) {
+      this.dataset.waiting = id;
+    } else {
+      delete this.dataset.waiting;
+    }
+    this.update();
+  }
+
   public get workbook(): Correxit.Workbook | null {
     return this._workbook;
   }
@@ -35,6 +52,7 @@ export class Sidebar extends ReactWidget {
     if (this._workbook !== workbook) {
       void Correxit.open(workbook, { quiet: true });
       this._workbook = workbook;
+      this.waiting = null;
       this.update();
     }
   }
@@ -46,13 +64,13 @@ export class Sidebar extends ReactWidget {
     if (workbook === null || workbook.content.model === null) {
       return (
         <section>
-          <small>{trans.__('[correxit idle, waiting for notebook]')}</small>
+          <small>[{trans.__('correxit idle, waiting for notebook')}]</small>
         </section>
       );
     }
     const { model } = workbook.content;
     const key = model.cells.get(0).id;
-    const waiting = this.dataset.waiting;
+    const { waiting } = this;
     return (
       <UseSignal key={key} signal={model.metadataChanged} initialSender={model}>
         {() => (
