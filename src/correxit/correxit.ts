@@ -186,8 +186,8 @@ namespace Secure {
   ): Promise<void> {
     const { key, secret } = rubric;
     const notebook = workbook.content;
-    const model = notebook.model!;
     NotebookActions.clearAllOutputs(notebook);
+    const model = notebook.model!;
     for (const id of Object.keys(secret.cells)) {
       const index = findIndex(model.cells, cell => cell.id === id);
       const cell = model.cells.get(index);
@@ -195,7 +195,7 @@ namespace Secure {
       const widget = find(notebook.widgets, ({ model }) => model === cell)!;
       notebook.deselectAll();
       notebook.select(widget);
-      cell.sharedModel.setSource(await encrypt(source, key));
+      widget.model.sharedModel.setSource(await encrypt(source, key));
       NotebookActions.changeCellType(workbook.content, 'raw')
     };
   }
