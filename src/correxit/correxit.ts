@@ -28,7 +28,8 @@ export namespace Correxit {
     if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
       return new Error('add error');
     }
-    rubric[cell.shared ? 'shared' : 'secret'].cells[cell.id] = cell;
+    const section = rubric[cell.shared ? 'shared' : 'secret'];
+    section.cells[cell.id] = { ...cell, shared: !!cell.shared };
     await Encrypted.metadata(workbook, rubric);
     return unlock(workbook, rubric.key);
   }

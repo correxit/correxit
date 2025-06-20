@@ -56,10 +56,12 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
       const { has } = Correxit.Rubric;
       const rubric = Correxit.open(sidebar.workbook, { quiet });
-      if (!id || !rubric || rubric.locked || !has(rubric, id)) {
+      const shallow = true;
+      if (!id || !rubric || rubric.locked || !has(rubric, id, shallow)) {
         return false;
       }
       const cell = rubric.secret.cells[id] || rubric.shared.cells[id];
+      console.log(rubric, cell, id);
       return cell.is === 'answerable';
     },
     [CommandIDs.reset]: () =>
@@ -210,6 +212,20 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         if (button.accept) {
           await Correxit.reset(sidebar.workbook!);
           await sidebar.workbook!.context.save();
+        }
+      }
+    }),
+    commands.addCommand(CommandIDs.toggle, {
+      isEnabled: validate[CommandIDs.toggle],
+      isVisible: validate[CommandIDs.toggle],
+      label: (cell: CellCommandArgs) => {
+        return cell.shared
+          ? trans.__('Only allow correction in grader mode')
+          : trans.__('Allow correction when workbook is locked');
+      },
+      execute: async (cell: CellCommandArgs) => {
+        if (validate[CommandIDs.toggle](cell)) {
+          return Correxit.remove(sidebar.workbook!, cell.id!);
         }
       }
     }),

@@ -35,7 +35,7 @@ export namespace Rubric {
   }
 
   const references = ({ cells }: Section, reference: string) =>
-    find(Object.keys(cells), key => cells[key].reference !== reference);
+    find(Object.keys(cells), key => cells[key].reference === reference);
 
   const remove = (section: Section, cell: Workbook.Cell): Section => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -57,13 +57,15 @@ export namespace Rubric {
    */
   export function has(
     rubric: Rubric<'locked'> | Rubric<'unlocked'>,
-    id: string
+    id: string,
+    shallow = false
   ): boolean {
     const { locked, secret, shared } = rubric;
     return locked ?
-      !!(shared.cells[id] || references(shared, id)) :
-      !!(shared.cells[id] || references(shared, id)) ||
-      !!((secret as Section).cells[id] || references(secret as Section, id));
+      !!(shared.cells[id] || (!shallow && references(shared, id))) :
+      !!(shared.cells[id] || (!shallow && references(shared, id))) ||
+      !!((secret as Section).cells[id] ||
+        (shallow && references(secret as Section, id)));
   }
 
   export async function lock(
@@ -114,8 +116,9 @@ export namespace Rubric {
       throw new Error('cannot toggle cell unknown in rubric');
     }
     const { id, key, locked } = rubric;
-    const secret = (cell.shared ? add : remove)(rubric.secret, cell);
-    const shared = (cell.shared ? remove : add)(rubric.shared, cell);
+    const copy = { ...cell, shared: !cell.shared };
+    const secret = (cell.shared ? add : remove)(rubric.secret, copy);
+    const shared = (cell.shared ? remove : add)(rubric.shared, copy);
     return { id, key, locked, secret, shared };
   }
 

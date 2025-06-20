@@ -50,7 +50,7 @@ const WorkbookCell: React.FC<{
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell, commands, reference, trans }) => {
   const { Cell } = Correxit.Workbook;
-  const { add, correct, remove } = Sidebar.CommandIDs;
+  const { add, correct, remove, toggle } = Sidebar.CommandIDs;
   const args: Partial<Correxit.Workbook.Cell> = {
     id: Cell.id(cell, true),
     reference: reference ? Cell.id(reference, true) : ''
@@ -60,6 +60,7 @@ const WorkbookCell: React.FC<{
     { commands, id: add, args: { ...args, is: 'comparable' } },
     { commands, id: add, args: { ...args, is: 'correctable' } },
     { commands, id: correct, args },
+    { commands, id: toggle, args },
     { commands, id: remove, args }
   ];
   return (
