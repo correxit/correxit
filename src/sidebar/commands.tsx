@@ -105,11 +105,13 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
             sidebar.waiting = null;
             return Correxit.add(workbook, { ...cell, id, is });
           }
-          void showDialog({
+          const { button } = await showDialog({
             title: trans.__('Select another cell to continue'),
             body: trans.__('Select another cell for comparing or correcting')
           });
-          sidebar.waiting = id;
+          if (button.accept) {
+            sidebar.waiting = id;
+          }
         }
       }
     }),

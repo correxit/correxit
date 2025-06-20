@@ -1,9 +1,7 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
-import { NotebookActions } from '@jupyterlab/notebook';
-import { find, findIndex } from '@lumino/algorithm';
+import { find } from '@lumino/algorithm';
 import * as description from './description';
 import { Rubric, Rubric as RUBRIC } from './rubric';
-import { encrypt } from './security';
 import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
@@ -31,7 +29,7 @@ export namespace Correxit {
       return new Error('add error');
     }
     rubric[cell.shared ? 'shared' : 'secret'].cells[cell.id] = cell;
-    await Encrypt.metadata(workbook, rubric);
+    await Encrypted.metadata(workbook, rubric);
     return unlock(workbook, rubric.key);
   }
 
@@ -42,11 +40,11 @@ export namespace Correxit {
     try {
       const opened = open(workbook)!;
       const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
-      await Encrypt.metadata(workbook, rubric);
+      await Encrypted.metadata(workbook, rubric);
       return unlock(workbook, rubric.key);
     } catch (error) {
       if (error === NO_CORREXIT_METADATA) {
-        await Encrypt.metadata(workbook, Correxit.Rubric.create(key));
+        await Encrypted.metadata(workbook, Correxit.Rubric.create(key));
         return unlock(workbook, key);
       }
       throw error;
@@ -77,8 +75,8 @@ export namespace Correxit {
     if (!rubric || rubric.locked) {
       return;
     }
-    await Encrypt.metadata(workbook, rubric);
-    await Encrypt.content(workbook, rubric);
+    await Encrypted.metadata(workbook, rubric);
+    await Encrypted.content(workbook, rubric);
     Private.CACHE.set(workbook, await Rubric.lock(rubric));
   }
 
@@ -132,7 +130,7 @@ export namespace Correxit {
     }
     delete rubric.secret.cells[cell];
     delete rubric.shared.cells[cell];
-    await Encrypt.metadata(workbook, rubric);
+    await Encrypted.metadata(workbook, rubric);
     return unlock(workbook, rubric.key);
   }
 
@@ -154,21 +152,28 @@ export namespace Correxit {
       return opened;
     }
     const rubric = await Rubric.unlock(opened, key);
-    await Encrypt.metadata(workbook, rubric);
+    await Encrypted.metadata(workbook, rubric);
+    await Decrypted.content(workbook, rubric);
     Private.CACHE.set(workbook, rubric);
     return rubric;
   }
 }
 
-namespace Encrypt {
-  /**
-   * Write rubric metadata to workbook.
-   * @param workbook
-   * @param rubric
-   *
-   * #### Notes
-   * This function always sets the workbook's cached rubric to locked.
-   */
+namespace Decrypted {
+  export async function content(
+    workbook: Correxit.Workbook,
+    rubric: Rubric<'unlocked'>
+  ): Promise<void> {
+    for (const id in rubric.secret.cells) {
+      const cell = rubric.secret.cells[id];
+      if (cell.is === 'comparable' || cell.is === 'correctable') {
+        await Correxit.Workbook.Cell.decrypt(workbook, cell.reference!);
+      }
+    };
+  }
+}
+
+namespace Encrypted {
   export async function metadata(
     workbook: Correxit.Workbook,
     rubric: Correxit.Rubric<'unlocked'>
@@ -186,21 +191,11 @@ namespace Encrypt {
     workbook: Correxit.Workbook,
     rubric: Rubric<'unlocked'>
   ): Promise<void> {
-    const { Cell } = Correxit.Workbook;
-    const { key, secret } = rubric;
-    const notebook = workbook.content;
-    NotebookActions.clearAllOutputs(notebook);
-    const model = notebook.model!;
-    const widgets = notebook.widgets;
-    for (const id of Object.keys(secret.cells)) {
-      const index = findIndex(model.cells, cell => Cell.id(cell) === id);
-      const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
-      const cell = model.cells.get(index);
-      const source = cell.sharedModel.getSource();
-      notebook.deselectAll();
-      widget.model.sharedModel.setSource(await encrypt(source, key));
-      notebook.select(widget);
-      NotebookActions.changeCellType(workbook.content, 'raw')
+    for (const id in rubric.secret.cells) {
+      const cell = rubric.secret.cells[id];
+      if (cell.is === 'comparable' || cell.is === 'correctable') {
+        await Correxit.Workbook.Cell.encrypt(workbook, cell.reference!);
+      }
     };
   }
 }

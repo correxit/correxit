@@ -104,7 +104,7 @@ export namespace Sidebar {
     export const convert = 'correxit:convert';
     export const correct = 'correxit:correct';
     export const lock = 'correxit:lock';
-    export const remove = 'correxit:delete';
+    export const remove = 'correxit:remove';
     export const reset = 'correxit:reset';
     export const unlock = 'correxit:unlock';
   }

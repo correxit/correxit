@@ -1,5 +1,5 @@
 import { UUID } from '@lumino/coreutils';
-import { decrypt, encrypt } from './security';
+import * as security from './security';
 import { Workbook } from './workbook';
 
 export type Rubric<Secure = 'locked' | 'unlocked'> = {
@@ -50,7 +50,7 @@ export namespace Rubric {
     return {
       id, key: null,
       locked: true,
-      secret: await encrypt(JSON.stringify(secret), key),
+      secret: await security.encrypt(JSON.stringify(secret), key),
       shared
     };
   }
@@ -117,7 +117,7 @@ export namespace Rubric {
       id: rubric.id,
       key,
       locked: false,
-      secret: JSON.parse(await decrypt(rubric.secret as string, key)),
+      secret: JSON.parse(await security.decrypt(rubric.secret as string, key)),
       shared: rubric.shared
     };
   }
