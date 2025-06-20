@@ -42,6 +42,7 @@ export namespace Workbook {
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
       notebook.select(widget);
       widget.model.sharedModel.setSource(decrypted);
+      notebook.select(widget);
       NotebookActions.changeCellType(workbook.content, 'code');
     }
 
@@ -62,6 +63,7 @@ export namespace Workbook {
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
       notebook.select(widget);
       widget.model.sharedModel.setSource(encrypted);
+      notebook.select(widget);
       NotebookActions.changeCellType(workbook.content, 'raw');
     }
 

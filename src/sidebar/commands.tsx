@@ -23,11 +23,13 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       const rubric = Correxit.open(sidebar.workbook, { quiet });
       const cells = sidebar.workbook?.content.model?.cells || [];
       const model = find(cells, cell => Cell.id(cell) === id);
-      if (!id || !is || !model || !rubric || rubric.locked || reference) {
+      if (!id || !is || !model || !rubric || rubric.locked) {
         return false;
       }
-
-      return model.type === 'code' && !has(rubric, id);
+      if (has(rubric, id) || (reference && has(rubric, reference))) {
+        return false;
+      }
+      return id !== reference && model.type === 'code';
     },
     [CommandIDs.convert]: () => {
       const model = sidebar.workbook?.content.model;

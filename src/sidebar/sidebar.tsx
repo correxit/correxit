@@ -4,6 +4,7 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
+import { Signal } from '@lumino/signaling';
 import React from 'react';
 import { Correxit } from '../correxit';
 import { Body } from './body';
@@ -52,12 +53,26 @@ export class Sidebar extends ReactWidget {
       return;
     }
     void Correxit.open(workbook, { quiet: true });
+    if (this._workbook) {
+      this._workbook.context.fileChanged.disconnect(this.ping, this);
+      this._workbook.content.model?.metadataChanged.disconnect(this.ping, this);
+    }
     this._workbook = workbook;
+    if (this._workbook) {
+      this._workbook.context.fileChanged.connect(this.ping, this);
+      this._workbook.content.model?.metadataChanged.connect(this.ping, this);
+    }
     this.waiting = null;
     this.update();
   }
 
   protected commands: CommandRegistry;
+
+  protected pinged = new Signal<unknown, undefined>(this);
+
+  protected ping() {
+    this.pinged.emit(undefined);
+  }
 
   protected render() {
     const { commands, trans, workbook } = this;
@@ -68,10 +83,9 @@ export class Sidebar extends ReactWidget {
         </section>
       );
     }
-    const { model } = workbook.content;
-    const key = model.cells.get(0).id;
+    const key = workbook.content.model.cells.get(0).id;
     return (
-      <UseSignal key={key} signal={model.metadataChanged} initialSender={model}>
+      <UseSignal key={key} signal={this.pinged} initialSender={this}>
         {() => (
           <>
             <Header commands={commands} trans={trans} workbook={workbook} />

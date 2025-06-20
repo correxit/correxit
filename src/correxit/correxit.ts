@@ -25,7 +25,7 @@ export namespace Correxit {
     cell: Workbook.Cell
   ) {
     const rubric = open(workbook, { quiet: true });
-    if (!rubric || rubric.locked) {
+    if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
       return new Error('add error');
     }
     rubric[cell.shared ? 'shared' : 'secret'].cells[cell.id] = cell;
@@ -75,8 +75,8 @@ export namespace Correxit {
     if (!rubric || rubric.locked) {
       return;
     }
-    await Encrypted.metadata(workbook, rubric);
     await Encrypted.content(workbook, rubric);
+    await Encrypted.metadata(workbook, rubric);
     Private.CACHE.set(workbook, await Rubric.lock(rubric));
   }
 
@@ -123,13 +123,13 @@ export namespace Correxit {
     }
   }
 
-  export async function remove(workbook: Workbook, cell: string) {
+  export async function remove(workbook: Workbook, id: string) {
     const rubric = open(workbook, { quiet: true });
     if (!rubric || rubric.locked) {
       return new Error('remove error');
     }
-    delete rubric.secret.cells[cell];
-    delete rubric.shared.cells[cell];
+    delete rubric.secret.cells[id];
+    delete rubric.shared.cells[id];
     await Encrypted.metadata(workbook, rubric);
     return unlock(workbook, rubric.key);
   }
@@ -152,9 +152,9 @@ export namespace Correxit {
       return opened;
     }
     const rubric = await Rubric.unlock(opened, key);
-    await Encrypted.metadata(workbook, rubric);
-    await Decrypted.content(workbook, rubric);
     Private.CACHE.set(workbook, rubric);
+    await Decrypted.content(workbook, rubric);
+    await Encrypted.metadata(workbook, rubric);
     return rubric;
   }
 }

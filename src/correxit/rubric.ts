@@ -1,6 +1,7 @@
 import { UUID } from '@lumino/coreutils';
 import * as security from './security';
 import { Workbook } from './workbook';
+import { find } from '@lumino/algorithm';
 
 export type Rubric<Secure = 'locked' | 'unlocked'> = {
   readonly id: string;
@@ -24,6 +25,24 @@ export namespace Rubric {
 
   export type Section = { readonly cells: { [id: string]: Workbook.Cell; }; };
 
+  const add = (section: Section, cell: Workbook.Cell): Section => {
+    return {
+      cells: {
+        ...section.cells,
+        [cell.id]: { ...cell, shared: !cell.shared }
+      }
+    };
+  }
+
+  const references = ({ cells }: Section, reference: string) =>
+    find(Object.keys(cells), key => cells[key].reference !== reference);
+
+  const remove = (section: Section, cell: Workbook.Cell): Section => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { [cell.id]: _, ...cells } = section.cells;
+    return { cells };
+  }
+
   export function create(key: string): Rubric<'unlocked'> {
     return {
       id: `wb-${UUID.uuid4()}`, key,
@@ -33,14 +52,18 @@ export namespace Rubric {
     };
   }
 
+  /**
+   * Whether a rubric has or references a given id.
+   */
   export function has(
     rubric: Rubric<'locked'> | Rubric<'unlocked'>,
     id: string
   ): boolean {
-    if (rubric.locked) {
-      return !!rubric.shared.cells[id];
-    }
-    return !!(rubric.secret.cells[id] || rubric.shared.cells[id]);
+    const { locked, secret, shared } = rubric;
+    return locked ?
+      !!(shared.cells[id] || references(shared, id)) :
+      !!(shared.cells[id] || references(shared, id)) ||
+      !!((secret as Section).cells[id] || references(secret as Section, id));
   }
 
   export async function lock(
@@ -89,19 +112,6 @@ export namespace Rubric {
   ): Rubric<'unlocked'> {
     if (!has(rubric, cell.id)) {
       throw new Error('cannot toggle cell unknown in rubric');
-    }
-    const add = (section: Section, cell: Workbook.Cell): Section => {
-      return {
-        cells: {
-          ...section.cells,
-          [cell.id]: { ...cell, shared: !cell.shared }
-        }
-      };
-    }
-    const remove = (section: Section, cell: Workbook.Cell): Section => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { [cell.id]: _, ...cells } = section.cells;
-      return { cells };
     }
     const { id, key, locked } = rubric;
     const secret = (cell.shared ? add : remove)(rubric.secret, cell);
