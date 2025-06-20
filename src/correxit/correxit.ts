@@ -191,11 +191,12 @@ namespace Encrypt {
     const notebook = workbook.content;
     NotebookActions.clearAllOutputs(notebook);
     const model = notebook.model!;
+    const widgets = notebook.widgets;
     for (const id of Object.keys(secret.cells)) {
       const index = findIndex(model.cells, cell => Cell.id(cell) === id);
+      const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
       const cell = model.cells.get(index);
       const source = cell.sharedModel.getSource();
-      const widget = find(notebook.widgets, ({ model }) => model === cell)!;
       notebook.deselectAll();
       widget.model.sharedModel.setSource(await encrypt(source, key));
       notebook.select(widget);

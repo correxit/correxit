@@ -15,9 +15,7 @@
   flex: 1;
 }
 
-.correxit .correxit-cell-id,
-.correxit .correxit-digest,
-.correxit .correxit-basename {
+.correxit .correxit-monospace {
   background-color: var(--jp-layout-color2);
   font-family: var(--jp-code-font-family);
   font-size: small;

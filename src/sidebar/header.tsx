@@ -22,7 +22,6 @@ export const Header: React.FC<{
       <ID trans={trans} workbook={workbook} />
       <CommandToolbarButtonComponent commands={commands} id={lock} />
       <CommandToolbarButtonComponent commands={commands} id={unlock} />
-      <Key trans={trans} workbook={workbook} />
     </section>
   );
 };
@@ -40,7 +39,7 @@ const File: React.FC<{
       {() => (
         <>
           <h4>{heading}</h4>
-          <div className="correxit-basename">
+          <div className="correxit-monospace">
             {PathExt.basename(context.path)}
           </div>
         </>
@@ -60,26 +59,8 @@ const ID: React.FC<{
   return (
     <>
       <h4>{trans.__('Workbook ID:')}</h4>
-      <div className="correxit-digest" title={id}>
+      <div className="correxit-monospace" title={id}>
         {id}
-      </div>
-    </>
-  );
-};
-
-const Key: React.FC<{
-  trans: IRenderMime.TranslationBundle;
-  workbook: Correxit.Workbook;
-}> = ({ trans, workbook }) => {
-  const key = Correxit.open(workbook, { quiet: true })?.key;
-  if (!key) {
-    return <></>;
-  }
-  return (
-    <>
-      <h4>{trans.__('Workbook private key:')}</h4>
-      <div className="correxit-digest" title={key}>
-        {key}
       </div>
     </>
   );

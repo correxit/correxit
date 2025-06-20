@@ -48,12 +48,13 @@ export class Sidebar extends ReactWidget {
     return this._workbook;
   }
   protected set workbook(workbook: Correxit.Workbook | null) {
-    if (this._workbook !== workbook) {
-      void Correxit.open(workbook, { quiet: true });
-      this._workbook = workbook;
-      this.waiting = null;
-      this.update();
+    if (this._workbook === workbook) {
+      return;
     }
+    void Correxit.open(workbook, { quiet: true });
+    this._workbook = workbook;
+    this.waiting = null;
+    this.update();
   }
 
   protected commands: CommandRegistry;
@@ -69,7 +70,6 @@ export class Sidebar extends ReactWidget {
     }
     const { model } = workbook.content;
     const key = model.cells.get(0).id;
-    const { waiting } = this;
     return (
       <UseSignal key={key} signal={model.metadataChanged} initialSender={model}>
         {() => (
@@ -78,7 +78,7 @@ export class Sidebar extends ReactWidget {
             <Body
               commands={commands}
               trans={trans}
-              waiting={waiting}
+              waiting={this.waiting}
               workbook={workbook}
             />
             <Footer commands={commands} />

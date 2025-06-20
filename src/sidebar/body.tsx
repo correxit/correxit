@@ -13,7 +13,7 @@ import { Sidebar } from './sidebar';
 export const Body: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
-  waiting: ICodeCellModel['id'] | null;
+  waiting: string | null;
   workbook: Correxit.Workbook;
 }> = ({ commands, trans, waiting, workbook }) => {
   const { Cell } = Correxit.Workbook;
@@ -25,11 +25,7 @@ export const Body: React.FC<{
     <section className="correxit-body">
       <UseSignal initialArgs={activeCell} key={id} signal={activeCellChanged}>
         {(_, reference) => {
-          if (
-            !reference?.model ||
-            reference.model.type !== 'code' ||
-            Cell.id(reference.model) === waiting
-          ) {
+          if (!reference?.model || Cell.id(reference.model) === waiting) {
             return <></>;
           }
           const cell = find(model.cells, cell => Cell.id(cell) === waiting);
@@ -69,13 +65,13 @@ const WorkbookCell: React.FC<{
   return (
     <>
       <h4>{trans.__('Workbook cell:')}</h4>
-      <div className="correxit-cell-id" title={Cell.id(cell)}>
+      <div className="correxit-monospace" title={Cell.id(cell)}>
         {Cell.id(cell)}
       </div>
       {reference && (
         <>
           <h4>{trans.__('Reference cell:')}</h4>
-          <div className="correxit-cell-id" title={Cell.id(reference)}>
+          <div className="correxit-monospace" title={Cell.id(reference)}>
             {Cell.id(reference)}
           </div>
         </>

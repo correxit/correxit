@@ -19,13 +19,14 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
   const { trans } = sidebar;
   const quiet = true;
   const validate = {
-    [CommandIDs.add]: ({ id, is }: CellCommandArgs) => {
+    [CommandIDs.add]: ({ id, is, reference }: CellCommandArgs) => {
       const rubric = Correxit.open(sidebar.workbook, { quiet });
       const cells = sidebar.workbook?.content.model?.cells || [];
       const model = find(cells, cell => Cell.id(cell) === id);
-      if (!id || !is || !model || !rubric || rubric.locked) {
+      if (!id || !is || !model || !rubric || rubric.locked || reference) {
         return false;
       }
+
       return model.type === 'code' && !has(rubric, id);
     },
     [CommandIDs.convert]: () => {
