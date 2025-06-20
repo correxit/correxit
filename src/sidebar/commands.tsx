@@ -53,6 +53,15 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       const rubric = Correxit.open(sidebar.workbook, { quiet });
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
+    [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
+      const { has } = Correxit.Rubric;
+      const rubric = Correxit.open(sidebar.workbook, { quiet });
+      if (!id || !rubric || rubric.locked || !has(rubric, id)) {
+        return false;
+      }
+      const cell = rubric.secret.cells[id] || rubric.shared.cells[id];
+      return cell.is === 'answerable';
+    },
     [CommandIDs.reset]: () =>
       Correxit.open(sidebar.workbook, { quiet })?.locked === false,
     [CommandIDs.unlock]: () =>

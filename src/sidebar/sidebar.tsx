@@ -120,6 +120,7 @@ export namespace Sidebar {
     export const lock = 'correxit:lock';
     export const remove = 'correxit:remove';
     export const reset = 'correxit:reset';
+    export const toggle = 'correxit:toggle';
     export const unlock = 'correxit:unlock';
   }
 
