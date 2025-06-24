@@ -10,6 +10,7 @@ import { Correxit } from '../correxit';
 import { digest, keygen } from '../correxit/security';
 import { Sidebar } from '.';
 import { find } from '@lumino/algorithm';
+import { CellSelection } from './cell-selection';
 
 export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
   type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
@@ -102,6 +103,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         const is = cell.is!;
         const { reference } = cell;
         const workbook = sidebar.workbook!;
+
         if (is === 'answerable') {
           const expected = await Private.prompt({
             title: trans.__('Add expected output'),
@@ -113,18 +115,30 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
           const payload = [await digest(expected)];
           return Correxit.add(workbook, { id, is, payload });
         }
+
         if (is === 'comparable' || is === 'correctable') {
           if (reference) {
             sidebar.waiting = null;
             return Correxit.add(workbook, { ...cell, id, is });
           }
-          const { button } = await showDialog({
-            title: trans.__('Select another cell to continue'),
-            body: trans.__('Select another cell for comparing or correcting')
-          });
-          if (button.accept) {
-            sidebar.waiting = id;
+          if (sidebar.tracker.currentWidget === null) {
+            return;
           }
+          let selector: CellSelection | null = new CellSelection({
+            notebook: sidebar.tracker.currentWidget
+          });
+          return selector.selection
+            .then(async selection => {
+              const correxItCell: Partial<Correxit.Workbook.Cell> = {
+                id: Cell.id(selection.model, true)
+              };
+              const payload = [await digest(correxItCell.id!)];
+              return Correxit.add(workbook, { id, is, payload });
+            })
+            .catch(reason => console.log('Rejected', reason))
+            .finally(() => {
+              selector = null;
+            });
         }
       }
     }),

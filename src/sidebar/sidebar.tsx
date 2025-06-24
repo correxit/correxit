@@ -25,9 +25,14 @@ export class Sidebar extends ReactWidget {
       this.workbook = workbook;
     }, this);
     this._workbook = tracker.currentWidget;
+    this._tracker = tracker;
   }
 
   readonly trans: IRenderMime.TranslationBundle;
+
+  public get tracker(): INotebookTracker {
+    return this._tracker;
+  }
 
   public get waiting(): string | null {
     return this.dataset.waiting || null;
@@ -103,6 +108,7 @@ export class Sidebar extends ReactWidget {
   }
 
   private _workbook: Correxit.Workbook | null = null;
+  private _tracker: INotebookTracker;
 }
 
 export namespace Sidebar {
