@@ -89,8 +89,14 @@ export namespace Correxit {
   }
 
   /**
-   * Run the code cells of a workbook until a target cell. All the code cells are
-   * executed if there is no target.
+   * Run the code cells of a workbook.
+   *
+   * - if the id is not provided, the whole workbook is executed.
+   * - if the id is provided, and the target cell is 'answerable', the workbook is
+   * executed until this cell.
+   * - if the id is provided and the target cell is 'comparable' or 'correctable', the
+   * workbook is executed until both target and reference cells.
+   *
    *
    * @param kernel - the kernel used to run the code cells.
    * @param workbook - the workbook to run.
@@ -102,11 +108,31 @@ export namespace Correxit {
   export async function runWorkbook(
     kernel: Kernel.IKernelConnection,
     workbook: Workbook,
+    rubric: Rubric<'locked'> | Rubric<'unlocked'>,
     id?: string
-  ): Promise<CellOutputs> {
+  ): Promise<CellOutputs | undefined> {
     const outputs: CellOutputs = {};
     const cells = workbook.content.model!.cells;
-    const last = id ? findIndex(cells, cell => Workbook.Cell.id(cell) === id): cells.length -1;
+    let last = cells.length -1;
+    if (id) {
+      const correxitCell = !rubric.locked
+        ? rubric.secret.cells[id]
+        : rubric.shared.cells[id] || null;
+
+      if (!correxitCell) {
+        return;
+      }
+      if (correxitCell.is === 'answerable') {
+        last = findIndex(cells, cell => Workbook.Cell.id(cell) === id);
+      } else {
+        const reference = correxitCell.reference!;
+        last = Math.max(
+          findIndex(cells, cell => Workbook.Cell.id(cell) === id),
+          findIndex(cells, cell => Workbook.Cell.id(cell) === reference)
+        );
+      }
+    }
+
     for (let i = 0; i <= last; i++) {
       const cell = cells.get(i);
       const cellId = Workbook.Cell.id(cell);
@@ -136,12 +162,18 @@ export namespace Correxit {
     id: string
   ): Promise<Rubric.Score> {
     const cellOutputs = outputs[id];
+    if (cellOutputs === undefined) {
+      return Rubric.UNSCORED;
+    }
+
     const lastOutput = cellOutputs[cellOutputs.length -1];
     const correxitCell = !rubric.locked ? rubric.secret.cells[id] : rubric.shared.cells[id] || null;
     if (!correxitCell) {
       return Rubric.UNSCORED;
     }
+    console.log('content', lastOutput.content);
     if (correxitCell.is === 'answerable') {
+      // TODO: handle the case when the execution failed.
       if (lastOutput.header.msg_type === 'error') {
         return [0, 1];
       } else if (lastOutput.header.msg_type === 'stream') {
@@ -152,6 +184,25 @@ export namespace Correxit {
         }
         return [0, 1];
       }
+    } else {
+      const refId = correxitCell.reference!;
+      const refOutputs = outputs[refId];
+      // TODO: we should probably handle this case, where the reference cell has not
+      // been executed.
+      if (refOutputs === undefined) {
+        return Rubric.UNSCORED;
+      }
+      const lastRefOutput = refOutputs[refOutputs.length -1];
+      if (correxitCell.is === 'comparable') {
+        // Compare the execution result content.
+        return JSON.stringify(lastOutput.content) === JSON.stringify(lastRefOutput.content)
+          ? [1, 1]
+          : [0, 1];
+      } else {
+        // Ensure the ref cell is not in error.
+        return lastRefOutput.header.msg_type !== 'error' ? [1, 1] : [0, 0];
+      }
+
     }
     return Rubric.UNSCORED
   }
@@ -182,8 +233,12 @@ export namespace Correxit {
     }
 
     // Run the workbook cells.
-    const outputs = await runWorkbook(kernel, workbook, id);
+    const outputs = await runWorkbook(kernel, workbook, rubric, id);
     await kernel?.shutdown();
+
+    if (outputs === undefined) {
+      return Rubric.UNSCORED;
+    }
 
     // Compute the score, only the target cell if the id is provided,
     // the whole workbook otherwise.
