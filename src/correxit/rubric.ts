@@ -25,6 +25,18 @@ export namespace Rubric {
 
   export type Section = { readonly cells: { [id: string]: Workbook.Cell; }; };
 
+  /**
+   * Return the sum of two scores.
+   */
+  export const sumScore = (a: Score, b: Score): Score => {
+    if (a === UNSCORED) {
+      return b;
+    } else if (b === UNSCORED) {
+      return a;
+    }
+    return [a[0] + b[0], a[1] + b[1]];
+  };
+
   const add = (section: Section, cell: Workbook.Cell): Section => {
     return {
       cells: {
