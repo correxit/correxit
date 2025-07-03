@@ -40,7 +40,7 @@
   display: none;
 }
 
-.correxit-watermark {
+.correxit-overlay {
   height: 100%;
   width: 100%;
   position: absolute;
@@ -50,7 +50,7 @@
   z-index: 10;
 }
 
-.correxit-targetCell {
+.correxit-target-cell {
   outline: none;
   border: none;
   border-radius: 2px;

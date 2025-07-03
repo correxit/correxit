@@ -25,30 +25,9 @@ export class Sidebar extends ReactWidget {
       this.workbook = workbook;
     }, this);
     this._workbook = tracker.currentWidget;
-    this._tracker = tracker;
   }
 
   readonly trans: IRenderMime.TranslationBundle;
-
-  public get tracker(): INotebookTracker {
-    return this._tracker;
-  }
-
-  public get waiting(): string | null {
-    return this.dataset.waiting || null;
-  }
-  public set waiting(id: string | null) {
-    const current: string | null = this.dataset.waiting || null;
-    if (id === current) {
-      return;
-    }
-    if (id) {
-      this.dataset.waiting = id;
-    } else {
-      delete this.dataset.waiting;
-    }
-    this.update();
-  }
 
   public get workbook(): Correxit.Workbook | null {
     return this._workbook;
@@ -67,7 +46,6 @@ export class Sidebar extends ReactWidget {
       this._workbook.context.fileChanged.connect(this.ping, this);
       this._workbook.content.model?.metadataChanged.connect(this.ping, this);
     }
-    this.waiting = null;
     this.update();
   }
 
@@ -94,12 +72,7 @@ export class Sidebar extends ReactWidget {
         {() => (
           <>
             <Header commands={commands} trans={trans} workbook={workbook} />
-            <Body
-              commands={commands}
-              trans={trans}
-              waiting={this.waiting}
-              workbook={workbook}
-            />
+            <Body commands={commands} trans={trans} workbook={workbook} />
             <Footer commands={commands} />
           </>
         )}
@@ -108,7 +81,6 @@ export class Sidebar extends ReactWidget {
   }
 
   private _workbook: Correxit.Workbook | null = null;
-  private _tracker: INotebookTracker;
 }
 
 export namespace Sidebar {

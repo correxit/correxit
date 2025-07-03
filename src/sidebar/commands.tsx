@@ -1,21 +1,17 @@
-import {
-  InputDialog,
-  showDialog,
-  showErrorMessage
-} from '@jupyterlab/apputils';
+import { showDialog, showErrorMessage } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { lockIcon, notebookIcon } from '@jupyterlab/ui-components';
-import { CommandRegistry } from '@lumino/commands';
-import { Correxit } from '../correxit';
-import { digest, keygen } from '../correxit/security';
-import { Sidebar } from '.';
 import { find } from '@lumino/algorithm';
-import { CellSelection } from './cell-selection';
+import { CommandRegistry } from '@lumino/commands';
+import { Correxit } from '..';
+import { digest } from '../correxit/security';
+import { Sidebar } from '.';
+import * as input from './input';
 
 export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
   type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
   const { CommandIDs } = Sidebar;
-  const { has, size } = Correxit.Rubric;
+  const { get, has, size } = Correxit.Rubric;
   const { Cell } = Correxit.Workbook;
   const { trans } = sidebar;
   const quiet = true;
@@ -50,20 +46,16 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     [CommandIDs.lock]: () =>
       Correxit.open(sidebar.workbook, { quiet })?.locked === false,
     [CommandIDs.remove]: ({ id }: CellCommandArgs) => {
-      const { has } = Correxit.Rubric;
       const rubric = Correxit.open(sidebar.workbook, { quiet });
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
     [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
-      const { has } = Correxit.Rubric;
       const rubric = Correxit.open(sidebar.workbook, { quiet });
       const shallow = true;
       if (!id || !rubric || rubric.locked || !has(rubric, id, shallow)) {
         return false;
       }
-      const cell = rubric.secret.cells[id] || rubric.shared.cells[id];
-      console.log(rubric, cell, id);
-      return cell.is === 'answerable';
+      return get(rubric, id)?.is === 'answerable';
     },
     [CommandIDs.reset]: () =>
       Correxit.open(sidebar.workbook, { quiet })?.locked === false,
@@ -101,11 +93,10 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         }
         const id = cell.id!;
         const is = cell.is!;
-        const { reference } = cell;
         const workbook = sidebar.workbook!;
 
         if (is === 'answerable') {
-          const expected = await Private.prompt({
+          const expected = await input.answer({
             title: trans.__('Add expected output'),
             label: commands.label(CommandIDs.add, cell)
           });
@@ -116,29 +107,19 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
           return Correxit.add(workbook, { id, is, payload });
         }
 
-        if (is === 'comparable' || is === 'correctable') {
-          if (reference) {
-            sidebar.waiting = null;
-            return Correxit.add(workbook, { ...cell, id, is });
-          }
-          if (sidebar.tracker.currentWidget === null) {
-            return;
-          }
-          let selector: CellSelection | null = new CellSelection({
-            notebook: sidebar.tracker.currentWidget
-          });
-          return selector.selection
-            .then(async selection => {
-              const correxItCell: Partial<Correxit.Workbook.Cell> = {
-                id: Cell.id(selection.model, true)
-              };
-              const payload = [await digest(correxItCell.id!)];
-              return Correxit.add(workbook, { id, is, payload });
-            })
-            .catch(reason => console.log('Rejected', reason))
-            .finally(() => {
-              selector = null;
-            });
+        if (is !== 'comparable' && is !== 'correctable') {
+          return;
+        }
+        if (cell.reference) {
+          return Correxit.add(workbook, { ...cell, id, is });
+        }
+        const selected = await input.cell(workbook);
+        if (selected) {
+          const { widgets } = workbook.content;
+          const reference = Correxit.Workbook.Cell.id(selected, true);
+          const original = find(widgets, ({ model }) => Cell.id(model) === id)!;
+          await workbook.content.scrollToCell(original);
+          return Correxit.add(workbook, { ...cell, id, is, reference });
         }
       }
     }),
@@ -151,7 +132,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
           return;
         }
         const workbook = sidebar.workbook!;
-        const key = await Private.prompt({
+        const key = await input.passphrase({
           title: trans.__('Enter a passphrase'),
           label: trans.__('Enter a passphrase for this workbook')
         });
@@ -264,7 +245,7 @@ The command invokes an error message dialog if unlock fails.
         }
         try {
           const workbook = sidebar.workbook!;
-          key ||= await Private.prompt({
+          key ||= await input.passphrase({
             title: trans.__('Enter a passphrase to unlock'),
             label: trans.__('Enter a passphrase to unlock this workbook')
           });
@@ -285,11 +266,4 @@ The command invokes an error message dialog if unlock fails.
       }
     })
   ];
-}
-
-namespace Private {
-  export const prompt = async ({ label, title }: InputDialog.ITextOptions) => {
-    const { button, value } = await InputDialog.getText({ label, title });
-    return (button.accept && value && (await keygen(value))) || '';
-  };
 }

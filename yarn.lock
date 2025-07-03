@@ -4480,6 +4480,7 @@ __metadata:
     "@lumino/commands": ^2.3.2
     "@lumino/coreutils": ^2.2.1
     "@lumino/disposable": ^2.1.4
+    "@lumino/polling": ^2.1.4
     "@lumino/signaling": ^2.1.4
     "@openpgp/web-stream-tools": 0.0.11-patch-1
     "@types/jest": ^29.2.0
