@@ -171,7 +171,6 @@ export namespace Correxit {
     if (!correxitCell) {
       return Rubric.UNSCORED;
     }
-    console.log('content', lastOutput.content);
     if (correxitCell.is === 'answerable') {
       // TODO: handle the case when the execution failed.
       if (lastOutput.header.msg_type === 'error') {
@@ -192,17 +191,22 @@ export namespace Correxit {
       if (refOutputs === undefined) {
         return Rubric.UNSCORED;
       }
-      const lastRefOutput = refOutputs[refOutputs.length -1];
+
       if (correxitCell.is === 'comparable') {
+        // TODO: handle the case where the reference cell has no output to compare with.
+        if (!refOutputs.length) {
+          return Rubric.UNSCORED;
+        }
+        const lastRefOutput = refOutputs[refOutputs.length -1];
         // Compare the execution result content.
         return JSON.stringify(lastOutput.content) === JSON.stringify(lastRefOutput.content)
           ? [1, 1]
           : [0, 1];
-      } else {
-        // Ensure the ref cell is not in error.
-        return lastRefOutput.header.msg_type !== 'error' ? [1, 1] : [0, 0];
+      } else if (correxitCell.is === 'correctable') {
+        // Ensure the reference cell has no error.
+        const errors = refOutputs.filter(value => value.header.msg_type === 'error');
+        return errors.length === 0 ? [1, 1] : [0, 0];
       }
-
     }
     return Rubric.UNSCORED
   }
