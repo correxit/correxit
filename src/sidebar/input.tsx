@@ -36,7 +36,13 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
     throttler.dispose();
     delegate.resolve(model);
   };
-  const keydown = ({ key }: KeyboardEvent) => void key === 'Escape' && submit();
+  const keydown = ({ key }: KeyboardEvent) => {
+    if (key === 'Escape') {
+      target?.node.classList.remove(TARGET_CELL_CLASS);
+      target = null;
+      submit();
+    }
+  };
   const pointerdown = () => submit();
   const throttler = new Throttler(
     ({ clientX, clientY }: PointerEvent) => {
