@@ -73,6 +73,7 @@
         "@lumino/commands": "^2.3.2",
         "@lumino/coreutils": "^2.2.1",
         "@lumino/disposable": "^2.1.4",
+        "@lumino/polling": "^2.1.4",
         "@lumino/signaling": "^2.1.4",
         "openpgp": "^5.11.3",
         "react": "^18.2.0"

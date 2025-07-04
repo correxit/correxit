@@ -4,7 +4,6 @@ import {
   UseSignal,
   CommandToolbarButtonComponent
 } from '@jupyterlab/ui-components';
-import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
@@ -13,27 +12,26 @@ import { Sidebar } from './sidebar';
 export const Body: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
-  waiting: string | null;
   workbook: Correxit.Workbook;
-}> = ({ commands, trans, waiting, workbook }) => {
-  const { Cell } = Correxit.Workbook;
-  const { activeCell, activeCellChanged, id, model } = workbook.content;
-  if (!model || !activeCell || !model.getMetadata('correxit')) {
+}> = ({ commands, trans, workbook }) => {
+  const rubric = Correxit.open(workbook, { quiet: true });
+  const { activeCell, activeCellChanged, model } = workbook.content;
+  const key = workbook.content.id;
+  if (!model || !activeCell || !rubric) {
     return <section className="correxit-body"></section>;
   }
   return (
     <section className="correxit-body">
-      <UseSignal initialArgs={activeCell} key={id} signal={activeCellChanged}>
-        {(_, reference) => {
-          if (!reference?.model || Cell.id(reference.model) === waiting) {
+      <UseSignal initialArgs={activeCell} key={key} signal={activeCellChanged}>
+        {(_, cell) => {
+          if (!cell?.model || cell.model.type !== 'code') {
             return <></>;
           }
-          const cell = find(model.cells, cell => Cell.id(cell) === waiting);
           return (
             <WorkbookCell
-              cell={(cell || reference.model) as ICodeCellModel}
-              reference={cell ? (reference.model as ICodeCellModel) : undefined}
+              cell={cell.model as ICodeCellModel}
               commands={commands}
+              rubric={rubric}
               trans={trans}
             />
           );
@@ -46,23 +44,21 @@ export const Body: React.FC<{
 const WorkbookCell: React.FC<{
   cell: ICodeCellModel;
   commands: CommandRegistry;
-  reference?: ICodeCellModel;
+  rubric: Correxit.Rubric;
   trans: IRenderMime.TranslationBundle;
-}> = ({ cell, commands, reference, trans }) => {
+}> = ({ cell, commands, rubric, trans }) => {
   const { Cell } = Correxit.Workbook;
   const { add, correct, remove, toggle } = Sidebar.CommandIDs;
-  const args: Partial<Correxit.Workbook.Cell> = {
-    id: Cell.id(cell, true),
-    reference: reference ? Cell.id(reference, true) : ''
-  };
+  const id = Cell.id(cell, true);
   const buttons: CommandToolbarButtonComponent.IProps[] = [
-    { commands, id: add, args: { ...args, is: 'answerable' } },
-    { commands, id: add, args: { ...args, is: 'comparable' } },
-    { commands, id: add, args: { ...args, is: 'correctable' } },
-    { commands, id: correct, args },
-    { commands, id: toggle, args },
-    { commands, id: remove, args }
+    { commands, id: add, args: { id, is: 'answerable' } },
+    { commands, id: add, args: { id, is: 'comparable' } },
+    { commands, id: add, args: { id, is: 'correctable' } },
+    { commands, id: correct, args: { id } },
+    { commands, id: toggle, args: { id } },
+    { commands, id: remove, args: { id } }
   ];
+  const reference = Correxit.Rubric.get(rubric, id)?.reference;
   return (
     <>
       <h4>{trans.__('Workbook cell:')}</h4>
@@ -72,8 +68,8 @@ const WorkbookCell: React.FC<{
       {reference && (
         <>
           <h4>{trans.__('Reference cell:')}</h4>
-          <div className="correxit-monospace" title={Cell.id(reference)}>
-            {Cell.id(reference)}
+          <div className="correxit-monospace" title={reference}>
+            {reference}
           </div>
         </>
       )}

@@ -52,6 +52,17 @@ export namespace Rubric {
     };
   }
 
+  export function get(
+    rubric: Rubric<'locked'> | Rubric<'unlocked'>,
+    id: string
+  ): Workbook.Cell | null {
+    if (has(rubric, id)) {
+      const { locked, secret, shared } = rubric;
+      return locked ? shared.cells[id] : secret.cells[id] || shared.cells[id];
+    }
+    return null;
+  }
+
   /**
    * Whether a rubric has or references a given id.
    */
