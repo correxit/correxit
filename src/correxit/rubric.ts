@@ -138,11 +138,12 @@ export namespace Rubric {
 
   export function toggle(
     rubric: Rubric<'unlocked'>,
-    cell: Workbook.Cell
+    id: Workbook.Cell['id']
   ): Rubric<'unlocked'> {
-    if (!has(rubric, cell.id)) {
+    if (!has(rubric, id)) {
       throw new Error('cannot toggle cell unknown in rubric');
     }
+    const cell = get(rubric, id)!;
     return {
       id: rubric.id,
       key: rubric.key,

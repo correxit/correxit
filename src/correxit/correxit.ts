@@ -163,8 +163,7 @@ export namespace Correxit {
     if (!opened || opened.locked || !Rubric.has(opened, id)) {
       throw new Error('cannot toggle');
     }
-    const cell = Rubric.get(opened, id)!;
-    const rubric = Rubric.toggle(opened, cell);
+    const rubric = Rubric.toggle(opened, id);
     Private.CACHE.set(workbook, rubric);
     await Encrypted.metadata(workbook, rubric);
     return rubric;
