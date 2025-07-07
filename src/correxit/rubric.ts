@@ -25,22 +25,17 @@ export namespace Rubric {
 
   export type Section = { readonly cells: { [id: string]: Workbook.Cell; }; };
 
-  const add = (section: Section, cell: Workbook.Cell): Section => {
-    return {
-      cells: {
-        ...section.cells,
-        [cell.id]: { ...cell, shared: !cell.shared }
-      }
-    };
+  const add = (section: Rubric.Section, cell: Workbook.Cell) => {
+    return { cells: { ...section.cells, [cell.id]: cell } } as Rubric.Section;
   }
 
   const references = ({ cells }: Section, reference: string) =>
     find(Object.keys(cells), key => cells[key].reference === reference);
 
-  const remove = (section: Section, cell: Workbook.Cell): Section => {
+  const remove = (section: Rubric.Section, cell: Workbook.Cell) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { [cell.id]: _, ...cells } = section.cells;
-    return { cells };
+    return { cells } as Rubric.Section;
   }
 
   export function create(key: string): Rubric<'unlocked'> {
@@ -69,14 +64,14 @@ export namespace Rubric {
   export function has(
     rubric: Rubric<'locked'> | Rubric<'unlocked'>,
     id: Workbook.Cell['id'],
-    shallow = false
+    deep = false
   ): boolean {
     const { locked, secret, shared } = rubric;
     return locked ?
-      !!(shared.cells[id] || (!shallow && references(shared, id))) :
-      !!(shared.cells[id] || (!shallow && references(shared, id))) ||
+      !!(shared.cells[id] || (deep && references(shared, id))) :
+      !!(shared.cells[id] || (deep && references(shared, id))) ||
       !!((secret as Section).cells[id] ||
-        (shallow && references(secret as Section, id)));
+        (deep && references(secret as Section, id)));
   }
 
   /**
@@ -148,11 +143,17 @@ export namespace Rubric {
     if (!has(rubric, cell.id)) {
       throw new Error('cannot toggle cell unknown in rubric');
     }
-    const { id, key, locked } = rubric;
-    const copy = { ...cell, shared: !cell.shared };
-    const secret = (cell.shared ? add : remove)(rubric.secret, copy);
-    const shared = (cell.shared ? remove : add)(rubric.shared, copy);
-    return { id, key, locked, secret, shared };
+    return {
+      id: rubric.id,
+      key: rubric.key,
+      locked: rubric.locked,
+      secret: cell.shared ?
+        add(rubric.secret, { ...cell, shared: false }) :
+        remove(rubric.secret, cell),
+      shared: cell.shared ?
+        remove(rubric.shared, cell) :
+        add(rubric.shared, { ...cell, shared: true })
+    };
   }
 
   export async function unlock(
