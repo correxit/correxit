@@ -16,10 +16,10 @@ export type Rubric<Secure = 'locked' | 'unlocked'> = {
 };
 
 export namespace Rubric {
-  export const UNSCORED: Score = [
+  export const UNSCORED: Score = Object.freeze([
     Number.NEGATIVE_INFINITY,
     Number.POSITIVE_INFINITY
-  ];
+  ]);
 
   export type Score = readonly [numerator: number, denominator: number];
 
@@ -54,7 +54,7 @@ export namespace Rubric {
 
   export function get(
     rubric: Rubric<'locked'> | Rubric<'unlocked'>,
-    id: string
+    id: Workbook.Cell['id']
   ): Workbook.Cell | null {
     if (has(rubric, id)) {
       const { locked, secret, shared } = rubric;
@@ -68,7 +68,7 @@ export namespace Rubric {
    */
   export function has(
     rubric: Rubric<'locked'> | Rubric<'unlocked'>,
-    id: string,
+    id: Workbook.Cell['id'],
     shallow = false
   ): boolean {
     const { locked, secret, shared } = rubric;
@@ -79,6 +79,9 @@ export namespace Rubric {
         (shallow && references(secret as Section, id)));
   }
 
+  /**
+   * Lock a rubric and return a promise that resolves to the locked rubric.
+   */
   export async function lock(
     rubric: Rubric<'unlocked'>
   ): Promise<Rubric<'locked'>> {
@@ -91,6 +94,9 @@ export namespace Rubric {
     };
   }
 
+  /**
+   * Returns a normalized complete rubric or throws an error.
+   */
   export function normalize(
     rubric: Partial<Rubric<'locked'>>
   ): Rubric<'locked'> {
@@ -113,11 +119,27 @@ export namespace Rubric {
     return { id, key, locked, secret, shared };
   }
 
+  /**
+   * Returns the number of cells configured in a rubric.
+   */
   export function size(rubric: Rubric<'locked'> | Rubric<'unlocked'>): number {
     const { locked, secret, shared } = rubric;
     return (locked ? 0 : Object.keys(secret).length) +
       Object.keys(shared).length;
   }
+
+  /**
+   * Return the sum of two scores.
+   */
+  export function sum(a: Score, b: Score): Score {
+    if (a === UNSCORED) {
+      return b;
+    }
+    if (b === UNSCORED) {
+      return a;
+    }
+    return [a[0] + b[0], a[1] + b[1]];
+  };
 
   export function toggle(
     rubric: Rubric<'unlocked'>,

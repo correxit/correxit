@@ -1,6 +1,7 @@
 import * as pgp from 'openpgp';
 
 const SALT = await digest('correxit:salt');
+const PEPPER = await digest('correxit:pepper');
 
 export async function decrypt(encrypted: string, password: string) {
   const message = await pgp.readMessage({ armoredMessage: encrypted });
@@ -21,5 +22,5 @@ export async function encrypt(text: string, password: string) {
 
 export async function keygen(text: string) {
   const hash = await digest(text);
-  return await digest(`${hash}:${SALT}`);
+  return await digest(`${SALT}:${hash}:${PEPPER}`);
 }

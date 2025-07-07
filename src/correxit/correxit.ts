@@ -1,5 +1,3 @@
-import { ICodeCellModel } from '@jupyterlab/cells';
-import { find } from '@lumino/algorithm';
 import * as description from './description';
 import { Rubric, Rubric as RUBRIC } from './rubric';
 import { Workbook as WORKBOOK } from './workbook';
@@ -52,23 +50,37 @@ export namespace Correxit {
     }
   }
 
+  /**
+   * Correct a cell (if `id` is provided) or an entire workbook.
+   *
+   * @param workbook - the workbook to correct.
+   * @param id - the id of the cell to correct.
+   *
+   * @returns a score for the cell or the whole workbook.
+   */
   export async function correct(
     workbook: Workbook,
-    id?: string
+    id?: Workbook.Cell['id']
   ): Promise<Rubric.Score> {
     const rubric = open(workbook, { quiet: true });
     if (!rubric) {
       return Rubric.UNSCORED;
     }
-    const model = workbook.content.model!;
-    const code = find(model.cells, cell => Workbook.Cell.id(cell) === id);
-    if (!code || code.type !== 'code') {
+
+    const outputs = await Workbook.execute(workbook, id);
+    if (!outputs) {
       return Rubric.UNSCORED;
     }
-    for (const output of (code as ICodeCellModel).outputs.toJSON()) {
-      console.log('output', output);
+
+    if (id) {
+      return await Workbook.Cell.score(workbook, id, outputs);
     }
-    return [0, 0];
+    let total: Rubric.Score = [0, 0];
+    for (const id of Object.keys(outputs)) {
+      const score = await Workbook.Cell.score(workbook, id, outputs);
+      total = Rubric.sum(total, score);
+    }
+    return total;
   }
 
   export async function lock(workbook: Workbook): Promise<void> {
@@ -106,8 +118,7 @@ export namespace Correxit {
       return Private.CACHE.get(workbook)!;
     }
 
-    const rubric: Rubric<'locked'> | null =
-      workbook.content.model.getMetadata('correxit') || null;
+    const rubric = workbook.content.model.getMetadata('correxit') || null;
     if (!rubric) {
       if (quiet) {
         return null;
@@ -127,7 +138,7 @@ export namespace Correxit {
   export async function remove(workbook: Workbook, id: string) {
     const rubric = open(workbook, { quiet: true });
     if (!rubric || rubric.locked) {
-      return new Error('remove error');
+      throw new Error('remove error');
     }
     delete rubric.secret.cells[id];
     delete rubric.shared.cells[id];
