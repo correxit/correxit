@@ -147,8 +147,14 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     commands.addCommand(CommandIDs.correct, {
       isEnabled: validate[CommandIDs.correct],
       isVisible: validate[CommandIDs.correct],
-      label: ({ id }: CellCommandArgs) =>
-        id ? trans.__('Correct cell...') : trans.__('Correct workbook...'),
+      label: ({ id }: CellCommandArgs) => {
+        if (!validate[CommandIDs.correct]) {
+          return '';
+        }
+        return id
+          ? trans.__('Correct cell...')
+          : trans.__('Correct workbook...');
+      },
       execute: async ({ id }: CellCommandArgs) => {
         if (!validate[CommandIDs.correct]({ id: id ?? '' })) {
           return;

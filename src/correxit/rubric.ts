@@ -119,8 +119,9 @@ export namespace Rubric {
    */
   export function size(rubric: Rubric<'locked'> | Rubric<'unlocked'>): number {
     const { locked, secret, shared } = rubric;
-    return (locked ? 0 : Object.keys(secret).length) +
-      Object.keys(shared).length;
+    return locked ?
+      Object.keys(shared.cells).length :
+      Object.keys(secret.cells).length + Object.keys(shared.cells).length
   }
 
   /**
