@@ -44,16 +44,18 @@ export namespace Workbook {
       const model = notebook.model!;
       const { widgets } = notebook;
       NotebookActions.clearAllOutputs(notebook);
-      notebook.deselectAll();
+      NotebookActions.deselectAll(notebook);
       const index = findIndex(model.cells, cell => Cell.id(cell) === id);
       const cell = model.cells.get(index);
       const source = cell.sharedModel.getSource();
       const decrypted = await security.decrypt(source, rubric.key);
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
+      const initial = notebook.activeCellIndex;
       notebook.select(widget);
+      notebook.activeCellIndex = index;
       widget.model.sharedModel.setSource(decrypted);
-      notebook.select(widget);
       NotebookActions.changeCellType(workbook.content, 'code');
+      notebook.activeCellIndex = initial;
     }
 
     export async function encrypt(workbook: Workbook, id: Cell['id']) {
@@ -71,9 +73,12 @@ export namespace Workbook {
       const encrypted = await security.encrypt(source, rubric.key);
       const { widgets } = notebook;
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
+      const initial = notebook.activeCellIndex;
       notebook.select(widget);
+      notebook.activeCellIndex = index;
       widget.model.sharedModel.setSource(encrypted);
       NotebookActions.changeCellType(notebook, 'raw');
+      notebook.activeCellIndex = initial;
     }
 
     /**
