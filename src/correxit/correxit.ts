@@ -88,9 +88,9 @@ export namespace Correxit {
     if (!rubric || rubric.locked) {
       return;
     }
+    Private.CACHE.set(workbook, await Rubric.lock(rubric));
     await Encrypted.content(workbook, rubric);
     await Encrypted.metadata(workbook, rubric);
-    Private.CACHE.set(workbook, await Rubric.lock(rubric));
   }
 
   /**
@@ -190,10 +190,11 @@ namespace Decrypted {
     workbook: Correxit.Workbook,
     rubric: Rubric<'unlocked'>
   ): Promise<void> {
+    const { key } = rubric;
     for (const id in rubric.secret.cells) {
       const cell = rubric.secret.cells[id];
       if (cell.is === 'comparable' || cell.is === 'correctable') {
-        await Correxit.Workbook.Cell.decrypt(workbook, cell.reference!);
+        await Correxit.Workbook.Cell.decrypt(workbook, cell.reference!, key);
       }
     };
   }
@@ -217,10 +218,11 @@ namespace Encrypted {
     workbook: Correxit.Workbook,
     rubric: Rubric<'unlocked'>
   ): Promise<void> {
+    const { key } = rubric;
     for (const id in rubric.secret.cells) {
       const cell = rubric.secret.cells[id];
       if (cell.is === 'comparable' || cell.is === 'correctable') {
-        await Correxit.Workbook.Cell.encrypt(workbook, cell.reference!);
+        await Correxit.Workbook.Cell.encrypt(workbook, cell.reference!, key);
       }
     };
   }
