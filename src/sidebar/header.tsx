@@ -14,7 +14,7 @@ export const Header: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ commands, trans, workbook }) => {
-  const { convert, lock, unlock } = Sidebar.CommandIDs;
+  const { convert, correct, lock, unlock } = Sidebar.CommandIDs;
   return (
     <section className="correxit-header">
       <File trans={trans} workbook={workbook} />
@@ -22,6 +22,7 @@ export const Header: React.FC<{
       <ID trans={trans} workbook={workbook} />
       <CommandToolbarButtonComponent commands={commands} id={lock} />
       <CommandToolbarButtonComponent commands={commands} id={unlock} />
+      <CommandToolbarButtonComponent commands={commands} id={correct} />
     </section>
   );
 };

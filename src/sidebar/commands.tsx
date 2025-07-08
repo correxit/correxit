@@ -148,7 +148,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       isEnabled: validate[CommandIDs.correct],
       isVisible: validate[CommandIDs.correct],
       label: ({ id }: CellCommandArgs) => {
-        if (!validate[CommandIDs.correct]) {
+        if (!validate[CommandIDs.correct]({ id })) {
           return '';
         }
         return id
