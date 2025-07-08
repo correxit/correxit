@@ -3,8 +3,13 @@ import * as pgp from 'openpgp';
 const SALT = await digest('correxit:salt');
 const PEPPER = await digest('correxit:pepper');
 
-export async function decrypt(encrypted: string, password: string) {
-  const message = await pgp.readMessage({ armoredMessage: encrypted });
+export async function decrypt(text: string, password: string) {
+  let message;
+  try {
+    message = await pgp.readMessage({ armoredMessage: text });
+  } catch (_) {
+    return text;
+  }
   return (await pgp.decrypt({ message, passwords: [password] })).data;
 }
 

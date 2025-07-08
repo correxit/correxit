@@ -35,10 +35,13 @@ export namespace Workbook {
       | KernelMessage.IIOPubMessage<'stream'>
       | KernelMessage.IIOPubMessage<'error'>;
 
-    export async function decrypt(workbook: Workbook, id: Cell['id']) {
-      const rubric = Correxit.open(workbook);
+    export async function decrypt(
+      workbook: Workbook,
+      id: Cell['id'],
+      key: string
+    ) {
       const notebook = workbook.content;
-      if (!rubric || rubric.locked) {
+      if (!key) {
         throw new Error('decrypt error');
       }
       const model = notebook.model!;
@@ -48,7 +51,7 @@ export namespace Workbook {
       const index = findIndex(model.cells, cell => Cell.id(cell) === id);
       const cell = model.cells.get(index);
       const source = cell.sharedModel.getSource();
-      const decrypted = await security.decrypt(source, rubric.key);
+      const decrypted = await security.decrypt(source, key);
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
       const initial = notebook.activeCellIndex;
       notebook.select(widget);
@@ -58,10 +61,13 @@ export namespace Workbook {
       notebook.activeCellIndex = initial;
     }
 
-    export async function encrypt(workbook: Workbook, id: Cell['id']) {
-      const rubric = Correxit.open(workbook);
+    export async function encrypt(
+      workbook: Workbook,
+      id: Cell['id'],
+      key: string
+    ) {
       const notebook = workbook.content;
-      if (!rubric || rubric.locked) {
+      if (!key) {
         throw new Error('encrypt error');
       }
       const model = notebook.model!;
@@ -70,7 +76,7 @@ export namespace Workbook {
       const index = findIndex(model.cells, cell => Cell.id(cell) === id);
       const cell = model.cells.get(index);
       const source = cell.sharedModel.getSource();
-      const encrypted = await security.encrypt(source, rubric.key);
+      const encrypted = await security.encrypt(source, key);
       const { widgets } = notebook;
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
       const initial = notebook.activeCellIndex;
