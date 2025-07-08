@@ -11,22 +11,27 @@ import * as input from './input';
 export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
   type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
   const { CommandIDs } = Sidebar;
-  const { get, has, size } = Correxit.Rubric;
+  const { has, size } = Correxit.Rubric;
   const { Cell } = Correxit.Workbook;
   const { trans } = sidebar;
+  const deep = true;
   const quiet = true;
   const validate = {
     [CommandIDs.add]: ({ id, is, reference }: CellCommandArgs) => {
-      const rubric = Correxit.open(sidebar.workbook, { quiet });
       const cells = sidebar.workbook?.content.model?.cells || [];
       const model = find(cells, cell => Cell.id(cell) === id);
-      if (!id || !is || !model || !rubric || rubric.locked) {
-        return false;
-      }
-      if (has(rubric, id) || (reference && has(rubric, reference))) {
-        return false;
-      }
-      return id !== reference && model.type === 'code';
+      const rubric = Correxit.open(sidebar.workbook, { quiet });
+      return (
+        !!id &&
+        !!is &&
+        !!model &&
+        !!rubric &&
+        !rubric.locked &&
+        !has(rubric, id, deep) &&
+        !(reference && has(rubric, reference, deep)) &&
+        id !== reference &&
+        model.type === 'code'
+      );
     },
     [CommandIDs.convert]: () => {
       const model = sidebar.workbook?.content.model;
@@ -51,11 +56,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     },
     [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
       const rubric = Correxit.open(sidebar.workbook, { quiet });
-      const shallow = true;
-      if (!id || !rubric || rubric.locked || !has(rubric, id, shallow)) {
-        return false;
-      }
-      return get(rubric, id)?.is === 'answerable';
+      return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
     [CommandIDs.reset]: () =>
       Correxit.open(sidebar.workbook, { quiet })?.locked === false,
@@ -146,8 +147,14 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     commands.addCommand(CommandIDs.correct, {
       isEnabled: validate[CommandIDs.correct],
       isVisible: validate[CommandIDs.correct],
-      label: ({ id }: CellCommandArgs) =>
-        id ? trans.__('Correct cell...') : trans.__('Correct workbook...'),
+      label: ({ id }: CellCommandArgs) => {
+        if (!validate[CommandIDs.correct]) {
+          return '';
+        }
+        return id
+          ? trans.__('Correct cell...')
+          : trans.__('Correct workbook...');
+      },
       execute: async ({ id }: CellCommandArgs) => {
         if (!validate[CommandIDs.correct]({ id: id ?? '' })) {
           return;
@@ -213,14 +220,19 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
     commands.addCommand(CommandIDs.toggle, {
       isEnabled: validate[CommandIDs.toggle],
       isVisible: validate[CommandIDs.toggle],
-      label: (cell: CellCommandArgs) => {
+      label: ({ id }: CellCommandArgs) => {
+        if (!id || !validate[CommandIDs.toggle]({ id })) {
+          return '';
+        }
+        const rubric = Correxit.open(sidebar.workbook)!;
+        const cell = Correxit.Rubric.get(rubric, id)!;
         return cell.shared
-          ? trans.__('Only allow correction in grader mode')
-          : trans.__('Allow correction when workbook is locked');
+          ? trans.__('Allow correction only in grader mode')
+          : trans.__('Allow correction in all modes');
       },
       execute: async (cell: CellCommandArgs) => {
         if (validate[CommandIDs.toggle](cell)) {
-          return Correxit.remove(sidebar.workbook!, cell.id!);
+          return Correxit.toggle(sidebar.workbook!, cell.id!);
         }
       }
     }),

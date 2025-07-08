@@ -54,6 +54,7 @@ const WorkbookCell: React.FC<{
     { commands, id: add, args: { id, is: 'answerable' } },
     { commands, id: add, args: { id, is: 'comparable' } },
     { commands, id: add, args: { id, is: 'correctable' } },
+    { commands, id: correct, args: {} },
     { commands, id: correct, args: { id } },
     { commands, id: toggle, args: { id } },
     { commands, id: remove, args: { id } }

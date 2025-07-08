@@ -21,10 +21,10 @@ export namespace Correxit {
   export async function add(
     workbook: Workbook,
     cell: Workbook.Cell
-  ) {
+  ): Promise<Rubric<'unlocked'>> {
     const rubric = open(workbook, { quiet: true });
     if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
-      return new Error('add error');
+      throw new Error('add error');
     }
     const section = rubric[cell.shared ? 'shared' : 'secret'];
     section.cells[cell.id] = { ...cell, shared: !!cell.shared };
@@ -153,6 +153,20 @@ export namespace Correxit {
     for (const cell of model.cells) {
       cell.deleteMetadata('correxit');
     }
+  }
+
+  export async function toggle(
+    workbook: Workbook,
+    id: Workbook.Cell['id']
+  ): Promise<Rubric<'unlocked'>> {
+    const opened = open(workbook, { quiet: true });
+    if (!opened || opened.locked || !Rubric.has(opened, id)) {
+      throw new Error('cannot toggle');
+    }
+    const rubric = Rubric.toggle(opened, id);
+    Private.CACHE.set(workbook, rubric);
+    await Encrypted.metadata(workbook, rubric);
+    return rubric;
   }
 
   export async function unlock(
