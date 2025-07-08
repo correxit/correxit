@@ -180,8 +180,9 @@ export namespace Workbook {
           return Rubric.UNSCORED;
         }
         const referent = referents[referents.length - 1];
-        const comparable = JSON.stringify(referent.content);
-        const serialized = JSON.stringify(answer.content);
+        const data = (obj: any) => obj.data
+        const comparable = JSON.stringify(data(referent.content));
+        const serialized = JSON.stringify(data(answer.content));
         return comparable === serialized ? [1, 1] : [0, 1];
       }
       if (cell.is === 'correctable') {
@@ -233,8 +234,10 @@ export namespace Workbook {
       }
     }
 
-    const { kernelManager } = context.sessionContext;
-    const kernel = await (kernelManager?.startNew().catch(_ => undefined));
+    const { kernelManager, kernelPreference } = context.sessionContext;
+    const kernel = await (kernelManager?.startNew({
+      name: kernelPreference.name
+    }).catch(_ => undefined));
     if (!kernel) {
       console.warn('execute error, could not start kernel');
       return null;
