@@ -1,6 +1,6 @@
 import { showDialog, showErrorMessage } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
-import { lockIcon, notebookIcon } from '@jupyterlab/ui-components';
+import { checkIcon, lockIcon, notebookIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit } from '..';
@@ -145,6 +145,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       }
     }),
     commands.addCommand(CommandIDs.correct, {
+      icon: checkIcon,
       isEnabled: validate[CommandIDs.correct],
       isVisible: validate[CommandIDs.correct],
       label: ({ id }: CellCommandArgs) => {
