@@ -27,7 +27,6 @@ export class Sidebar extends ReactWidget {
     if (this._workbook === workbook) {
       return;
     }
-    void Correxit.open(workbook, { quiet: true });
     if (this._workbook) {
       this._workbook.context.fileChanged.disconnect(this.ping, this);
       this._workbook.content.model?.metadataChanged.disconnect(this.ping, this);
