@@ -39,8 +39,8 @@ export const sidebar: JupyterFrontEndPlugin<void> = {
 };
 
 /**
- * The corrext source plugin loads settings, adds commands and provides an
- * (async iterable) workbook source.
+ * The correxit source plugin loads settings, adds commands, and provides an
+ * async iterable workbook source that emits when the user changes tabs.
  */
 export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,
@@ -62,14 +62,15 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       }
       const source = new Poll<Correxit.Workbook | null>({
         auto: false,
+        // Set the poll to never tick except when manually scheduled.
         frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
         factory: async () => null
       });
       const added = addCommands({ commands, source, translator });
       const schedule = (workbook: Correxit.Workbook | null) => {
         if (source.state.payload !== workbook) {
-          void Correxit.open(workbook, { quiet: true });
-          source.schedule({ payload: workbook });
+          Correxit.open(workbook, { quiet: true });
+          void source.schedule({ payload: workbook });
         }
       };
       const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) =>

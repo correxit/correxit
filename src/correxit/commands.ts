@@ -22,6 +22,14 @@ export function addCommands(options: {
   const { Cell } = Correxit.Workbook;
   const deep = true;
   const quiet = true;
+
+  // Update the active workbook when the source emits.
+  void (async () => {
+    for await (const { payload } of source) {
+      active.workbook = payload;
+    }
+  })();
+
   const validate = {
     [CommandIDs.add]: ({ id, is, reference }: CellCommandArgs) => {
       const cells = active.workbook?.content.model?.cells || [];
@@ -69,11 +77,6 @@ export function addCommands(options: {
     [CommandIDs.unlock]: () =>
       Correxit.open(active.workbook!, { quiet })?.locked ?? false
   };
-  void (async () => {
-    for await (const { payload } of source) {
-      active.workbook = payload;
-    }
-  })();
   return [
     commands.addCommand(CommandIDs.add, {
       isEnabled: validate[CommandIDs.add],
