@@ -1,5 +1,3 @@
-import { JupyterFrontEnd } from '@jupyterlab/application';
-import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
@@ -13,18 +11,12 @@ import { Footer } from './footer';
 import { Header } from './header';
 
 export class Sidebar extends ReactWidget {
-  constructor({ commands, shell, tracker, translator }: Sidebar.IOptions) {
+  constructor({ commands, source, translator }: Sidebar.IOptions) {
     super();
     this.addClass('correxit');
     this.commands = commands;
     this.trans = (translator || nullTranslator).load('correxit');
-    shell.currentChanged?.connect((_, { newValue }) => {
-      this.workbook = newValue instanceof NotebookPanel ? newValue : null;
-    }, this);
-    tracker.currentChanged.connect((_, workbook) => {
-      this.workbook = workbook;
-    }, this);
-    this._workbook = tracker.currentWidget;
+    this.subscribe(source);
   }
 
   readonly trans: IRenderMime.TranslationBundle;
@@ -80,14 +72,22 @@ export class Sidebar extends ReactWidget {
     );
   }
 
+  protected async subscribe(source: Sidebar.IOptions['source']) {
+    for await (const { payload } of source) {
+      if (this.isDisposed) {
+        return;
+      }
+      this.workbook = payload;
+    }
+  }
+
   private _workbook: Correxit.Workbook | null = null;
 }
 
 export namespace Sidebar {
   export interface IOptions {
     commands: CommandRegistry;
-    shell: JupyterFrontEnd.IShell;
-    tracker: INotebookTracker;
+    source: AsyncIterable<{ payload: Correxit.Workbook | null }>;
     translator?: ITranslator | null;
   }
 

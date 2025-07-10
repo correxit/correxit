@@ -1,3 +1,4 @@
+import { Token } from '@lumino/coreutils';
 import * as description from './description';
 import { Rubric, Rubric as RUBRIC } from './rubric';
 import { Workbook as WORKBOOK } from './workbook';
@@ -7,16 +8,22 @@ export namespace Correxit {
 
   export import Workbook = WORKBOOK;
 
-  export const DESCRIPTION = {
-    PLUGIN: description.PLUGIN,
-    SIDEBAR: description.SIDEBAR
-  };
+  export interface IPlugin extends AsyncIterable<{
+    payload: Workbook | null
+  }> {}
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
   export const PLUGIN = 'correxit:plugin';
 
   export const SIDEBAR = 'correxit:sidebar';
+
+  export const IPlugin = new Token<IPlugin>(PLUGIN);
+
+  export const DESCRIPTION = {
+    PLUGIN: description.PLUGIN,
+    SIDEBAR: description.SIDEBAR
+  };
 
   export async function add(
     workbook: Workbook,

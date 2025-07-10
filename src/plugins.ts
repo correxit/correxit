@@ -2,28 +2,58 @@ import {
   ILayoutRestorer,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-import { INotebookTracker } from '@jupyterlab/notebook';
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
+import { Poll } from '@lumino/polling';
 import { Correxit } from './correxit';
 import { Sidebar } from './sidebar';
 
 /**
- * The primary corrext plugin.
+ * The main correxit plugin loads user settings and provides a workbook source.
  */
-export const plugin: JupyterFrontEndPlugin<void> = {
+export const plugin: JupyterFrontEndPlugin<Correxit.IPlugin> = {
   id: Correxit.PLUGIN,
   description: Correxit.DESCRIPTION.PLUGIN,
   autoStart: true,
+  requires: [INotebookTracker],
   optional: [ISettingRegistry],
+  provides: Correxit.IPlugin,
   ...((deactivator?: () => void) => ({
-    activate: (_, registry: ISettingRegistry | null) => {
+    activate: (
+      { shell },
+      tracker: INotebookTracker,
+      registry: ISettingRegistry | null
+    ): Correxit.IPlugin => {
       console.log('JupyterLab extension correxit is activated!');
 
       if (registry) {
         void Private.loadSettings(registry);
       }
-      deactivator = () => undefined;
+      const poll = new Poll<Correxit.Workbook | null>({
+        auto: false,
+        frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
+        factory: async () => null
+      });
+      const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) => {
+        const workbook = newValue instanceof NotebookPanel ? newValue : null;
+        if (poll.state.payload !== workbook) {
+          poll.schedule({ payload: workbook });
+        }
+      };
+      const trackerSlot = (_: unknown, workbook: Correxit.Workbook | null) => {
+        if (poll.state.payload !== workbook) {
+          poll.schedule({ payload: workbook });
+        }
+      };
+      shell.currentChanged?.connect(shellSlot);
+      tracker.currentChanged.connect(trackerSlot);
+      deactivator = () => {
+        shell.currentChanged?.disconnect(shellSlot);
+        tracker.currentChanged.disconnect(trackerSlot);
+        poll.dispose();
+      };
+      return poll;
     },
     deactivate: () => deactivator?.()
   }))()
@@ -36,16 +66,16 @@ export const sidebar: JupyterFrontEndPlugin<void> = {
   id: Correxit.SIDEBAR,
   description: Correxit.DESCRIPTION.SIDEBAR,
   autoStart: true,
-  requires: [INotebookTracker],
+  requires: [Correxit.IPlugin],
   optional: [ITranslator, ILayoutRestorer],
   ...((deactivator?: () => void) => ({
     activate: (
       { commands, shell },
-      tracker: INotebookTracker,
+      source: Correxit.IPlugin,
       translator: ITranslator | null,
       restorer: ILayoutRestorer | null
     ) => {
-      const sidebar = new Sidebar({ commands, shell, tracker, translator });
+      const sidebar = new Sidebar({ commands, source, translator });
 
       sidebar.id = 'correxit-sidebar';
       shell.add(sidebar, 'right');
