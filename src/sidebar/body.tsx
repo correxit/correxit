@@ -7,7 +7,6 @@ import {
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-import { Sidebar } from './sidebar';
 
 export const Body: React.FC<{
   commands: CommandRegistry;
@@ -48,7 +47,7 @@ const WorkbookCell: React.FC<{
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell, commands, rubric, trans }) => {
   const { Cell } = Correxit.Workbook;
-  const { add, correct, remove, toggle } = Sidebar.CommandIDs;
+  const { add, correct, remove, toggle } = Correxit.CommandIDs;
   const id = Cell.id(cell, true);
   const buttons: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: add, args: { id, is: 'answerable' } },

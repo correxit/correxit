@@ -6,7 +6,6 @@ import { Signal } from '@lumino/signaling';
 import React from 'react';
 import { Correxit } from '../correxit';
 import { Body } from './body';
-import { addCommands as ADD_COMMANDS } from './commands';
 import { Footer } from './footer';
 import { Header } from './header';
 
@@ -90,17 +89,4 @@ export namespace Sidebar {
     source: AsyncIterable<{ payload: Correxit.Workbook | null }>;
     translator?: ITranslator | null;
   }
-
-  export namespace CommandIDs {
-    export const add = 'correxit:add';
-    export const convert = 'correxit:convert';
-    export const correct = 'correxit:correct';
-    export const lock = 'correxit:lock';
-    export const remove = 'correxit:remove';
-    export const reset = 'correxit:reset';
-    export const toggle = 'correxit:toggle';
-    export const unlock = 'correxit:unlock';
-  }
-
-  export const addCommands: typeof ADD_COMMANDS = ADD_COMMANDS;
 }

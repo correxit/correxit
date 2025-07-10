@@ -1,26 +1,35 @@
 import { showDialog, showErrorMessage } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
+import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { checkIcon, lockIcon, notebookIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit } from '..';
-import { digest } from '../correxit/security';
-import { Sidebar } from '.';
+import { digest } from './security';
 import * as input from './input';
 
-export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
+export function addCommands({
+  commands,
+  source,
+  translator
+}: {
+  commands: CommandRegistry;
+  source: Correxit.IPlugin;
+  translator: ITranslator | null;
+}) {
   type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
-  const { CommandIDs } = Sidebar;
+  const active: { workbook: Correxit.Workbook | null } = { workbook: null };
+  const trans = (translator || nullTranslator).load('correxit');
+  const { CommandIDs } = Correxit;
   const { has, size } = Correxit.Rubric;
   const { Cell } = Correxit.Workbook;
-  const { trans } = sidebar;
   const deep = true;
   const quiet = true;
   const validate = {
     [CommandIDs.add]: ({ id, is, reference }: CellCommandArgs) => {
-      const cells = sidebar.workbook?.content.model?.cells || [];
+      const cells = active.workbook?.content.model?.cells || [];
       const model = find(cells, cell => Cell.id(cell) === id);
-      const rubric = Correxit.open(sidebar.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, { quiet });
       return (
         !!id &&
         !!is &&
@@ -34,35 +43,40 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       );
     },
     [CommandIDs.convert]: () => {
-      const model = sidebar.workbook?.content.model;
+      const model = active.workbook?.content.model;
       return !!(model && !model.getMetadata('correxit'));
     },
     [CommandIDs.correct]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(sidebar.workbook, { quiet: true });
+      const rubric = Correxit.open(active.workbook, { quiet: true });
       if (!rubric) {
         return false;
       }
       if (!id) {
         return size(rubric) > 0;
       }
-      const model = sidebar.workbook!.content.activeCell?.model;
+      const model = active.workbook!.content.activeCell?.model;
       return Cell.id(model) === id && model?.type === 'code' && has(rubric, id);
     },
     [CommandIDs.lock]: () =>
-      Correxit.open(sidebar.workbook, { quiet })?.locked === false,
+      Correxit.open(active.workbook, { quiet })?.locked === false,
     [CommandIDs.remove]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(sidebar.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, { quiet });
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
     [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(sidebar.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, { quiet });
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
     [CommandIDs.reset]: () =>
-      Correxit.open(sidebar.workbook, { quiet })?.locked === false,
+      Correxit.open(active.workbook, { quiet })?.locked === false,
     [CommandIDs.unlock]: () =>
-      Correxit.open(sidebar.workbook!, { quiet })?.locked ?? false
+      Correxit.open(active.workbook!, { quiet })?.locked ?? false
   };
+  void (async () => {
+    for await (const { payload } of source) {
+      active.workbook = payload;
+    }
+  })();
   return [
     commands.addCommand(CommandIDs.add, {
       isEnabled: validate[CommandIDs.add],
@@ -94,7 +108,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         }
         const id = cell.id!;
         const is = cell.is!;
-        const workbook = sidebar.workbook!;
+        const workbook = active.workbook!;
 
         if (is === 'answerable') {
           const expected = await input.answer({
@@ -132,7 +146,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         if (!validate[CommandIDs.convert]()) {
           return;
         }
-        const workbook = sidebar.workbook!;
+        const workbook = active.workbook!;
         const key = await input.passphrase({
           title: trans.__('Enter a passphrase'),
           label: trans.__('Enter a passphrase for this workbook')
@@ -160,8 +174,8 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         if (!validate[CommandIDs.correct]({ id: id ?? '' })) {
           return;
         }
-        const workbook = sidebar.workbook!;
-        workbook!.content.scrollToCell(workbook.content.activeCell!);
+        const workbook = active.workbook!;
+        workbook.content.scrollToCell(workbook.content.activeCell!);
         const score = await Correxit.correct(workbook, id);
         const unscored = score === Correxit.Rubric.UNSCORED;
         const [x, y] = score;
@@ -181,8 +195,9 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
           return;
         }
         try {
-          const rubric = await Correxit.lock(sidebar.workbook!);
-          await sidebar.workbook!.context.save();
+          const workbook = active.workbook!;
+          const rubric = await Correxit.lock(workbook);
+          await workbook.context.save();
           return rubric;
         } catch (error) {
           void showErrorMessage(trans.__('Could not lock'), error as Error);
@@ -195,7 +210,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       label: trans.__('Reset expected cell output'),
       execute: async (cell: CellCommandArgs) => {
         if (validate[CommandIDs.remove](cell)) {
-          return Correxit.remove(sidebar.workbook!, cell.id!);
+          return Correxit.remove(active.workbook!, cell.id!);
         }
       }
     }),
@@ -211,10 +226,11 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         }
         const title = trans.__('Revert to notebook');
         const body = commands.caption(CommandIDs.reset);
+        const workbook = active.workbook!;
         const { button } = await showDialog({ body, title });
         if (button.accept) {
-          await Correxit.reset(sidebar.workbook!);
-          await sidebar.workbook!.context.save();
+          await Correxit.reset(workbook);
+          await workbook.context.save();
         }
       }
     }),
@@ -225,7 +241,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
         if (!id || !validate[CommandIDs.toggle]({ id })) {
           return '';
         }
-        const rubric = Correxit.open(sidebar.workbook)!;
+        const rubric = Correxit.open(active.workbook)!;
         const cell = Correxit.Rubric.get(rubric, id)!;
         return cell.shared
           ? trans.__('Allow correction only in grader mode')
@@ -233,7 +249,7 @@ export function addCommands(commands: CommandRegistry, sidebar: Sidebar) {
       },
       execute: async (cell: CellCommandArgs) => {
         if (validate[CommandIDs.toggle](cell)) {
-          return Correxit.toggle(sidebar.workbook!, cell.id!);
+          return Correxit.toggle(active.workbook!, cell.id!);
         }
       }
     }),
@@ -256,8 +272,8 @@ The command invokes an error message dialog if unlock fails.
         if (!validate[CommandIDs.unlock]()) {
           return null;
         }
+        const workbook = active.workbook!;
         try {
-          const workbook = sidebar.workbook!;
           key ||= await input.passphrase({
             title: trans.__('Enter a passphrase to unlock'),
             label: trans.__('Enter a passphrase to unlock this workbook')
@@ -269,7 +285,7 @@ The command invokes an error message dialog if unlock fails.
           await workbook.context.save();
           return rubric;
         } catch (error) {
-          const file = PathExt.basename(sidebar.workbook!.context.path);
+          const file = PathExt.basename(workbook.context.path);
           void showErrorMessage(
             trans.__('Could not unlock %1', file),
             error as Error

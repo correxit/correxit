@@ -4,6 +4,17 @@ import { Rubric, Rubric as RUBRIC } from './rubric';
 import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
+  export namespace CommandIDs {
+    export const add = 'correxit:add';
+    export const convert = 'correxit:convert';
+    export const correct = 'correxit:correct';
+    export const lock = 'correxit:lock';
+    export const remove = 'correxit:remove';
+    export const reset = 'correxit:reset';
+    export const toggle = 'correxit:toggle';
+    export const unlock = 'correxit:unlock';
+  }
+
   export import Rubric = RUBRIC;
 
   export import Workbook = WORKBOOK;
