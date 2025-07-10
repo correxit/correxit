@@ -20,7 +20,7 @@ export class Sidebar extends ReactWidget {
 
   readonly trans: IRenderMime.TranslationBundle;
 
-  public get workbook(): Correxit.Workbook | null {
+  protected get workbook(): Correxit.Workbook | null {
     return this._workbook;
   }
   protected set workbook(workbook: Correxit.Workbook | null) {
