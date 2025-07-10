@@ -4,5 +4,15 @@
   "description": "Correxit settings.",
   "type": "object",
   "properties": {},
+  "jupyter.lab.toolbars": {
+    "Notebook": [
+      {
+        "name": "correct-cell",
+        "command": "correxit:correct",
+        "label": "Correct",
+        "caption": "Correct workbook"
+      }
+    ]
+  },
   "additionalProperties": false
 }
