@@ -15,7 +15,7 @@ export class Sidebar extends ReactWidget {
     this.addClass('correxit');
     this.commands = commands;
     this.trans = (translator || nullTranslator).load('correxit');
-    this.subscribe(source);
+    void this.subscribe(source);
   }
 
   readonly trans: IRenderMime.TranslationBundle;

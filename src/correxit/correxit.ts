@@ -19,21 +19,19 @@ export namespace Correxit {
 
   export import Workbook = WORKBOOK;
 
-  export interface IPlugin extends AsyncIterable<{
-    payload: Workbook | null
-  }> {}
+  export type Source = AsyncIterable<{ payload: Workbook | null }>;
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
-  export const PLUGIN = 'correxit:plugin';
-
   export const SIDEBAR = 'correxit:sidebar';
 
-  export const IPlugin = new Token<IPlugin>(PLUGIN);
+  export const SOURCE = 'correxit:source';
+
+  export const Source = new Token<Source>(SOURCE);
 
   export const DESCRIPTION = {
-    PLUGIN: description.PLUGIN,
-    SIDEBAR: description.SIDEBAR
+    SIDEBAR: description.SIDEBAR,
+    SOURCE: description.SOURCE
   };
 
   export async function add(

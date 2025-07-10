@@ -8,16 +8,13 @@ import { Correxit } from '..';
 import { digest } from './security';
 import * as input from './input';
 
-export function addCommands({
-  commands,
-  source,
-  translator
-}: {
+export function addCommands(options: {
   commands: CommandRegistry;
-  source: Correxit.IPlugin;
+  source: Correxit.Source;
   translator: ITranslator | null;
 }) {
   type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
+  const { commands, source, translator } = options;
   const active: { workbook: Correxit.Workbook | null } = { workbook: null };
   const trans = (translator || nullTranslator).load('correxit');
   const { CommandIDs } = Correxit;

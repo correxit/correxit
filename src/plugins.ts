@@ -11,22 +11,51 @@ import { addCommands } from './correxit/commands';
 import { Sidebar } from './sidebar';
 
 /**
- * This plugin loads settings, adds commands and provides a workbook source.
+ * The correxit sidebar UI.
  */
-export const plugin: JupyterFrontEndPlugin<Correxit.IPlugin> = {
-  id: Correxit.PLUGIN,
-  description: Correxit.DESCRIPTION.PLUGIN,
+export const sidebar: JupyterFrontEndPlugin<void> = {
+  id: Correxit.SIDEBAR,
+  description: Correxit.DESCRIPTION.SIDEBAR,
+  autoStart: true,
+  requires: [Correxit.Source],
+  optional: [ITranslator, ILayoutRestorer],
+  ...((deactivator?: () => void) => ({
+    activate: (
+      { commands, shell },
+      source: Correxit.Source,
+      translator: ITranslator | null,
+      restorer: ILayoutRestorer | null
+    ) => {
+      const sidebar = new Sidebar({ commands, source, translator });
+      sidebar.id = 'correxit-sidebar';
+      shell.add(sidebar, 'right');
+      if (restorer) {
+        restorer.add(sidebar, sidebar.id);
+      }
+      deactivator = () => sidebar.dispose();
+    },
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/**
+ * The corrext source plugin loads settings, adds commands and provides an
+ * (async iterable) workbook source.
+ */
+export const source: JupyterFrontEndPlugin<Correxit.Source> = {
+  id: Correxit.SOURCE,
+  description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
   requires: [INotebookTracker],
   optional: [ISettingRegistry, ITranslator],
-  provides: Correxit.IPlugin,
+  provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
       { commands, shell },
       tracker: INotebookTracker,
       registry: ISettingRegistry | null,
       translator: ITranslator | null
-    ): Correxit.IPlugin => {
+    ): Correxit.Source => {
       console.log('JupyterLab extension correxit is activated!');
       if (registry) {
         void Private.loadSettings(registry);
@@ -62,41 +91,13 @@ export const plugin: JupyterFrontEndPlugin<Correxit.IPlugin> = {
   }))()
 };
 
-/**
- * The correxit sidebar UI.
- */
-export const sidebar: JupyterFrontEndPlugin<void> = {
-  id: Correxit.SIDEBAR,
-  description: Correxit.DESCRIPTION.SIDEBAR,
-  autoStart: true,
-  requires: [Correxit.IPlugin],
-  optional: [ITranslator, ILayoutRestorer],
-  ...((deactivator?: () => void) => ({
-    activate: (
-      { commands, shell },
-      source: Correxit.IPlugin,
-      translator: ITranslator | null,
-      restorer: ILayoutRestorer | null
-    ) => {
-      const sidebar = new Sidebar({ commands, source, translator });
-      sidebar.id = 'correxit-sidebar';
-      shell.add(sidebar, 'right');
-      if (restorer) {
-        restorer.add(sidebar, sidebar.id);
-      }
-      deactivator = () => sidebar.dispose();
-    },
-    deactivate: () => deactivator?.()
-  }))()
-};
-
 namespace Private {
   export async function loadSettings(registry: ISettingRegistry) {
     try {
-      const settings = await registry.load(Correxit.PLUGIN);
-      console.log(`${Correxit.PLUGIN} settings loaded:`, settings.composite);
+      const settings = await registry.load(Correxit.SOURCE);
+      console.log(`${Correxit.SOURCE} settings loaded:`, settings.composite);
     } catch (error) {
-      console.error(`Failed to load settings for ${Correxit.PLUGIN}.`, error);
+      console.error(`Failed to load settings for ${Correxit.SOURCE}.`, error);
     }
   }
 }
