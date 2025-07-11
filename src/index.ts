@@ -1,3 +1,3 @@
-import { sidebar, source } from './plugins';
+import { cellToolbar, sidebar, source } from './plugins';
 export * from './correxit';
-export default [sidebar, source];
+export default [cellToolbar, sidebar, source];

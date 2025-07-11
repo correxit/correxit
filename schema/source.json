@@ -7,10 +7,15 @@
   "jupyter.lab.toolbars": {
     "Notebook": [
       {
-        "name": "correct-cell",
+        "name": "correct-notebook",
         "command": "correxit:correct",
         "label": "Correct",
         "caption": "Correct workbook"
+      }
+    ],
+    "Cell": [
+      {
+        "name": "correct-cell"
       }
     ]
   },

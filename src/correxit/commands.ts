@@ -14,6 +14,9 @@ export function addCommands(options: {
   translator: ITranslator | null;
 }) {
   type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
+  type CorrectCommandArgs = CellCommandArgs & {
+    toolbar?: boolean;
+  };
   const { commands, source, translator } = options;
   const active: { workbook: Correxit.Workbook | null } = { workbook: null };
   const trans = (translator || nullTranslator).load('correxit');
@@ -173,8 +176,8 @@ export function addCommands(options: {
       icon: checkIcon,
       isEnabled: validate[CommandIDs.correct],
       isVisible: validate[CommandIDs.correct],
-      label: ({ id }: CellCommandArgs) => {
-        if (!validate[CommandIDs.correct]({ id })) {
+      label: ({ id, toolbar }: CorrectCommandArgs) => {
+        if (!validate[CommandIDs.correct]({ id }) || toolbar) {
           return '';
         }
         return id

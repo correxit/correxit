@@ -2,6 +2,11 @@ import {
   ILayoutRestorer,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
+import {
+  CommandToolbarButton,
+  IToolbarWidgetRegistry
+} from '@jupyterlab/apputils';
+import { Cell } from '@jupyterlab/cells';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
@@ -89,6 +94,24 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
     },
     deactivate: () => deactivator?.()
   }))()
+};
+
+export const cellToolbar: JupyterFrontEndPlugin<void> = {
+  id: Correxit.CELL_TOOLBAR,
+  description: Correxit.DESCRIPTION.CELL_TOOLBAR,
+  autoStart: true,
+  requires: [IToolbarWidgetRegistry],
+  activate: ({ commands }, toolbarRegistry: IToolbarWidgetRegistry) => {
+    const factory = (cell: Cell) => {
+      const id = Correxit.Workbook.Cell.id(cell.model, false);
+      return new CommandToolbarButton({
+        commands,
+        id: Correxit.CommandIDs.correct,
+        args: { id, toolbar: true }
+      });
+    };
+    toolbarRegistry.addFactory('Cell', 'correct-cell', factory);
+  }
 };
 
 namespace Private {
