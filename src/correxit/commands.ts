@@ -30,6 +30,7 @@ export function addCommands(options: {
   void (async () => {
     for await (const { payload } of source) {
       active.workbook = payload;
+      commands.notifyCommandChanged(CommandIDs.correct);
     }
   })();
 
@@ -175,7 +176,15 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.correct, {
       icon: checkIcon,
       isEnabled: validate[CommandIDs.correct],
-      isVisible: validate[CommandIDs.correct],
+      isVisible: (args: CorrectCommandArgs) => {
+        const rubric = Correxit.open(active.workbook, { quiet: true });
+        // Display the icon in the notebook toolbar if this is a workbook (even if it
+        // is disabled).
+        // Display the icon in the cell toolbar only if the cell is correctable.
+        return args.toolbar && !args.id
+          ? !!rubric
+          : validate[CommandIDs.correct](args);
+      },
       label: ({ id, toolbar }: CorrectCommandArgs) => {
         if (!validate[CommandIDs.correct]({ id }) || toolbar) {
           return '';
