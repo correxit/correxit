@@ -4,9 +4,9 @@ import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { checkIcon, lockIcon, notebookIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
-import { Correxit } from '..';
-import { digest } from './security';
+import { Correxit } from '.';
 import * as input from './input';
+import { digest } from './security';
 
 export function addCommands(options: {
   commands: CommandRegistry;

@@ -20,28 +20,28 @@ export class Sidebar extends ReactWidget {
 
   readonly trans: IRenderMime.TranslationBundle;
 
+  protected commands: CommandRegistry;
+
+  protected pinged = new Signal<unknown, undefined>(this);
+
   protected get workbook(): Correxit.Workbook | null {
     return this._workbook;
   }
   protected set workbook(workbook: Correxit.Workbook | null) {
-    if (this._workbook === workbook) {
+    if (workbook === this.workbook) {
       return;
     }
-    if (this._workbook) {
-      this._workbook.context.fileChanged.disconnect(this.ping, this);
-      this._workbook.content.model?.metadataChanged.disconnect(this.ping, this);
+    if (workbook) {
+      workbook.context.fileChanged.connect(this.ping, this);
+      workbook.content.model?.metadataChanged.connect(this.ping, this);
+    }
+    if (this.workbook) {
+      this.workbook.context.fileChanged.disconnect(this.ping, this);
+      this.workbook.content.model?.metadataChanged.disconnect(this.ping, this);
     }
     this._workbook = workbook;
-    if (this._workbook) {
-      this._workbook.context.fileChanged.connect(this.ping, this);
-      this._workbook.content.model?.metadataChanged.connect(this.ping, this);
-    }
     this.update();
   }
-
-  protected commands: CommandRegistry;
-
-  protected pinged = new Signal<unknown, undefined>(this);
 
   protected ping() {
     this.pinged.emit(undefined);
