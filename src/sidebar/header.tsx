@@ -7,14 +7,13 @@ import {
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-import { Sidebar } from './sidebar';
 
 export const Header: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ commands, trans, workbook }) => {
-  const { convert, correct, lock, unlock } = Sidebar.CommandIDs;
+  const { convert, correct, lock, unlock } = Correxit.CommandIDs;
   return (
     <section className="correxit-header">
       <File trans={trans} workbook={workbook} />

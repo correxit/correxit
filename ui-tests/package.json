@@ -1,7 +1,7 @@
 {
   "name": "correxit-ui-tests",
   "version": "1.0.0",
-  "description": "JupyterLab correxit Integration Tests",
+  "description": "JupyterLab/Correxit Integration Tests",
   "private": true,
   "scripts": {
     "start": "jupyter lab --config jupyter_server_test_config.py",

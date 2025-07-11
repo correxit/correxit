@@ -1,22 +1,38 @@
+import { Token } from '@lumino/coreutils';
 import * as description from './description';
-import { Rubric, Rubric as RUBRIC } from './rubric';
+import { Rubric as RUBRIC } from './rubric';
 import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
+  export namespace CommandIDs {
+    export const add = 'correxit:add';
+    export const convert = 'correxit:convert';
+    export const correct = 'correxit:correct';
+    export const lock = 'correxit:lock';
+    export const remove = 'correxit:remove';
+    export const reset = 'correxit:reset';
+    export const toggle = 'correxit:toggle';
+    export const unlock = 'correxit:unlock';
+  }
+
   export import Rubric = RUBRIC;
 
   export import Workbook = WORKBOOK;
 
-  export const DESCRIPTION = {
-    PLUGIN: description.PLUGIN,
-    SIDEBAR: description.SIDEBAR
-  };
+  export type Source = AsyncIterable<{ payload: Workbook | null }>;
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
-  export const PLUGIN = 'correxit:plugin';
-
   export const SIDEBAR = 'correxit:sidebar';
+
+  export const SOURCE = 'correxit:source';
+
+  export const Source = new Token<Source>(SOURCE);
+
+  export const DESCRIPTION = {
+    SIDEBAR: description.SIDEBAR,
+    SOURCE: description.SOURCE
+  };
 
   export async function add(
     workbook: Workbook,
@@ -188,7 +204,7 @@ export namespace Correxit {
 namespace Decrypted {
   export async function content(
     workbook: Correxit.Workbook,
-    rubric: Rubric<'unlocked'>
+    rubric: Correxit.Rubric<'unlocked'>
   ): Promise<void> {
     const { key } = rubric;
     for (const id in rubric.secret.cells) {
@@ -216,7 +232,7 @@ namespace Encrypted {
 
   export async function content(
     workbook: Correxit.Workbook,
-    rubric: Rubric<'unlocked'>
+    rubric: Correxit.Rubric<'unlocked'>
   ): Promise<void> {
     const { key } = rubric;
     for (const id in rubric.secret.cells) {

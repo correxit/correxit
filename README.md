@@ -101,24 +101,6 @@ located. Then you can remove the symlink named `correxit` within that folder.
 
 ### Testing the extension
 
-#### Server tests
-
-This extension is using [Pytest](https://docs.pytest.org/) for Python code.
-
-Install test dependencies (needed only once):
-
-```sh
-pip install -e ".[test]"
-# When you install the Python package, you need to restore the labextension link
-jupyter labextension develop . --overwrite
-```
-
-To execute them, run:
-
-```sh
-pytest -vv -r ap --cov correxit
-```
-
 #### Frontend tests
 
 This extension is using [Jest](https://jestjs.io/) for JavaScript code testing.

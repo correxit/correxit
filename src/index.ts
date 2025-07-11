@@ -1,3 +1,3 @@
-import { plugin, sidebar } from './plugins';
+import { sidebar, source } from './plugins';
 export * from './correxit';
-export default [plugin, sidebar];
+export default [sidebar, source];

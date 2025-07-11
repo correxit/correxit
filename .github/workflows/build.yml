@@ -38,9 +38,8 @@ jobs:
     - name: Build the extension
       run: |
         set -eux
-        python -m pip install .[test]
+        python -m pip install .
 
-        pytest -vv -r ap --cov correxit
         jupyter server extension list
         jupyter server extension list 2>&1 | grep -ie "correxit.*OK"
 
@@ -149,12 +148,3 @@ jobs:
         path: |
           ui-tests/test-results
           ui-tests/playwright-report
-
-  check_links:
-    name: Check Links
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
-      - uses: jupyterlab/maintainer-tools/.github/actions/check-links@v1

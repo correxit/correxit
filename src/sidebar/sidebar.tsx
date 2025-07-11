@@ -1,5 +1,3 @@
-import { JupyterFrontEnd } from '@jupyterlab/application';
-import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
@@ -8,50 +6,42 @@ import { Signal } from '@lumino/signaling';
 import React from 'react';
 import { Correxit } from '../correxit';
 import { Body } from './body';
-import { addCommands as ADD_COMMANDS } from './commands';
 import { Footer } from './footer';
 import { Header } from './header';
 
 export class Sidebar extends ReactWidget {
-  constructor({ commands, shell, tracker, translator }: Sidebar.IOptions) {
+  constructor({ commands, source, translator }: Sidebar.IOptions) {
     super();
     this.addClass('correxit');
     this.commands = commands;
     this.trans = (translator || nullTranslator).load('correxit');
-    shell.currentChanged?.connect((_, { newValue }) => {
-      this.workbook = newValue instanceof NotebookPanel ? newValue : null;
-    }, this);
-    tracker.currentChanged.connect((_, workbook) => {
-      this.workbook = workbook;
-    }, this);
-    this._workbook = tracker.currentWidget;
+    void this.subscribe(source);
   }
 
   readonly trans: IRenderMime.TranslationBundle;
 
-  public get workbook(): Correxit.Workbook | null {
-    return this._workbook;
-  }
-  protected set workbook(workbook: Correxit.Workbook | null) {
-    if (this._workbook === workbook) {
-      return;
-    }
-    void Correxit.open(workbook, { quiet: true });
-    if (this._workbook) {
-      this._workbook.context.fileChanged.disconnect(this.ping, this);
-      this._workbook.content.model?.metadataChanged.disconnect(this.ping, this);
-    }
-    this._workbook = workbook;
-    if (this._workbook) {
-      this._workbook.context.fileChanged.connect(this.ping, this);
-      this._workbook.content.model?.metadataChanged.connect(this.ping, this);
-    }
-    this.update();
-  }
-
   protected commands: CommandRegistry;
 
   protected pinged = new Signal<unknown, undefined>(this);
+
+  protected get workbook(): Correxit.Workbook | null {
+    return this._workbook;
+  }
+  protected set workbook(workbook: Correxit.Workbook | null) {
+    if (workbook === this.workbook) {
+      return;
+    }
+    if (workbook) {
+      workbook.context.fileChanged.connect(this.ping, this);
+      workbook.content.model?.metadataChanged.connect(this.ping, this);
+    }
+    if (this.workbook) {
+      this.workbook.context.fileChanged.disconnect(this.ping, this);
+      this.workbook.content.model?.metadataChanged.disconnect(this.ping, this);
+    }
+    this._workbook = workbook;
+    this.update();
+  }
 
   protected ping() {
     this.pinged.emit(undefined);
@@ -80,27 +70,22 @@ export class Sidebar extends ReactWidget {
     );
   }
 
+  protected async subscribe(source: Correxit.Source) {
+    for await (const { payload } of source) {
+      if (this.isDisposed) {
+        return;
+      }
+      this.workbook = payload;
+    }
+  }
+
   private _workbook: Correxit.Workbook | null = null;
 }
 
 export namespace Sidebar {
   export interface IOptions {
     commands: CommandRegistry;
-    shell: JupyterFrontEnd.IShell;
-    tracker: INotebookTracker;
+    source: Correxit.Source;
     translator?: ITranslator | null;
   }
-
-  export namespace CommandIDs {
-    export const add = 'correxit:add';
-    export const convert = 'correxit:convert';
-    export const correct = 'correxit:correct';
-    export const lock = 'correxit:lock';
-    export const remove = 'correxit:remove';
-    export const reset = 'correxit:reset';
-    export const toggle = 'correxit:toggle';
-    export const unlock = 'correxit:unlock';
-  }
-
-  export const addCommands: typeof ADD_COMMANDS = ADD_COMMANDS;
 }

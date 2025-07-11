@@ -2,61 +2,90 @@ import {
   ILayoutRestorer,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-import { INotebookTracker } from '@jupyterlab/notebook';
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
+import { Poll } from '@lumino/polling';
 import { Correxit } from './correxit';
+import { addCommands } from './correxit/commands';
 import { Sidebar } from './sidebar';
 
 /**
- * The primary corrext plugin.
+ * The Correxit sidebar UI.
  */
-export const plugin: JupyterFrontEndPlugin<void> = {
-  id: Correxit.PLUGIN,
-  description: Correxit.DESCRIPTION.PLUGIN,
+export const sidebar: JupyterFrontEndPlugin<void> = {
+  id: Correxit.SIDEBAR,
+  description: Correxit.DESCRIPTION.SIDEBAR,
   autoStart: true,
-  optional: [ISettingRegistry],
+  requires: [Correxit.Source],
+  optional: [ITranslator, ILayoutRestorer],
   ...((deactivator?: () => void) => ({
-    activate: (_, registry: ISettingRegistry | null) => {
-      console.log('JupyterLab extension correxit is activated!');
-
-      if (registry) {
-        void Private.loadSettings(registry);
+    activate: (
+      { commands, shell },
+      source: Correxit.Source,
+      translator: ITranslator | null,
+      restorer: ILayoutRestorer | null
+    ) => {
+      const sidebar = new Sidebar({ commands, source, translator });
+      sidebar.id = 'correxit-sidebar';
+      shell.add(sidebar, 'right');
+      if (restorer) {
+        restorer.add(sidebar, sidebar.id);
       }
-      deactivator = () => undefined;
+      deactivator = () => sidebar.dispose();
     },
     deactivate: () => deactivator?.()
   }))()
 };
 
 /**
- * The correxit sidebar UI.
+ * The Correxit source plugin loads settings, adds commands, and provides an
+ * async iterable workbook source that emits when the user changes tabs.
  */
-export const sidebar: JupyterFrontEndPlugin<void> = {
-  id: Correxit.SIDEBAR,
-  description: Correxit.DESCRIPTION.SIDEBAR,
+export const source: JupyterFrontEndPlugin<Correxit.Source> = {
+  id: Correxit.SOURCE,
+  description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
   requires: [INotebookTracker],
-  optional: [ITranslator, ILayoutRestorer],
+  optional: [ISettingRegistry, ITranslator],
+  provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
       { commands, shell },
       tracker: INotebookTracker,
-      translator: ITranslator | null,
-      restorer: ILayoutRestorer | null
-    ) => {
-      const sidebar = new Sidebar({ commands, shell, tracker, translator });
-
-      sidebar.id = 'correxit-sidebar';
-      shell.add(sidebar, 'right');
-      if (restorer) {
-        restorer.add(sidebar, sidebar.id);
+      registry: ISettingRegistry | null,
+      translator: ITranslator | null
+    ): Correxit.Source => {
+      console.log('JupyterLab extension correxit is activated!');
+      if (registry) {
+        void Private.loadSettings(registry);
       }
-
-      // Add sidebar commands and keep track of their disposables.
-      const disposables = Sidebar.addCommands(commands, sidebar);
-      disposables.push(sidebar);
-      deactivator = () => disposables.forEach(item => item.dispose());
+      const source = new Poll<Correxit.Workbook | null>({
+        auto: false,
+        // Set the poll to never tick except when manually scheduled.
+        frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
+        factory: async () => null
+      });
+      const added = addCommands({ commands, source, translator });
+      const schedule = (workbook: Correxit.Workbook | null) => {
+        if (source.state.payload !== workbook) {
+          Correxit.open(workbook, { quiet: true });
+          void source.schedule({ payload: workbook });
+        }
+      };
+      const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) =>
+        schedule(newValue instanceof NotebookPanel ? newValue : null);
+      const trackerSlot = (_: unknown, workbook: Correxit.Workbook | null) =>
+        schedule(workbook);
+      shell.currentChanged?.connect(shellSlot);
+      tracker.currentChanged.connect(trackerSlot);
+      deactivator = () => {
+        added.forEach(command => command.dispose());
+        source.dispose();
+        shell.currentChanged?.disconnect(shellSlot);
+        tracker.currentChanged.disconnect(trackerSlot);
+      };
+      return source;
     },
     deactivate: () => deactivator?.()
   }))()
@@ -65,10 +94,10 @@ export const sidebar: JupyterFrontEndPlugin<void> = {
 namespace Private {
   export async function loadSettings(registry: ISettingRegistry) {
     try {
-      const settings = await registry.load(Correxit.PLUGIN);
-      console.log(`${Correxit.PLUGIN} settings loaded:`, settings.composite);
+      const settings = await registry.load(Correxit.SOURCE);
+      console.log(`${Correxit.SOURCE} settings loaded:`, settings.composite);
     } catch (error) {
-      console.error(`Failed to load settings for ${Correxit.PLUGIN}.`, error);
+      console.error(`Failed to load settings for ${Correxit.SOURCE}.`, error);
     }
   }
 }
