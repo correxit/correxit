@@ -31,6 +31,8 @@ export function addCommands(options: {
     for await (const { payload } of source) {
       active.workbook = payload;
       commands.notifyCommandChanged(CommandIDs.correct);
+      commands.notifyCommandChanged(CommandIDs.lock);
+      commands.notifyCommandChanged(CommandIDs.unlock);
     }
   })();
 
@@ -222,6 +224,8 @@ export function addCommands(options: {
           const rubric = await Correxit.lock(workbook);
           await workbook.context.save();
           commands.notifyCommandChanged(CommandIDs.correct);
+          commands.notifyCommandChanged(CommandIDs.lock);
+          commands.notifyCommandChanged(CommandIDs.unlock);
           return rubric;
         } catch (error) {
           void showErrorMessage(trans.__('Could not lock'), error as Error);
@@ -313,6 +317,8 @@ The command invokes an error message dialog if unlock fails.
           const rubric = await Correxit.unlock(workbook, key);
           await workbook.context.save();
           commands.notifyCommandChanged(CommandIDs.correct);
+          commands.notifyCommandChanged(CommandIDs.lock);
+          commands.notifyCommandChanged(CommandIDs.unlock);
           return rubric;
         } catch (error) {
           const file = PathExt.basename(workbook.context.path);
