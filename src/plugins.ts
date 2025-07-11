@@ -11,7 +11,7 @@ import { addCommands } from './correxit/commands';
 import { Sidebar } from './sidebar';
 
 /**
- * The correxit sidebar UI.
+ * The Correxit sidebar UI.
  */
 export const sidebar: JupyterFrontEndPlugin<void> = {
   id: Correxit.SIDEBAR,
@@ -39,7 +39,7 @@ export const sidebar: JupyterFrontEndPlugin<void> = {
 };
 
 /**
- * The correxit source plugin loads settings, adds commands, and provides an
+ * The Correxit source plugin loads settings, adds commands, and provides an
  * async iterable workbook source that emits when the user changes tabs.
  */
 export const source: JupyterFrontEndPlugin<Correxit.Source> = {

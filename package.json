@@ -1,7 +1,7 @@
 {
     "name": "correxit",
     "version": "0.1.0",
-    "description": "correxit is a JupyterLab extension and the third-person singular perfect active indicative conjugation of the Latin verb corrigere",
+    "description": "Correxit is a JupyterLab extension and the third-person singular perfect active indicative conjugation of the Latin verb corrigere",
     "keywords": [
         "jupyter",
         "jupyterlab",

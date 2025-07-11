@@ -1,6 +1,6 @@
 import { Token } from '@lumino/coreutils';
 import * as description from './description';
-import { Rubric, Rubric as RUBRIC } from './rubric';
+import { Rubric as RUBRIC } from './rubric';
 import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
@@ -204,7 +204,7 @@ export namespace Correxit {
 namespace Decrypted {
   export async function content(
     workbook: Correxit.Workbook,
-    rubric: Rubric<'unlocked'>
+    rubric: Correxit.Rubric<'unlocked'>
   ): Promise<void> {
     const { key } = rubric;
     for (const id in rubric.secret.cells) {
@@ -232,7 +232,7 @@ namespace Encrypted {
 
   export async function content(
     workbook: Correxit.Workbook,
-    rubric: Rubric<'unlocked'>
+    rubric: Correxit.Rubric<'unlocked'>
   ): Promise<void> {
     const { key } = rubric;
     for (const id in rubric.secret.cells) {

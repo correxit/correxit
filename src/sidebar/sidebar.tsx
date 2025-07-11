@@ -70,7 +70,7 @@ export class Sidebar extends ReactWidget {
     );
   }
 
-  protected async subscribe(source: Sidebar.IOptions['source']) {
+  protected async subscribe(source: Correxit.Source) {
     for await (const { payload } of source) {
       if (this.isDisposed) {
         return;
@@ -85,7 +85,7 @@ export class Sidebar extends ReactWidget {
 export namespace Sidebar {
   export interface IOptions {
     commands: CommandRegistry;
-    source: AsyncIterable<{ payload: Correxit.Workbook | null }>;
+    source: Correxit.Source;
     translator?: ITranslator | null;
   }
 }
