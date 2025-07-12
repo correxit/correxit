@@ -49,7 +49,7 @@ export function addCommands(options: {
     },
     [CommandIDs.convert]: () => {
       const model = active.workbook?.content.model;
-      return !!(model && !model.getMetadata('correxit'));
+      return !!(model && !model.sharedModel.getMetadata('correxit'));
     },
     [CommandIDs.correct]: ({ id }: CellCommandArgs) => {
       const rubric = Correxit.open(active.workbook, { quiet: true });

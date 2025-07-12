@@ -29,8 +29,9 @@ const File: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ trans, workbook }) => {
-  const { content, context } = workbook;
-  const heading = content.model?.getMetadata('correxit')
+  const rubric = Correxit.open(workbook, { quiet: true });
+  const { context } = workbook;
+  const heading = rubric
     ? trans.__('Workbook file:')
     : trans.__('Notebook file:');
   return (

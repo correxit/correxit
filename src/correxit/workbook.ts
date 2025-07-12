@@ -35,7 +35,7 @@ export namespace Workbook {
       | KernelMessage.IIOPubMessage<'stream'>
       | KernelMessage.IIOPubMessage<'error'>;
 
-    const answer = async (given: Output[], expected: Cell['payload']) => {
+    const answer = async (expected: Cell['payload'], given: Output[]) => {
         const { CORRECT, INCORRECT, UNSCORED } = Rubric;
         const message = given.slice(-1)[0];
         if (message.header.msg_type === 'error') {
@@ -170,12 +170,12 @@ export namespace Workbook {
       if (!cell){
         return '';
       }
-      const id = cell.getMetadata('correxit') || '';
+      const id = cell.sharedModel.getMetadata('correxit') as string || '';
       if (id || !initialize) {
         return id;
       }
-      cell.setMetadata('correxit', UUID.uuid4());
-      return cell.getMetadata('correxit');
+      cell.sharedModel.setMetadata('correxit', UUID.uuid4());
+      return cell.sharedModel.getMetadata('correxit') as string;
     }
 
     /**
@@ -206,7 +206,7 @@ export namespace Workbook {
         return Rubric.UNSCORED;
       }
       if (cell.is === 'answerable') {
-        return answer(given, cell.payload);
+        return answer(cell.payload, given);
       }
 
       const expected = cell.reference ? outputs[cell.reference] : null;

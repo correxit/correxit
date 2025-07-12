@@ -134,7 +134,7 @@ export namespace Correxit {
       return Private.CACHE.get(workbook)!;
     }
 
-    const rubric = workbook.content.model.getMetadata('correxit') || null;
+    const rubric = workbook.content.model.sharedModel.getMetadata('correxit');
     if (!rubric) {
       if (quiet) {
         return null;
@@ -142,7 +142,7 @@ export namespace Correxit {
       throw NO_CORREXIT_METADATA;
     }
     try {
-      return Rubric.normalize(rubric);
+      return Rubric.normalize(rubric as Partial<Rubric>);
     } catch (error) {
       if (quiet) {
         return null;
@@ -224,7 +224,7 @@ namespace Encrypted {
     const notebook = workbook.content;
     const model = notebook.model!;
     const locked = await Correxit.Rubric.lock(rubric);
-    model.setMetadata('correxit', locked);
+    model.sharedModel.setMetadata('correxit', locked);
     for (const cell of model.cells) {
       Correxit.Workbook.Cell.id(cell, true);
     }
