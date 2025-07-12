@@ -87,10 +87,10 @@ export namespace Correxit {
     if (!outputs) {
       return Rubric.UNSCORED;
     }
-
     if (id) {
       return await Workbook.Cell.score(workbook, id, outputs);
     }
+
     let total: Rubric.Score = [0, 0];
     for (const id of Object.keys(outputs)) {
       const score = await Workbook.Cell.score(workbook, id, outputs);

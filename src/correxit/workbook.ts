@@ -35,6 +35,58 @@ export namespace Workbook {
       | KernelMessage.IIOPubMessage<'stream'>
       | KernelMessage.IIOPubMessage<'error'>;
 
+    const answer = async (
+      cell: Cell,
+      expected: Output[]
+    ) => {
+        const { CORRECT, INCORRECT, UNSCORED } = Rubric;
+        const answer = expected.slice(-1)[0];
+        // TODO: handle the case when the execution failed.
+        if (answer.header.msg_type === 'error') {
+          return INCORRECT;
+        }
+        if (answer.header.msg_type === 'stream') {
+          const content = answer.content as KernelMessage.IStreamMsg['content'];
+          if (content.name === 'stdout') {
+            const value = await security.digest(content.text.trim());
+            return value === cell.payload?.[0] ? CORRECT : INCORRECT;
+          }
+          return INCORRECT;
+        }
+      return UNSCORED;
+    };
+
+    const compare = (given: Output[], expected: Output[]) => {
+      const { CORRECT, INCORRECT, UNSCORED } = Rubric;
+      if (!expected.length) {
+        return UNSCORED;
+      }
+      if (!given.length) {
+        return INCORRECT;
+      }
+
+      const a = given.slice(-1)[0].content;
+      const b = expected.slice(-1)[0].content;
+      const congruent =
+        Object.keys(a).sort().join('') ===
+        Object.keys(b).sort().join('');
+      if (!congruent) {
+        return INCORRECT;
+      }
+      if ('data' in a && 'data' in b) {
+        const equal = JSON.stringify(a.data) === JSON.stringify(b.data);
+        return equal ? CORRECT : INCORRECT;
+      }
+      if ('name' in a && 'name' in b) {
+        return a.name === b.name && a.text === b.text ? CORRECT : INCORRECT;
+      }
+      return UNSCORED;
+    };
+
+    const correct = (expected: Output[]) =>
+      expected.some(msg => msg.header.msg_type === 'error') ?
+        Rubric.INCORRECT : Rubric.CORRECT;
+
     export async function decrypt(
       workbook: Workbook,
       id: Cell['id'],
@@ -96,10 +148,13 @@ export namespace Workbook {
      * @returns an array of of cell outputs.
      */
     export async function execute(
-      { sharedModel: { source} }: ICodeCellModel,
+      { sharedModel: { source } }: ICodeCellModel,
       kernel: Kernel.IKernelConnection
     ): Promise<Output[]> {
       const outputs: Output[] = [];
+      if (!source) {
+        return outputs;
+      }
       const future = kernel.requestExecute({ code: source });
       future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
         if (msg.header.msg_type === 'execute_result' ||
@@ -143,51 +198,27 @@ export namespace Workbook {
       outputs: Workbook.Outputs,
     ): Promise<Rubric.Score> {
       const rubric = Correxit.open(workbook, { quiet: true });
-      if (!rubric || !Object.keys(outputs).length) {
+      if (!rubric) {
         return Rubric.UNSCORED;
       }
 
-      const answer = outputs[id][outputs[id].length - 1];
       const cell = Rubric.get(rubric, id);
-      if (!cell) {
+      if (!cell || !outputs[id]) {
         return Rubric.UNSCORED;
       }
       if (cell.is === 'answerable') {
-        // TODO: handle the case when the execution failed.
-        if (answer.header.msg_type === 'error') {
-          return [0, 1];
-        }
-        if (answer.header.msg_type === 'stream') {
-          const content = answer.content as KernelMessage.IStreamMsg['content'];
-          if (content.name === 'stdout') {
-            const value = await security.digest(content.text.trim());
-            return value === cell.payload?.[0] ? [1, 1] : [0, 1];
-          }
-          return [0, 1];
-        }
+        return answer(cell, outputs[id]);
       }
 
-      // TODO: We should probably handle this case where the reference cell
-      // has not been executed.
-      const referents = outputs[cell.reference!];
-      if (!referents) {
+      const reference = cell.reference!;
+      if (!outputs[reference]) {
         return Rubric.UNSCORED;
       }
-
       if (cell.is === 'comparable') {
-        // TODO: Handle the case where the reference cell has no output.
-        if (!referents.length) {
-          return Rubric.UNSCORED;
-        }
-        const referent = referents[referents.length - 1];
-        const data = (obj: any) => obj.data
-        const comparable = JSON.stringify(data(referent.content));
-        const serialized = JSON.stringify(data(answer.content));
-        return comparable === serialized ? [1, 1] : [0, 1];
+        return compare(outputs[id], outputs[reference]);
       }
       if (cell.is === 'correctable') {
-        const wrong = referents.some(msg => msg.header.msg_type === 'error');
-        return wrong ? [0, 1] : [1, 1];
+        return correct(outputs[reference]);
       }
       return Rubric.UNSCORED;
     }
@@ -235,9 +266,8 @@ export namespace Workbook {
     }
 
     const { kernelManager, kernelPreference } = context.sessionContext;
-    const kernel = await (kernelManager?.startNew({
-      name: kernelPreference.name
-    }).catch(_ => undefined));
+    const { name } = kernelPreference;
+    const kernel = await (kernelManager?.startNew({ name }).catch(_ => {}));
     if (!kernel) {
       console.warn('execute error, could not start kernel');
       return null;
