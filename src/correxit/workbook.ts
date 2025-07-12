@@ -35,28 +35,24 @@ export namespace Workbook {
       | KernelMessage.IIOPubMessage<'stream'>
       | KernelMessage.IIOPubMessage<'error'>;
 
-    const answer = async (
-      cell: Cell,
-      expected: Output[]
-    ) => {
+    const answer = async (given: Output[], expected: Cell['payload']) => {
         const { CORRECT, INCORRECT, UNSCORED } = Rubric;
-        const answer = expected.slice(-1)[0];
-        // TODO: handle the case when the execution failed.
-        if (answer.header.msg_type === 'error') {
+        const message = given.slice(-1)[0];
+        if (message.header.msg_type === 'error') {
           return INCORRECT;
         }
-        if (answer.header.msg_type === 'stream') {
-          const content = answer.content as KernelMessage.IStreamMsg['content'];
+        if (message.header.msg_type === 'stream') {
+          const { content } = message as KernelMessage.IStreamMsg;
           if (content.name === 'stdout') {
             const value = await security.digest(content.text.trim());
-            return value === cell.payload?.[0] ? CORRECT : INCORRECT;
+            return value === expected?.[0] ? CORRECT : INCORRECT;
           }
           return INCORRECT;
         }
       return UNSCORED;
     };
 
-    const compare = (given: Output[], expected: Output[]) => {
+    const compare = (expected: Output[], given: Output[]) => {
       const { CORRECT, INCORRECT, UNSCORED } = Rubric;
       if (!expected.length) {
         return UNSCORED;
@@ -65,26 +61,26 @@ export namespace Workbook {
         return INCORRECT;
       }
 
-      const a = given.slice(-1)[0].content;
-      const b = expected.slice(-1)[0].content;
+      const x = given.slice(-1)[0].content;
+      const y = expected.slice(-1)[0].content;
       const congruent =
-        Object.keys(a).sort().join('') ===
-        Object.keys(b).sort().join('');
+        Object.keys(x).sort().join('') ===
+        Object.keys(y).sort().join('');
       if (!congruent) {
         return INCORRECT;
       }
-      if ('data' in a && 'data' in b) {
-        const equal = JSON.stringify(a.data) === JSON.stringify(b.data);
+      if ('data' in x && 'data' in y) {
+        const equal = JSON.stringify(x.data) === JSON.stringify(y.data);
         return equal ? CORRECT : INCORRECT;
       }
-      if ('name' in a && 'name' in b) {
-        return a.name === b.name && a.text === b.text ? CORRECT : INCORRECT;
+      if ('name' in x && 'name' in y) {
+        return x.name === y.name && x.text === y.text ? CORRECT : INCORRECT;
       }
       return UNSCORED;
     };
 
     const correct = (expected: Output[]) =>
-      expected.some(msg => msg.header.msg_type === 'error') ?
+      expected.some(message => message.header.msg_type === 'error') ?
         Rubric.INCORRECT : Rubric.CORRECT;
 
     export async function decrypt(
@@ -108,6 +104,7 @@ export namespace Workbook {
       const initial = notebook.activeCellIndex;
       notebook.select(widget);
       notebook.activeCellIndex = index;
+      widget.inputHidden = false;
       widget.model.sharedModel.setSource(decrypted);
       NotebookActions.changeCellType(workbook.content, 'code');
       notebook.activeCellIndex = initial;
@@ -135,6 +132,7 @@ export namespace Workbook {
       notebook.select(widget);
       notebook.activeCellIndex = index;
       widget.model.sharedModel.setSource(encrypted);
+      widget.inputHidden = true;
       NotebookActions.changeCellType(notebook, 'raw');
       notebook.activeCellIndex = initial;
     }
@@ -156,12 +154,12 @@ export namespace Workbook {
         return outputs;
       }
       const future = kernel.requestExecute({ code: source });
-      future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-        if (msg.header.msg_type === 'execute_result' ||
-            msg.header.msg_type === 'display_data' ||
-            msg.header.msg_type === 'stream' ||
-            msg.header.msg_type === 'error') {
-          outputs.push(msg as Output);
+      future.onIOPub = (message: KernelMessage.IIOPubMessage) => {
+        if (message.header.msg_type === 'execute_result' ||
+            message.header.msg_type === 'display_data' ||
+            message.header.msg_type === 'stream' ||
+            message.header.msg_type === 'error') {
+          outputs.push(message as Output);
         }
       };
       await future.done;
@@ -203,22 +201,23 @@ export namespace Workbook {
       }
 
       const cell = Rubric.get(rubric, id);
-      if (!cell || !outputs[id]) {
+      const given = outputs[id];
+      if (!cell || !given) {
         return Rubric.UNSCORED;
       }
       if (cell.is === 'answerable') {
-        return answer(cell, outputs[id]);
+        return answer(given, cell.payload);
       }
 
-      const reference = cell.reference!;
-      if (!outputs[reference]) {
+      const expected = cell.reference ? outputs[cell.reference] : null;
+      if (!expected) {
         return Rubric.UNSCORED;
       }
       if (cell.is === 'comparable') {
-        return compare(outputs[id], outputs[reference]);
+        return compare(expected, given);
       }
       if (cell.is === 'correctable') {
-        return correct(outputs[reference]);
+        return correct(expected);
       }
       return Rubric.UNSCORED;
     }
