@@ -61,12 +61,10 @@ export namespace Workbook {
         return INCORRECT;
       }
 
+      const keys = (obj: Output['content']) => Object.keys(obj).sort().join('');
       const x = given.slice(-1)[0].content;
       const y = expected.slice(-1)[0].content;
-      const congruent =
-        Object.keys(x).sort().join('') ===
-        Object.keys(y).sort().join('');
-      if (!congruent) {
+      if (keys(x) !== keys(y)) {
         return INCORRECT;
       }
       if ('data' in x && 'data' in y) {
@@ -89,24 +87,23 @@ export namespace Workbook {
       key: string
     ) {
       const notebook = workbook.content;
-      if (!key) {
+      if (!key || !notebook.model) {
         throw new Error('decrypt error');
       }
-      const model = notebook.model!;
+      const model = notebook.model;
       const { widgets } = notebook;
       NotebookActions.clearAllOutputs(notebook);
       NotebookActions.deselectAll(notebook);
       const index = findIndex(model.cells, cell => Cell.id(cell) === id);
-      const cell = model.cells.get(index);
-      const source = cell.sharedModel.getSource();
-      const decrypted = await security.decrypt(source, key);
+      const { sharedModel } = model.cells.get(index);
+      const decrypted = await security.decrypt(sharedModel.getSource(), key);
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
       const initial = notebook.activeCellIndex;
       notebook.select(widget);
       notebook.activeCellIndex = index;
       widget.inputHidden = false;
       widget.model.sharedModel.setSource(decrypted);
-      NotebookActions.changeCellType(workbook.content, 'code');
+      NotebookActions.changeCellType(notebook, 'code');
       notebook.activeCellIndex = initial;
     }
 
