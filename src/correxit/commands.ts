@@ -48,8 +48,11 @@ export function addCommands(options: {
       );
     },
     [CommandIDs.convert]: () => {
-      const model = active.workbook?.content.model;
-      return !!(model && !model.getMetadata('correxit'));
+      try {
+        return !Correxit.open(active.workbook);
+      } catch (error) {
+        return error === Correxit.NO_CORREXIT_METADATA;
+      }
     },
     [CommandIDs.correct]: ({ id }: CellCommandArgs) => {
       const rubric = Correxit.open(active.workbook, { quiet: true });

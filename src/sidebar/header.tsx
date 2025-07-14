@@ -18,7 +18,6 @@ export const Header: React.FC<{
     <section className="correxit-header">
       <File trans={trans} workbook={workbook} />
       <CommandToolbarButtonComponent commands={commands} id={convert} />
-      <ID trans={trans} workbook={workbook} />
       <CommandToolbarButtonComponent commands={commands} id={lock} />
       <CommandToolbarButtonComponent commands={commands} id={unlock} />
       <CommandToolbarButtonComponent commands={commands} id={correct} />
@@ -30,8 +29,9 @@ const File: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ trans, workbook }) => {
-  const { content, context } = workbook;
-  const heading = content.model?.getMetadata('correxit')
+  const rubric = Correxit.open(workbook, { quiet: true });
+  const { context } = workbook;
+  const heading = rubric
     ? trans.__('Workbook file:')
     : trans.__('Notebook file:');
   return (
@@ -45,23 +45,5 @@ const File: React.FC<{
         </>
       )}
     </UseSignal>
-  );
-};
-
-const ID: React.FC<{
-  trans: IRenderMime.TranslationBundle;
-  workbook: Correxit.Workbook;
-}> = ({ trans, workbook }) => {
-  const id = workbook.content.model?.getMetadata('correxit')?.id;
-  if (!id) {
-    return <></>;
-  }
-  return (
-    <>
-      <h4>{trans.__('Workbook ID:')}</h4>
-      <div className="correxit-monospace" title={id}>
-        {id}
-      </div>
-    </>
   );
 };

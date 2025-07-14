@@ -16,6 +16,10 @@ export type Rubric<Secure = 'locked' | 'unlocked'> = {
 };
 
 export namespace Rubric {
+  export const CORRECT: Score = Object.freeze([1, 1]);
+
+  export const INCORRECT: Score = Object.freeze([0, 1]);
+
   export const UNSCORED: Score = Object.freeze([
     Number.NEGATIVE_INFINITY,
     Number.POSITIVE_INFINITY
@@ -134,7 +138,7 @@ export namespace Rubric {
     if (b === UNSCORED) {
       return a;
     }
-    return [a[0] + b[0], a[1] + b[1]];
+    return Object.freeze([a[0] + b[0], a[1] + b[1]]);
   };
 
   export function toggle(
