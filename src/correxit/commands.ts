@@ -62,8 +62,12 @@ export function addCommands(options: {
       if (!id) {
         return size(rubric) > 0;
       }
+
       const model = active.workbook!.content.activeCell?.model;
-      return Cell.id(model) === id && model?.type === 'code' && has(rubric, id);
+      if (!model || Cell.id(model) !== id || model.type !== 'code') {
+        return false;
+      }
+      return has(rubric, id);
     },
     [CommandIDs.lock]: () =>
       Correxit.open(active.workbook, { quiet })?.locked === false,
