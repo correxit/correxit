@@ -12,14 +12,24 @@ import { Correxit } from './correxit';
 import { Rubric } from './rubric';
 import * as security from './security';
 
+/**
+ * `Workbook` as a type is equal to `NotebookPanel`. Conceptually, a notebook
+ * panel is only a Correxit workbook if it has Correxit metadata.
+ */
 export type Workbook = {
   readonly content: Notebook;
   readonly context: DocumentRegistry.IContext<INotebookModel>;
 };
 
 export namespace Workbook {
+  /**
+   * The collection of outputs for every scorable workbook cell.
+   */
   export type Outputs = { [id: Cell['id']]: Cell.Output[]; }
 
+  /**
+   * A workbook cell definition defines how to score a notebook cell.
+   */
   export type Cell = {
     readonly id: ReturnType<typeof UUID.uuid4>;
     readonly is: 'answerable' | 'comparable' | 'correctable';
@@ -29,6 +39,9 @@ export namespace Workbook {
   };
 
   export namespace Cell {
+    /**
+     * An output is an `iopub` message of interest.
+     */
     export type Output =
       | KernelMessage.IIOPubMessage<'execute_result'>
       | KernelMessage.IIOPubMessage<'display_data'>
@@ -85,6 +98,10 @@ export namespace Workbook {
       expected.some(message => message.header.msg_type === 'error') ?
         Rubric.INCORRECT : Rubric.CORRECT;
 
+    /**
+     * Decrypts a workbook cell, modifying its source and changing its cell type
+     * from `raw` to `code`.
+     */
     export async function decrypt(
       workbook: Workbook,
       id: Cell['id'],
@@ -94,15 +111,16 @@ export namespace Workbook {
       if (!key || !notebook.model) {
         throw new Error('decrypt error');
       }
+
       const model = notebook.model;
       const { widgets } = notebook;
-      NotebookActions.clearAllOutputs(notebook);
-      NotebookActions.deselectAll(notebook);
       const index = findIndex(model.cells, cell => Cell.id(cell) === id);
       const { sharedModel } = model.cells.get(index);
       const decrypted = await security.decrypt(sharedModel.getSource(), key);
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
       const initial = notebook.activeCellIndex;
+      NotebookActions.clearAllOutputs(notebook);
+      NotebookActions.deselectAll(notebook);
       notebook.select(widget);
       notebook.activeCellIndex = index;
       widget.inputHidden = false;
@@ -111,6 +129,10 @@ export namespace Workbook {
       notebook.activeCellIndex = initial;
     }
 
+    /**
+     * Encrypts a workbook cell, modifying its source and changing its cell type
+     * from `code` to `raw`.
+     */
     export async function encrypt(
       workbook: Workbook,
       id: Cell['id'],
@@ -120,9 +142,8 @@ export namespace Workbook {
       if (!key) {
         throw new Error('encrypt error');
       }
+
       const model = notebook.model!;
-      NotebookActions.clearAllOutputs(notebook);
-      NotebookActions.deselectAll(notebook);
       const index = findIndex(model.cells, cell => Cell.id(cell) === id);
       const cell = model.cells.get(index);
       const source = cell.sharedModel.getSource();
@@ -130,6 +151,8 @@ export namespace Workbook {
       const { widgets } = notebook;
       const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
       const initial = notebook.activeCellIndex;
+      NotebookActions.clearAllOutputs(notebook);
+      NotebookActions.deselectAll(notebook);
       notebook.select(widget);
       notebook.activeCellIndex = index;
       widget.model.sharedModel.setSource(encrypted);
@@ -167,16 +190,19 @@ export namespace Workbook {
       return outputs;
     }
 
-    export function id(cell?: ICellModel, initialize = false): string {
-      if (!cell){
-        return '';
-      }
-      const id = cell.sharedModel.getMetadata('correxit') as string || '';
+    /**
+     * Returns the UUID value of the `correxit` key in a cell's metadata.
+     * @param cell - the cell model.
+     * @param initialize - if `true`, creates a new ID if one does not exist.
+     */
+    export function id(cell: ICellModel, initialize = false): string {
+      const { sharedModel } = cell;
+      const id = sharedModel.getMetadata('correxit') as string || '';
       if (id || !initialize) {
         return id;
       }
-      cell.sharedModel.setMetadata('correxit', UUID.uuid4());
-      return cell.sharedModel.getMetadata('correxit') as string;
+      sharedModel.setMetadata('correxit', UUID.uuid4());
+      return sharedModel.getMetadata('correxit') as string;
     }
 
     /**
