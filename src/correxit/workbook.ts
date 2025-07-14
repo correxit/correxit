@@ -37,6 +37,10 @@ export namespace Workbook {
 
     const answer = async (expected: Cell['payload'], given: Output[]) => {
         const { CORRECT, INCORRECT, UNSCORED } = Rubric;
+        if (!given.length) {
+          return INCORRECT;
+        }
+
         const message = given.slice(-1)[0];
         if (message.header.msg_type === 'error') {
           return INCORRECT;
