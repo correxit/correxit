@@ -13,8 +13,7 @@ export function addCommands(options: {
   source: Correxit.Source;
   translator: ITranslator | null;
 }) {
-  type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
-  type CorrectCommandArgs = CellCommandArgs & {
+  type CellCommandArgs = Partial<Correxit.Workbook.Cell> & {
     toolbar?: boolean;
   };
   const { commands, source, translator } = options;
@@ -34,21 +33,20 @@ export function addCommands(options: {
   })();
 
   const validate = {
-    [CommandIDs.add]: ({ id, is, reference }: CellCommandArgs) => {
+    [CommandIDs.add]: ({ id, is, reference, toolbar }: CellCommandArgs) => {
       const cells = active.workbook?.content.model?.cells || [];
       const model = find(cells, cell => Cell.id(cell) === id);
       const rubric = Correxit.open(active.workbook, { quiet });
-      return (
-        !!id &&
-        !!is &&
-        !!model &&
-        !!rubric &&
-        !rubric.locked &&
-        !has(rubric, id, deep) &&
-        !(reference && has(rubric, reference, deep)) &&
-        id !== reference &&
-        model.type === 'code'
-      );
+      if (!id || !model || !rubric || rubric.locked || id === reference || model.type !== 'code') {
+        return false;
+      } else if (has(rubric, id, deep)) {
+        // Check if the cell is a reference (true when deep search and false when normal)
+        if (!has(rubric, id)) {
+          return false;
+        }
+      }
+      // Valid if toolbar, otherwise only if not already defined.
+      return toolbar || (!!is && !has(rubric, id));
     },
     [CommandIDs.convert]: () => {
       try {
@@ -74,9 +72,9 @@ export function addCommands(options: {
     },
     [CommandIDs.lock]: () =>
       Correxit.open(active.workbook, { quiet })?.locked === false,
-    [CommandIDs.remove]: ({ id }: CellCommandArgs) => {
+    [CommandIDs.remove]: ({ id, toolbar }: CellCommandArgs) => {
       const rubric = Correxit.open(active.workbook, { quiet });
-      return !!id && !!rubric && !rubric.locked && has(rubric, id);
+      return !!id && !!rubric && !rubric.locked && (toolbar || has(rubric, id));
     },
     [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
       const rubric = Correxit.open(active.workbook, { quiet });
@@ -142,6 +140,10 @@ export function addCommands(options: {
         if (selected) {
           const { widgets } = workbook.content;
           const reference = Correxit.Workbook.Cell.id(selected, true);
+          // Cell cannot refer to itself.
+          if (id === reference) {
+            return;
+          }
           const original = find(widgets, ({ model }) => Cell.id(model) === id)!;
           await workbook.content.scrollToCell(original);
           return Correxit.add(workbook, { ...cell, id, is, reference });
@@ -171,7 +173,7 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.correct, {
       icon: checkIcon,
       isEnabled: validate[CommandIDs.correct],
-      isVisible: (args: CorrectCommandArgs) => {
+      isVisible: (args: CellCommandArgs) => {
         const rubric = Correxit.open(active.workbook, { quiet: true });
         // Display the icon in the notebook toolbar if this is a workbook (even if it
         // is disabled).
@@ -180,7 +182,7 @@ export function addCommands(options: {
           ? !!rubric
           : validate[CommandIDs.correct](args);
       },
-      label: ({ id, toolbar }: CorrectCommandArgs) => {
+      label: ({ id, toolbar }: CellCommandArgs) => {
         if (!validate[CommandIDs.correct]({ id }) || toolbar) {
           return '';
         }

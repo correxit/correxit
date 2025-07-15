@@ -56,3 +56,11 @@
   border-radius: 2px;
   box-shadow: 0 0 0 2px var(--jp-accent-color1);
 }
+
+.correxit-cell-mode-select .lm-mod-hidden {
+  display: none;
+}
+
+.correxit-cell-mode-select svg {
+  top: 6px !important;
+}

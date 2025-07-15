@@ -6,11 +6,13 @@ import {
   CommandToolbarButton,
   IToolbarWidgetRegistry
 } from '@jupyterlab/apputils';
-import { Cell } from '@jupyterlab/cells';
+import { Cell, ICellModel } from '@jupyterlab/cells';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
+
+import { CellModeSwitcher } from './components/cell-mode-switcher';
 import { Correxit } from './correxit';
 import { addCommands } from './correxit/commands';
 import { Sidebar } from './sidebar';
@@ -115,9 +117,15 @@ export const cellToolbar: JupyterFrontEndPlugin<void> = {
   id: Correxit.CELL_TOOLBAR,
   description: Correxit.DESCRIPTION.CELL_TOOLBAR,
   autoStart: true,
-  requires: [IToolbarWidgetRegistry],
-  activate: ({ commands }, toolbarRegistry: IToolbarWidgetRegistry) => {
-    const factory = (cell: Cell) => {
+  requires: [Correxit.Source, IToolbarWidgetRegistry],
+  optional: [ITranslator],
+  activate: async (
+    { commands },
+    source: Correxit.Source,
+    toolbarRegistry: IToolbarWidgetRegistry,
+    translator: ITranslator
+  ) => {
+    const correctCellFactory = (cell: Cell) => {
       const id = Correxit.Workbook.Cell.id(cell.model, false);
       return new CommandToolbarButton({
         commands,
@@ -125,7 +133,16 @@ export const cellToolbar: JupyterFrontEndPlugin<void> = {
         args: { id, toolbar: true }
       });
     };
-    toolbarRegistry.addFactory('Cell', 'correct-cell', factory);
+    toolbarRegistry.addFactory('Cell', 'correct-cell', correctCellFactory);
+
+    const addCellFactory = (cell: Cell) => {
+      return new CellModeSwitcher({ commands, source, cell, translator });
+    };
+    toolbarRegistry.addFactory<Cell<ICellModel>>(
+      'Cell',
+      'cell-mode',
+      addCellFactory
+    );
   }
 };
 

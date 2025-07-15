@@ -24,11 +24,6 @@
         "label": "Unlock",
         "caption": "Unlock workbook"
       }
-    ],
-    "Cell": [
-      {
-        "name": "correct-cell"
-      }
     ]
   },
   "additionalProperties": false
