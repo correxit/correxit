@@ -44,9 +44,6 @@ export class Sidebar extends ReactWidget {
   }
 
   protected ping() {
-    this.commands.notifyCommandChanged(Correxit.CommandIDs.correct);
-    this.commands.notifyCommandChanged(Correxit.CommandIDs.lock);
-    this.commands.notifyCommandChanged(Correxit.CommandIDs.unlock);
     this.pinged.emit(undefined);
   }
 

@@ -30,9 +30,6 @@ export function addCommands(options: {
   void (async () => {
     for await (const { payload } of source) {
       active.workbook = payload;
-      commands.notifyCommandChanged(CommandIDs.correct);
-      commands.notifyCommandChanged(CommandIDs.lock);
-      commands.notifyCommandChanged(CommandIDs.unlock);
     }
   })();
 
@@ -123,7 +120,6 @@ export function addCommands(options: {
         const is = cell.is!;
         const workbook = active.workbook!;
 
-        let rubric: Correxit.Rubric<'unlocked'> | undefined;
         if (is === 'answerable') {
           const expected = await input.answer({
             title: trans.__('Add expected output'),
@@ -133,14 +129,14 @@ export function addCommands(options: {
             return;
           }
           const payload = [await digest(expected)];
-          rubric = await Correxit.add(workbook, { id, is, payload });
+          return Correxit.add(workbook, { id, is, payload });
         }
 
         if (is !== 'comparable' && is !== 'correctable') {
           return;
         }
         if (cell.reference) {
-          rubric = await Correxit.add(workbook, { ...cell, id, is });
+          return Correxit.add(workbook, { ...cell, id, is });
         }
         const selected = await input.cell(workbook);
         if (selected) {
@@ -148,10 +144,8 @@ export function addCommands(options: {
           const reference = Correxit.Workbook.Cell.id(selected, true);
           const original = find(widgets, ({ model }) => Cell.id(model) === id)!;
           await workbook.content.scrollToCell(original);
-          rubric = await Correxit.add(workbook, { ...cell, id, is, reference });
+          return Correxit.add(workbook, { ...cell, id, is, reference });
         }
-        commands.notifyCommandChanged(CommandIDs.correct);
-        return rubric;
       }
     }),
     commands.addCommand(CommandIDs.convert, {
@@ -170,7 +164,6 @@ export function addCommands(options: {
         if (key) {
           const rubric = await Correxit.convert(workbook, key);
           await workbook.context.save();
-          commands.notifyCommandChanged(CommandIDs.correct);
           return rubric;
         }
       }
@@ -223,9 +216,6 @@ export function addCommands(options: {
           const workbook = active.workbook!;
           const rubric = await Correxit.lock(workbook);
           await workbook.context.save();
-          commands.notifyCommandChanged(CommandIDs.correct);
-          commands.notifyCommandChanged(CommandIDs.lock);
-          commands.notifyCommandChanged(CommandIDs.unlock);
           return rubric;
         } catch (error) {
           void showErrorMessage(trans.__('Could not lock'), error as Error);
@@ -238,9 +228,7 @@ export function addCommands(options: {
       label: trans.__('Reset expected cell output'),
       execute: async (cell: CellCommandArgs) => {
         if (validate[CommandIDs.remove](cell)) {
-          const rubric = await Correxit.remove(active.workbook!, cell.id!);
-          commands.notifyCommandChanged(CommandIDs.correct);
-          return rubric;
+          return Correxit.remove(active.workbook!, cell.id!);
         }
       }
     }),
@@ -261,7 +249,6 @@ export function addCommands(options: {
         if (button.accept) {
           await Correxit.reset(workbook);
           await workbook.context.save();
-          commands.notifyCommandChanged(CommandIDs.correct);
         }
       }
     }),
@@ -280,9 +267,7 @@ export function addCommands(options: {
       },
       execute: async (cell: CellCommandArgs) => {
         if (validate[CommandIDs.toggle](cell)) {
-          const rubric = await Correxit.toggle(active.workbook!, cell.id!);
-          commands.notifyCommandChanged(CommandIDs.correct);
-          return rubric;
+          return Correxit.toggle(active.workbook!, cell.id!);
         }
       }
     }),
@@ -316,9 +301,6 @@ The command invokes an error message dialog if unlock fails.
           }
           const rubric = await Correxit.unlock(workbook, key);
           await workbook.context.save();
-          commands.notifyCommandChanged(CommandIDs.correct);
-          commands.notifyCommandChanged(CommandIDs.lock);
-          commands.notifyCommandChanged(CommandIDs.unlock);
           return rubric;
         } catch (error) {
           const file = PathExt.basename(workbook.context.path);

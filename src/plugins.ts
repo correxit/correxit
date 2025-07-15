@@ -72,12 +72,27 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         factory: async () => null
       });
       const added = addCommands({ commands, source, translator });
+      let current: Correxit.Workbook | null = null;
       const schedule = (workbook: Correxit.Workbook | null) => {
         if (source.state.payload !== workbook) {
+          current?.context.fileChanged.disconnect(notifyCommands);
+          current?.content.model?.metadataChanged.disconnect(notifyCommands);
+
+          current = workbook;
           Correxit.open(workbook, { quiet: true });
           void source.schedule({ payload: workbook });
+
+          current?.context.fileChanged.connect(notifyCommands);
+          current?.content.model?.metadataChanged.connect(notifyCommands);
         }
       };
+
+      const notifyCommands = () => {
+        commands.notifyCommandChanged(Correxit.CommandIDs.correct);
+        commands.notifyCommandChanged(Correxit.CommandIDs.lock);
+        commands.notifyCommandChanged(Correxit.CommandIDs.unlock);
+      };
+
       const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) =>
         schedule(newValue instanceof NotebookPanel ? newValue : null);
       const trackerSlot = (_: unknown, workbook: Correxit.Workbook | null) =>
