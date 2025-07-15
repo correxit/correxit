@@ -26,6 +26,14 @@
   white-space: nowrap;
 }
 
+.correxit-cell-mode-select .lm-mod-hidden {
+  display: none;
+}
+
+.correxit-cell-mode-select svg {
+  top: 6px !important;
+}
+
 .correxit .jp-ToolbarButtonComponent {
   display: block;
   margin: 0 0 5px;
@@ -55,12 +63,4 @@
   border: none;
   border-radius: 2px;
   box-shadow: 0 0 0 2px var(--jp-accent-color1);
-}
-
-.correxit-cell-mode-select .lm-mod-hidden {
-  display: none;
-}
-
-.correxit-cell-mode-select svg {
-  top: 6px !important;
 }
