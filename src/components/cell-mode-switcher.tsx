@@ -86,7 +86,6 @@ export class CellModeSwitcher extends ReactWidget {
 
   private _switch = async (mode: string) => {
     const id = Workbook.Cell.id(this._cell.model);
-    console.log('Switch', mode, id);
     await this._commands.execute(Correxit.CommandIDs.remove, {
       id
     });
