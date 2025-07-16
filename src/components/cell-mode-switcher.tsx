@@ -8,8 +8,7 @@ import { HTMLSelect, ReactWidget } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-import { Workbook } from '../correxit/workbook';
-import { Rubric } from '../correxit/rubric';
+import { NotebookPanel } from '@jupyterlab/notebook';
 
 const CELL_MODE_CLASS = 'correxit-cell-mode-select';
 
@@ -20,13 +19,14 @@ export class CellModeSwitcher extends ReactWidget {
   /**
    * Construct a new cell type switcher.
    */
-  constructor(options: IOptions) {
+  constructor({ cell, commands, translator }: IOptions) {
     super();
-    this._commands = options.commands;
-    this._trans = (options.translator || nullTranslator).load('correxit');
+    this._commands = commands;
+    this._trans = (translator || nullTranslator).load('correxit');
     this.addClass(CELL_MODE_CLASS);
-    this._cell = options.cell;
-    void this.subscribe(options.source);
+    this._cell = cell;
+    this._workbook =
+      cell.parent?.parent instanceof NotebookPanel ? cell.parent.parent : null;
   }
 
   /**
@@ -50,10 +50,10 @@ export class CellModeSwitcher extends ReactWidget {
     const rubric = Correxit.open(this._workbook, { quiet: true });
     let value = '-';
     let disabled = true;
-    const id = Workbook.Cell.id(this._cell.model);
+    const id = Correxit.Workbook.Cell.id(this._cell.model);
 
     if (rubric && !rubric.locked && this._isEnabled(id)) {
-      const cell = Rubric.get(rubric, id);
+      const cell = Correxit.Rubric.get(rubric, id);
       value = cell?.is ?? '-';
       disabled = false;
     }
@@ -85,7 +85,7 @@ export class CellModeSwitcher extends ReactWidget {
   };
 
   private _switch = async (mode: string) => {
-    const id = Workbook.Cell.id(this._cell.model);
+    const id = Correxit.Workbook.Cell.id(this._cell.model);
     await this._commands.execute(Correxit.CommandIDs.remove, {
       id
     });
@@ -99,24 +99,14 @@ export class CellModeSwitcher extends ReactWidget {
     this.update();
   };
 
-  protected async subscribe(source: Correxit.Source) {
-    for await (const { payload } of source) {
-      if (this.isDisposed) {
-        return;
-      }
-      this._workbook = payload;
-    }
-  }
-
   private _commands: CommandRegistry;
   private _trans: TranslationBundle;
   private _cell: Cell;
-  private _workbook: Workbook | null = null;
+  private _workbook: Correxit.Workbook | null;
 }
 
 interface IOptions {
   commands: CommandRegistry;
-  source: Correxit.Source;
   cell: Cell;
   translator?: ITranslator;
 }

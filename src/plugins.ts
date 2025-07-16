@@ -6,7 +6,7 @@ import {
   CommandToolbarButton,
   IToolbarWidgetRegistry
 } from '@jupyterlab/apputils';
-import { Cell, ICellModel } from '@jupyterlab/cells';
+import { Cell } from '@jupyterlab/cells';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
@@ -76,25 +76,22 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       const added = addCommands({ commands, source, translator });
       let current: Correxit.Workbook | null = null;
       const schedule = (workbook: Correxit.Workbook | null) => {
-        if (source.state.payload !== workbook) {
-          current?.context.fileChanged.disconnect(notifyCommands);
-          current?.content.model?.metadataChanged.disconnect(notifyCommands);
-
-          current = workbook;
-          Correxit.open(workbook, { quiet: true });
-          void source.schedule({ payload: workbook });
-
-          current?.context.fileChanged.connect(notifyCommands);
-          current?.content.model?.metadataChanged.connect(notifyCommands);
+        if (workbook === source.state.payload) {
+          return;
         }
+        Correxit.open(workbook, { quiet: true });
+        workbook?.context.fileChanged.connect(notifyCommands);
+        workbook?.content.model?.metadataChanged.connect(notifyCommands);
+        current?.context.fileChanged.disconnect(notifyCommands);
+        current?.content.model?.metadataChanged.disconnect(notifyCommands);
+        current = workbook;
+        void source.schedule({ payload: workbook });
       };
-
       const notifyCommands = () => {
         commands.notifyCommandChanged(Correxit.CommandIDs.correct);
         commands.notifyCommandChanged(Correxit.CommandIDs.lock);
         commands.notifyCommandChanged(Correxit.CommandIDs.unlock);
       };
-
       const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) =>
         schedule(newValue instanceof NotebookPanel ? newValue : null);
       const trackerSlot = (_: unknown, workbook: Correxit.Workbook | null) =>
@@ -113,35 +110,32 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   }))()
 };
 
-export const cellToolbar: JupyterFrontEndPlugin<void> = {
-  id: Correxit.CELL_TOOLBAR,
-  description: Correxit.DESCRIPTION.CELL_TOOLBAR,
+export const toolbars: JupyterFrontEndPlugin<void> = {
+  id: Correxit.TOOLBARS,
+  description: Correxit.DESCRIPTION.TOOLBARS,
   autoStart: true,
   requires: [Correxit.Source, IToolbarWidgetRegistry],
   optional: [ITranslator],
   activate: async (
     { commands },
-    source: Correxit.Source,
+    _: Correxit.Source, // Load source to ensure commands are available.
     toolbarRegistry: IToolbarWidgetRegistry,
     translator: ITranslator
   ) => {
-    const correctCellFactory = (cell: Cell) => {
-      const id = Correxit.Workbook.Cell.id(cell.model, false);
-      return new CommandToolbarButton({
-        commands,
-        id: Correxit.CommandIDs.correct,
-        args: { id, toolbar: true }
-      });
-    };
-    toolbarRegistry.addFactory('Cell', 'correct-cell', correctCellFactory);
-
-    const addCellFactory = (cell: Cell) => {
-      return new CellModeSwitcher({ commands, source, cell, translator });
-    };
-    toolbarRegistry.addFactory<Cell<ICellModel>>(
+    toolbarRegistry.addFactory(
       'Cell',
-      'cell-mode',
-      addCellFactory
+      'correxit-correct',
+      ({ model }: Cell) =>
+        new CommandToolbarButton({
+          commands,
+          id: Correxit.CommandIDs.correct,
+          args: { id: Correxit.Workbook.Cell.id(model, true), toolbar: true }
+        })
+    );
+    toolbarRegistry.addFactory(
+      'Cell',
+      'correxit-switch',
+      (cell: Cell) => new CellModeSwitcher({ cell, commands, translator })
     );
   }
 };
