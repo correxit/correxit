@@ -2,10 +2,17 @@ import {
   ILayoutRestorer,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
+import {
+  CommandToolbarButton,
+  IToolbarWidgetRegistry
+} from '@jupyterlab/apputils';
+import { Cell, ICellModel } from '@jupyterlab/cells';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
+
+import { CellModeSwitcher } from './components/cell-mode-switcher';
 import { Correxit } from './correxit';
 import { addCommands } from './correxit/commands';
 import { Sidebar } from './sidebar';
@@ -67,12 +74,27 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         factory: async () => null
       });
       const added = addCommands({ commands, source, translator });
+      let current: Correxit.Workbook | null = null;
       const schedule = (workbook: Correxit.Workbook | null) => {
         if (source.state.payload !== workbook) {
+          current?.context.fileChanged.disconnect(notifyCommands);
+          current?.content.model?.metadataChanged.disconnect(notifyCommands);
+
+          current = workbook;
           Correxit.open(workbook, { quiet: true });
           void source.schedule({ payload: workbook });
+
+          current?.context.fileChanged.connect(notifyCommands);
+          current?.content.model?.metadataChanged.connect(notifyCommands);
         }
       };
+
+      const notifyCommands = () => {
+        commands.notifyCommandChanged(Correxit.CommandIDs.correct);
+        commands.notifyCommandChanged(Correxit.CommandIDs.lock);
+        commands.notifyCommandChanged(Correxit.CommandIDs.unlock);
+      };
+
       const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) =>
         schedule(newValue instanceof NotebookPanel ? newValue : null);
       const trackerSlot = (_: unknown, workbook: Correxit.Workbook | null) =>
@@ -89,6 +111,39 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
     },
     deactivate: () => deactivator?.()
   }))()
+};
+
+export const cellToolbar: JupyterFrontEndPlugin<void> = {
+  id: Correxit.CELL_TOOLBAR,
+  description: Correxit.DESCRIPTION.CELL_TOOLBAR,
+  autoStart: true,
+  requires: [Correxit.Source, IToolbarWidgetRegistry],
+  optional: [ITranslator],
+  activate: async (
+    { commands },
+    source: Correxit.Source,
+    toolbarRegistry: IToolbarWidgetRegistry,
+    translator: ITranslator
+  ) => {
+    const correctCellFactory = (cell: Cell) => {
+      const id = Correxit.Workbook.Cell.id(cell.model, false);
+      return new CommandToolbarButton({
+        commands,
+        id: Correxit.CommandIDs.correct,
+        args: { id, toolbar: true }
+      });
+    };
+    toolbarRegistry.addFactory('Cell', 'correct-cell', correctCellFactory);
+
+    const addCellFactory = (cell: Cell) => {
+      return new CellModeSwitcher({ commands, source, cell, translator });
+    };
+    toolbarRegistry.addFactory<Cell<ICellModel>>(
+      'Cell',
+      'cell-mode',
+      addCellFactory
+    );
+  }
 };
 
 namespace Private {

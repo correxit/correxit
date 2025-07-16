@@ -27,11 +27,14 @@ export namespace Correxit {
 
   export const SOURCE = 'correxit:source';
 
+  export const CELL_TOOLBAR = 'correxit:cell-toolbar';
+
   export const Source = new Token<Source>(SOURCE);
 
   export const DESCRIPTION = {
     SIDEBAR: description.SIDEBAR,
-    SOURCE: description.SOURCE
+    SOURCE: description.SOURCE,
+    CELL_TOOLBAR: description.CELL_TOOLBAR
   };
 
   export async function add(
