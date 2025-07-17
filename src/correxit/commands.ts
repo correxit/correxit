@@ -31,15 +31,6 @@ export function addCommands(options: {
   })();
 
   const validate = {
-    [CommandIDs.add]: ({ id, reference }: CellCommandArgs) => {
-      const cells = active.workbook?.content.model?.cells || [];
-      const model = find(cells, cell => Cell.id(cell) === id);
-      const rubric = Correxit.open(active.workbook, { quiet });
-      if (!model || !rubric || rubric.locked || id === reference) {
-        return false;
-      }
-      return model.type === 'code' && !has(rubric, id!, deep);
-    },
     [CommandIDs.convert]: () => {
       try {
         return !Correxit.open(active.workbook);
@@ -72,10 +63,6 @@ export function addCommands(options: {
       const rubric = Correxit.open(active.workbook, { quiet });
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
-    [CommandIDs.replace]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
-      return !!rubric && !rubric.locked && !!id && has(rubric, id);
-    },
     [CommandIDs.reset]: () =>
       Correxit.open(active.workbook, { quiet })?.locked === false,
     [CommandIDs.unlock]: () =>
@@ -83,10 +70,18 @@ export function addCommands(options: {
   };
   return [
     commands.addCommand(CommandIDs.add, {
-      isEnabled: validate[CommandIDs.add],
-      isVisible: validate[CommandIDs.add],
+      isEnabled: ({ id, reference }: CellCommandArgs) => {
+        const cells = active.workbook?.content.model?.cells || [];
+        const model = find(cells, cell => Cell.id(cell) === id);
+        const rubric = Correxit.open(active.workbook, { quiet });
+        if (!model || !rubric || rubric.locked || id === reference) {
+          return false;
+        }
+        return model.type === 'code' && !has(rubric, id!, deep);
+      },
+      isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
       label: (cell: CellCommandArgs) => {
-        if (!validate[CommandIDs.add](cell)) {
+        if (!commands.isEnabled(CommandIDs.add, cell)) {
           return '';
         }
         if (cell.is === 'answerable') {
@@ -107,7 +102,7 @@ export function addCommands(options: {
         return '';
       },
       execute: async (cell: CellCommandArgs) => {
-        if (!validate[CommandIDs.add](cell)) {
+        if (!commands.isEnabled(CommandIDs.add, cell)) {
           return;
         }
         const id = cell.id!;
@@ -223,16 +218,21 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.replace, {
-      isEnabled: validate[CommandIDs.replace],
-      label: (cell: CellCommandArgs) => validate[CommandIDs.replace](cell) ?
-        trans.__('Replace workbook cell in rubric') : '',
+      isEnabled: ({ id }: CellCommandArgs) => {
+        const rubric = Correxit.open(active.workbook, { quiet });
+        return !!rubric && !rubric.locked && !!id;
+      },
+      label: (cell: CellCommandArgs) =>
+        commands.isEnabled(CommandIDs.replace, cell) ?
+          trans.__('Replace workbook cell in rubric') : '',
       execute: async ({ id, is }: CellCommandArgs) => {
-        if (!validate[CommandIDs.replace]({ id, is })) {
+        if (!commands.isEnabled(CommandIDs.replace, { id, is })) {
           return;
         }
         const rubric = Correxit.open(active.workbook, { quiet })!;
+        const replace = is && get(rubric, id!)?.is !== is;
         await commands.execute(CommandIDs.remove, { id });
-        if (is && get(rubric, id!)?.is !== is) {
+        if (replace) {
           await commands.execute(CommandIDs.add, { id, is });
         }
       }
