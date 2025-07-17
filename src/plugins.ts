@@ -12,7 +12,7 @@ import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
 
-import { CellModeSwitcher } from './components/cell-mode-switcher';
+import { CellModeSwitcher } from './toolbars/cell-mode-switcher';
 import { Correxit } from './correxit';
 import { addCommands } from './correxit/commands';
 import { Sidebar } from './sidebar';

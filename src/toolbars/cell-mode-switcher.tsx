@@ -29,40 +29,28 @@ export class CellModeSwitcher extends ReactWidget {
       cell.parent?.parent instanceof NotebookPanel ? cell.parent.parent : null;
   }
 
-  /**
-   * Handle `change` events for the HTMLSelect component.
-   */
-  handleChange = (event: React.ChangeEvent<HTMLSelectElement>): void => {
-    this._switch(event.target.value);
-  };
-
-  /**
-   * Handle `keydown` events for the HTMLSelect component.
-   */
-  handleKeyDown = (event: React.KeyboardEvent): void => {
-    const target = event.target as HTMLSelectElement;
-    if (event.key === 'Enter') {
-      this._switch(target.value);
-    }
-  };
-
   render(): JSX.Element {
+    type Mode = Correxit.Workbook.Cell['is'] | '-';
     const rubric = Correxit.open(this._workbook, { quiet: true });
     let value = '-';
     let disabled = true;
     const id = Correxit.Workbook.Cell.id(this._cell.model);
-
     if (rubric && !rubric.locked && this._isEnabled(id)) {
       const cell = Correxit.Rubric.get(rubric, id);
       value = cell?.is ?? '-';
       disabled = false;
     }
 
+    const change = async (mode: Mode) => {
+      await this._commands.execute(Correxit.CommandIDs.remove, { id });
+      if (mode !== '-') {
+        await this._commands.execute(Correxit.CommandIDs.add, { id, is: mode });
+      }
+    };
     return (
       <HTMLSelect
         className={disabled ? 'lm-mod-hidden' : ''}
-        onChange={this.handleChange}
-        onKeyDown={this.handleKeyDown}
+        onChange={({ target: { value } }) => void change(value as Mode)}
         value={value}
         aria-label={this._trans.__('Cell mode')}
         title={this._trans.__('Select the cell mode')}
@@ -82,21 +70,6 @@ export class CellModeSwitcher extends ReactWidget {
       this._commands.isEnabled(Correxit.CommandIDs.remove, { id, toolbar }) &&
       this._commands.isEnabled(Correxit.CommandIDs.add, { id, toolbar })
     );
-  };
-
-  private _switch = async (mode: string) => {
-    const id = Correxit.Workbook.Cell.id(this._cell.model);
-    await this._commands.execute(Correxit.CommandIDs.remove, {
-      id
-    });
-    this.update();
-    if (mode !== '-') {
-      await this._commands.execute(Correxit.CommandIDs.add, {
-        id,
-        is: mode
-      });
-    }
-    this.update();
   };
 
   private _commands: CommandRegistry;
