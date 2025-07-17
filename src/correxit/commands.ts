@@ -30,44 +30,6 @@ export function addCommands(options: {
     }
   })();
 
-  const validate = {
-    [CommandIDs.convert]: () => {
-      try {
-        return !Correxit.open(active.workbook);
-      } catch (error) {
-        return error === Correxit.NO_CORREXIT_METADATA;
-      }
-    },
-    [CommandIDs.correct]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(active.workbook, { quiet: true });
-      if (!rubric) {
-        return false;
-      }
-      if (!id) {
-        return size(rubric) > 0;
-      }
-
-      const model = active.workbook!.content.activeCell?.model;
-      if (!model || Cell.id(model) !== id || model.type !== 'code') {
-        return false;
-      }
-      return has(rubric, id);
-    },
-    [CommandIDs.lock]: () =>
-      Correxit.open(active.workbook, { quiet })?.locked === false,
-    [CommandIDs.remove]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
-      return !!id && !!rubric && !rubric.locked && has(rubric, id);
-    },
-    [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
-      return !!id && !!rubric && !rubric.locked && has(rubric, id);
-    },
-    [CommandIDs.reset]: () =>
-      Correxit.open(active.workbook, { quiet })?.locked === false,
-    [CommandIDs.unlock]: () =>
-      Correxit.open(active.workbook!, { quiet })?.locked ?? false
-  };
   return [
     commands.addCommand(CommandIDs.add, {
       isEnabled: ({ id, reference }: CellCommandArgs) => {
@@ -142,11 +104,17 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.convert, {
-      isEnabled: validate[CommandIDs.convert],
-      isVisible: validate[CommandIDs.convert],
+      isEnabled: () => {
+        try {
+          return !Correxit.open(active.workbook);
+        } catch (error) {
+          return error === Correxit.NO_CORREXIT_METADATA;
+        }
+      },
+      isVisible: () => commands.isEnabled(CommandIDs.convert),
       label: trans.__('Convert notebook to a workbook...'),
       execute: async () => {
-        if (!validate[CommandIDs.convert]()) {
+        if (!commands.isEnabled(CommandIDs.convert)) {
           return;
         }
         const workbook = active.workbook!;
@@ -163,7 +131,21 @@ export function addCommands(options: {
     }),
     commands.addCommand(CommandIDs.correct, {
       icon: checkIcon,
-      isEnabled: validate[CommandIDs.correct],
+      isEnabled: ({ id }: CellCommandArgs) => {
+        const rubric = Correxit.open(active.workbook, { quiet: true });
+        if (!rubric) {
+          return false;
+        }
+        if (!id) {
+          return size(rubric) > 0;
+        }
+
+        const model = active.workbook!.content.activeCell?.model;
+        if (!model || Cell.id(model) !== id || model.type !== 'code') {
+          return false;
+        }
+        return has(rubric, id);
+      },
       isVisible: () => !!Correxit.open(active.workbook, { quiet: true }),
       label: ({ id }: CellCommandArgs) => {
         if (!Correxit.open(active.workbook, { quiet: true })) {
@@ -174,7 +156,7 @@ export function addCommands(options: {
           : trans.__('Correct workbook...');
       },
       execute: async ({ id }: CellCommandArgs) => {
-        if (!validate[CommandIDs.correct]({ id: id ?? '' })) {
+        if (!commands.isEnabled(CommandIDs.correct, { id: id ?? '' })) {
           return;
         }
         const workbook = active.workbook!;
@@ -190,11 +172,12 @@ export function addCommands(options: {
     }),
     commands.addCommand(CommandIDs.lock, {
       icon: lockIcon,
-      isEnabled: validate[CommandIDs.lock],
-      isVisible: validate[CommandIDs.lock],
+      isEnabled: () =>
+          Correxit.open(active.workbook, { quiet })?.locked === false,
+      isVisible: () => commands.isEnabled(CommandIDs.lock),
       label: trans.__('Lock grader mode (PGP encrypt)'),
       execute: async () => {
-        if (!validate[CommandIDs.lock]()) {
+        if (!commands.isEnabled(CommandIDs.lock)) {
           return;
         }
         try {
@@ -208,11 +191,14 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.remove, {
-      isEnabled: validate[CommandIDs.remove],
-      isVisible: validate[CommandIDs.remove],
+      isEnabled: ({ id }: CellCommandArgs) => {
+        const rubric = Correxit.open(active.workbook, { quiet });
+        return !!id && !!rubric && !rubric.locked && has(rubric, id);
+      },
+      isVisible: cell => commands.isEnabled(CommandIDs.remove, cell),
       label: trans.__('Reset expected cell output'),
       execute: async (cell: CellCommandArgs) => {
-        if (validate[CommandIDs.remove](cell)) {
+        if (commands.isEnabled(CommandIDs.remove, cell)) {
           return Correxit.remove(active.workbook!, cell.id!);
         }
       }
@@ -239,12 +225,13 @@ export function addCommands(options: {
     }),
     commands.addCommand(CommandIDs.reset, {
       icon: notebookIcon,
-      isEnabled: validate[CommandIDs.reset],
-      isVisible: validate[CommandIDs.reset],
+      isEnabled: () =>
+        Correxit.open(active.workbook, { quiet })?.locked === false,
+      isVisible: () => commands.isEnabled(CommandIDs.reset),
       caption: 'Delete workbook metadata, leave notebook cells unmodified',
       label: trans.__('Revert to notebook (delete workbook metadata)...'),
       execute: async () => {
-        if (!validate[CommandIDs.reset]()) {
+        if (!commands.isEnabled(CommandIDs.reset)) {
           return;
         }
         const title = trans.__('Revert to notebook');
@@ -258,10 +245,13 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.toggle, {
-      isEnabled: validate[CommandIDs.toggle],
-      isVisible: validate[CommandIDs.toggle],
+      isEnabled: ({ id }: CellCommandArgs) => {
+        const rubric = Correxit.open(active.workbook, { quiet });
+        return !!id && !!rubric && !rubric.locked && has(rubric, id);
+      },
+      isVisible: cell => commands.isEnabled(CommandIDs.toggle, cell),
       label: ({ id }: CellCommandArgs) => {
-        if (!id || !validate[CommandIDs.toggle]({ id })) {
+        if (!id || !commands.isEnabled(CommandIDs.toggle, { id })) {
           return '';
         }
         const rubric = Correxit.open(active.workbook)!;
@@ -271,15 +261,16 @@ export function addCommands(options: {
           : trans.__('Allow correction in all modes');
       },
       execute: async (cell: CellCommandArgs) => {
-        if (validate[CommandIDs.toggle](cell)) {
+        if (commands.isEnabled(CommandIDs.toggle, cell)) {
           return Correxit.toggle(active.workbook!, cell.id!);
         }
       }
     }),
     commands.addCommand(CommandIDs.unlock, {
       icon: lockIcon,
-      isEnabled: validate[CommandIDs.unlock],
-      isVisible: validate[CommandIDs.unlock],
+      isEnabled: () =>
+        Correxit.open(active.workbook!, { quiet })?.locked ?? false,
+      isVisible: () => commands.isEnabled(CommandIDs.unlock),
       label: trans.__('Unlock grader mode (PGP decrypt)...'),
       usage: `
 The command execute args type is: { key?: string }
@@ -292,7 +283,7 @@ The returned promise never rejects.
 The command invokes an error message dialog if unlock fails.
       `,
       execute: async ({ key }: { key?: string }) => {
-        if (!validate[CommandIDs.unlock]()) {
+        if (!commands.isEnabled(CommandIDs.unlock)) {
           return null;
         }
         const workbook = active.workbook!;

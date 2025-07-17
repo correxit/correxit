@@ -61,7 +61,7 @@ export namespace CellMode {
 }
 
 /**
- * A toolbar widget that switches cell types.
+ * A thin wrapper widget using a `CellMode` component in Jupyter toolbars.
  */
 export class CellModeSwitcher extends ReactWidget {
   constructor(readonly props: CellMode.Props) {
