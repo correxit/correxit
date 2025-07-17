@@ -141,6 +141,9 @@ export namespace Rubric {
     return Object.freeze([a[0] + b[0], a[1] + b[1]]);
   };
 
+  /**
+   * Returns a rubric where given cell is toggled between `secret` and `shared`.
+   */
   export function toggle(
     rubric: Rubric<'unlocked'>,
     id: Workbook.Cell['id']

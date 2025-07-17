@@ -13,14 +13,12 @@ export function addCommands(options: {
   source: Correxit.Source;
   translator: ITranslator | null;
 }) {
-  type CellCommandArgs = Partial<Correxit.Workbook.Cell> & {
-    toolbar?: boolean;
-  };
+  type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
   const { commands, source, translator } = options;
   const active: { workbook: Correxit.Workbook | null } = { workbook: null };
   const trans = (translator || nullTranslator).load('correxit');
   const { CommandIDs } = Correxit;
-  const { has, size } = Correxit.Rubric;
+  const { get, has, size } = Correxit.Rubric;
   const { Cell } = Correxit.Workbook;
   const deep = true;
   const quiet = true;
@@ -33,20 +31,14 @@ export function addCommands(options: {
   })();
 
   const validate = {
-    [CommandIDs.add]: ({ id, is, reference, toolbar }: CellCommandArgs) => {
+    [CommandIDs.add]: ({ id, reference }: CellCommandArgs) => {
       const cells = active.workbook?.content.model?.cells || [];
       const model = find(cells, cell => Cell.id(cell) === id);
       const rubric = Correxit.open(active.workbook, { quiet });
-      if (!id || !model || !rubric || rubric.locked || id === reference || model.type !== 'code') {
+      if (!model || !rubric || rubric.locked || id === reference) {
         return false;
-      } else if (has(rubric, id, deep)) {
-        // Check if the cell is a reference (true when deep search and false when normal)
-        if (!has(rubric, id)) {
-          return false;
-        }
       }
-      // Valid if toolbar, otherwise only if not already defined.
-      return toolbar || (!!is && !has(rubric, id));
+      return model.type === 'code' && !has(rubric, id!, deep);
     },
     [CommandIDs.convert]: () => {
       try {
@@ -72,13 +64,17 @@ export function addCommands(options: {
     },
     [CommandIDs.lock]: () =>
       Correxit.open(active.workbook, { quiet })?.locked === false,
-    [CommandIDs.remove]: ({ id, toolbar }: CellCommandArgs) => {
+    [CommandIDs.remove]: ({ id }: CellCommandArgs) => {
       const rubric = Correxit.open(active.workbook, { quiet });
-      return !!id && !!rubric && !rubric.locked && (toolbar || has(rubric, id));
+      return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
     [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
       const rubric = Correxit.open(active.workbook, { quiet });
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
+    },
+    [CommandIDs.replace]: ({ id }: CellCommandArgs) => {
+      const rubric = Correxit.open(active.workbook, { quiet });
+      return !!rubric && !rubric.locked && !!id && has(rubric, id);
     },
     [CommandIDs.reset]: () =>
       Correxit.open(active.workbook, { quiet })?.locked === false,
@@ -173,17 +169,9 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.correct, {
       icon: checkIcon,
       isEnabled: validate[CommandIDs.correct],
-      isVisible: (args: CellCommandArgs) => {
-        const rubric = Correxit.open(active.workbook, { quiet: true });
-        // Display the icon in the notebook toolbar if this is a workbook (even if it
-        // is disabled).
-        // Display the icon in the cell toolbar only if the cell is correctable.
-        return args.toolbar && !args.id
-          ? !!rubric
-          : validate[CommandIDs.correct](args);
-      },
-      label: ({ id, toolbar }: CellCommandArgs) => {
-        if (!validate[CommandIDs.correct]({ id }) || toolbar) {
+      isVisible: () => !!Correxit.open(active.workbook, { quiet: true }),
+      label: ({ id }: CellCommandArgs) => {
+        if (!Correxit.open(active.workbook, { quiet: true })) {
           return '';
         }
         return id
@@ -231,6 +219,21 @@ export function addCommands(options: {
       execute: async (cell: CellCommandArgs) => {
         if (validate[CommandIDs.remove](cell)) {
           return Correxit.remove(active.workbook!, cell.id!);
+        }
+      }
+    }),
+    commands.addCommand(CommandIDs.replace, {
+      isEnabled: validate[CommandIDs.replace],
+      label: (cell: CellCommandArgs) => validate[CommandIDs.replace](cell) ?
+        trans.__('Replace workbook cell in rubric') : '',
+      execute: async ({ id, is }: CellCommandArgs) => {
+        if (!validate[CommandIDs.replace]({ id, is })) {
+          return;
+        }
+        const rubric = Correxit.open(active.workbook, { quiet })!;
+        await commands.execute(CommandIDs.remove, { id });
+        if (is && get(rubric, id!)?.is !== is) {
+          await commands.execute(CommandIDs.add, { id, is });
         }
       }
     }),

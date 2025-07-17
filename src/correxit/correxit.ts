@@ -10,6 +10,7 @@ export namespace Correxit {
     export const correct = 'correxit:correct';
     export const lock = 'correxit:lock';
     export const remove = 'correxit:remove';
+    export const replace = 'correxit:replace';
     export const reset = 'correxit:reset';
     export const toggle = 'correxit:toggle';
     export const unlock = 'correxit:unlock';

@@ -9,7 +9,7 @@ import {
 import { Cell } from '@jupyterlab/cells';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { ITranslator } from '@jupyterlab/translation';
+import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
 
 import { CellModeSwitcher } from './toolbars/cell-mode-switcher';
@@ -120,8 +120,9 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
     { commands },
     _: Correxit.Source, // Load source to ensure commands are available.
     toolbarRegistry: IToolbarWidgetRegistry,
-    translator: ITranslator
+    translator: ITranslator | null
   ) => {
+    const trans = (translator || nullTranslator).load('correxit');
     toolbarRegistry.addFactory(
       'Cell',
       'correxit-correct',
@@ -129,13 +130,14 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
         new CommandToolbarButton({
           commands,
           id: Correxit.CommandIDs.correct,
-          args: { id: Correxit.Workbook.Cell.id(model, true), toolbar: true }
+          label: '',
+          args: { id: Correxit.Workbook.Cell.id(model, true) }
         })
     );
     toolbarRegistry.addFactory(
       'Cell',
       'correxit-switch',
-      (cell: Cell) => new CellModeSwitcher({ cell, commands, translator })
+      (cell: Cell) => new CellModeSwitcher({ cell, commands, trans })
     );
   }
 };
