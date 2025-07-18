@@ -217,7 +217,11 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.replace, {
       isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         const rubric = Correxit.open(active.workbook, { quiet });
-        return !!rubric && !rubric.locked && !!id;
+        if (!rubric || rubric.locked || !id) {
+          return false;
+        }
+        // Return false if the cell is a reference and true otherwise.
+        return has(rubric, id) || !has(rubric, id, deep);
       },
       label: (cell: Partial<Correxit.Workbook.Cell>) =>
         commands.isEnabled(CommandIDs.replace, cell) ?
