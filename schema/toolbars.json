@@ -5,7 +5,7 @@
   "type": "object",
   "properties": {},
   "jupyter.lab.toolbars": {
-    "Cell": [{ "name": "correxit-correct" }, { "name": "correxit-switch" }],
+    "Cell": [{ "name": "correxit-correct" }, { "name": "correxit-replace" }],
     "Notebook": [
       {
         "name": "correxit-correct",

@@ -4,15 +4,16 @@ import {
 } from '@jupyterlab/application';
 import {
   CommandToolbarButton,
-  IToolbarWidgetRegistry
+  IToolbarWidgetRegistry,
+  ReactWidget
 } from '@jupyterlab/apputils';
 import { Cell } from '@jupyterlab/cells';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
-
-import { CellModeSwitcher } from './toolbars/cell-mode-switcher';
+import React from 'react';
+import { CellModeSwitcher } from './toolbars';
 import { Correxit } from './correxit';
 import { addCommands } from './correxit/commands';
 import { Sidebar } from './sidebar';
@@ -136,8 +137,8 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
     );
     toolbarRegistry.addFactory(
       'Cell',
-      'correxit-switch',
-      (cell: Cell) => new CellModeSwitcher({ cell, commands, trans })
+      'correxit-replace',
+      (cell: Cell) => new Private.CellMode({ cell, commands, trans })
     );
   }
 };
@@ -149,6 +150,15 @@ namespace Private {
       console.log(`${Correxit.SOURCE} settings loaded:`, settings.composite);
     } catch (error) {
       console.error(`Failed to load settings for ${Correxit.SOURCE}.`, error);
+    }
+  }
+
+  export class CellMode extends ReactWidget {
+    constructor(readonly props: Parameters<typeof CellModeSwitcher>[0]) {
+      super();
+    }
+    render() {
+      return <CellModeSwitcher {...this.props} />;
     }
   }
 }

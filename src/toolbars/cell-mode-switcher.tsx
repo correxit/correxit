@@ -1,17 +1,19 @@
 import { Cell } from '@jupyterlab/cells';
+import { NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { HTMLSelect, ReactWidget, UseSignal } from '@jupyterlab/ui-components';
+import { HTMLSelect, UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
-import { NotebookPanel } from '@jupyterlab/notebook';
 
 const CELL_MODE_CLASS = 'correxit-cell-mode-select';
 
-export const CellMode: React.FC<CellMode.Props> = props => {
+export const CellModeSwitcher: React.FC<{
+  cell: Cell;
+  commands: CommandRegistry;
+  trans: IRenderMime.TranslationBundle;
+}> = ({ cell: { model, parent }, commands, trans }) => {
   type Mode = Correxit.Workbook.Cell['is'] | '';
-  const { commands, trans } = props;
-  const { parent } = props.cell;
   const { add, replace } = Correxit.CommandIDs;
   const workbook = parent?.parent instanceof NotebookPanel && parent.parent;
   if (!workbook) {
@@ -19,16 +21,16 @@ export const CellMode: React.FC<CellMode.Props> = props => {
   }
 
   // Enable the dropdown for either adding or replacing a workbook cell.
-  const id = Correxit.Workbook.Cell.id(props.cell.model);
+  const id = Correxit.Workbook.Cell.id(model);
   const args = { id };
   if (!commands.isEnabled(add, args) && !commands.isEnabled(replace, args)) {
     return <></>;
   }
 
   const rubric = Correxit.open(workbook, { quiet: true })!;
-  const model = workbook.model!;
+  const sender = workbook.model!;
   return (
-    <UseSignal signal={model.metadataChanged} initialSender={model}>
+    <UseSignal signal={sender.metadataChanged} initialSender={sender}>
       {() => {
         const cell = Correxit.Rubric.get(rubric, id);
         return (
@@ -51,23 +53,3 @@ export const CellMode: React.FC<CellMode.Props> = props => {
     </UseSignal>
   );
 };
-
-export namespace CellMode {
-  export type Props = {
-    cell: Cell;
-    commands: CommandRegistry;
-    trans: IRenderMime.TranslationBundle;
-  };
-}
-
-/**
- * A thin wrapper widget using a `CellMode` component in Jupyter toolbars.
- */
-export class CellModeSwitcher extends ReactWidget {
-  constructor(readonly props: CellMode.Props) {
-    super();
-  }
-  render() {
-    return <CellMode {...this.props} />;
-  }
-}
