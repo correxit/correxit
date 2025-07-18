@@ -1,0 +1,31 @@
+{
+  "jupyter.lab.shortcuts": [],
+  "title": "Correxit",
+  "description": "Correxit toolbar buttons.",
+  "type": "object",
+  "properties": {},
+  "jupyter.lab.toolbars": {
+    "Cell": [{ "name": "correxit-replace" }, { "name": "correxit-correct" }],
+    "Notebook": [
+      {
+        "name": "correxit-correct",
+        "command": "correxit:correct",
+        "label": "Correct",
+        "caption": "Correct workbook"
+      },
+      {
+        "name": "correxit-lock",
+        "command": "correxit:lock",
+        "label": "Lock",
+        "caption": "Lock workbook"
+      },
+      {
+        "name": "correxit-unlock",
+        "command": "correxit:unlock",
+        "label": "Unlock",
+        "caption": "Unlock workbook"
+      }
+    ]
+  },
+  "additionalProperties": false
+}

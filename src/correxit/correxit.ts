@@ -10,6 +10,7 @@ export namespace Correxit {
     export const correct = 'correxit:correct';
     export const lock = 'correxit:lock';
     export const remove = 'correxit:remove';
+    export const replace = 'correxit:replace';
     export const reset = 'correxit:reset';
     export const toggle = 'correxit:toggle';
     export const unlock = 'correxit:unlock';
@@ -27,14 +28,14 @@ export namespace Correxit {
 
   export const SOURCE = 'correxit:source';
 
-  export const CELL_TOOLBAR = 'correxit:cell-toolbar';
+  export const TOOLBARS = 'correxit:toolbars';
 
   export const Source = new Token<Source>(SOURCE);
 
   export const DESCRIPTION = {
     SIDEBAR: description.SIDEBAR,
     SOURCE: description.SOURCE,
-    CELL_TOOLBAR: description.CELL_TOOLBAR
+    TOOLBARS: description.TOOLBARS
   };
 
   export async function add(

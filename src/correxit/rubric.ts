@@ -4,6 +4,8 @@ import { Workbook } from './workbook';
 import { find } from '@lumino/algorithm';
 
 export type Rubric<Secure = 'locked' | 'unlocked'> = {
+  readonly accessed: number;
+
   readonly id: string;
 
   readonly key: Secure extends 'locked' ? null : string;
@@ -44,6 +46,7 @@ export namespace Rubric {
 
   export function create(key: string): Rubric<'unlocked'> {
     return {
+      accessed: Date.now(),
       id: `wb-${UUID.uuid4()}`, key,
       locked: false,
       secret: { cells: {} },
@@ -86,6 +89,7 @@ export namespace Rubric {
   ): Promise<Rubric<'locked'>> {
     const { id, key, secret, shared } = rubric;
     return {
+      accessed: Date.now(),
       id, key: null,
       locked: true,
       secret: await security.encrypt(JSON.stringify(secret), key),
@@ -99,12 +103,15 @@ export namespace Rubric {
   export function normalize(
     rubric: Partial<Rubric<'locked'>>
   ): Rubric<'locked'> {
-    const { id, key, locked, secret, shared } = rubric || {};
+    const { accessed, id, key, locked, secret, shared } = rubric || {};
+    if (!accessed) {
+      throw new Error('invalid rubric, missing accessed');
+    }
     if (!id) {
       throw new Error('invalid rubric, missing id');
     }
     if (key !== null) {
-      throw new Error('invalid rubric, missing null key');
+      throw new Error('invalid rubric, missing (null) key');
     }
     if (locked !== true) {
       throw new Error('invalid rubric, must be locked');
@@ -115,7 +122,7 @@ export namespace Rubric {
     if (!(shared && shared.cells)) {
       throw new Error('invalid rubric, invalid shared section')
     }
-    return { id, key, locked, secret, shared };
+    return { accessed, id, key, locked, secret, shared };
   }
 
   /**
@@ -141,6 +148,9 @@ export namespace Rubric {
     return Object.freeze([a[0] + b[0], a[1] + b[1]]);
   };
 
+  /**
+   * Returns a rubric where given cell is toggled between `secret` and `shared`.
+   */
   export function toggle(
     rubric: Rubric<'unlocked'>,
     id: Workbook.Cell['id']
@@ -150,6 +160,7 @@ export namespace Rubric {
     }
     const cell = get(rubric, id)!;
     return {
+      accessed: Date.now(),
       id: rubric.id,
       key: rubric.key,
       locked: rubric.locked,
@@ -167,6 +178,7 @@ export namespace Rubric {
     key: string
   ): Promise<Rubric<'unlocked'>> {
     return {
+      accessed: Date.now(),
       id: rubric.id,
       key,
       locked: false,

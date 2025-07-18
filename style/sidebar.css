@@ -1,0 +1,41 @@
+.correxit-sidebar {
+  display: flex;
+  flex-flow: column;
+}
+
+.correxit-sidebar h4 {
+  margin: 5px 0;
+}
+
+.correxit-sidebar > section {
+  padding: 5px;
+}
+
+.correxit-sidebar > section.correxit-body {
+  flex: 1;
+}
+
+.correxit-sidebar .correxit-monospace {
+  background-color: var(--jp-layout-color2);
+  font-family: var(--jp-code-font-family);
+  font-size: small;
+  overflow: hidden;
+  margin: 2px 0;
+  padding: 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correxit-sidebar .jp-ToolbarButtonComponent {
+  display: block;
+  margin: 0 0 5px;
+  padding: 0 0 7px;
+}
+
+.correxit-sidebar .jp-ToolbarButtonComponent svg {
+  margin-right: 5px;
+}
+
+.correxit-sidebar .jp-ToolbarButtonComponent.lm-mod-hidden {
+  display: none;
+}

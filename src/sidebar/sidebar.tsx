@@ -12,7 +12,7 @@ import { Header } from './header';
 export class Sidebar extends ReactWidget {
   constructor({ commands, source, translator }: Sidebar.IOptions) {
     super();
-    this.addClass('correxit');
+    this.addClass('correxit-sidebar');
     this.commands = commands;
     this.trans = (translator || nullTranslator).load('correxit');
     void this.subscribe(source);
@@ -32,12 +32,15 @@ export class Sidebar extends ReactWidget {
       return;
     }
     if (workbook) {
+      const { model } = workbook.content;
+      model?.sharedModel.metadataChanged.connect(this.ping, this);
       workbook.context.fileChanged.connect(this.ping, this);
-      workbook.content.model?.metadataChanged.connect(this.ping, this);
     }
-    if (this.workbook) {
-      this.workbook.context.fileChanged.disconnect(this.ping, this);
-      this.workbook.content.model?.metadataChanged.disconnect(this.ping, this);
+    const previous = this.workbook;
+    if (previous) {
+      const { model } = previous.content;
+      model?.sharedModel.metadataChanged.disconnect(this.ping, this);
+      previous.context.fileChanged.disconnect(this.ping, this);
     }
     this._workbook = workbook;
     this.update();

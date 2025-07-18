@@ -13,14 +13,11 @@ export function addCommands(options: {
   source: Correxit.Source;
   translator: ITranslator | null;
 }) {
-  type CellCommandArgs = Partial<Correxit.Workbook.Cell> & {
-    toolbar?: boolean;
-  };
   const { commands, source, translator } = options;
   const active: { workbook: Correxit.Workbook | null } = { workbook: null };
   const trans = (translator || nullTranslator).load('correxit');
   const { CommandIDs } = Correxit;
-  const { has, size } = Correxit.Rubric;
+  const { get, has, size } = Correxit.Rubric;
   const { Cell } = Correxit.Workbook;
   const deep = true;
   const quiet = true;
@@ -32,65 +29,20 @@ export function addCommands(options: {
     }
   })();
 
-  const validate = {
-    [CommandIDs.add]: ({ id, is, reference, toolbar }: CellCommandArgs) => {
-      const cells = active.workbook?.content.model?.cells || [];
-      const model = find(cells, cell => Cell.id(cell) === id);
-      const rubric = Correxit.open(active.workbook, { quiet });
-      if (!id || !model || !rubric || rubric.locked || id === reference || model.type !== 'code') {
-        return false;
-      } else if (has(rubric, id, deep)) {
-        // Check if the cell is a reference (true when deep search and false when normal)
-        if (!has(rubric, id)) {
-          return false;
-        }
-      }
-      // Valid if toolbar, otherwise only if not already defined.
-      return toolbar || (!!is && !has(rubric, id));
-    },
-    [CommandIDs.convert]: () => {
-      try {
-        return !Correxit.open(active.workbook);
-      } catch (error) {
-        return error === Correxit.NO_CORREXIT_METADATA;
-      }
-    },
-    [CommandIDs.correct]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(active.workbook, { quiet: true });
-      if (!rubric) {
-        return false;
-      }
-      if (!id) {
-        return size(rubric) > 0;
-      }
-
-      const model = active.workbook!.content.activeCell?.model;
-      if (!model || Cell.id(model) !== id || model.type !== 'code') {
-        return false;
-      }
-      return has(rubric, id);
-    },
-    [CommandIDs.lock]: () =>
-      Correxit.open(active.workbook, { quiet })?.locked === false,
-    [CommandIDs.remove]: ({ id, toolbar }: CellCommandArgs) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
-      return !!id && !!rubric && !rubric.locked && (toolbar || has(rubric, id));
-    },
-    [CommandIDs.toggle]: ({ id }: CellCommandArgs) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
-      return !!id && !!rubric && !rubric.locked && has(rubric, id);
-    },
-    [CommandIDs.reset]: () =>
-      Correxit.open(active.workbook, { quiet })?.locked === false,
-    [CommandIDs.unlock]: () =>
-      Correxit.open(active.workbook!, { quiet })?.locked ?? false
-  };
   return [
     commands.addCommand(CommandIDs.add, {
-      isEnabled: validate[CommandIDs.add],
-      isVisible: validate[CommandIDs.add],
-      label: (cell: CellCommandArgs) => {
-        if (!validate[CommandIDs.add](cell)) {
+      isEnabled: ({ id, reference }: Partial<Correxit.Workbook.Cell>) => {
+        const cells = active.workbook?.content.model?.cells || [];
+        const model = find(cells, cell => Cell.id(cell) === id);
+        const rubric = Correxit.open(active.workbook, { quiet });
+        if (!model || !rubric || rubric.locked || id === reference) {
+          return false;
+        }
+        return model.type === 'code' && !has(rubric, id!, deep);
+      },
+      isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
+      label: (cell: Partial<Correxit.Workbook.Cell>) => {
+        if (!commands.isEnabled(CommandIDs.add, cell)) {
           return '';
         }
         if (cell.is === 'answerable') {
@@ -110,8 +62,8 @@ export function addCommands(options: {
         }
         return '';
       },
-      execute: async (cell: CellCommandArgs) => {
-        if (!validate[CommandIDs.add](cell)) {
+      execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
+        if (!commands.isEnabled(CommandIDs.add, cell)) {
           return;
         }
         const id = cell.id!;
@@ -151,11 +103,17 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.convert, {
-      isEnabled: validate[CommandIDs.convert],
-      isVisible: validate[CommandIDs.convert],
+      isEnabled: () => {
+        try {
+          return !Correxit.open(active.workbook);
+        } catch (error) {
+          return error === Correxit.NO_CORREXIT_METADATA;
+        }
+      },
+      isVisible: () => commands.isEnabled(CommandIDs.convert),
       label: trans.__('Convert notebook to a workbook...'),
       execute: async () => {
-        if (!validate[CommandIDs.convert]()) {
+        if (!commands.isEnabled(CommandIDs.convert)) {
           return;
         }
         const workbook = active.workbook!;
@@ -172,26 +130,44 @@ export function addCommands(options: {
     }),
     commands.addCommand(CommandIDs.correct, {
       icon: checkIcon,
-      isEnabled: validate[CommandIDs.correct],
-      isVisible: (args: CellCommandArgs) => {
+      isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         const rubric = Correxit.open(active.workbook, { quiet: true });
-        // Display the icon in the notebook toolbar if this is a workbook (even if it
-        // is disabled).
-        // Display the icon in the cell toolbar only if the cell is correctable.
-        return args.toolbar && !args.id
-          ? !!rubric
-          : validate[CommandIDs.correct](args);
+        if (!rubric) {
+          return false;
+        }
+        if (!id) {
+          return size(rubric) > 0;
+        }
+
+        const model = active.workbook!.content.activeCell?.model;
+        if (!model || Cell.id(model) !== id || model.type !== 'code') {
+          return false;
+        }
+        return has(rubric, id);
       },
-      label: ({ id, toolbar }: CellCommandArgs) => {
-        if (!validate[CommandIDs.correct]({ id }) || toolbar) {
+      isVisible: ({ id }) => {
+        const rubric = Correxit.open(active.workbook, { quiet: true });
+        if (!rubric) {
+          return false;
+        }
+        if (!id) {
+          return true;
+        }
+        const { Cell } = Correxit.Workbook;
+        const cells = active.workbook!.content.model!.cells;
+        const model = find(cells, model => id === Cell.id(model))
+        return model?.type === 'code';
+      },
+      label: ({ id }: Partial<Correxit.Workbook.Cell>) => {
+        if (!Correxit.open(active.workbook, { quiet: true })) {
           return '';
         }
         return id
           ? trans.__('Correct cell...')
           : trans.__('Correct workbook...');
       },
-      execute: async ({ id }: CellCommandArgs) => {
-        if (!validate[CommandIDs.correct]({ id: id ?? '' })) {
+      execute: async ({ id }: Partial<Correxit.Workbook.Cell>) => {
+        if (!commands.isEnabled(CommandIDs.correct, { id: id ?? '' })) {
           return;
         }
         const workbook = active.workbook!;
@@ -207,11 +183,12 @@ export function addCommands(options: {
     }),
     commands.addCommand(CommandIDs.lock, {
       icon: lockIcon,
-      isEnabled: validate[CommandIDs.lock],
-      isVisible: validate[CommandIDs.lock],
+      isEnabled: () =>
+          Correxit.open(active.workbook, { quiet })?.locked === false,
+      isVisible: () => commands.isEnabled(CommandIDs.lock),
       label: trans.__('Lock grader mode (PGP encrypt)'),
       execute: async () => {
-        if (!validate[CommandIDs.lock]()) {
+        if (!commands.isEnabled(CommandIDs.lock)) {
           return;
         }
         try {
@@ -225,23 +202,51 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.remove, {
-      isEnabled: validate[CommandIDs.remove],
-      isVisible: validate[CommandIDs.remove],
+      isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
+        const rubric = Correxit.open(active.workbook, { quiet });
+        return !!id && !!rubric && !rubric.locked && has(rubric, id);
+      },
+      isVisible: cell => commands.isEnabled(CommandIDs.remove, cell),
       label: trans.__('Reset expected cell output'),
-      execute: async (cell: CellCommandArgs) => {
-        if (validate[CommandIDs.remove](cell)) {
+      execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
+        if (commands.isEnabled(CommandIDs.remove, cell)) {
           return Correxit.remove(active.workbook!, cell.id!);
+        }
+      }
+    }),
+    commands.addCommand(CommandIDs.replace, {
+      isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
+        const rubric = Correxit.open(active.workbook, { quiet });
+        if (!rubric || rubric.locked || !id) {
+          return false;
+        }
+        // Return false if the cell is a reference and true otherwise.
+        return has(rubric, id) || !has(rubric, id, deep);
+      },
+      label: (cell: Partial<Correxit.Workbook.Cell>) =>
+        commands.isEnabled(CommandIDs.replace, cell) ?
+          trans.__('Replace workbook cell in rubric') : '',
+      execute: async ({ id, is }: Partial<Correxit.Workbook.Cell>) => {
+        if (!commands.isEnabled(CommandIDs.replace, { id, is })) {
+          return;
+        }
+        const rubric = Correxit.open(active.workbook, { quiet })!;
+        const replace = is && get(rubric, id!)?.is !== is;
+        await commands.execute(CommandIDs.remove, { id });
+        if (replace) {
+          await commands.execute(CommandIDs.add, { id, is });
         }
       }
     }),
     commands.addCommand(CommandIDs.reset, {
       icon: notebookIcon,
-      isEnabled: validate[CommandIDs.reset],
-      isVisible: validate[CommandIDs.reset],
+      isEnabled: () =>
+        Correxit.open(active.workbook, { quiet })?.locked === false,
+      isVisible: () => commands.isEnabled(CommandIDs.reset),
       caption: 'Delete workbook metadata, leave notebook cells unmodified',
       label: trans.__('Revert to notebook (delete workbook metadata)...'),
       execute: async () => {
-        if (!validate[CommandIDs.reset]()) {
+        if (!commands.isEnabled(CommandIDs.reset)) {
           return;
         }
         const title = trans.__('Revert to notebook');
@@ -255,10 +260,13 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.toggle, {
-      isEnabled: validate[CommandIDs.toggle],
-      isVisible: validate[CommandIDs.toggle],
-      label: ({ id }: CellCommandArgs) => {
-        if (!id || !validate[CommandIDs.toggle]({ id })) {
+      isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
+        const rubric = Correxit.open(active.workbook, { quiet });
+        return !!id && !!rubric && !rubric.locked && has(rubric, id);
+      },
+      isVisible: cell => commands.isEnabled(CommandIDs.toggle, cell),
+      label: ({ id }: Partial<Correxit.Workbook.Cell>) => {
+        if (!id || !commands.isEnabled(CommandIDs.toggle, { id })) {
           return '';
         }
         const rubric = Correxit.open(active.workbook)!;
@@ -267,16 +275,17 @@ export function addCommands(options: {
           ? trans.__('Allow correction only in grader mode')
           : trans.__('Allow correction in all modes');
       },
-      execute: async (cell: CellCommandArgs) => {
-        if (validate[CommandIDs.toggle](cell)) {
+      execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
+        if (commands.isEnabled(CommandIDs.toggle, cell)) {
           return Correxit.toggle(active.workbook!, cell.id!);
         }
       }
     }),
     commands.addCommand(CommandIDs.unlock, {
       icon: lockIcon,
-      isEnabled: validate[CommandIDs.unlock],
-      isVisible: validate[CommandIDs.unlock],
+      isEnabled: () =>
+        Correxit.open(active.workbook!, { quiet })?.locked ?? false,
+      isVisible: () => commands.isEnabled(CommandIDs.unlock),
       label: trans.__('Unlock grader mode (PGP decrypt)...'),
       usage: `
 The command execute args type is: { key?: string }
@@ -289,7 +298,7 @@ The returned promise never rejects.
 The command invokes an error message dialog if unlock fails.
       `,
       execute: async ({ key }: { key?: string }) => {
-        if (!validate[CommandIDs.unlock]()) {
+        if (!commands.isEnabled(CommandIDs.unlock)) {
           return null;
         }
         const workbook = active.workbook!;
