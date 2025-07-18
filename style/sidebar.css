@@ -1,13 +1,3 @@
-.correxit-overlay {
-  height: 100%;
-  width: 100%;
-  position: absolute;
-  top: 0;
-  background-color: white;
-  opacity: 0.4;
-  z-index: 10;
-}
-
 .correxit-sidebar {
   display: flex;
   flex-flow: column;
@@ -48,11 +38,4 @@
 
 .correxit-sidebar .jp-ToolbarButtonComponent.lm-mod-hidden {
   display: none;
-}
-
-.correxit-target-cell {
-  outline: none;
-  border: none;
-  border-radius: 2px;
-  box-shadow: 0 0 0 2px var(--jp-accent-color1);
 }
