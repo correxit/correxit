@@ -81,14 +81,22 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
           return;
         }
         Correxit.open(workbook, { quiet: true });
-        workbook?.context.fileChanged.connect(notifyCommands);
-        workbook?.content.model?.metadataChanged.connect(notifyCommands);
-        current?.context.fileChanged.disconnect(notifyCommands);
-        current?.content.model?.metadataChanged.disconnect(notifyCommands);
+        subscribe(current, workbook);
         current = workbook;
         void source.schedule({ payload: workbook });
       };
-      const notifyCommands = () => {
+      const subscribe = (
+        prev: Correxit.Workbook | null,
+        next: Correxit.Workbook | null
+      ) => {
+        prev?.context.fileChanged.disconnect(handler);
+        prev?.content.model?.sharedModel.metadataChanged.disconnect(handler);
+        next?.context.fileChanged.connect(handler);
+        next?.content.model?.sharedModel.metadataChanged.connect(handler);
+      };
+      const handler = () => {
+        // The sidebar can rely on metadata changes, but the native toolbar
+        // buttons only change when their respective command has changed.
         commands.notifyCommandChanged(Correxit.CommandIDs.correct);
         commands.notifyCommandChanged(Correxit.CommandIDs.lock);
         commands.notifyCommandChanged(Correxit.CommandIDs.unlock);
