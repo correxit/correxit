@@ -1,21 +1,31 @@
-.correxit {
+.correxit-overlay {
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  background-color: white;
+  opacity: 0.4;
+  z-index: 10;
+}
+
+.correxit-sidebar {
   display: flex;
   flex-flow: column;
 }
 
-.correxit h4 {
+.correxit-sidebar h4 {
   margin: 5px 0;
 }
 
-.correxit > section {
+.correxit-sidebar > section {
   padding: 5px;
 }
 
-.correxit > section.correxit-body {
+.correxit-sidebar > section.correxit-body {
   flex: 1;
 }
 
-.correxit .correxit-monospace {
+.correxit-sidebar .correxit-monospace {
   background-color: var(--jp-layout-color2);
   font-family: var(--jp-code-font-family);
   font-size: small;
@@ -26,32 +36,18 @@
   white-space: nowrap;
 }
 
-.correxit-cell-mode-select svg {
-  top: 6px !important;
-}
-
-.correxit .jp-ToolbarButtonComponent {
+.correxit-sidebar .jp-ToolbarButtonComponent {
   display: block;
   margin: 0 0 5px;
   padding: 0 0 7px;
 }
 
-.correxit .jp-ToolbarButtonComponent svg {
+.correxit-sidebar .jp-ToolbarButtonComponent svg {
   margin-right: 5px;
 }
 
-.correxit .jp-ToolbarButtonComponent.lm-mod-hidden {
+.correxit-sidebar .jp-ToolbarButtonComponent.lm-mod-hidden {
   display: none;
-}
-
-.correxit-overlay {
-  height: 100%;
-  width: 100%;
-  position: absolute;
-  top: 0;
-  background-color: white;
-  opacity: 0.4;
-  z-index: 10;
 }
 
 .correxit-target-cell {

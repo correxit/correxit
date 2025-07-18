@@ -6,14 +6,13 @@ import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
 
-const CELL_MODE_CLASS = 'correxit-cell-mode-select';
+const CELL_MODE_CLASS = 'correxit-cell-mode-switcher';
 
 export const CellModeSwitcher: React.FC<{
   cell: Cell;
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell: { model, parent }, commands, trans }) => {
-  type Mode = Correxit.Workbook.Cell['is'] | '';
   const { add, replace } = Correxit.CommandIDs;
   const workbook = parent?.parent instanceof NotebookPanel && parent.parent;
   if (!workbook) {
@@ -37,7 +36,7 @@ export const CellModeSwitcher: React.FC<{
           <HTMLSelect
             className={CELL_MODE_CLASS}
             onChange={({ target: { value } }) =>
-              commands.execute(replace, { id, is: value as Mode })
+              commands.execute(replace, { id, is: value })
             }
             value={cell?.is ?? ''}
             aria-label={trans.__('Workbook cell grading mode')}

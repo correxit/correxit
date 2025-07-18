@@ -12,7 +12,7 @@ import { Header } from './header';
 export class Sidebar extends ReactWidget {
   constructor({ commands, source, translator }: Sidebar.IOptions) {
     super();
-    this.addClass('correxit');
+    this.addClass('correxit-sidebar');
     this.commands = commands;
     this.trans = (translator || nullTranslator).load('correxit');
     void this.subscribe(source);
