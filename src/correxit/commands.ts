@@ -13,7 +13,6 @@ export function addCommands(options: {
   source: Correxit.Source;
   translator: ITranslator | null;
 }) {
-  type CellCommandArgs = Partial<Correxit.Workbook.Cell>;
   const { commands, source, translator } = options;
   const active: { workbook: Correxit.Workbook | null } = { workbook: null };
   const trans = (translator || nullTranslator).load('correxit');
@@ -32,7 +31,7 @@ export function addCommands(options: {
 
   return [
     commands.addCommand(CommandIDs.add, {
-      isEnabled: ({ id, reference }: CellCommandArgs) => {
+      isEnabled: ({ id, reference }: Partial<Correxit.Workbook.Cell>) => {
         const cells = active.workbook?.content.model?.cells || [];
         const model = find(cells, cell => Cell.id(cell) === id);
         const rubric = Correxit.open(active.workbook, { quiet });
@@ -42,7 +41,7 @@ export function addCommands(options: {
         return model.type === 'code' && !has(rubric, id!, deep);
       },
       isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
-      label: (cell: CellCommandArgs) => {
+      label: (cell: Partial<Correxit.Workbook.Cell>) => {
         if (!commands.isEnabled(CommandIDs.add, cell)) {
           return '';
         }
@@ -63,7 +62,7 @@ export function addCommands(options: {
         }
         return '';
       },
-      execute: async (cell: CellCommandArgs) => {
+      execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
         if (!commands.isEnabled(CommandIDs.add, cell)) {
           return;
         }
@@ -131,7 +130,7 @@ export function addCommands(options: {
     }),
     commands.addCommand(CommandIDs.correct, {
       icon: checkIcon,
-      isEnabled: ({ id }: CellCommandArgs) => {
+      isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         const rubric = Correxit.open(active.workbook, { quiet: true });
         if (!rubric) {
           return false;
@@ -147,7 +146,7 @@ export function addCommands(options: {
         return has(rubric, id);
       },
       isVisible: () => !!Correxit.open(active.workbook, { quiet: true }),
-      label: ({ id }: CellCommandArgs) => {
+      label: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         if (!Correxit.open(active.workbook, { quiet: true })) {
           return '';
         }
@@ -155,7 +154,7 @@ export function addCommands(options: {
           ? trans.__('Correct cell...')
           : trans.__('Correct workbook...');
       },
-      execute: async ({ id }: CellCommandArgs) => {
+      execute: async ({ id }: Partial<Correxit.Workbook.Cell>) => {
         if (!commands.isEnabled(CommandIDs.correct, { id: id ?? '' })) {
           return;
         }
@@ -191,27 +190,27 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.remove, {
-      isEnabled: ({ id }: CellCommandArgs) => {
+      isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         const rubric = Correxit.open(active.workbook, { quiet });
         return !!id && !!rubric && !rubric.locked && has(rubric, id);
       },
       isVisible: cell => commands.isEnabled(CommandIDs.remove, cell),
       label: trans.__('Reset expected cell output'),
-      execute: async (cell: CellCommandArgs) => {
+      execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
         if (commands.isEnabled(CommandIDs.remove, cell)) {
           return Correxit.remove(active.workbook!, cell.id!);
         }
       }
     }),
     commands.addCommand(CommandIDs.replace, {
-      isEnabled: ({ id }: CellCommandArgs) => {
+      isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         const rubric = Correxit.open(active.workbook, { quiet });
         return !!rubric && !rubric.locked && !!id;
       },
-      label: (cell: CellCommandArgs) =>
+      label: (cell: Partial<Correxit.Workbook.Cell>) =>
         commands.isEnabled(CommandIDs.replace, cell) ?
           trans.__('Replace workbook cell in rubric') : '',
-      execute: async ({ id, is }: CellCommandArgs) => {
+      execute: async ({ id, is }: Partial<Correxit.Workbook.Cell>) => {
         if (!commands.isEnabled(CommandIDs.replace, { id, is })) {
           return;
         }
@@ -245,12 +244,12 @@ export function addCommands(options: {
       }
     }),
     commands.addCommand(CommandIDs.toggle, {
-      isEnabled: ({ id }: CellCommandArgs) => {
+      isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         const rubric = Correxit.open(active.workbook, { quiet });
         return !!id && !!rubric && !rubric.locked && has(rubric, id);
       },
       isVisible: cell => commands.isEnabled(CommandIDs.toggle, cell),
-      label: ({ id }: CellCommandArgs) => {
+      label: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         if (!id || !commands.isEnabled(CommandIDs.toggle, { id })) {
           return '';
         }
@@ -260,7 +259,7 @@ export function addCommands(options: {
           ? trans.__('Allow correction only in grader mode')
           : trans.__('Allow correction in all modes');
       },
-      execute: async (cell: CellCommandArgs) => {
+      execute: async (cell: Partial<Correxit.Workbook.Cell>) => {
         if (commands.isEnabled(CommandIDs.toggle, cell)) {
           return Correxit.toggle(active.workbook!, cell.id!);
         }
