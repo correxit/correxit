@@ -145,7 +145,19 @@ export function addCommands(options: {
         }
         return has(rubric, id);
       },
-      isVisible: () => !!Correxit.open(active.workbook, { quiet: true }),
+      isVisible: ({ id }) => {
+        const rubric = Correxit.open(active.workbook, { quiet: true });
+        if (!rubric) {
+          return false;
+        }
+        if (!id) {
+          return true;
+        }
+        const { Cell } = Correxit.Workbook;
+        const cells = active.workbook!.content.model!.cells;
+        const model = find(cells, model => id === Cell.id(model))
+        return model?.type === 'code';
+      },
       label: ({ id }: Partial<Correxit.Workbook.Cell>) => {
         if (!Correxit.open(active.workbook, { quiet: true })) {
           return '';

@@ -6,7 +6,7 @@ import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
 
-const CELL_MODE_CLASS = 'correxit-cell-mode-switcher';
+const CELL_MODE_SWITCHER_CLASS = 'correxit-cell-mode-switcher';
 
 export const CellModeSwitcher: React.FC<{
   cell: Cell;
@@ -14,41 +14,37 @@ export const CellModeSwitcher: React.FC<{
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell: { model, parent }, commands, trans }) => {
   const { add, replace } = Correxit.CommandIDs;
-  const workbook = parent?.parent instanceof NotebookPanel && parent.parent;
-  if (!workbook) {
-    return <></>;
-  }
-
-  // Enable the dropdown for either adding or replacing a workbook cell.
   const id = Correxit.Workbook.Cell.id(model);
-  const args = { id };
-  if (!commands.isEnabled(add, args) && !commands.isEnabled(replace, args)) {
+  const workbook = parent?.parent instanceof NotebookPanel && parent.parent;
+  if (!workbook || !workbook.model) {
     return <></>;
   }
 
-  const rubric = Correxit.open(workbook, { quiet: true })!;
-  const sender = workbook.model!;
-  return (
-    <UseSignal signal={sender.metadataChanged} initialSender={sender}>
-      {() => {
-        const cell = Correxit.Rubric.get(rubric, id);
-        return (
-          <HTMLSelect
-            className={CELL_MODE_CLASS}
-            onChange={({ target: { value } }) =>
-              commands.execute(replace, { id, is: value })
-            }
-            value={cell?.is ?? ''}
-            aria-label={trans.__('Workbook cell grading mode')}
-            title={trans.__('Select the cell grading mode')}
-          >
-            <option value="">{trans.__('Not configured')}</option>
-            <option value="answerable">{trans.__('Answer')}</option>
-            <option value="comparable">{trans.__('Compare')}</option>
-            <option value="correctable">{trans.__('Correct')}</option>
-          </HTMLSelect>
-        );
-      }}
-    </UseSignal>
-  );
+  const { sharedModel } = workbook.model;
+  const select = () => {
+    const disabled =
+      !commands.isEnabled(add, { id }) && !commands.isEnabled(replace, { id });
+    if (disabled) {
+      return <></>;
+    }
+
+    const rubric = Correxit.open(workbook, { quiet: true })!;
+    return (
+      <HTMLSelect
+        className={CELL_MODE_SWITCHER_CLASS}
+        onChange={({ target: { value } }) =>
+          commands.execute(replace, { id, is: value })
+        }
+        value={Correxit.Rubric.get(rubric, id)?.is ?? ''}
+        aria-label={trans.__('Workbook cell grading mode')}
+        title={trans.__('Select the cell grading mode')}
+      >
+        <option value="">{trans.__('Not configured')}</option>
+        <option value="answerable">{trans.__('Answer')}</option>
+        <option value="comparable">{trans.__('Compare')}</option>
+        <option value="correctable">{trans.__('Correct')}</option>
+      </HTMLSelect>
+    );
+  };
+  return <UseSignal signal={sharedModel.metadataChanged}>{select}</UseSignal>;
 };
