@@ -6,7 +6,7 @@ import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit } from '.';
 import * as input from './input';
-import { digest } from './security';
+import { digest, keygen } from './security';
 
 export function addCommands(options: {
   commands: CommandRegistry;
@@ -70,7 +70,7 @@ export function addCommands(options: {
         const is = cell.is!;
         const workbook = active.workbook!;
         if (is === 'answerable') {
-          const expected = await input.answer({
+          const expected = await input.text({
             title: trans.__('Add expected output'),
             label: commands.label(CommandIDs.add, cell)
           });
@@ -118,12 +118,12 @@ export function addCommands(options: {
         }
 
         const workbook = active.workbook!;
-        const key = await input.passphrase({
+        const passphrase = await input.text({
           title: trans.__('Enter a passphrase'),
           label: trans.__('Enter a passphrase for this workbook')
         });
-        if (key) {
-          const rubric = await Correxit.convert(workbook, key);
+        if (passphrase) {
+          const rubric = await Correxit.convert(workbook, passphrase);
           await workbook.context.save();
           return rubric;
         }
@@ -223,8 +223,11 @@ export function addCommands(options: {
         if (!rubric || rubric.locked || !id) {
           return false;
         }
-        // Return false if the cell is a reference and true otherwise.
-        return has(rubric, id) || !has(rubric, id, deep);
+
+        const cells = active.workbook?.content.model?.cells || [];
+        const model = find(cells, cell => cell.id === id);
+        const reference = has(rubric, id, deep) && !has(rubric, id);
+        return !reference && has(rubric, id) || model?.type === 'code';
       },
       label: (cell: Partial<Correxit.Workbook.Cell>) =>
         commands.isEnabled(CommandIDs.replace, cell) ?
@@ -287,32 +290,35 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.unlock, {
       icon: lockIcon,
       isEnabled: () =>
-        Correxit.open(active.workbook!, { quiet })?.locked ?? false,
+        Correxit.open(active.workbook, { quiet })?.locked ?? false,
       isVisible: () => commands.isEnabled(CommandIDs.unlock),
       label: trans.__('Unlock grader mode (PGP decrypt)...'),
       usage: `
-The command execute args type is: { key?: string }
+The command execute args type is: { passphrase?: string }
 
-If no key is provided, the command invokes a user prompt dialog.
+If no passphrase is provided, the command invokes a user prompt dialog.
 
 The command execute return type is: Promise<Rubric<"unlocked"> | null>
 The returned promise never rejects.
 
 The command invokes an error message dialog if unlock fails.
       `,
-      execute: async ({ key }: { key?: string }) => {
+      execute: async ({ passphrase }: { passphrase?: string }) => {
         if (!commands.isEnabled(CommandIDs.unlock)) {
           return null;
         }
         const workbook = active.workbook!;
         try {
-          key ||= await input.passphrase({
+          passphrase ||= await input.text({
             title: trans.__('Enter a passphrase to unlock'),
             label: trans.__('Enter a passphrase to unlock this workbook')
           });
-          if (!key) {
+          if (!passphrase) {
             return null;
           }
+
+          const opened = Correxit.open(workbook, { quiet })!;
+          const key = await keygen(passphrase, opened.id);
           const rubric = await Correxit.unlock(workbook, key);
           await workbook.context.save();
           return rubric;

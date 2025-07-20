@@ -45,9 +45,8 @@ const WorkbookCell: React.FC<{
   commands: CommandRegistry;
   rubric: Correxit.Rubric;
   trans: IRenderMime.TranslationBundle;
-}> = ({ cell, commands, rubric, trans }) => {
+}> = ({ cell: { id }, commands, rubric, trans }) => {
   const { add, correct, remove, toggle } = Correxit.CommandIDs;
-  const id = cell.id;
   const buttons: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: add, args: { id, is: 'answerable' } },
     { commands, id: add, args: { id, is: 'comparable' } },
@@ -60,8 +59,8 @@ const WorkbookCell: React.FC<{
   return (
     <>
       <h4>{trans.__('Workbook cell:')}</h4>
-      <div className="correxit-monospace" title={cell.id}>
-        {cell.id}
+      <div className="correxit-monospace" title={id}>
+        {id}
       </div>
       {reference && (
         <>

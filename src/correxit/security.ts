@@ -25,7 +25,7 @@ export async function encrypt(text: string, password: string) {
   return await pgp.encrypt({ message, passwords: [password] });
 }
 
-export async function keygen(text: string) {
-  const hash = await digest(text);
-  return await digest(`${SALT}:${hash}:${PEPPER}`);
+export async function keygen(passphrase: string, salt = SALT, pepper = PEPPER) {
+  const hash = await digest(passphrase);
+  return await digest(`${salt}:${hash}:${pepper}`);
 }

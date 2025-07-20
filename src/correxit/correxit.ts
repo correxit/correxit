@@ -1,6 +1,7 @@
 import { Token } from '@lumino/coreutils';
 import * as description from './description';
 import { Rubric as RUBRIC } from './rubric';
+import { keygen } from './security';
 import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
@@ -55,17 +56,17 @@ export namespace Correxit {
   /**
    * Convert a plain notebook into a workbook and return its rubric.
    */
-  export async function convert(workbook: Workbook, key: string) {
-    if (key.length !== 64) {
-      throw new Error('cannot unlock a workbook without a valid key');
-    }
+  export async function convert(workbook: Workbook, passphrase: string) {
     try {
       const opened = open(workbook)!;
+      const key = await keygen(passphrase, opened.id);
       const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
       return unlock(workbook, (await Encrypted.metadata(workbook, rubric)).key);
     } catch (error) {
       if (error === NO_CORREXIT_METADATA) {
-        const rubric = await Encrypted.metadata(workbook, Rubric.create(key));
+        const created = Rubric.create();
+        const key = await keygen(passphrase, created.id);
+        const rubric = await Encrypted.metadata(workbook, { ...created, key });
         return unlock(workbook, rubric.key);
       }
       throw error;
@@ -171,9 +172,6 @@ export namespace Correxit {
     Private.CACHE.delete(workbook);
     const model = workbook.content.model!;
     model.deleteMetadata('correxit');
-    for (const cell of model.cells) {
-      cell.deleteMetadata('correxit');
-    }
   }
 
   export async function toggle(

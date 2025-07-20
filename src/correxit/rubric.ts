@@ -43,13 +43,13 @@ export namespace Rubric {
     return { cells } as Rubric.Section;
   }
 
-  export function create(key: string): Rubric<'unlocked'> {
+  export function create(): Omit<Rubric<'unlocked'>, 'key'> {
     const accessed = Date.now();
     const id = 'wb' + `${accessed}`.split('')
       .map(i => String.fromCharCode(parseInt(i, 10) + 97)).join('');
     const secret: Section = { cells: {} };
     const shared: Section = { cells: {} };
-    return { accessed, id, key, locked: false, secret, shared };
+    return { accessed, id, locked: false, secret, shared };
   }
 
   export function get(
