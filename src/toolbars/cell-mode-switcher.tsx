@@ -6,6 +6,8 @@ import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit } from '../correxit';
 
+const CELL_MODE_SWITCHER_CLASS = 'correxit-cell-mode-switcher';
+
 export const CellModeSwitcher: React.FC<{
   cell: Cell;
   commands: CommandRegistry;
@@ -37,6 +39,7 @@ const Switcher: React.FC<{
   }
   return (
     <HTMLSelect
+      className={CELL_MODE_SWITCHER_CLASS}
       onChange={({ target: { value } }) =>
         commands.execute(replace, { id, is: value })
       }
