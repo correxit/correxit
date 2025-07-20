@@ -18,7 +18,6 @@ export function addCommands(options: {
   const trans = (translator || nullTranslator).load('correxit');
   const { CommandIDs } = Correxit;
   const { get, has, size } = Correxit.Rubric;
-  const { Cell } = Correxit.Workbook;
   const deep = true;
   const quiet = true;
 
@@ -33,7 +32,7 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.add, {
       isEnabled: ({ id, reference }: Partial<Correxit.Workbook.Cell>) => {
         const cells = active.workbook?.content.model?.cells || [];
-        const model = find(cells, cell => Cell.id(cell) === id);
+        const model = find(cells, cell => cell.id === id);
         const rubric = Correxit.open(active.workbook, { quiet });
         if (!model || !rubric || rubric.locked || id === reference) {
           return false;
@@ -66,10 +65,10 @@ export function addCommands(options: {
         if (!commands.isEnabled(CommandIDs.add, cell)) {
           return;
         }
+
         const id = cell.id!;
         const is = cell.is!;
         const workbook = active.workbook!;
-
         if (is === 'answerable') {
           const expected = await input.answer({
             title: trans.__('Add expected output'),
@@ -78,25 +77,26 @@ export function addCommands(options: {
           if (!expected) {
             return;
           }
+
           const payload = [await digest(expected)];
           return Correxit.add(workbook, { id, is, payload });
         }
-
         if (is !== 'comparable' && is !== 'correctable') {
           return;
         }
         if (cell.reference) {
           return Correxit.add(workbook, { ...cell, id, is });
         }
+
         const selected = await input.cell(workbook);
         if (selected) {
           const { widgets } = workbook.content;
-          const reference = Correxit.Workbook.Cell.id(selected, true);
-          // Cell cannot refer to itself.
+          const reference = selected.id;
           if (id === reference) {
             return;
           }
-          const original = find(widgets, ({ model }) => Cell.id(model) === id)!;
+
+          const original = find(widgets, ({ model }) => model.id === id)!;
           await workbook.content.scrollToCell(original);
           return Correxit.add(workbook, { ...cell, id, is, reference });
         }
@@ -116,6 +116,7 @@ export function addCommands(options: {
         if (!commands.isEnabled(CommandIDs.convert)) {
           return;
         }
+
         const workbook = active.workbook!;
         const key = await input.passphrase({
           title: trans.__('Enter a passphrase'),
@@ -131,7 +132,7 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.correct, {
       icon: checkIcon,
       isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-        const rubric = Correxit.open(active.workbook, { quiet: true });
+        const rubric = Correxit.open(active.workbook, { quiet });
         if (!rubric) {
           return false;
         }
@@ -140,26 +141,26 @@ export function addCommands(options: {
         }
 
         const model = active.workbook!.content.activeCell?.model;
-        if (!model || Cell.id(model) !== id || model.type !== 'code') {
+        if (!model || model.id !== id || model.type !== 'code') {
           return false;
         }
         return has(rubric, id);
       },
       isVisible: ({ id }) => {
-        const rubric = Correxit.open(active.workbook, { quiet: true });
+        const rubric = Correxit.open(active.workbook, { quiet });
         if (!rubric) {
           return false;
         }
         if (!id) {
           return true;
         }
-        const { Cell } = Correxit.Workbook;
+
         const cells = active.workbook!.content.model!.cells;
-        const model = find(cells, model => id === Cell.id(model))
+        const model = find(cells, model => model.id === id)
         return model?.type === 'code';
       },
       label: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-        if (!Correxit.open(active.workbook, { quiet: true })) {
+        if (!Correxit.open(active.workbook, { quiet })) {
           return '';
         }
         return id
@@ -170,8 +171,10 @@ export function addCommands(options: {
         if (!commands.isEnabled(CommandIDs.correct, { id: id ?? '' })) {
           return;
         }
+
         const workbook = active.workbook!;
         workbook.content.scrollToCell(workbook.content.activeCell!);
+
         const score = await Correxit.correct(workbook, id);
         const unscored = score === Correxit.Rubric.UNSCORED;
         const [x, y] = score;

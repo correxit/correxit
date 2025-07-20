@@ -52,6 +52,9 @@ export namespace Correxit {
     return unlock(workbook, rubric.key);
   }
 
+  /**
+   * Convert a plain notebook into a workbook and return its rubric.
+   */
   export async function convert(workbook: Workbook, key: string) {
     if (key.length !== 64) {
       throw new Error('cannot unlock a workbook without a valid key');
@@ -59,12 +62,11 @@ export namespace Correxit {
     try {
       const opened = open(workbook)!;
       const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
-      await Encrypted.metadata(workbook, rubric);
-      return unlock(workbook, rubric.key);
+      return unlock(workbook, (await Encrypted.metadata(workbook, rubric)).key);
     } catch (error) {
       if (error === NO_CORREXIT_METADATA) {
-        await Encrypted.metadata(workbook, Correxit.Rubric.create(key));
-        return unlock(workbook, key);
+        const rubric = await Encrypted.metadata(workbook, Rubric.create(key));
+        return unlock(workbook, rubric.key);
       }
       throw error;
     }
@@ -108,9 +110,8 @@ export namespace Correxit {
     if (!rubric || rubric.locked) {
       return;
     }
-    Private.CACHE.set(workbook, await Rubric.lock(rubric));
-    await Encrypted.content(workbook, rubric);
-    await Encrypted.metadata(workbook, rubric);
+    const unlocked = await Encrypted.content(workbook, rubric);
+    Private.CACHE.set(workbook, await Rubric.lock(unlocked));
   }
 
   /**
@@ -186,7 +187,7 @@ export namespace Correxit {
     const rubric = Rubric.toggle(opened, id);
     Private.CACHE.set(workbook, rubric);
     await Encrypted.metadata(workbook, rubric);
-    return rubric;
+    return unlock(workbook, rubric.key);
   }
 
   export async function unlock(
@@ -197,54 +198,68 @@ export namespace Correxit {
     if (!opened.locked) {
       return opened;
     }
-    const rubric = await Rubric.unlock(opened, key);
+    const unlocked = await Rubric.unlock(opened, key);
+    const rubric = await Decrypted.content(workbook, unlocked);
     Private.CACHE.set(workbook, rubric);
-    await Decrypted.content(workbook, rubric);
-    await Encrypted.metadata(workbook, rubric);
     return rubric;
   }
 }
 
 namespace Decrypted {
+  /**
+   * Decrypts all encrypted correxit raw cells and returns updated rubric.
+   */
   export async function content(
     workbook: Correxit.Workbook,
     rubric: Correxit.Rubric<'unlocked'>
-  ): Promise<void> {
+  ): Promise<Correxit.Rubric<'unlocked'>> {
+    const { decrypt } = Correxit.Workbook.Cell;
     const { key } = rubric;
     for (const id in rubric.secret.cells) {
-      const cell = rubric.secret.cells[id];
-      if (cell.is === 'comparable' || cell.is === 'correctable') {
-        await Correxit.Workbook.Cell.decrypt(workbook, cell.reference!, key);
+      const { is, reference, ...cell } = rubric.secret.cells[id];
+      if (is === 'comparable' || is === 'correctable') {
+        rubric.secret.cells[id] = {
+          ...cell, is, reference: await decrypt(workbook, reference!, key)
+        };
       }
     };
+    return Encrypted.metadata(workbook, rubric);
   }
 }
 
 namespace Encrypted {
+  const { encrypt } = Correxit.Workbook.Cell;
+  const { lock, unlock } = Correxit.Rubric;
+
+  /**
+   * Saves encrypted workbook metadata.
+   */
   export async function metadata(
     workbook: Correxit.Workbook,
     rubric: Correxit.Rubric<'unlocked'>
-  ): Promise<void> {
-    const notebook = workbook.content;
-    const model = notebook.model!;
-    const locked = await Correxit.Rubric.lock(rubric);
-    model.sharedModel.setMetadata('correxit', locked);
-    for (const cell of model.cells) {
-      Correxit.Workbook.Cell.id(cell, true);
-    }
+  ): Promise<Correxit.Rubric<'unlocked'>> {
+    const { sharedModel } = workbook.content.model!;
+    const metadata = await lock(rubric);
+    sharedModel.setMetadata('correxit', metadata);
+    return unlock(metadata, rubric.key);
   }
 
+  /**
+   * Encrypts the workbook cell content, updates rubric, and saves metadata.
+   */
   export async function content(
     workbook: Correxit.Workbook,
     rubric: Correxit.Rubric<'unlocked'>
-  ): Promise<void> {
+  ): Promise<Correxit.Rubric<'unlocked'>> {
     const { key } = rubric;
     for (const id in rubric.secret.cells) {
       const cell = rubric.secret.cells[id];
       if (cell.is === 'comparable' || cell.is === 'correctable') {
-        await Correxit.Workbook.Cell.encrypt(workbook, cell.reference!, key);
+        const reference = await encrypt(workbook, cell.reference!, key);
+        rubric.secret.cells[id] = { ...cell, reference};
       }
     };
+    return metadata(workbook, rubric);
   }
 }
 

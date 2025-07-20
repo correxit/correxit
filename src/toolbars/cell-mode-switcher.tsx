@@ -13,7 +13,7 @@ export const CellModeSwitcher: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell: { model, parent }, commands, trans }) => {
-  const id = Correxit.Workbook.Cell.id(model);
+  const id = model.id;
   const workbook = parent?.parent instanceof NotebookPanel && parent.parent;
   if (!workbook || !workbook.model) {
     return <></>;

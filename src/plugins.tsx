@@ -135,12 +135,12 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
     toolbarRegistry.addFactory(
       'Cell',
       'correxit-correct',
-      ({ model }: Cell) =>
+      ({ model: { id } }: Cell) =>
         new CommandToolbarButton({
           commands,
           id: Correxit.CommandIDs.correct,
           label: '',
-          args: { id: Correxit.Workbook.Cell.id(model, true) }
+          args: { id }
         })
     );
     toolbarRegistry.addFactory(
