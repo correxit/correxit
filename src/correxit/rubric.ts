@@ -1,4 +1,3 @@
-import { UUID } from '@lumino/coreutils';
 import * as security from './security';
 import { Workbook } from './workbook';
 import { find } from '@lumino/algorithm';
@@ -45,13 +44,12 @@ export namespace Rubric {
   }
 
   export function create(key: string): Rubric<'unlocked'> {
-    return {
-      accessed: Date.now(),
-      id: `wb-${UUID.uuid4()}`, key,
-      locked: false,
-      secret: { cells: {} },
-      shared: { cells: {} }
-    };
+    const accessed = Date.now();
+    const id = 'wb' + `${accessed}`.split('')
+      .map(i => String.fromCharCode(parseInt(i, 10) + 97)).join('');
+    const secret: Section = { cells: {} };
+    const shared: Section = { cells: {} };
+    return { accessed, id, key, locked: false, secret, shared };
   }
 
   export function get(

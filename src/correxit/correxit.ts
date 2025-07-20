@@ -256,7 +256,7 @@ namespace Encrypted {
       const cell = rubric.secret.cells[id];
       if (cell.is === 'comparable' || cell.is === 'correctable') {
         const reference = await encrypt(workbook, cell.reference!, key);
-        rubric.secret.cells[id] = { ...cell, reference};
+        rubric.secret.cells[id] = { ...cell, reference };
       }
     };
     return metadata(workbook, rubric);

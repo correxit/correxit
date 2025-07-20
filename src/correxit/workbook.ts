@@ -7,7 +7,6 @@ import {
 } from '@jupyterlab/notebook';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
 import { find, findIndex } from '@lumino/algorithm';
-import { UUID } from '@lumino/coreutils';
 import { Correxit } from './correxit';
 import { Rubric } from './rubric';
 import * as security from './security';
@@ -31,10 +30,10 @@ export namespace Workbook {
    * A workbook cell definition defines how to score a notebook cell.
    */
   export type Cell = {
-    readonly id: ReturnType<typeof UUID.uuid4>;
+    readonly id: string;
     readonly is: 'answerable' | 'comparable' | 'correctable';
     readonly payload?: string[];
-    readonly reference?: ReturnType<typeof UUID.uuid4>;
+    readonly reference?: string;
     readonly shared?: boolean;
   };
 
