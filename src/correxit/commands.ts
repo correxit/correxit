@@ -71,7 +71,7 @@ export function addCommands(options: {
         const workbook = active.workbook!;
         if (is === 'answerable') {
           const expected = await input.text({
-            title: trans.__('Add expected output'),
+            title: trans.__('Enter expected cell output'),
             label: commands.label(CommandIDs.add, cell)
           });
           if (!expected) {

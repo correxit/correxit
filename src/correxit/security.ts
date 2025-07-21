@@ -26,6 +26,5 @@ export async function encrypt(text: string, password: string) {
 }
 
 export async function keygen(passphrase: string, salt = SALT, pepper = PEPPER) {
-  const hash = await digest(passphrase);
-  return digest(`${salt}:${hash}:${pepper}`);
+  return digest(`${salt}:${await digest(passphrase)}:${pepper}`);
 }

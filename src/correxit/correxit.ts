@@ -83,25 +83,24 @@ export namespace Correxit {
     workbook: Workbook,
     id?: Workbook.Cell['id']
   ): Promise<Rubric.Score> {
+    const { sum, UNSCORED } = Rubric;
+    const { score } = Workbook.Cell;
     const rubric = open(workbook, { quiet: true });
     if (!rubric) {
-      return Rubric.UNSCORED;
+      return UNSCORED;
     }
 
     const outputs = await Workbook.execute(workbook, id);
     if (!outputs) {
-      return Rubric.UNSCORED;
+      return UNSCORED;
     }
     if (id) {
-      return Workbook.Cell.score(workbook, id, outputs);
+      return score(workbook, id, outputs);
     }
 
-    let total: Rubric.Score = [0, 0];
-    for (const id of Object.keys(outputs)) {
-      const score = await Workbook.Cell.score(workbook, id, outputs);
-      total = Rubric.sum(total, score);
-    }
-    return total;
+    const initial = Promise.resolve([0, 0] as Rubric.Score);
+    return Object.keys(outputs).reduce(async (total, id) =>
+      sum(await total, await score(workbook, id, outputs)), initial);
   }
 
   export async function lock(workbook: Workbook): Promise<void> {
