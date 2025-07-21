@@ -4,20 +4,10 @@ import { filter } from '@lumino/algorithm';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
 import { Correxit } from '..';
-import { keygen } from '../correxit/security';
 
 const OVERLAY_CLASS = 'correxit-overlay';
 
 const TARGET_CELL_CLASS = 'correxit-target-cell';
-
-/**
- * @returns a promise that resolves to a user input string.
- */
-export const answer = async (options: InputDialog.ITextOptions) => {
-  const { label, title } = options;
-  const { button, value } = await InputDialog.getText({ label, title });
-  return (button.accept && value) || '';
-};
 
 /**
  * @returns a promise that resolves to a user input cell or `null`.
@@ -47,19 +37,19 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
   const throttler = new Throttler(
     ({ clientX, clientY }: PointerEvent) => {
       const cells = workbook.content.widgets;
+      workbook.content.node.querySelectorAll(`.${TARGET_CELL_CLASS}`)
+        .forEach(({ classList }) => classList.remove(TARGET_CELL_CLASS));
       for (const cell of filter(cells, cell => cell.inViewport)) {
         const rect = cell.node.getBoundingClientRect();
-        if (
-          clientY >= rect.y &&
+        const overlap = clientY >= rect.y &&
           clientY <= rect.y + rect.height &&
           clientX >= rect.x &&
-          clientX <= rect.x + rect.width
-        ) {
+          clientX <= rect.x + rect.width;
+        if (overlap) {
           cell.node.classList.add(TARGET_CELL_CLASS);
           target = cell;
-          continue;
+          return;
         }
-        cell.node.classList.remove(TARGET_CELL_CLASS);
       }
     },
     { limit: 100 }
@@ -69,7 +59,6 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
     target?.node.classList.remove(TARGET_CELL_CLASS);
     target = null;
   };
-
   overlay.classList.add(OVERLAY_CLASS);
   workbook.content.viewportNode.appendChild(overlay);
   overlay.addEventListener('pointermove', pointermove);
@@ -80,10 +69,9 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
 }
 
 /**
- * @returns a promise that resolves to a string key based on user passphrase.
+ * @returns a promise that resolves with text input from the user.
  */
-export const passphrase = async (options: InputDialog.ITextOptions) => {
-  const { label, title } = options;
-  const { button, value } = await InputDialog.getText({ label, title });
-  return (button.accept && value && (await keygen(value))) || '';
+export const text = async (options: InputDialog.ITextOptions) => {
+  const { button, value } = await InputDialog.getText(options);
+  return button.accept && value || '';
 };

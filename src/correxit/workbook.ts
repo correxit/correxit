@@ -1,4 +1,4 @@
-import { ICellModel, ICodeCellModel } from '@jupyterlab/cells';
+import { ICodeCellModel } from '@jupyterlab/cells';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import {
   INotebookModel,
@@ -7,7 +7,6 @@ import {
 } from '@jupyterlab/notebook';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
 import { find, findIndex } from '@lumino/algorithm';
-import { UUID } from '@lumino/coreutils';
 import { Correxit } from './correxit';
 import { Rubric } from './rubric';
 import * as security from './security';
@@ -31,10 +30,10 @@ export namespace Workbook {
    * A workbook cell definition defines how to score a notebook cell.
    */
   export type Cell = {
-    readonly id: ReturnType<typeof UUID.uuid4>;
+    readonly id: string;
     readonly is: 'answerable' | 'comparable' | 'correctable';
     readonly payload?: string[];
-    readonly reference?: ReturnType<typeof UUID.uuid4>;
+    readonly reference?: string;
     readonly shared?: boolean;
   };
 
@@ -100,65 +99,90 @@ export namespace Workbook {
 
     /**
      * Decrypts a workbook cell, modifying its source and changing its cell type
-     * from `raw` to `code`.
+     * from `raw` to `code`. This changes the cell `id`.
+     * @returns a promise that resolves with the resulting cell `id`.
      */
     export async function decrypt(
       workbook: Workbook,
-      id: Cell['id'],
+      reference: string,
       key: string
-    ) {
+    ): Promise<string> {
       const notebook = workbook.content;
-      if (!key || !notebook.model) {
+      const model = notebook.model;
+      if (!key || !model) {
         throw new Error('decrypt error');
       }
 
-      const model = notebook.model;
       const { widgets } = notebook;
-      const index = findIndex(model.cells, cell => Cell.id(cell) === id);
-      const { sharedModel } = model.cells.get(index);
-      const decrypted = await security.decrypt(sharedModel.getSource(), key);
-      const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
+      const index = findIndex(model.cells, cell => cell.id === reference);
+      if (index === -1) {
+        throw new Error('decrypt error');
+      }
+
+      const source = model.cells.get(index).sharedModel.getSource();
+      const decrypted = await security.decrypt(source, key);
+      const widget = find(widgets, ({ model }) => model.id === reference);
+      if (!widget) {
+        throw new Error('decrypt error');
+      }
+
       const initial = notebook.activeCellIndex;
       NotebookActions.clearAllOutputs(notebook);
       NotebookActions.deselectAll(notebook);
       notebook.select(widget);
       notebook.activeCellIndex = index;
       widget.inputHidden = false;
+      widget.model.sharedModel.deleteMetadata('editable');
       widget.model.sharedModel.setSource(decrypted);
       NotebookActions.changeCellType(notebook, 'code');
       notebook.activeCellIndex = initial;
+
+      const result = model.cells.get(index);
+      return result.id;
     }
 
     /**
      * Encrypts a workbook cell, modifying its source and changing its cell type
-     * from `code` to `raw`.
+     * from `code` to `raw`. This changes the cell `id`.
+     * @returns a promise that resolves with the resulting cell `id`.
      */
     export async function encrypt(
       workbook: Workbook,
-      id: Cell['id'],
+      reference: string,
       key: string
-    ) {
+    ): Promise<string> {
       const notebook = workbook.content;
-      if (!key) {
+      const model = notebook.model;
+      if (!key || !model) {
         throw new Error('encrypt error');
       }
 
-      const model = notebook.model!;
-      const index = findIndex(model.cells, cell => Cell.id(cell) === id);
-      const cell = model.cells.get(index);
-      const source = cell.sharedModel.getSource();
-      const encrypted = await security.encrypt(source, key);
       const { widgets } = notebook;
-      const widget = find(widgets, ({ model }) => Cell.id(model) === id)!;
+      const index = findIndex(model.cells, ({ id }) => id === reference);
+      if (index === -1) {
+        throw new Error('encrypt error');
+      }
+
+      const source = model.cells.get(index).sharedModel.getSource();
+      const encrypted = await security.encrypt(source, key);
+      const widget = find(widgets, ({ model }) => model.id === reference);
+      if (!widget) {
+        throw new Error('encrypt error');
+      }
+
       const initial = notebook.activeCellIndex;
       NotebookActions.clearAllOutputs(notebook);
       NotebookActions.deselectAll(notebook);
       notebook.select(widget);
       notebook.activeCellIndex = index;
-      widget.model.sharedModel.setSource(encrypted);
       widget.inputHidden = true;
+      widget.model.sharedModel.setSource(encrypted);
       NotebookActions.changeCellType(notebook, 'raw');
       notebook.activeCellIndex = initial;
+
+      const result = model.cells.get(index);
+      result.sharedModel.setMetadata('editable', false);
+      return result.id;
     }
 
     /**
@@ -188,21 +212,6 @@ export namespace Workbook {
       };
       await future.done;
       return outputs;
-    }
-
-    /**
-     * Returns the UUID value of the `correxit` key in a cell's metadata.
-     * @param cell - the cell model.
-     * @param initialize - if `true`, creates a new ID if one does not exist.
-     */
-    export function id(cell: ICellModel, initialize = false): string {
-      const { sharedModel } = cell;
-      const id = sharedModel.getMetadata('correxit') as string || '';
-      if (id || !initialize) {
-        return id;
-      }
-      sharedModel.setMetadata('correxit', UUID.uuid4());
-      return sharedModel.getMetadata('correxit') as string;
     }
 
     /**
@@ -260,7 +269,7 @@ export namespace Workbook {
    *
    * #### Notes
    * If `id` is not provided, the whole workbook is executed.
-   * If `id` is provided, and the target cell is 'answerable', the workbook is
+   * If `id` is provided and the target cell is 'answerable', the workbook is
    * executed up to this cell.
    * If `id` is provided and the target cell is 'comparable' or 'correctable',
    * the workbook is executed up to both target and reference cells.
@@ -272,23 +281,18 @@ export namespace Workbook {
     const rubric = Correxit.open(workbook)!;
     const { content, context } = workbook;
     const { cells } = content.model!;
-    const outputs: Outputs = {};
-
     let last = cells.length - 1;
     if (id) {
       const cell = Correxit.Rubric.get(rubric, id);
       if (!cell) {
         return null;
       }
-      if (cell.is === 'answerable') {
-        last = findIndex(cells, cell => Cell.id(cell) === id);
-      } else {
-        const reference = cell.reference!;
-        last = Math.max(
-          findIndex(cells, cell => Cell.id(cell) === id),
-          findIndex(cells, cell => Cell.id(cell) === reference)
-        );
-      }
+      last = Math.max(
+        findIndex(cells, ({ id }) => id === cell.id),
+        cell.is === 'answerable' ?
+          Number.NEGATIVE_INFINITY :
+          findIndex(cells, ({ id }) => id === cell.reference!)
+      );
     }
 
     const { kernelManager, kernelPreference } = context.sessionContext;
@@ -299,13 +303,14 @@ export namespace Workbook {
       return null;
     }
 
-    for (let i = 0; i <= last; i++) {
-      const model = cells.get(i) as ICodeCellModel;
+    const outputs: Outputs = {};
+    for (let index = 0; index <= last; index++) {
+      const model = cells.get(index);
       if (model.type === 'code') {
-        outputs[Cell.id(model)] = await Cell.execute(model, kernel);
+        outputs[model.id] = await Cell.execute(model as ICodeCellModel, kernel);
       }
     }
-    void kernel.shutdown().catch(_ => undefined);
+    void kernel.shutdown().catch(_ => {});
     return outputs;
   }
 }

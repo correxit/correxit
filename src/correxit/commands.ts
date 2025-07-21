@@ -6,7 +6,7 @@ import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit } from '.';
 import * as input from './input';
-import { digest } from './security';
+import { digest, keygen } from './security';
 
 export function addCommands(options: {
   commands: CommandRegistry;
@@ -18,7 +18,6 @@ export function addCommands(options: {
   const trans = (translator || nullTranslator).load('correxit');
   const { CommandIDs } = Correxit;
   const { get, has, size } = Correxit.Rubric;
-  const { Cell } = Correxit.Workbook;
   const deep = true;
   const quiet = true;
 
@@ -33,12 +32,12 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.add, {
       isEnabled: ({ id, reference }: Partial<Correxit.Workbook.Cell>) => {
         const cells = active.workbook?.content.model?.cells || [];
-        const model = find(cells, cell => Cell.id(cell) === id);
+        const model = find(cells, cell => cell.id === id);
         const rubric = Correxit.open(active.workbook, { quiet });
-        if (!model || !rubric || rubric.locked || id === reference) {
+        if (!model || !rubric || rubric.locked || !id || id === reference) {
           return false;
         }
-        return model.type === 'code' && !has(rubric, id!, deep);
+        return model.type === 'code' && !has(rubric, id, deep);
       },
       isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
       label: (cell: Partial<Correxit.Workbook.Cell>) => {
@@ -49,15 +48,9 @@ export function addCommands(options: {
           return trans.__('Expect output of this cell to match answer...');
         }
         if (cell.is === 'comparable') {
-          if (cell.id && cell.reference) {
-            return trans.__("Select this cell's output as expected value");
-          }
           return trans.__('Select another cell for comparing cell output...');
         }
         if (cell.is === 'correctable') {
-          if (cell.id && cell.reference) {
-            return trans.__('Select this cell for correction');
-          }
           return trans.__('Select another cell that corrects this cell...');
         }
         return '';
@@ -66,37 +59,35 @@ export function addCommands(options: {
         if (!commands.isEnabled(CommandIDs.add, cell)) {
           return;
         }
+
         const id = cell.id!;
         const is = cell.is!;
         const workbook = active.workbook!;
-
         if (is === 'answerable') {
-          const expected = await input.answer({
-            title: trans.__('Add expected output'),
+          const expected = await input.text({
+            title: trans.__('Enter expected cell output'),
             label: commands.label(CommandIDs.add, cell)
           });
           if (!expected) {
             return;
           }
+
           const payload = [await digest(expected)];
           return Correxit.add(workbook, { id, is, payload });
         }
-
         if (is !== 'comparable' && is !== 'correctable') {
           return;
         }
-        if (cell.reference) {
-          return Correxit.add(workbook, { ...cell, id, is });
-        }
+
         const selected = await input.cell(workbook);
         if (selected) {
           const { widgets } = workbook.content;
-          const reference = Correxit.Workbook.Cell.id(selected, true);
-          // Cell cannot refer to itself.
-          if (id === reference) {
+          const reference = selected.id;
+          if (id === reference || selected.type !== 'code') {
             return;
           }
-          const original = find(widgets, ({ model }) => Cell.id(model) === id)!;
+
+          const original = find(widgets, ({ model }) => model.id === id)!;
           await workbook.content.scrollToCell(original);
           return Correxit.add(workbook, { ...cell, id, is, reference });
         }
@@ -116,13 +107,14 @@ export function addCommands(options: {
         if (!commands.isEnabled(CommandIDs.convert)) {
           return;
         }
+
         const workbook = active.workbook!;
-        const key = await input.passphrase({
+        const passphrase = await input.text({
           title: trans.__('Enter a passphrase'),
           label: trans.__('Enter a passphrase for this workbook')
         });
-        if (key) {
-          const rubric = await Correxit.convert(workbook, key);
+        if (passphrase) {
+          const rubric = await Correxit.convert(workbook, passphrase);
           await workbook.context.save();
           return rubric;
         }
@@ -131,7 +123,7 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.correct, {
       icon: checkIcon,
       isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-        const rubric = Correxit.open(active.workbook, { quiet: true });
+        const rubric = Correxit.open(active.workbook, { quiet });
         if (!rubric) {
           return false;
         }
@@ -140,26 +132,26 @@ export function addCommands(options: {
         }
 
         const model = active.workbook!.content.activeCell?.model;
-        if (!model || Cell.id(model) !== id || model.type !== 'code') {
+        if (!model || model.id !== id || model.type !== 'code') {
           return false;
         }
         return has(rubric, id);
       },
       isVisible: ({ id }) => {
-        const rubric = Correxit.open(active.workbook, { quiet: true });
+        const rubric = Correxit.open(active.workbook, { quiet });
         if (!rubric) {
           return false;
         }
         if (!id) {
           return true;
         }
-        const { Cell } = Correxit.Workbook;
+
         const cells = active.workbook!.content.model!.cells;
-        const model = find(cells, model => id === Cell.id(model))
+        const model = find(cells, model => model.id === id)
         return model?.type === 'code';
       },
       label: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-        if (!Correxit.open(active.workbook, { quiet: true })) {
+        if (!Correxit.open(active.workbook, { quiet })) {
           return '';
         }
         return id
@@ -170,8 +162,10 @@ export function addCommands(options: {
         if (!commands.isEnabled(CommandIDs.correct, { id: id ?? '' })) {
           return;
         }
+
         const workbook = active.workbook!;
         workbook.content.scrollToCell(workbook.content.activeCell!);
+
         const score = await Correxit.correct(workbook, id);
         const unscored = score === Correxit.Rubric.UNSCORED;
         const [x, y] = score;
@@ -186,7 +180,7 @@ export function addCommands(options: {
       isEnabled: () =>
           Correxit.open(active.workbook, { quiet })?.locked === false,
       isVisible: () => commands.isEnabled(CommandIDs.lock),
-      label: trans.__('Lock grader mode (PGP encrypt)'),
+      label: trans.__('Lock grader mode'),
       execute: async () => {
         if (!commands.isEnabled(CommandIDs.lock)) {
           return;
@@ -220,8 +214,10 @@ export function addCommands(options: {
         if (!rubric || rubric.locked || !id) {
           return false;
         }
-        // Return false if the cell is a reference and true otherwise.
-        return has(rubric, id) || !has(rubric, id, deep);
+
+        const cells = active.workbook?.content.model?.cells || [];
+        const code = find(cells, cell => cell.id === id)?.type === 'code';
+        return code && !has(rubric, id, deep) || has(rubric, id);
       },
       label: (cell: Partial<Correxit.Workbook.Cell>) =>
         commands.isEnabled(CommandIDs.replace, cell) ?
@@ -284,32 +280,35 @@ export function addCommands(options: {
     commands.addCommand(CommandIDs.unlock, {
       icon: lockIcon,
       isEnabled: () =>
-        Correxit.open(active.workbook!, { quiet })?.locked ?? false,
+        Correxit.open(active.workbook, { quiet })?.locked ?? false,
       isVisible: () => commands.isEnabled(CommandIDs.unlock),
-      label: trans.__('Unlock grader mode (PGP decrypt)...'),
+      label: trans.__('Unlock grader mode...'),
       usage: `
-The command execute args type is: { key?: string }
+The command execute args type is: { passphrase?: string }
 
-If no key is provided, the command invokes a user prompt dialog.
+If no passphrase is provided, the command invokes a user prompt dialog.
 
 The command execute return type is: Promise<Rubric<"unlocked"> | null>
 The returned promise never rejects.
 
 The command invokes an error message dialog if unlock fails.
       `,
-      execute: async ({ key }: { key?: string }) => {
+      execute: async ({ passphrase }: { passphrase?: string }) => {
         if (!commands.isEnabled(CommandIDs.unlock)) {
           return null;
         }
         const workbook = active.workbook!;
         try {
-          key ||= await input.passphrase({
+          passphrase ||= await input.text({
             title: trans.__('Enter a passphrase to unlock'),
             label: trans.__('Enter a passphrase to unlock this workbook')
           });
-          if (!key) {
+          if (!passphrase) {
             return null;
           }
+
+          const opened = Correxit.open(workbook, { quiet })!;
+          const key = await keygen(passphrase, opened.id);
           const rubric = await Correxit.unlock(workbook, key);
           await workbook.context.save();
           return rubric;

@@ -22,10 +22,9 @@ export async function digest(text: string) {
 
 export async function encrypt(text: string, password: string) {
   const message = await pgp.createMessage({ text });
-  return await pgp.encrypt({ message, passwords: [password] });
+  return pgp.encrypt({ message, passwords: [password] });
 }
 
-export async function keygen(text: string) {
-  const hash = await digest(text);
-  return await digest(`${SALT}:${hash}:${PEPPER}`);
+export async function keygen(passphrase: string, salt = SALT, pepper = PEPPER) {
+  return digest(`${salt}:${await digest(passphrase)}:${pepper}`);
 }
