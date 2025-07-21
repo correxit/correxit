@@ -34,10 +34,10 @@ export function addCommands(options: {
         const cells = active.workbook?.content.model?.cells || [];
         const model = find(cells, cell => cell.id === id);
         const rubric = Correxit.open(active.workbook, { quiet });
-        if (!model || !rubric || rubric.locked || id === reference) {
+        if (!model || !rubric || rubric.locked || !id || id === reference) {
           return false;
         }
-        return model.type === 'code' && !has(rubric, id!, deep);
+        return model.type === 'code' && !has(rubric, id, deep);
       },
       isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
       label: (cell: Partial<Correxit.Workbook.Cell>) => {
@@ -225,9 +225,8 @@ export function addCommands(options: {
         }
 
         const cells = active.workbook?.content.model?.cells || [];
-        const model = find(cells, cell => cell.id === id);
-        const reference = has(rubric, id, deep) && !has(rubric, id);
-        return !reference && (has(rubric, id) || model?.type === 'code');
+        const code = find(cells, cell => cell.id === id)?.type === 'code';
+        return code && !has(rubric, id, deep) || has(rubric, id);
       },
       label: (cell: Partial<Correxit.Workbook.Cell>) =>
         commands.isEnabled(CommandIDs.replace, cell) ?

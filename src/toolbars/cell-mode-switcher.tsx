@@ -30,18 +30,16 @@ const Switcher: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ commands, id, trans, workbook }) => {
-  const { add, replace } = Correxit.CommandIDs;
-  const enabled =
-    commands.isEnabled(add, { id }) || commands.isEnabled(replace, { id });
-  const rubric = Correxit.open(workbook, { quiet: true });
-  if (!enabled || !rubric) {
+  if (!commands.isEnabled(Correxit.CommandIDs.replace, { id })) {
     return <></>;
   }
+
+  const rubric = Correxit.open(workbook, { quiet: true })!;
   return (
     <HTMLSelect
       className={CELL_MODE_SWITCHER_CLASS}
       onChange={({ target: { value } }) =>
-        commands.execute(replace, { id, is: value })
+        commands.execute(Correxit.CommandIDs.replace, { id, is: value })
       }
       value={Correxit.Rubric.get(rubric, id)?.is ?? ''}
       aria-label={trans.__('Workbook cell grading mode')}
