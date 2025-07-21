@@ -99,8 +99,8 @@ export namespace Workbook {
 
     /**
      * Decrypts a workbook cell, modifying its source and changing its cell type
-     * from `raw` to `code`. Returns a promise that resolves with the resulting
-     * cell `id`, which may have changed.
+     * from `raw` to `code`. This changes the cell `id`.
+     * @returns a promise that resolves with the resulting cell `id`.
      */
     export async function decrypt(
       workbook: Workbook,
@@ -143,8 +143,8 @@ export namespace Workbook {
 
     /**
      * Encrypts a workbook cell, modifying its source and changing its cell type
-     * from `code` to `raw`. Returns a promise that resolves with the resulting
-     * cell ID, which can be different from the original `id` passed in.
+     * from `code` to `raw`. This changes the cell `id`.
+     * @returns a promise that resolves with the resulting cell `id`.
      */
     export async function encrypt(
       workbook: Workbook,
@@ -269,7 +269,7 @@ export namespace Workbook {
    *
    * #### Notes
    * If `id` is not provided, the whole workbook is executed.
-   * If `id` is provided, and the target cell is 'answerable', the workbook is
+   * If `id` is provided and the target cell is 'answerable', the workbook is
    * executed up to this cell.
    * If `id` is provided and the target cell is 'comparable' or 'correctable',
    * the workbook is executed up to both target and reference cells.
@@ -281,23 +281,18 @@ export namespace Workbook {
     const rubric = Correxit.open(workbook)!;
     const { content, context } = workbook;
     const { cells } = content.model!;
-    const outputs: Outputs = {};
-
     let last = cells.length - 1;
     if (id) {
       const cell = Correxit.Rubric.get(rubric, id);
       if (!cell) {
         return null;
       }
-      if (cell.is === 'answerable') {
-        last = findIndex(cells, cell => cell.id === id);
-      } else {
-        const reference = cell.reference!;
-        last = Math.max(
-          findIndex(cells, cell => cell.id === id),
-          findIndex(cells, cell => cell.id === reference)
-        );
-      }
+      last = Math.max(
+        findIndex(cells, ({ id }) => id === cell.id),
+        cell.is === 'answerable' ?
+          Number.NEGATIVE_INFINITY :
+          findIndex(cells, ({ id }) => id === cell.reference!)
+      );
     }
 
     const { kernelManager, kernelPreference } = context.sessionContext;
@@ -308,13 +303,14 @@ export namespace Workbook {
       return null;
     }
 
-    for (let i = 0; i <= last; i++) {
-      const model = cells.get(i) as ICodeCellModel;
+    const outputs: Outputs = {};
+    for (let index = 0; index <= last; index++) {
+      const model = cells.get(index);
       if (model.type === 'code') {
-        outputs[model.id] = await Cell.execute(model, kernel);
+        outputs[model.id] = await Cell.execute(model as ICodeCellModel, kernel);
       }
     }
-    void kernel.shutdown().catch(_ => undefined);
+    void kernel.shutdown().catch(_ => {});
     return outputs;
   }
 }

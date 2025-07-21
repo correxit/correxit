@@ -43,10 +43,18 @@ export namespace Rubric {
     return { cells } as Rubric.Section;
   }
 
+  /**
+   * @returns an unlocked rubric with the `key` field omitted. The client needs
+   * to add a `key` field to use the rubric. The automatically generated `id` of
+   * the rubric is a constructed as follows:
+   *
+   * `"wb"` + `accessed` timestamp's digits `[0-9]` shifted into ascii chars
+   * `[q-z]`, e.g., `"wbrxvtqyuxuszvq"`.
+   */
   export function create(): Omit<Rubric<'unlocked'>, 'key'> {
     const accessed = Date.now();
     const id = 'wb' + `${accessed}`.split('')
-      .map(i => String.fromCharCode(parseInt(i, 10) + 97)).join('');
+      .map(i => String.fromCharCode(parseInt(i, 10) + 113)).join('');
     const secret: Section = { cells: {} };
     const shared: Section = { cells: {} };
     return { accessed, id, locked: false, secret, shared };
@@ -96,7 +104,7 @@ export namespace Rubric {
   }
 
   /**
-   * Returns a normalized complete rubric or throws an error.
+   * @returns a normalized complete rubric or throws an error.
    */
   export function normalize(
     rubric: Partial<Rubric<'locked'>>
@@ -124,7 +132,7 @@ export namespace Rubric {
   }
 
   /**
-   * Returns the number of cells configured in a rubric.
+   * @returns the number of cells configured in a rubric.
    */
   export function size(rubric: Rubric<'locked'> | Rubric<'unlocked'>): number {
     const { locked, secret, shared } = rubric;
@@ -147,7 +155,7 @@ export namespace Rubric {
   };
 
   /**
-   * Returns a rubric where given cell is toggled between `secret` and `shared`.
+   * @returns a rubric where given cell is toggled between `secret` or `shared`.
    */
   export function toggle(
     rubric: Rubric<'unlocked'>,

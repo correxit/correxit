@@ -37,6 +37,8 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
   const throttler = new Throttler(
     ({ clientX, clientY }: PointerEvent) => {
       const cells = workbook.content.widgets;
+      workbook.content.node.querySelectorAll(`.${TARGET_CELL_CLASS}`)
+        .forEach(({ classList }) => classList.remove(TARGET_CELL_CLASS));
       for (const cell of filter(cells, cell => cell.inViewport)) {
         const rect = cell.node.getBoundingClientRect();
         const overlap = clientY >= rect.y &&
@@ -46,9 +48,8 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
         if (overlap) {
           cell.node.classList.add(TARGET_CELL_CLASS);
           target = cell;
-          continue;
+          return;
         }
-        cell.node.classList.remove(TARGET_CELL_CLASS);
       }
     },
     { limit: 100 }
@@ -72,5 +73,5 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
  */
 export const text = async (options: InputDialog.ITextOptions) => {
   const { button, value } = await InputDialog.getText(options);
-  return (button.accept && value) || '';
+  return button.accept && value || '';
 };

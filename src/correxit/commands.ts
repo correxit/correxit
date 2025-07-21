@@ -227,7 +227,7 @@ export function addCommands(options: {
         const cells = active.workbook?.content.model?.cells || [];
         const model = find(cells, cell => cell.id === id);
         const reference = has(rubric, id, deep) && !has(rubric, id);
-        return !reference && has(rubric, id) || model?.type === 'code';
+        return !reference && (has(rubric, id) || model?.type === 'code');
       },
       label: (cell: Partial<Correxit.Workbook.Cell>) =>
         commands.isEnabled(CommandIDs.replace, cell) ?
