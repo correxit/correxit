@@ -48,15 +48,9 @@ export function addCommands(options: {
           return trans.__('Expect output of this cell to match answer...');
         }
         if (cell.is === 'comparable') {
-          if (cell.id && cell.reference) {
-            return trans.__("Select this cell's output as expected value");
-          }
           return trans.__('Select another cell for comparing cell output...');
         }
         if (cell.is === 'correctable') {
-          if (cell.id && cell.reference) {
-            return trans.__('Select this cell for correction');
-          }
           return trans.__('Select another cell that corrects this cell...');
         }
         return '';
@@ -84,15 +78,12 @@ export function addCommands(options: {
         if (is !== 'comparable' && is !== 'correctable') {
           return;
         }
-        if (cell.reference) {
-          return Correxit.add(workbook, { ...cell, id, is });
-        }
 
         const selected = await input.cell(workbook);
         if (selected) {
           const { widgets } = workbook.content;
           const reference = selected.id;
-          if (id === reference) {
+          if (id === reference || selected.type !== 'code') {
             return;
           }
 
@@ -189,7 +180,7 @@ export function addCommands(options: {
       isEnabled: () =>
           Correxit.open(active.workbook, { quiet })?.locked === false,
       isVisible: () => commands.isEnabled(CommandIDs.lock),
-      label: trans.__('Lock grader mode (PGP encrypt)'),
+      label: trans.__('Lock grader mode'),
       execute: async () => {
         if (!commands.isEnabled(CommandIDs.lock)) {
           return;
@@ -291,7 +282,7 @@ export function addCommands(options: {
       isEnabled: () =>
         Correxit.open(active.workbook, { quiet })?.locked ?? false,
       isVisible: () => commands.isEnabled(CommandIDs.unlock),
-      label: trans.__('Unlock grader mode (PGP decrypt)...'),
+      label: trans.__('Unlock grader mode...'),
       usage: `
 The command execute args type is: { passphrase?: string }
 
