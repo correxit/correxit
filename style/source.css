@@ -12,5 +12,13 @@
   outline: none;
   border: none;
   border-radius: 2px;
-  box-shadow: 0 0 0 2px var(--jp-accent-color1);
+  box-shadow: 0 0 0 3px transparent;
+}
+
+.correxit-target-cell.cxt-mod-include {
+  box-shadow: 0 0 0 3px var(--jp-accept-color-active);
+}
+
+.correxit-target-cell.cxt-mod-exclude {
+  box-shadow: 0 0 0 3px var(--jp-reject-color-active);
 }
