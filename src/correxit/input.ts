@@ -5,6 +5,10 @@ import { PromiseDelegate } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
 import { Correxit } from '..';
 
+const EXCLUDE_CLASS = 'cxt-mod-exclude';
+
+const INCLUDE_CLASS = 'cxt-mod-include';
+
 const OVERLAY_CLASS = 'correxit-overlay';
 
 const TARGET_CELL_CLASS = 'correxit-target-cell';
@@ -38,7 +42,8 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
     ({ clientX, clientY }: PointerEvent) => {
       const cells = workbook.content.widgets;
       workbook.content.node.querySelectorAll(`.${TARGET_CELL_CLASS}`)
-        .forEach(({ classList }) => classList.remove(TARGET_CELL_CLASS));
+        .forEach(({ classList }) =>
+          classList.remove(TARGET_CELL_CLASS, EXCLUDE_CLASS, INCLUDE_CLASS));
       for (const cell of filter(cells, cell => cell.inViewport)) {
         const rect = cell.node.getBoundingClientRect();
         const overlap = clientY >= rect.y &&
@@ -46,7 +51,11 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
           clientX >= rect.x &&
           clientX <= rect.x + rect.width;
         if (overlap) {
-          cell.node.classList.add(TARGET_CELL_CLASS);
+          cell.node.classList.add(
+            TARGET_CELL_CLASS,
+            cell.model.type === 'code' ? INCLUDE_CLASS : EXCLUDE_CLASS
+          );
+
           target = cell;
           return;
         }
