@@ -97,6 +97,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       const handler = () => {
         // The sidebar can rely on metadata changes, but the native toolbar
         // buttons only change when their respective command has changed.
+        commands.notifyCommandChanged(Correxit.CommandIDs.convert);
         commands.notifyCommandChanged(Correxit.CommandIDs.correct);
         commands.notifyCommandChanged(Correxit.CommandIDs.lock);
         commands.notifyCommandChanged(Correxit.CommandIDs.unlock);

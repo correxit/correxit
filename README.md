@@ -1,4 +1,4 @@
-# CORREXIT
+# Correxit
 
 [![Github Actions Status](https://github.com/notebook-link/correxit/workflows/Build/badge.svg)](https://github.com/notebook-link/correxit/actions/workflows/build.yml)
 
@@ -6,8 +6,28 @@ Correxit is a kernel-agnostic Jupyter extension for grading Jupyter notebooks.
 It is also the third-person singular perfect active indicative conjugation of
 the Latin verb _corrigere_, to correct.
 
-This extension is composed of a Python package named `correxit` for the server
-extension and an NPM package named `correxit` for the frontend extension.
+This extension is composed of a Python package named `correxit` and an NPM
+package named `correxit`.
+
+## What does it do? How does it work?
+
+With Correxit, a user can convert a Jupyter notebook using any language kernel
+into a gradable workbook.
+
+- All of the workbook creation and grading logic happens in the Jupyter
+  frontend (JupyterLab / Jupyter Notebook / JupyterLite). There is no backend.
+- All workbook data for both a grader and a student is contained within the
+  document itself, which is jJupyter notebook (`.ipynb`) file with a `correxit`
+  field in its metadata. There is no other data store.
+- The author converts a Jupyter notebook into a workbook by configuring which
+  cells to grade and encrypting the grading logic with a passphrase.
+
+This video shows an example, a SQL (`xeus-sql`) Jupyter notebook that loads the
+Chinook database in SQLite and runs some queries and renders a Vega graph of the
+genres and media types tables. The user converts the notebook into a workbook
+and demonstrates the basic features of Correxit.
+
+https://github.com/user-attachments/assets/04c5218e-772d-4e94-afca-2af2e15864d1
 
 ## Requirements
 
