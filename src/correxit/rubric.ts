@@ -46,7 +46,7 @@ export namespace Rubric {
   /**
    * @returns an unlocked rubric with the `key` field omitted. The client needs
    * to add a `key` field to use the rubric. The automatically generated `id` of
-   * the rubric is a constructed as follows:
+   * the rubric is constructed as follows:
    *
    * `"wb"` + `accessed` timestamp's digits `[0-9]` shifted into ascii chars
    * `[q-z]`, e.g., `"wbrxvtqyuxuszvq"`.

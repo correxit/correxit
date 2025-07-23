@@ -8,6 +8,12 @@
     "Cell": [{ "name": "correxit-replace" }, { "name": "correxit-correct" }],
     "Notebook": [
       {
+        "name": "correxit-convert",
+        "command": "correxit:convert",
+        "label": "Convert",
+        "caption": "Convert notebook to workbook"
+      },
+      {
         "name": "correxit-correct",
         "command": "correxit:correct",
         "label": "Correct",
