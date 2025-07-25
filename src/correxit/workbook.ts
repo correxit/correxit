@@ -1,4 +1,4 @@
-import { ICodeCellModel } from '@jupyterlab/cells';
+import { ICellModel, ICodeCellModel } from '@jupyterlab/cells';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import {
   INotebookModel,
@@ -259,6 +259,11 @@ export namespace Workbook {
     }
   }
 
+  export type Integrity = {
+    ok: boolean;
+    checks: { problem: Error; remedy?: () => unknown; }[];
+  };
+
   /**
    * Executes the code cells of a workbook.
    *
@@ -312,5 +317,36 @@ export namespace Workbook {
     }
     void kernel.shutdown().catch(_ => {});
     return outputs;
+  }
+
+  export function integrity(workbook: Workbook): Integrity {
+    const rubric = Correxit.open(workbook, { quiet: true });
+    if (!rubric || rubric.locked || !workbook.content.model) {
+      return { ok: false, checks: [{ problem: new Error('integrity error') }]};
+    }
+
+    const check = (section: 'secret' | 'shared', integrity: Integrity) => {
+      const { cells } = rubric[section];
+      for (const cell in cells) {
+        const { reference } = cells[cell];
+        if (known[cell] && (!reference || known[reference])) {
+          continue;
+        }
+
+        const message = known[cell] ?
+          `unknown reference in ${section} cell ${cell}: ${reference}` :
+          `unknown ${section} cell: ${cell}`;
+        const remedy = () => Correxit.remove(workbook, cell).catch(_ => {});
+        integrity.checks.push({ problem: new ReferenceError(message), remedy });
+      }
+    };
+    const integrity: Integrity = { ok: true, checks: [] };
+    const known: { [id: string]: ICellModel['type'] } = Object.create(null);
+    for (const cell of workbook.content.model.cells) {
+      known[cell.id] = cell.type;
+    }
+    check('secret', integrity);
+    check('shared', integrity);
+    return integrity;
   }
 }
