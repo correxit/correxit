@@ -261,7 +261,7 @@ export namespace Workbook {
 
   export type Integrity = {
     ok: boolean;
-    checks: { problem: Error; remedy?: () => unknown; }[];
+    removed: Cell[];
   };
 
   /**
@@ -319,34 +319,43 @@ export namespace Workbook {
     return outputs;
   }
 
-  export function integrity(workbook: Workbook): Integrity {
+  /**
+   * Returns an integrity report for the rubric of workbook.
+   */
+  export async function integrity(workbook: Workbook): Promise<Integrity> {
     const rubric = Correxit.open(workbook, { quiet: true });
     if (!rubric || rubric.locked || !workbook.content.model) {
-      return { ok: false, checks: [{ problem: new Error('integrity error') }]};
+      return { ok: false, removed: [] };
     }
 
-    const check = (section: 'secret' | 'shared', integrity: Integrity) => {
-      const { cells } = rubric[section];
-      for (const cell in cells) {
-        const { reference } = cells[cell];
-        if (known[cell] && (!reference || known[reference])) {
-          continue;
+    const integrity: Integrity = { ok: true, removed: [] };
+    const promises: Promise<unknown>[] = [] ;
+    const check = async (section: 'secret' | 'shared') => {
+      for (const id in rubric[section].cells) {
+        const cell = rubric[section].cells[id] as Cell;
+        const { is, payload, reference } = cell;
+        switch (is) {
+          case 'answerable':
+            if (!(id in known) || !payload || !payload.length) {
+              promises.push(Correxit.remove(workbook, id));
+              integrity.removed.push(cell);
+            }
+            continue;
+          default:
+            if (!(id in known) || !reference || !(reference in known)) {
+              promises.push(Correxit.remove(workbook, id));
+              integrity.removed.push(cell);
+            }
+            continue;
         }
-
-        const message = known[cell] ?
-          `unknown reference in ${section} cell ${cell}: ${reference}` :
-          `unknown ${section} cell: ${cell}`;
-        const remedy = () => Correxit.remove(workbook, cell).catch(_ => {});
-        integrity.checks.push({ problem: new ReferenceError(message), remedy });
       }
+      return Promise.all(promises);
     };
-    const integrity: Integrity = { ok: true, checks: [] };
     const known: { [id: string]: ICellModel['type'] } = Object.create(null);
     for (const cell of workbook.content.model.cells) {
       known[cell.id] = cell.type;
     }
-    check('secret', integrity);
-    check('shared', integrity);
+    await Promise.all([check('secret'), check('shared')])
     return integrity;
   }
 }
