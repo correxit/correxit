@@ -29,11 +29,17 @@ export namespace Workbook {
   /**
    * A workbook cell definition defines how to score a notebook cell.
    */
-  export type Cell = {
+  export type Cell =  {
     readonly id: string;
-    readonly is: 'answerable' | 'comparable' | 'correctable';
-    readonly payload?: string[];
-    readonly reference?: string;
+    readonly is: 'answerable';
+    readonly payload: string[];
+    readonly reference: null;
+    readonly shared?: boolean;
+  } | {
+    readonly id: string;
+    readonly is: 'comparable' | 'correctable';
+    readonly payload: null;
+    readonly reference: string;
     readonly shared?: boolean;
   };
 
@@ -47,7 +53,7 @@ export namespace Workbook {
       | KernelMessage.IIOPubMessage<'stream'>
       | KernelMessage.IIOPubMessage<'error'>;
 
-    const answer = async (expected: Cell['payload'], given: Output[]) => {
+    const answer = async (expected: string[], given: Output[]) => {
         const { CORRECT, INCORRECT, UNSCORED } = Rubric;
         if (!given.length) {
           return INCORRECT;
@@ -333,16 +339,15 @@ export namespace Workbook {
     const check = async (section: 'secret' | 'shared') => {
       for (const id in rubric[section].cells) {
         const cell = rubric[section].cells[id] as Cell;
-        const { is, payload, reference } = cell;
-        switch (is) {
+        switch (cell.is) {
           case 'answerable':
-            if (!(id in known) || !payload || !payload.length) {
+            if (!(id in known) || cell.payload.length) {
               promises.push(Correxit.remove(workbook, id));
               integrity.removed.push(cell);
             }
             continue;
           default:
-            if (!(id in known) || !reference || !(reference in known)) {
+            if (!(id in known) || (cell.reference in known)) {
               promises.push(Correxit.remove(workbook, id));
               integrity.removed.push(cell);
             }

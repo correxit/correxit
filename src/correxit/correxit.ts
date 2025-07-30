@@ -204,10 +204,12 @@ namespace Decrypted {
     const { decrypt } = Correxit.Workbook.Cell;
     const { key } = rubric;
     for (const id in rubric.secret.cells) {
-      const { is, reference, ...cell } = rubric.secret.cells[id];
+      const { is, shared, payload, reference } = rubric.secret.cells[id];
       if (is === 'comparable' || is === 'correctable') {
         rubric.secret.cells[id] = {
-          ...cell, is, reference: await decrypt(workbook, reference!, key)
+          id, is, payload,
+          reference: await decrypt(workbook, reference, key),
+          shared
         };
       }
     };
