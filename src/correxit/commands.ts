@@ -74,7 +74,8 @@ export function addCommands(options: {
 
         const payload = [await digest(expected)];
         const reference = null;
-        return Correxit.add(workbook, { id, is, payload, reference });
+        const shared = false;
+        return Correxit.add(workbook, { id, is, payload, reference, shared });
       }
       if (is !== 'comparable' && is !== 'correctable') {
         return;
@@ -94,7 +95,8 @@ export function addCommands(options: {
       const original = find(widgets, ({ model }) => model.id === id)!;
       await workbook.content.scrollToCell(original);
       const payload = null;
-      return Correxit.add(workbook, { ...cell, id, is, payload, reference });
+      const shared = false;
+      return Correxit.add(workbook, { id, is, payload, reference, shared });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.convert, {

@@ -34,13 +34,13 @@ export namespace Workbook {
     readonly is: 'answerable';
     readonly payload: string[];
     readonly reference: null;
-    readonly shared?: boolean;
+    readonly shared: boolean;
   } | {
     readonly id: string;
     readonly is: 'comparable' | 'correctable';
     readonly payload: null;
     readonly reference: string;
-    readonly shared?: boolean;
+    readonly shared: boolean;
   };
 
   export namespace Cell {
