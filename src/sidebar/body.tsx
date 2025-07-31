@@ -55,8 +55,9 @@ const WorkbookCell: React.FC<{
     { commands, id: toggle, args: { id } },
     { commands, id: remove, args: { id } }
   ];
-  const cell = Correxit.Rubric.get(rubric, id)!;
-  const reference = cell.is !== 'answerable' && cell.reference;
+  const cell = Correxit.Rubric.get(rubric, id);
+  const referenceable = cell?.is === 'comparable' || cell?.is === 'correctable';
+  const reference = referenceable && cell.reference;
   return (
     <>
       <h4>{trans.__('Workbook cell:')}</h4>

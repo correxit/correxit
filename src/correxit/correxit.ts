@@ -1,4 +1,5 @@
 import { Token } from '@lumino/coreutils';
+import { AttachedProperty } from '@lumino/properties';
 import * as description from './description';
 import { Rubric as RUBRIC } from './rubric';
 import { keygen } from './security';
@@ -131,8 +132,8 @@ export namespace Correxit {
       }
       throw new Error('workbook or content model is null');
     }
-    if (Private.CACHE.has(workbook)) {
-      return Private.CACHE.get(workbook)!;
+    if (Private.rubric.get(workbook)) {
+      return Private.rubric.get(workbook);
     }
 
     const rubric = workbook.content.model.sharedModel.getMetadata('correxit');
@@ -163,7 +164,7 @@ export namespace Correxit {
   }
 
   export async function reset(workbook: Workbook) {
-    Private.CACHE.delete(workbook);
+    Private.rubric.set(workbook, null);
     const model = workbook.content.model!;
     model.deleteMetadata('correxit');
   }
@@ -230,7 +231,7 @@ namespace Encrypted {
     const { sharedModel } = workbook.content.model!;
     const locked = await Rubric.lock(rubric);
     const unlocked = await Rubric.unlock(locked, rubric.key);
-    Private.CACHE.set(workbook, lock ? locked : unlocked);
+    Private.rubric.set(workbook, lock ? locked : unlocked);
     sharedModel.setMetadata('correxit', locked);
     return unlocked;
   }
@@ -255,8 +256,8 @@ namespace Encrypted {
 }
 
 namespace Private {
-  export const CACHE = new WeakMap<
+  export const rubric = new AttachedProperty<
     Correxit.Workbook,
-    Correxit.Rubric<'locked'> | Correxit.Rubric<'unlocked'>
-  >();
+    Correxit.Rubric<'locked'> | Correxit.Rubric<'unlocked'> | null
+  >({ name: 'rubric', create: _ => null });
 }
