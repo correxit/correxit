@@ -55,7 +55,6 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
             TARGET_CELL_CLASS,
             cell.model.type === 'code' ? INCLUDE_CLASS : EXCLUDE_CLASS
           );
-
           target = cell;
           return;
         }

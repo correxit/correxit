@@ -207,9 +207,8 @@ namespace Decrypted {
       const { is, shared, payload, reference } = rubric.secret.cells[id];
       if (is === 'comparable' || is === 'correctable') {
         rubric.secret.cells[id] = {
-          id, is, payload,
-          reference: await decrypt(workbook, reference, key),
-          shared
+          id, is, payload, shared,
+          reference: await decrypt(workbook, reference, key)
         };
       }
     };
@@ -247,7 +246,7 @@ namespace Encrypted {
     for (const id in rubric.secret.cells) {
       const cell = rubric.secret.cells[id];
       if (cell.is === 'comparable' || cell.is === 'correctable') {
-        const reference = await Cell.encrypt(workbook, cell.reference!, key);
+        const reference = await Cell.encrypt(workbook, cell.reference, key);
         rubric.secret.cells[id] = { ...cell, reference };
       }
     };
