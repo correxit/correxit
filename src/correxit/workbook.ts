@@ -33,7 +33,7 @@ export namespace Workbook {
     export type Pass = {
       ok: true;
       pruned: { cell: Cell; reason: string; }[];
-      rubric: Rubric<'unlocked'>;
+      rubric: Rubric.Unlocked;
     };
 
     export type Fail = { ok: false; error: string; rubric: Rubric | null; };
@@ -317,7 +317,7 @@ export namespace Workbook {
      */
     export async function metadata(
       workbook: Workbook,
-      rubric: Rubric<'unlocked'>,
+      rubric: Rubric.Unlocked,
       lock = false
     ): Promise<Integrity> {
       const { sharedModel } = workbook.content.model!;
@@ -337,7 +337,7 @@ export namespace Workbook {
      */
     export async function content(
       workbook: Workbook,
-      rubric: Rubric<'unlocked'>
+      rubric: Rubric.Unlocked
     ): Promise<void> {
       const { key } = rubric;
       for (const id in rubric.secret.cells) {
@@ -421,7 +421,7 @@ export namespace Workbook {
     }
   }
 
-  export async function reset(workbook: Workbook, rubric: Rubric<'unlocked'>) {
+  export async function reset(workbook: Workbook, rubric: Rubric.Unlocked) {
     if (rubric.locked || !workbook.content.model) {
       throw new Error('reset error');
     }
@@ -430,7 +430,7 @@ export namespace Workbook {
     model.deleteMetadata('correxit');
   }
 
-  export async function update(workbook: Workbook, rubric: Rubric<'unlocked'>) {
+  export async function update(workbook: Workbook, rubric: Rubric.Unlocked) {
       const integrity = await Encrypted.metadata(workbook, rubric);
       if (integrity.ok) {
         return integrity.rubric;
@@ -442,6 +442,6 @@ export namespace Workbook {
 namespace Private {
   export const rubric = new AttachedProperty<
     Correxit.Workbook,
-    Correxit.Rubric<'locked'> | Correxit.Rubric<'unlocked'> | null
+    Correxit.Rubric | null
   >({ name: 'rubric', create: _ => null });
 }

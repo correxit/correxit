@@ -294,7 +294,7 @@ The command execute args type is: { passphrase?: string }
 
 If no passphrase is provided, the command invokes a user prompt dialog.
 
-The command execute return type is: Promise<Rubric<"unlocked"> | null>
+The command execute return type is: Promise<Rubric.Unlocked | null>
 The returned promise never rejects.
 
 The command invokes an error message dialog if unlock fails.

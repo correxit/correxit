@@ -1,22 +1,32 @@
+import { find } from '@lumino/algorithm';
 import * as security from './security';
 import { Workbook } from './workbook';
-import { find } from '@lumino/algorithm';
 
-export type Rubric<Secure = 'locked' | 'unlocked'> = {
-  readonly accessed: number;
-
-  readonly id: string;
-
-  readonly key: Secure extends 'locked' ? null : string;
-
-  readonly locked: Secure extends 'locked' ? true : false;
-
-  readonly secret: Secure extends 'locked' ? string : Rubric.Section;
-
-  readonly shared: Rubric.Section;
-};
+export type Rubric = Rubric.Locked | Rubric.Unlocked;
 
 export namespace Rubric {
+  export type Locked = {
+    readonly accessed: number;
+    readonly id: string;
+    readonly key: null;
+    readonly locked: true;
+    readonly secret: string;
+    readonly shared: Section;
+  };
+
+  export type Unlocked = {
+    readonly accessed: number;
+    readonly id: string;
+    readonly key: string;
+    readonly locked: false;
+    readonly secret: Section;
+    readonly shared: Section;
+  };
+
+  export type Score = readonly [numerator: number, denominator: number];
+
+  export type Section = { readonly cells: { [id: string]: Workbook.Cell; }; };
+
   export const CORRECT: Score = Object.freeze([1, 1]);
 
   export const INCORRECT: Score = Object.freeze([0, 1]);
@@ -25,10 +35,6 @@ export namespace Rubric {
     Number.NEGATIVE_INFINITY,
     Number.POSITIVE_INFINITY
   ]);
-
-  export type Score = readonly [numerator: number, denominator: number];
-
-  export type Section = { readonly cells: { [id: string]: Workbook.Cell; }; };
 
   const add = (section: Rubric.Section, cell: Workbook.Cell) => {
     return { cells: { ...section.cells, [cell.id]: cell } } as Rubric.Section;
@@ -51,7 +57,7 @@ export namespace Rubric {
    * `"wb"` + `accessed` timestamp's digits `[0-9]` shifted into ascii chars
    * `[q-z]`, e.g., `"wbrxvtqyuxuszvq"`.
    */
-  export function create(): Omit<Rubric<'unlocked'>, 'key'> {
+  export function create(): Omit<Rubric.Unlocked, 'key'> {
     const accessed = Date.now();
     const id = 'wb' + `${accessed}`.split('')
       .map(i => String.fromCharCode(parseInt(i, 10) + 113)).join('');
@@ -64,7 +70,7 @@ export namespace Rubric {
    * @returns the rubric cell referenced by the `id` if found, otherwise `null`.
    */
   export function get(
-    rubric: Rubric<'locked'> | Rubric<'unlocked'>,
+    rubric: Rubric,
     id: Workbook.Cell['id']
   ): Workbook.Cell | null {
     if (has(rubric, id)) {
@@ -78,7 +84,7 @@ export namespace Rubric {
    * @returns whether a rubric has or references a given id.
    */
   export function has(
-    rubric: Rubric<'locked'> | Rubric<'unlocked'>,
+    rubric: Rubric,
     id: Workbook.Cell['id'],
     deep = false
   ): boolean {
@@ -94,8 +100,8 @@ export namespace Rubric {
    * Lock a rubric and return a promise that resolves to the locked rubric.
    */
   export async function lock(
-    rubric: Rubric<'unlocked'>
-  ): Promise<Rubric<'locked'>> {
+    rubric: Rubric.Unlocked
+  ): Promise<Rubric.Locked> {
     const { id, key, secret, shared } = rubric;
     return {
       accessed: Date.now(),
@@ -110,8 +116,8 @@ export namespace Rubric {
    * @returns a normalized complete rubric or throws an error.
    */
   export function normalize(
-    rubric: Partial<Rubric<'locked'>>
-  ): Rubric<'locked'> {
+    rubric: Partial<Rubric.Locked>
+  ): Rubric.Locked {
     const { accessed, id, key, locked, secret, shared } = rubric || {};
     if (!accessed) {
       throw new Error('invalid rubric, missing accessed');
@@ -137,7 +143,7 @@ export namespace Rubric {
   /**
    * @returns the number of cells configured in a rubric.
    */
-  export function size(rubric: Rubric<'locked'> | Rubric<'unlocked'>): number {
+  export function size(rubric: Rubric): number {
     const { locked, secret, shared } = rubric;
     return locked ?
       Object.keys(shared.cells).length :
@@ -161,9 +167,9 @@ export namespace Rubric {
    * @returns a rubric where given cell is toggled between `secret` or `shared`.
    */
   export function toggle(
-    rubric: Rubric<'unlocked'>,
+    rubric: Rubric.Unlocked,
     id: Workbook.Cell['id']
-  ): Rubric<'unlocked'> {
+  ): Rubric.Unlocked {
     if (!has(rubric, id)) {
       throw new Error('cannot toggle cell unknown in rubric');
     }
@@ -183,9 +189,9 @@ export namespace Rubric {
   }
 
   export async function unlock(
-    rubric: Rubric<'locked'>,
+    rubric: Rubric.Locked,
     key: string
-  ): Promise<Rubric<'unlocked'>> {
+  ): Promise<Rubric.Unlocked> {
     return {
       accessed: Date.now(),
       id: rubric.id,

@@ -42,7 +42,7 @@ export namespace Correxit {
   export async function add(
     workbook: Workbook,
     cell: Workbook.Cell
-  ): Promise<Rubric<'unlocked'>> {
+  ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, { quiet: true });
     if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
       throw new Error('add error');
@@ -121,7 +121,7 @@ export namespace Correxit {
   export function open(
     workbook: Workbook | null,
     { quiet }: { quiet?: boolean } = {}
-  ): Rubric<'locked'> | Rubric<'unlocked'> | null {
+  ): Rubric | null {
     if (!workbook || !workbook.content.model) {
       if (quiet) {
         return null;
@@ -140,7 +140,7 @@ export namespace Correxit {
       throw NO_CORREXIT_METADATA;
     }
     try {
-      return Rubric.normalize(rubric as Partial<Rubric>);
+      return Rubric.normalize(rubric as Partial<Rubric.Locked>);
     } catch (error) {
       if (quiet) {
         return null;
@@ -170,7 +170,7 @@ export namespace Correxit {
   export async function toggle(
     workbook: Workbook,
     id: Workbook.Cell['id']
-  ): Promise<Rubric<'unlocked'>> {
+  ): Promise<Rubric.Unlocked> {
     const opened = open(workbook, { quiet: true });
     if (!opened || opened.locked || !Rubric.has(opened, id)) {
       throw new Error('cannot toggle');
@@ -182,7 +182,7 @@ export namespace Correxit {
   export async function unlock(
     workbook: Workbook,
     key: string
-  ): Promise<Rubric<'unlocked'>> {
+  ): Promise<Rubric.Unlocked> {
     const opened = open(workbook)!;
     if (!opened.locked) {
       return opened;
@@ -198,8 +198,8 @@ namespace Decrypted {
    */
   export async function content(
     workbook: Correxit.Workbook,
-    rubric: Correxit.Rubric<'unlocked'>
-  ): Promise<Correxit.Rubric<'unlocked'>> {
+    rubric: Correxit.Rubric.Unlocked
+  ): Promise<Correxit.Rubric.Unlocked> {
     const { decrypt } = Correxit.Workbook.Cell;
     const { key } = rubric;
     for (const id in rubric.secret.cells) {
