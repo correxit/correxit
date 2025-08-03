@@ -37,10 +37,10 @@ export namespace Rubric {
   const references = ({ cells }: Section, reference: string) =>
     find(Object.keys(cells), key => cells[key].reference === reference);
 
-  const remove = (section: Rubric.Section, cell: Workbook.Cell) => {
+  const remove = (section: Section, cell: Workbook.Cell): Section => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { [cell.id]: _, ...cells } = section.cells;
-    return { cells } as Rubric.Section;
+    return { cells } as Section;
   }
 
   /**
@@ -60,6 +60,9 @@ export namespace Rubric {
     return { accessed, id, locked: false, secret, shared };
   }
 
+  /**
+   * @returns the rubric cell referenced by the `id` if found, otherwise `null`.
+   */
   export function get(
     rubric: Rubric<'locked'> | Rubric<'unlocked'>,
     id: Workbook.Cell['id']
@@ -72,7 +75,7 @@ export namespace Rubric {
   }
 
   /**
-   * Whether a rubric has or references a given id.
+   * @returns whether a rubric has or references a given id.
    */
   export function has(
     rubric: Rubric<'locked'> | Rubric<'unlocked'>,
