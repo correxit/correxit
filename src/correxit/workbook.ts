@@ -248,7 +248,7 @@ export namespace Workbook {
     export async function score(
       workbook: Workbook,
       id: Cell['id'],
-      outputs: Workbook.Outputs,
+      outputs: Outputs,
     ): Promise<Rubric.Score> {
       const rubric = Correxit.open(workbook, { quiet: true });
       if (!rubric) {
@@ -278,105 +278,55 @@ export namespace Workbook {
     }
   }
 
-  namespace Decrypted {
-    /**
-     * Decrypts all encrypted correxit raw cells and returns updated rubric.
-     */
-    export async function content(
-      workbook: Correxit.Workbook,
-      rubric: Correxit.Rubric.Unlocked
-    ): Promise<Correxit.Rubric.Unlocked> {
-      const { key } = rubric;
-      for (const id in rubric.secret.cells) {
-        const { is, shared, payload, reference } = rubric.secret.cells[id];
-        if (is === 'comparable' || is === 'correctable') {
-          rubric.secret.cells[id] = {
-            id, is, payload, shared,
-            reference: await Cell.decrypt(workbook, reference, key)
-          };
+  const pool = new AttachedProperty<
+    Correxit.Workbook,
+    Correxit.Rubric | null
+  >({ name: 'pool', create: _ => null });
+
+  const get: typeof pool.get = (workbook) => pool.get(workbook);
+
+  const set: typeof pool.set = (workbook, rubric) => pool.set(workbook, rubric);
+
+  /**
+   * Returns an integrity report for the rubric of workbook.
+   */
+  const validate = (workbook: Workbook, rubric: Rubric): Integrity => {
+    const pruned: { cell: Cell; reason: string; }[] = [];
+    const known = reduce(workbook.content.model!.cells,
+      (known, { id, type }) => ({ ...known, [id]: type === 'code'}),
+      Object.create(null) as { [id: string]: boolean; }
+    );
+    const { locked, secret, shared } = rubric;
+    for (const { cells } of locked ? [shared] : [secret, shared]) {
+      for (const id in cells) {
+        const { is, payload, reference } = cells[id];
+        const unknown = !known[id];
+        const valid = is === 'answerable' ? payload.length : known[reference];
+        if (unknown || !valid) {
+          const reason = unknown ? 'unknown cell' : 'invalid cell';
+          pruned.push({ cell: { ...cells[id] }, reason });
+          delete cells[id];
         }
-      };
-      return rubric;
-    }
+      }
+    };
+    return { ok: true, pruned, rubric: { ...rubric, accessed: Date.now() } };
   }
 
-  namespace Encrypted {
-    /**
-     * Returns an integrity report for the rubric of workbook.
-     */
-    const validate = (
-      workbook: Workbook,
-      rubric: Rubric
-    ): Integrity => {
-      const pruned: { cell: Cell; reason: string; }[] = [];
-      const known = reduce(workbook.content.model!.cells,
-        (known, { id, type }) => ({ ...known, [id]: type === 'code'}),
-        Object.create(null) as { [id: string]: boolean; }
-      );
-      const { locked, secret, shared } = rubric;
-      for (const { cells } of locked ? [shared] : [secret, shared]) {
-        for (const id in cells) {
-          const { is, payload, reference } = cells[id];
-          const unknown = !known[id];
-          const valid = is === 'answerable' ? payload.length : known[reference];
-          if (unknown || !valid) {
-            const reason = unknown ? 'unknown cell' : 'invalid cell';
-            pruned.push({ cell: cells[id], reason });
-            delete cells[id];
-          }
-        }
-      };
-      return { ok: true, pruned, rubric: { ...rubric, accessed: Date.now() } };
-    }
-
-    /**
-     * Saves encrypted workbook metadata.
-     */
-    export async function metadata(
-      workbook: Workbook,
-      rubric: Rubric
-    ): Promise<Integrity> {
-      if (!workbook.content.model) {
-        throw new Error('metadata error');
-      }
-
-      const { sharedModel } = workbook.content.model;
-      const integrity = validate(workbook, rubric);
-      Private.rubric.set(workbook, null);
-      if (integrity.ok) {
-        const { rubric } = integrity;
-        Private.rubric.set(workbook, rubric);
-        sharedModel.setMetadata('correxit', await Rubric.lock(rubric));
-      }
-      return integrity;
-    }
-
-    /**
-     * Encrypts the workbook cell content and returns updated rubric.
-     */
-    export async function content(
-      workbook: Workbook,
-      rubric: Rubric.Unlocked
-    ): Promise<Rubric.Locked> {
-      const { key } = rubric;
-      for (const id in rubric.secret.cells) {
-        const cell = rubric.secret.cells[id];
-        if (cell.is === 'comparable' || cell.is === 'correctable') {
-          const reference = await Cell.encrypt(workbook, cell.reference, key);
-          rubric.secret.cells[id] = { ...cell, reference };
-        }
-      };
-      return Rubric.lock(rubric);
-    }
-  }
-
+  /**
+   * Decrypts workbook content.
+   */
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
-    const decrypted = await Decrypted.content(workbook, rubric);
-    return update(workbook, decrypted);
-  }
-
-  export function get(workbook: Workbook) {
-    return Private.rubric.get(workbook);
+    const { key, secret: { cells } } = rubric;
+    for (const id in cells) {
+      const { is, shared, payload, reference } = rubric.secret.cells[id];
+      if (is === 'comparable' || is === 'correctable') {
+        cells[id] = {
+          id, is, payload, shared,
+          reference: await Cell.decrypt(workbook, reference, key)
+        };
+      }
+    };
+    return update(workbook, { ...rubric, accessed: Date.now() });
   }
 
   /**
@@ -440,12 +390,23 @@ export namespace Workbook {
 
   export async function lock(workbook: Workbook): Promise<void> {
     const rubric = get(workbook);
-    if (rubric && !rubric.locked) {
-      const encrypted = await Encrypted.content(workbook, rubric);
-      await update(workbook, encrypted);
+    if (!rubric || rubric.locked) {
+      return;
     }
+    for (const id in rubric.secret.cells) {
+      const cell = rubric.secret.cells[id];
+      if (cell.is === 'comparable' || cell.is === 'correctable') {
+        const { key } = rubric;
+        const reference = await Cell.encrypt(workbook, cell.reference, key);
+        rubric.secret.cells[id] = { ...cell, reference };
+      }
+    };
+    await update(workbook, await Rubric.lock(rubric));
   }
 
+  /**
+   * Synchronously returns a workbook's rubric or `null` from notebook metadata.
+   */
   export function open(workbook: Workbook): Rubric | null {
     if (!workbook.content.model) {
       throw new TypeError('open error');
@@ -458,22 +419,16 @@ export namespace Workbook {
     if (!metadata) {
       throw Correxit.NO_CORREXIT_METADATA;
     }
-
-    const rubric = {
-      ...Rubric.normalize(metadata as Partial<Rubric.Locked>),
-      accessed: Date.now()
-    };
-    Private.rubric.set(workbook, rubric);
-    return rubric;
+    set(workbook, Rubric.normalize(metadata as Partial<Rubric.Locked>));
+    return get(workbook);
   }
 
   export async function reset(workbook: Workbook, rubric: Rubric.Unlocked) {
     if (rubric.locked || !workbook.content.model) {
       throw new Error('reset error');
     }
-    Private.rubric.set(workbook, null);
-    const model = workbook.content.model;
-    model.deleteMetadata('correxit');
+    set(workbook, null);
+    workbook.content.model.sharedModel.deleteMetadata('correxit');
   }
 
   export async function update(
@@ -488,17 +443,18 @@ export namespace Workbook {
     workbook: Workbook,
     rubric: Rubric
   ): Promise<Rubric> {
-      const integrity = await Encrypted.metadata(workbook, rubric);
-      if (integrity.ok) {
-        return integrity.rubric;
+      if (!workbook.content.model) {
+        throw new Error('update error');
       }
-      throw new Error(integrity.error);
-  }
-}
 
-namespace Private {
-  export const rubric = new AttachedProperty<
-    Correxit.Workbook,
-    Correxit.Rubric | null
-  >({ name: 'rubric', create: _ => null });
+      const { sharedModel } = workbook.content.model;
+      const integrity = validate(workbook, rubric);
+      set(workbook, null);
+      if (!integrity.ok) {
+        throw new Error(integrity.error);
+      }
+      sharedModel.setMetadata('correxit', await Rubric.lock(integrity.rubric));
+      set(workbook, rubric);
+      return integrity.rubric;
+  }
 }
