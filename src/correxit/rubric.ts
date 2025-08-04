@@ -100,8 +100,12 @@ export namespace Rubric {
    * Lock a rubric and return a promise that resolves to the locked rubric.
    */
   export async function lock(
-    rubric: Rubric.Unlocked
+    rubric: Rubric
   ): Promise<Rubric.Locked> {
+    if (rubric.locked) {
+      return rubric;
+    }
+
     const { id, key, secret, shared } = rubric;
     return {
       accessed: Date.now(),

@@ -2,7 +2,7 @@ import { Token } from '@lumino/coreutils';
 import * as description from './description';
 import { Rubric as RUBRIC } from './rubric';
 import { keygen } from './security';
-import { Workbook, Workbook as WORKBOOK } from './workbook';
+import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
   export namespace CommandIDs {
@@ -90,7 +90,7 @@ export namespace Correxit {
       return UNSCORED;
     }
 
-    const outputs = await Workbook.execute(workbook, id);
+    const outputs = await Workbook.execute(workbook, rubric, id);
     if (!outputs) {
       return UNSCORED;
     }
@@ -128,19 +128,8 @@ export namespace Correxit {
       }
       throw new Error('workbook or content model is null');
     }
-    if (Workbook.get(workbook)) {
-      return Workbook.get(workbook);
-    }
-
-    const rubric = workbook.content.model.sharedModel.getMetadata('correxit');
-    if (!rubric) {
-      if (quiet) {
-        return null;
-      }
-      throw NO_CORREXIT_METADATA;
-    }
     try {
-      return Rubric.normalize(rubric as Partial<Rubric.Locked>);
+      return Workbook.open(workbook);
     } catch (error) {
       if (quiet) {
         return null;
@@ -188,29 +177,6 @@ export namespace Correxit {
       return opened;
     }
     const unlocked = await Rubric.unlock(opened, key);
-    return Decrypted.content(workbook, unlocked);
-  }
-}
-
-namespace Decrypted {
-  /**
-   * Decrypts all encrypted correxit raw cells and returns updated rubric.
-   */
-  export async function content(
-    workbook: Correxit.Workbook,
-    rubric: Correxit.Rubric.Unlocked
-  ): Promise<Correxit.Rubric.Unlocked> {
-    const { decrypt } = Correxit.Workbook.Cell;
-    const { key } = rubric;
-    for (const id in rubric.secret.cells) {
-      const { is, shared, payload, reference } = rubric.secret.cells[id];
-      if (is === 'comparable' || is === 'correctable') {
-        rubric.secret.cells[id] = {
-          id, is, payload, shared,
-          reference: await decrypt(workbook, reference, key)
-        };
-      }
-    };
-    return Workbook.update(workbook, rubric);
+    return Workbook.decrypt(workbook, unlocked);
   }
 }
