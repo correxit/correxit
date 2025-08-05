@@ -313,21 +313,10 @@ export namespace Workbook {
     }
   }
 
-  const quiet = true;
-
-  const pool = new AttachedProperty<
-    Correxit.Workbook,
-    Correxit.Rubric | null
-  >({ name: 'pool', create: _ => null });
-
-  const get: typeof pool.get = (workbook) => pool.get(workbook);
-
-  const set: typeof pool.set = (workbook, rubric) => pool.set(workbook, rubric);
-
   /**
-   * Returns an integrity report for the rubric of workbook.
+   * Audits a workbook's rubric and returns an integrity report.
    */
-  const validate = (workbook: Workbook, rubric: Rubric): Integrity => {
+  const audit = (workbook: Workbook, rubric: Rubric): Integrity => {
     const pruned: { cell: Cell; reason: string; }[] = [];
     const known = reduce(workbook.content.model!.cells,
       (known, { id, type }) => ({ ...known, [id]: type === 'code'}),
@@ -348,6 +337,17 @@ export namespace Workbook {
     };
     return { ok: true, pruned, rubric: { ...rubric, accessed: Date.now() } };
   }
+
+  const quiet = true;
+
+  const pool = new AttachedProperty<
+    Correxit.Workbook,
+    Correxit.Rubric | null
+  >({ name: 'pool', create: _ => null });
+
+  const get: typeof pool.get = (workbook) => pool.get(workbook);
+
+  const set: typeof pool.set = (workbook, rubric) => pool.set(workbook, rubric);
 
   /**
    * Convert a plain notebook into a workbook and return its rubric.
@@ -577,7 +577,7 @@ export namespace Workbook {
       }
 
       const { sharedModel } = workbook.content.model;
-      const integrity = validate(workbook, rubric);
+      const integrity = audit(workbook, rubric);
       set(workbook, null);
       if (!integrity.ok) {
         throw new Error(integrity.error);
