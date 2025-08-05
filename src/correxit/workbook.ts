@@ -447,7 +447,7 @@ export namespace Workbook {
     const { content: { model: { cells } }, context } = workbook;
     let stop = cells.length;
     if (id) {
-      const cell = Correxit.Rubric.get(rubric, id);
+      const cell = Rubric.get(rubric, id);
       if (!cell) {
         return null;
       }
@@ -565,7 +565,7 @@ export namespace Workbook {
         throw new Error(integrity.error);
       }
       sharedModel.setMetadata('correxit', await Rubric.lock(integrity.rubric));
-      set(workbook, rubric);
-      return integrity.rubric;
+      set(workbook, integrity.rubric);
+      return get(workbook)!;
   }
 }

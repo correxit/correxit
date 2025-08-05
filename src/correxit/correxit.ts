@@ -16,10 +16,17 @@ export namespace Correxit {
     export const unlock = 'correxit:unlock';
   }
 
-  export import Rubric = RUBRIC;
+  export import Rubric = RUBRIC; // Expose entire `Rubric` export.
 
-  export import Workbook = WORKBOOK;
+  export type Workbook = WORKBOOK; // Only export `Workbook` type.
 
+  export namespace Workbook {
+    export type Cell = WORKBOOK.Cell; // Only export `Cell` type.
+  }
+
+  /**
+   * The core Correxit plugin registers commands and returns a workbook source.
+   */
   export type Source = AsyncIterable<{ payload: Workbook | null }>;
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
@@ -38,21 +45,9 @@ export namespace Correxit {
     TOOLBARS: description.TOOLBARS
   };
 
-  export const add = Workbook.Cell.add;
+  export const { convert, correct, lock, reset, unlock } = WORKBOOK;
 
-  export const convert = Workbook.convert;
-
-  export const correct = Workbook.correct;
-
-  export const lock = Workbook.lock;
-
-  export const remove = Workbook.Cell.remove;
-
-  export const reset = Workbook.reset;
-
-  export const toggle = Workbook.Cell.toggle;
-
-  export const unlock = Workbook.unlock;
+  export const { add, remove, toggle } = WORKBOOK.Cell;
 
   /**
    * Opens a workbook's rubric.
@@ -76,7 +71,7 @@ export namespace Correxit {
       throw new Error('workbook or content model is null');
     }
     try {
-      return Workbook.open(workbook);
+      return WORKBOOK.open(workbook);
     } catch (error) {
       if (quiet) {
         return null;
