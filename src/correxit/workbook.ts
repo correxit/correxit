@@ -497,8 +497,7 @@ export namespace Workbook {
    * Synchronously returns a workbook's rubric or `null` from notebook metadata.
    *
    * @param workbook - The current workbook. May be `null`.
-   * @param options.quiet - Whether to return `null` instead of rejecting.
-   * @returns a promise that resolves to a rubric for a workbook.
+   * @param quiet - Whether to return `null` or throw errors.
    *
    * #### Notes
    * If `quiet` is set to true, the function returns `null` instead of throwing.
@@ -518,14 +517,18 @@ export namespace Workbook {
     }
 
     const metadata = workbook.content.model.sharedModel.getMetadata('correxit');
-    if (!metadata) {
+    try {
+      if (!metadata) {
+        throw Correxit.NO_CORREXIT_METADATA;
+      }
+      set(workbook, Rubric.normalize(metadata as Partial<Rubric.Locked>));
+      return get(workbook);
+    } catch (error) {
       if (quiet) {
         return null;
       }
-      throw Correxit.NO_CORREXIT_METADATA;
+      throw error;
     }
-    set(workbook, Rubric.normalize(metadata as Partial<Rubric.Locked>));
-    return get(workbook);
   }
 
   /**
