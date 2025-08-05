@@ -36,19 +36,6 @@ export namespace Rubric {
     Number.POSITIVE_INFINITY
   ]);
 
-  const add = (section: Rubric.Section, cell: Workbook.Cell) => {
-    return { cells: { ...section.cells, [cell.id]: cell } } as Rubric.Section;
-  }
-
-  const references = ({ cells }: Section, reference: string) =>
-    find(Object.keys(cells), key => cells[key].reference === reference);
-
-  const remove = (section: Section, cell: Workbook.Cell): Section => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { [cell.id]: _, ...cells } = section.cells;
-    return { cells } as Section;
-  }
-
   /**
    * @returns an unlocked rubric with the `key` field omitted. The client needs
    * to add a `key` field to use the rubric. The automatically generated `id` of
@@ -57,7 +44,7 @@ export namespace Rubric {
    * `"wb"` + `accessed` timestamp's digits `[0-9]` shifted into ascii chars
    * `[q-z]`, e.g., `"wbrxvtqyuxuszvq"`.
    */
-  export function create(): Omit<Rubric.Unlocked, 'key'> {
+  export function create(): Omit<Unlocked, 'key'> {
     const accessed = Date.now();
     const id = 'wb' + `${accessed}`.split('')
       .map(i => String.fromCharCode(parseInt(i, 10) + 113)).join('');
@@ -81,6 +68,7 @@ export namespace Rubric {
   }
 
   /**
+   * @param deep also check if given `id` is a `reference`, defaults to `false`.
    * @returns whether a rubric has or references a given id.
    */
   export function has(
@@ -88,6 +76,8 @@ export namespace Rubric {
     id: Workbook.Cell['id'],
     deep = false
   ): boolean {
+    const references = ({ cells }: Section, reference: string) =>
+      find(Object.keys(cells), key => cells[key].reference === reference);
     const { locked, secret, shared } = rubric;
     return locked ?
       !!(shared.cells[id] || (deep && references(shared, id))) :
@@ -99,9 +89,7 @@ export namespace Rubric {
   /**
    * Lock a rubric and return a promise that resolves to the locked rubric.
    */
-  export async function lock(
-    rubric: Rubric
-  ): Promise<Rubric.Locked> {
+  export async function lock(rubric: Rubric): Promise<Locked> {
     if (rubric.locked) {
       return rubric;
     }
@@ -119,9 +107,7 @@ export namespace Rubric {
   /**
    * @returns a normalized complete rubric or throws an error.
    */
-  export function normalize(
-    rubric: Partial<Rubric.Locked>
-  ): Rubric.Locked {
+  export function normalize(rubric: Partial<Locked>): Locked {
     const { accessed, id, key, locked, secret, shared } = rubric || {};
     if (!accessed) {
       throw new Error('invalid rubric, missing accessed');
@@ -170,19 +156,23 @@ export namespace Rubric {
   /**
    * @returns a rubric where given cell is toggled between `secret` or `shared`.
    */
-  export function toggle(
-    rubric: Rubric.Unlocked,
-    id: Workbook.Cell['id']
-  ): Rubric.Unlocked {
+  export function toggle(rubric: Unlocked, id: Workbook.Cell['id']): Unlocked {
     if (!has(rubric, id)) {
       throw new Error('cannot toggle cell unknown in rubric');
+    }
+
+    const add = (section: Section, cell: Workbook.Cell) =>
+      ({ cells: { ...section.cells, [cell.id]: cell } } as Section);
+    const remove = ({ cells }: Section, cell: Workbook.Cell): Section => {
+      delete cells[cell.id];
+      return { cells } as Section;
     }
     const cell = get(rubric, id)!;
     return {
       accessed: Date.now(),
       id: rubric.id,
       key: rubric.key,
-      locked: rubric.locked,
+      locked: false,
       secret: cell.shared ?
         add(rubric.secret, { ...cell, shared: false }) :
         remove(rubric.secret, cell),

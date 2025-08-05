@@ -314,7 +314,8 @@ export namespace Workbook {
   }
 
   /**
-   * Audits a workbook's rubric and returns an integrity report.
+   * Audit a workbook's rubric. Never throws.
+   * @returns the workbook rubric's integrity report.
    */
   const audit = (workbook: Workbook, rubric: Rubric): Integrity => {
     const pruned: { cell: Cell; reason: string; }[] = [];
