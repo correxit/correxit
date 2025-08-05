@@ -1,7 +1,6 @@
 import { Token } from '@lumino/coreutils';
 import * as description from './description';
 import { Rubric as RUBRIC } from './rubric';
-import { keygen } from './security';
 import { Workbook as WORKBOOK } from './workbook';
 
 export namespace Correxit {
@@ -39,73 +38,21 @@ export namespace Correxit {
     TOOLBARS: description.TOOLBARS
   };
 
-  export async function add(
-    workbook: Workbook,
-    cell: Workbook.Cell
-  ): Promise<Rubric.Unlocked> {
-    const rubric = open(workbook, { quiet: true });
-    if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
-      throw new Error('add error');
-    }
-    const section = rubric[cell.shared ? 'shared' : 'secret'];
-    section.cells[cell.id] = { ...cell, shared: !!cell.shared };
-    return Workbook.update(workbook, rubric);
-  }
+  export const add = Workbook.Cell.add;
 
-  /**
-   * Convert a plain notebook into a workbook and return its rubric.
-   */
-  export async function convert(workbook: Workbook, passphrase: string) {
-    try {
-      const opened = open(workbook)!;
-      const key = await keygen(passphrase, opened.id);
-      const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
-      return Workbook.update(workbook, rubric);
-    } catch (error) {
-      if (error !== NO_CORREXIT_METADATA) {
-        throw error;
-      }
-      const created = Rubric.create();
-      const key = await keygen(passphrase, created.id);
-      return Workbook.update(workbook, { ...created, key });
-    }
-  }
+  export const convert = Workbook.convert;
 
-  /**
-   * Correct a cell (if `id` is provided) or an entire workbook.
-   *
-   * @param workbook - the workbook to correct.
-   * @param id - the id of the cell to correct.
-   *
-   * @returns a score for the cell or the whole workbook.
-   */
-  export async function correct(
-    workbook: Workbook,
-    id?: Workbook.Cell['id']
-  ): Promise<Rubric.Score> {
-    const { sum, UNSCORED } = Rubric;
-    const { score } = Workbook.Cell;
-    const rubric = open(workbook, { quiet: true });
-    if (!rubric) {
-      return UNSCORED;
-    }
+  export const correct = Workbook.correct;
 
-    const outputs = await Workbook.execute(workbook, rubric, id);
-    if (!outputs) {
-      return UNSCORED;
-    }
-    if (id) {
-      return score(workbook, id, outputs);
-    }
+  export const lock = Workbook.lock;
 
-    const initial = Promise.resolve([0, 0] as Rubric.Score);
-    return Object.keys(outputs).reduce(async (total, id) =>
-      sum(await total, await score(workbook, id, outputs)), initial);
-  }
+  export const remove = Workbook.Cell.remove;
 
-  export async function lock(workbook: Workbook): Promise<void> {
-    return Workbook.lock(workbook);
-  }
+  export const reset = Workbook.reset;
+
+  export const toggle = Workbook.Cell.toggle;
+
+  export const unlock = Workbook.unlock;
 
   /**
    * Opens a workbook's rubric.
@@ -136,47 +83,5 @@ export namespace Correxit {
       }
       throw error;
     }
-  }
-
-  export async function remove(workbook: Workbook, id: string) {
-    const rubric = open(workbook, { quiet: true });
-    if (!rubric || rubric.locked) {
-      throw new Error('remove error');
-    }
-    delete rubric.secret.cells[id];
-    delete rubric.shared.cells[id];
-    return Workbook.update(workbook, rubric);
-  }
-
-  export async function reset(workbook: Workbook) {
-    const rubric = open(workbook, { quiet: true });
-    if (!rubric || rubric.locked) {
-      throw new Error('reset error');
-    }
-    return Workbook.reset(workbook, rubric);
-  }
-
-  export async function toggle(
-    workbook: Workbook,
-    id: Workbook.Cell['id']
-  ): Promise<Rubric.Unlocked> {
-    const opened = open(workbook, { quiet: true });
-    if (!opened || opened.locked || !Rubric.has(opened, id)) {
-      throw new Error('cannot toggle');
-    }
-    const rubric = Rubric.toggle(opened, id);
-    return Workbook.update(workbook, rubric);
-  }
-
-  export async function unlock(
-    workbook: Workbook,
-    key: string
-  ): Promise<Rubric.Unlocked> {
-    const opened = open(workbook)!;
-    if (!opened.locked) {
-      return opened;
-    }
-    const unlocked = await Rubric.unlock(opened, key);
-    return Workbook.decrypt(workbook, unlocked);
   }
 }

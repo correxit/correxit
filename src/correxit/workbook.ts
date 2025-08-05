@@ -117,6 +117,21 @@ export namespace Workbook {
         Rubric.INCORRECT : Rubric.CORRECT;
 
     /**
+     * Add a cell to a workbook's rubric.
+     */
+    export async function add(
+      workbook: Workbook,
+      cell: Cell
+    ): Promise<Rubric.Unlocked> {
+      const rubric = open(workbook);
+      if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
+        throw new Error('add error');
+      }
+      (cell.shared ? rubric.shared : rubric.secret).cells[cell.id] = cell;
+      return update(workbook, { ...rubric, accessed: Date.now() });
+    }
+
+    /**
      * Decrypts a workbook cell, modifying its source and changing its cell type
      * from `raw` to `code`. This changes the cell `id`.
      * @returns a promise that resolves with the resulting cell `id`.
@@ -234,6 +249,18 @@ export namespace Workbook {
     }
 
     /**
+     * Remove a cell from a workbook's rubric.
+     */
+    export async function remove(workbook: Workbook, id: string) {
+      const rubric = open(workbook);
+      const cell = rubric && Rubric.get(rubric, id);
+      if (cell && !rubric.locked) {
+        delete (cell.shared ? rubric.shared : rubric.secret).cells[id];
+        await update(workbook, { ...rubric, accessed: Date.now() });
+      }
+    }
+
+    /**
      * Get the score for a single cell.
      *
      * @param workbook - the workbook that contains the cell.
@@ -276,6 +303,20 @@ export namespace Workbook {
       }
       return Rubric.UNSCORED;
     }
+
+    /**
+     * Toggle a rubric cell between `secret` and `shared` sections of rubric.
+     */
+    export async function toggle(
+      workbook: Workbook,
+      id: Workbook.Cell['id']
+    ): Promise<Rubric.Unlocked> {
+      const rubric = open(workbook);
+      if (!rubric || rubric.locked || !Rubric.has(rubric, id)) {
+        throw new Error('toggle error');
+      }
+      return update(workbook, Rubric.toggle(rubric, id));
+    }
   }
 
   const pool = new AttachedProperty<
@@ -313,12 +354,62 @@ export namespace Workbook {
   }
 
   /**
+   * Convert a plain notebook into a workbook and return its rubric.
+   */
+  export async function convert(workbook: Workbook, passphrase: string) {
+    try {
+      const opened = open(workbook)!;
+      const key = await security.keygen(passphrase, opened.id);
+      const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
+      return update(workbook, rubric);
+    } catch (error) {
+      if (error === Correxit.NO_CORREXIT_METADATA) {
+        const created = Rubric.create();
+        const key = await security.keygen(passphrase, created.id);
+        return update(workbook, { ...created, key });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Correct a cell (if `id` is provided) or an entire workbook.
+   *
+   * @param workbook - the workbook to correct.
+   * @param id - the id of the cell to correct.
+   *
+   * @returns a score for the cell or the whole workbook.
+   */
+  export async function correct(
+    workbook: Workbook,
+    id?: Cell['id']
+  ): Promise<Rubric.Score> {
+    const { sum, UNSCORED } = Rubric;
+    const rubric = open(workbook);
+    if (!rubric) {
+      return UNSCORED;
+    }
+
+    const outputs = await execute(workbook, rubric, id);
+    if (!outputs) {
+      return UNSCORED;
+    }
+    if (id) {
+      return Cell.score(workbook, id, outputs);
+    }
+
+    const initial = Promise.resolve([0, 0] as Rubric.Score);
+    return Object.keys(outputs).reduce(async (total, id) =>
+      sum(await total, await Cell.score(workbook, id, outputs)), initial);
+  }
+
+  /**
    * Decrypts workbook content.
    */
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
     const { key, secret: { cells } } = rubric;
     for (const id in cells) {
-      const { is, shared, payload, reference } = rubric.secret.cells[id];
+      const { is, shared, payload, reference } = cells[id];
       if (is === 'comparable' || is === 'correctable') {
         cells[id] = {
           id, is, payload, shared,
@@ -353,8 +444,7 @@ export namespace Workbook {
       throw new Error('execute error');
     }
 
-    const { context } = workbook;
-    const { cells } = workbook.content.model;
+    const { content: { model: { cells } }, context } = workbook;
     let stop = cells.length;
     if (id) {
       const cell = Correxit.Rubric.get(rubric, id);
@@ -389,7 +479,7 @@ export namespace Workbook {
   }
 
   export async function lock(workbook: Workbook): Promise<void> {
-    const rubric = get(workbook);
+    const rubric = open(workbook);
     if (!rubric || rubric.locked) {
       return;
     }
@@ -423,12 +513,33 @@ export namespace Workbook {
     return get(workbook);
   }
 
-  export async function reset(workbook: Workbook, rubric: Rubric.Unlocked) {
-    if (rubric.locked || !workbook.content.model) {
+  /**
+   * Reset a workbook back to a plain Jupyter notebook.
+   */
+  export async function reset(workbook: Workbook) {
+    const rubric = open(workbook);
+    if (!rubric || rubric.locked || !workbook.content.model) {
       throw new Error('reset error');
     }
     set(workbook, null);
     workbook.content.model.sharedModel.deleteMetadata('correxit');
+  }
+
+  /**
+   * Unlocks a workbook's rubric, decrypts its contents, and returns the rubric.
+   */
+  export async function unlock(
+    workbook: Workbook,
+    key: string
+  ): Promise<Rubric.Unlocked> {
+    const rubric = open(workbook);
+    if (!rubric) {
+      throw new Error('unlock error');
+    }
+    if (rubric.locked) {
+      return decrypt(workbook, await Rubric.unlock(rubric, key));
+    }
+    return rubric;
   }
 
   export async function update(
