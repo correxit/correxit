@@ -75,12 +75,13 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         factory: async () => null
       });
       const added = addCommands({ commands, source, translator });
+      const quiet = true;
       let current: Correxit.Workbook | null = null;
       const schedule = (workbook: Correxit.Workbook | null) => {
         if (workbook === source.state.payload) {
           return;
         }
-        Correxit.open(workbook, { quiet: true });
+        Correxit.open(workbook, quiet);
         subscribe(current, workbook);
         current = workbook;
         void source.schedule({ payload: workbook });

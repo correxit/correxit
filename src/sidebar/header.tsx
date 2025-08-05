@@ -29,7 +29,8 @@ const File: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ trans, workbook }) => {
-  const rubric = Correxit.open(workbook, { quiet: true });
+  const quiet = true;
+  const rubric = Correxit.open(workbook, quiet);
   const { context } = workbook;
   const heading = rubric
     ? trans.__('Workbook file:')

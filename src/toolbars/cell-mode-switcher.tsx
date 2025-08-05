@@ -34,7 +34,8 @@ const Switcher: React.FC<{
     return <></>;
   }
 
-  const rubric = Correxit.open(workbook, { quiet: true })!;
+  const quiet = true;
+  const rubric = Correxit.open(workbook, quiet)!;
   return (
     <HTMLSelect
       className={CELL_MODE_SWITCHER_CLASS}

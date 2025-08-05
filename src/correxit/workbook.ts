@@ -123,7 +123,7 @@ export namespace Workbook {
       workbook: Workbook,
       cell: Cell
     ): Promise<Rubric.Unlocked> {
-      const rubric = open(workbook);
+      const rubric = open(workbook, quiet);
       if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
         throw new Error('add error');
       }
@@ -246,7 +246,7 @@ export namespace Workbook {
      * Remove a cell from a workbook's rubric.
      */
     export async function remove(workbook: Workbook, id: string) {
-      const rubric = open(workbook);
+      const rubric = open(workbook, quiet);
       const cell = rubric && Rubric.get(rubric, id);
       if (cell && !rubric.locked) {
         delete (cell.shared ? rubric.shared : rubric.secret).cells[id];
@@ -271,7 +271,7 @@ export namespace Workbook {
       id: Cell['id'],
       outputs: Outputs,
     ): Promise<Rubric.Score> {
-      const rubric = Correxit.open(workbook, { quiet: true });
+      const rubric = open(workbook, quiet);
       if (!rubric) {
         return Rubric.UNSCORED;
       }
@@ -305,13 +305,15 @@ export namespace Workbook {
       workbook: Workbook,
       id: Workbook.Cell['id']
     ): Promise<Rubric.Unlocked> {
-      const rubric = open(workbook);
+      const rubric = open(workbook, quiet);
       if (!rubric || rubric.locked || !Rubric.has(rubric, id)) {
         throw new Error('toggle error');
       }
       return update(workbook, Rubric.toggle(rubric, id));
     }
   }
+
+  const quiet = true;
 
   const pool = new AttachedProperty<
     Correxit.Workbook,
@@ -379,7 +381,7 @@ export namespace Workbook {
     id?: Cell['id']
   ): Promise<Rubric.Score> {
     const { sum, UNSCORED } = Rubric;
-    const rubric = open(workbook);
+    const rubric = open(workbook, quiet);
     if (!rubric) {
       return UNSCORED;
     }
@@ -472,8 +474,11 @@ export namespace Workbook {
     return outputs;
   }
 
+  /**
+   * Lock a workbook if its rubric is unlocked.
+   */
   export async function lock(workbook: Workbook): Promise<void> {
-    const rubric = open(workbook);
+    const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
       return;
     }
@@ -490,9 +495,22 @@ export namespace Workbook {
 
   /**
    * Synchronously returns a workbook's rubric or `null` from notebook metadata.
+   *
+   * @param workbook - The current workbook. May be `null`.
+   * @param options.quiet - Whether to return `null` instead of rejecting.
+   * @returns a promise that resolves to a rubric for a workbook.
+   *
+   * #### Notes
+   * If `quiet` is set to true, the function returns `null` instead of throwing.
    */
-  export function open(workbook: Workbook): Rubric | null {
-    if (!workbook.content.model) {
+  export function open(
+    workbook: Workbook | null,
+    quiet = false
+  ): Rubric | null {
+    if (!workbook || !workbook.content.model) {
+      if (quiet) {
+        return null;
+      }
       throw new TypeError('open error');
     }
     if (get(workbook)) {
@@ -501,6 +519,9 @@ export namespace Workbook {
 
     const metadata = workbook.content.model.sharedModel.getMetadata('correxit');
     if (!metadata) {
+      if (quiet) {
+        return null;
+      }
       throw Correxit.NO_CORREXIT_METADATA;
     }
     set(workbook, Rubric.normalize(metadata as Partial<Rubric.Locked>));
@@ -511,7 +532,7 @@ export namespace Workbook {
    * Reset a workbook back to a plain Jupyter notebook.
    */
   export async function reset(workbook: Workbook) {
-    const rubric = open(workbook);
+    const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked || !workbook.content.model) {
       throw new Error('reset error');
     }
@@ -526,7 +547,7 @@ export namespace Workbook {
     workbook: Workbook,
     key: string
   ): Promise<Rubric.Unlocked> {
-    const rubric = open(workbook);
+    const rubric = open(workbook, quiet);
     if (!rubric) {
       throw new Error('unlock error');
     }

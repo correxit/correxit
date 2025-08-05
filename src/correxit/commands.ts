@@ -33,7 +33,7 @@ export function addCommands(options: {
     isEnabled: ({ id, reference }: Partial<Correxit.Workbook.Cell>) => {
       const cells = active.workbook?.content.model?.cells || [];
       const model = find(cells, cell => cell.id === id);
-      const rubric = Correxit.open(active.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, quiet);
       if (!model || !rubric || rubric.locked || !id || id === reference) {
         return false;
       }
@@ -129,7 +129,7 @@ export function addCommands(options: {
   disposables.push(commands.addCommand(CommandIDs.correct, {
     icon: checkIcon,
     isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, quiet);
       if (!rubric) {
         return false;
       }
@@ -144,7 +144,7 @@ export function addCommands(options: {
       return has(rubric, id);
     },
     isVisible: ({ id }) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, quiet);
       if (!rubric) {
         return false;
       }
@@ -157,7 +157,7 @@ export function addCommands(options: {
       return model?.type === 'code';
     },
     label: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-      if (!Correxit.open(active.workbook, { quiet })) {
+      if (!Correxit.open(active.workbook, quiet)) {
         return '';
       }
       return id
@@ -184,7 +184,7 @@ export function addCommands(options: {
   disposables.push(commands.addCommand(CommandIDs.lock, {
     icon: lockIcon,
     isEnabled: () =>
-        Correxit.open(active.workbook, { quiet })?.locked === false,
+        Correxit.open(active.workbook, quiet)?.locked === false,
     isVisible: () => commands.isEnabled(CommandIDs.lock),
     label: trans.__('Lock grader mode'),
     execute: async () => {
@@ -203,7 +203,7 @@ export function addCommands(options: {
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
     isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, quiet);
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
     isVisible: cell => commands.isEnabled(CommandIDs.remove, cell),
@@ -216,7 +216,7 @@ export function addCommands(options: {
   }));
   disposables.push(commands.addCommand(CommandIDs.replace, {
     isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, quiet);
       if (!rubric || rubric.locked || !id) {
         return false;
       }
@@ -232,7 +232,7 @@ export function addCommands(options: {
       if (!commands.isEnabled(CommandIDs.replace, { id, is })) {
         return;
       }
-      const rubric = Correxit.open(active.workbook, { quiet })!;
+      const rubric = Correxit.open(active.workbook, quiet)!;
       const replace = is && get(rubric, id!)?.is !== is;
       await commands.execute(CommandIDs.remove, { id });
       if (replace) {
@@ -243,7 +243,7 @@ export function addCommands(options: {
   disposables.push(commands.addCommand(CommandIDs.reset, {
     icon: notebookIcon,
     isEnabled: () =>
-      Correxit.open(active.workbook, { quiet })?.locked === false,
+      Correxit.open(active.workbook, quiet)?.locked === false,
     isVisible: () => commands.isEnabled(CommandIDs.reset),
     caption: 'Delete workbook metadata, leave notebook cells unmodified',
     label: trans.__('Revert to notebook (delete workbook metadata)...'),
@@ -263,7 +263,7 @@ export function addCommands(options: {
   }));
   disposables.push(commands.addCommand(CommandIDs.toggle, {
     isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
-      const rubric = Correxit.open(active.workbook, { quiet });
+      const rubric = Correxit.open(active.workbook, quiet);
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
     isVisible: cell => commands.isEnabled(CommandIDs.toggle, cell),
@@ -286,7 +286,7 @@ export function addCommands(options: {
   disposables.push(commands.addCommand(CommandIDs.unlock, {
     icon: lockIcon,
     isEnabled: () =>
-      Correxit.open(active.workbook, { quiet })?.locked ?? false,
+      Correxit.open(active.workbook, quiet)?.locked ?? false,
     isVisible: () => commands.isEnabled(CommandIDs.unlock),
     label: trans.__('Unlock grader mode...'),
     usage: `
@@ -313,7 +313,7 @@ The command invokes an error message dialog if unlock fails.
           return null;
         }
 
-        const opened = Correxit.open(workbook, { quiet })!;
+        const opened = Correxit.open(workbook, quiet)!;
         const key = await keygen(passphrase, opened.id);
         const rubric = await Correxit.unlock(workbook, key);
         await workbook.context.save();

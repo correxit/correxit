@@ -45,38 +45,7 @@ export namespace Correxit {
     TOOLBARS: description.TOOLBARS
   };
 
-  export const { convert, correct, lock, reset, unlock } = WORKBOOK;
+  export const { convert, correct, lock, open, reset, unlock } = WORKBOOK;
 
   export const { add, remove, toggle } = WORKBOOK.Cell;
-
-  /**
-   * Opens a workbook's rubric.
-   *
-   * @param workbook - The current workbook. May be `null`.
-   * @param options.quiet - Whether to return `null` instead of rejecting.
-   * @returns a promise that resolves to a rubric for a workbook.
-   *
-   * #### Notes
-   * If `quiet` is set to true, the promise resolves with `null` instead of
-   * rejecting. By default the promise either resolves with a rubric or rejects.
-   */
-  export function open(
-    workbook: Workbook | null,
-    { quiet }: { quiet?: boolean } = {}
-  ): Rubric | null {
-    if (!workbook || !workbook.content.model) {
-      if (quiet) {
-        return null;
-      }
-      throw new Error('workbook or content model is null');
-    }
-    try {
-      return WORKBOOK.open(workbook);
-    } catch (error) {
-      if (quiet) {
-        return null;
-      }
-      throw error;
-    }
-  }
 }
