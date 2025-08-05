@@ -141,13 +141,11 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<string> {
-      const notebook = workbook.content;
-      const model = notebook.model;
-      if (!key || !model) {
+      if (!key || !workbook.content.model) {
         throw new Error('decrypt error');
       }
 
-      const { widgets } = notebook;
+      const { model, widgets } = workbook.content;
       const index = findIndex(model.cells, cell => cell.id === reference);
       if (index === -1) {
         throw new Error('decrypt error');
@@ -160,19 +158,18 @@ export namespace Workbook {
         throw new Error('decrypt error');
       }
 
+      const notebook = workbook.content;
       const initial = notebook.activeCellIndex;
       NotebookActions.clearAllOutputs(notebook);
       NotebookActions.deselectAll(notebook);
       notebook.select(widget);
       notebook.activeCellIndex = index;
       widget.inputHidden = false;
-      widget.model.sharedModel.deleteMetadata('editable');
-      widget.model.sharedModel.setSource(decrypted);
+      model.cells.get(index).sharedModel.deleteMetadata('editable');
+      model.cells.get(index).sharedModel.setSource(decrypted);
       NotebookActions.changeCellType(notebook, 'code');
       notebook.activeCellIndex = initial;
-
-      const result = model.cells.get(index);
-      return result.id;
+      return model.cells.get(index).id;
     }
 
     /**
@@ -185,13 +182,11 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<string> {
-      const notebook = workbook.content;
-      const model = notebook.model;
-      if (!key || !model) {
+      if (!key || !workbook.content.model) {
         throw new Error('encrypt error');
       }
 
-      const { widgets } = notebook;
+      const { model, widgets } = workbook.content;
       const index = findIndex(model.cells, ({ id }) => id === reference);
       if (index === -1) {
         throw new Error('encrypt error');
@@ -204,19 +199,18 @@ export namespace Workbook {
         throw new Error('encrypt error');
       }
 
+      const notebook = workbook.content;
       const initial = notebook.activeCellIndex;
       NotebookActions.clearAllOutputs(notebook);
       NotebookActions.deselectAll(notebook);
       notebook.select(widget);
       notebook.activeCellIndex = index;
       widget.inputHidden = true;
-      widget.model.sharedModel.setSource(encrypted);
+      model.cells.get(index).sharedModel.setSource(encrypted);
       NotebookActions.changeCellType(notebook, 'raw');
       notebook.activeCellIndex = initial;
-
-      const result = model.cells.get(index);
-      result.sharedModel.setMetadata('editable', false);
-      return result.id;
+      model.cells.get(index).sharedModel.setMetadata('editable', false);
+      return model.cells.get(index).id;
     }
 
     /**
