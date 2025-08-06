@@ -121,10 +121,7 @@ export namespace Workbook {
     /**
      * Add a cell to a workbook's rubric.
      */
-    export async function add(
-      workbook: Workbook,
-      cell: Cell
-    ): Promise<Rubric.Unlocked> {
+    export function add(workbook: Workbook, cell: Cell): Rubric.Unlocked {
       const rubric = open(workbook, quiet);
       if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
         throw new Error('add error');
@@ -247,15 +244,12 @@ export namespace Workbook {
     /**
      * Remove a cell from a workbook's rubric.
      */
-    export async function remove(
-      workbook: Workbook,
-      id: string
-    ): Promise<void> {
+    export function remove(workbook: Workbook, id: string): void {
       const rubric = open(workbook, quiet);
-      const cell = rubric && Rubric.get(rubric, id);
-      if (cell && !rubric.locked) {
+      const cell = rubric && !rubric.locked && Rubric.get(rubric, id);
+      if (cell) {
         delete (cell.shared ? rubric.shared : rubric.secret).cells[id];
-        await update(workbook, { ...rubric, accessed: Date.now() });
+        update(workbook, { ...rubric, accessed: Date.now() });
       }
     }
 
@@ -306,10 +300,7 @@ export namespace Workbook {
     /**
      * Toggle a rubric cell between `secret` and `shared` sections of rubric.
      */
-    export async function toggle(
-      workbook: Workbook,
-      id: Workbook.Cell['id']
-    ): Promise<Rubric.Unlocked> {
+    export function toggle(workbook: Workbook, id: Cell['id']): Rubric.Unlocked {
       const rubric = open(workbook, quiet);
       if (!rubric || rubric.locked || !Rubric.has(rubric, id)) {
         throw new Error('toggle error');
@@ -320,10 +311,9 @@ export namespace Workbook {
 
   const quiet = true;
 
-  const pool = new AttachedProperty<
-    Correxit.Workbook,
-    Correxit.Rubric | null
-  >({ name: 'pool', create: _ => null });
+  const pool = new AttachedProperty<Workbook, Rubric | null>({
+    create: _ => null, name: 'pool'
+  });
 
   const get: typeof pool.get = (workbook) => pool.get(workbook);
 
@@ -358,7 +348,10 @@ export namespace Workbook {
   /**
    * Convert a plain notebook into a workbook and return its rubric.
    */
-  export async function convert(workbook: Workbook, passphrase: string) {
+  export async function convert(
+    workbook: Workbook,
+    passphrase: string
+  ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
       const key = await security.keygen(passphrase, opened.id);
@@ -496,7 +489,7 @@ export namespace Workbook {
         rubric.secret.cells[id] = { ...cell, reference };
       }
     };
-    await update(workbook, await Rubric.lock(rubric));
+    update(workbook, await Rubric.lock(rubric));
   }
 
   /**
@@ -566,7 +559,11 @@ export namespace Workbook {
     return rubric;
   }
 
-  export function update(workbook: Workbook,
+  /**
+   * Updates the workbook metadata after auditing the given rubric.
+   */
+  export function update(
+    workbook: Workbook,
     rubric: Rubric.Locked
   ): Rubric.Locked
   export function update(
