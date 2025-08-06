@@ -323,23 +323,30 @@ export namespace Workbook {
    * Audits a rubric, prunes unknown or invalid cells. Never throws.
    */
   export function audit(workbook: Workbook, rubric: Rubric): Audit {
+    if (!workbook.content.model) {
+      return { ok: false, error: 'null content model', rubric };
+    }
+
     const pruned: { cell: Cell; reason: string; }[] = [];
-    const known = reduce(workbook.content.model!.cells,
-      (known, { id, type }) => ({ ...known, [id]: type === 'code'}),
-      Object.create(null) as { [id: string]: boolean; }
-    );
     const { locked, secret, shared } = rubric;
+    const known = reduce(workbook.content.model.cells,
+      (accumulator, { id, type }) => ({
+        ...accumulator,
+        [id]: locked ? type === 'code' || type === 'raw' : type === 'code'
+      }), Object.create(null) as { [id: string]: boolean; }
+    );
     for (const { cells } of locked ? [shared] : [secret, shared]) {
       for (const id in cells) {
         const { is, payload, reference } = cells[id];
-        const unknown = !known[id];
-        const invalid = is === 'answerable' ?
-          !payload.length : !known[reference];
-        if (unknown || invalid) {
-          const reason = unknown ? 'unknown cell' : 'invalid cell';
-          pruned.push({ cell: { ...cells[id] }, reason });
-          delete cells[id];
+        const valid = is === 'answerable' ? !!payload.length : known[reference];
+        if (known[id] && valid) {
+          continue;
         }
+        pruned.push({
+          cell: { ...cells[id] },
+          reason: known[id] ? 'invalid cell' : 'unknown cell'
+        });
+        delete cells[id];
       }
     };
     return { ok: true, pruned, rubric: { ...rubric, accessed: Date.now() } };
