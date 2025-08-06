@@ -42,12 +42,12 @@ export namespace Rubric {
    * the rubric is constructed as follows:
    *
    * `"wb"` + `accessed` timestamp's digits `[0-9]` shifted into ascii chars
-   * `[q-z]`, e.g., `"wbrxvtqyuxuszvq"`.
+   * `[d-m]`, e.g., `"wbekihhlhjdhmld"`.
    */
   export function create(): Omit<Unlocked, 'key'> {
     const accessed = Date.now();
     const id = 'wb' + `${accessed}`.split('')
-      .map(i => String.fromCharCode(parseInt(i, 10) + 113)).join('');
+      .map(i => String.fromCharCode(parseInt(i, 10) + 100)).join('');
     const secret: Section = { cells: {} };
     const shared: Section = { cells: {} };
     return { accessed, id, locked: false, secret, shared };
@@ -87,7 +87,7 @@ export namespace Rubric {
   }
 
   /**
-   * Lock a rubric and return a promise that resolves to the locked rubric.
+   * @returns a promise that resolves to the given rubric, locked.
    */
   export async function lock(rubric: Rubric): Promise<Locked> {
     if (rubric.locked) {
@@ -141,7 +141,7 @@ export namespace Rubric {
   }
 
   /**
-   * Return the sum of two scores.
+   * @returns the sum of two scores.
    */
   export function sum(a: Score, b: Score): Score {
     if (a === UNSCORED) {
@@ -161,27 +161,24 @@ export namespace Rubric {
       throw new Error('cannot toggle cell unknown in rubric');
     }
 
-    const add = (section: Section, cell: Workbook.Cell) =>
-      ({ cells: { ...section.cells, [cell.id]: cell } } as Section);
-    const remove = ({ cells }: Section, cell: Workbook.Cell): Section => {
-      delete cells[cell.id];
-      return { cells } as Section;
-    }
     const cell = get(rubric, id)!;
+    const secret = { cells: { ...rubric.secret.cells } };
+    const shared = { cells: { ...rubric.shared.cells } };
     return {
+      ...rubric,
       accessed: Date.now(),
-      id: rubric.id,
-      key: rubric.key,
-      locked: false,
       secret: cell.shared ?
-        add(rubric.secret, { ...cell, shared: false }) :
-        remove(rubric.secret, cell),
+        { cells: { ...secret.cells, [cell.id]: { ...cell, shared: false } } } :
+        { cells: { ...(delete secret.cells[cell.id], secret.cells) } },
       shared: cell.shared ?
-        remove(rubric.shared, cell) :
-        add(rubric.shared, { ...cell, shared: true })
+        { cells: { ...(delete shared.cells[cell.id], shared.cells) } } :
+        { cells: { ...shared.cells, [cell.id]: { ...cell, shared: true } } },
     };
   }
 
+  /**
+   * @returns an unlocked rubric after decrypting secret cells with given key.
+   */
   export async function unlock(
     rubric: Rubric.Locked,
     key: string
