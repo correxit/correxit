@@ -527,8 +527,8 @@ export namespace Workbook {
       if (!metadata) {
         throw Correxit.NO_CORREXIT_METADATA;
       }
-      set(workbook, Rubric.normalize(metadata as Partial<Rubric.Locked>));
-      return get(workbook);
+      const normalized = Rubric.normalize(metadata as Partial<Rubric.Locked>);
+      return update(workbook, normalized);
     } catch (error) {
       if (quiet) {
         return null;
@@ -566,28 +566,25 @@ export namespace Workbook {
     return rubric;
   }
 
-  export async function update(
-    workbook: Workbook,
+  export function update(workbook: Workbook,
     rubric: Rubric.Locked
-  ): Promise<Rubric.Locked>
-  export async function update(
+  ): Rubric.Locked
+  export function update(
     workbook: Workbook,
     rubric: Rubric.Unlocked
-  ): Promise<Rubric.Unlocked>
-  export async function update(
-    workbook: Workbook,
-    rubric: Rubric
-  ): Promise<Rubric> {
+  ): Rubric.Unlocked
+  export function update(workbook: Workbook, rubric: Rubric): Rubric {
     set(workbook, null);
     if (!workbook.content.model) {
       throw new Error('update error');
     }
 
     const audit = Workbook.audit(workbook, rubric);
+    const metadata = async ({ sharedModel }: INotebookModel, rubric: Rubric) =>
+      sharedModel.setMetadata('correxit', await Rubric.lock(rubric));
     if (audit.ok) {
-      const { sharedModel } = workbook.content.model;
       set(workbook, audit.rubric);
-      sharedModel.setMetadata('correxit', await Rubric.lock(audit.rubric));
+      void metadata(workbook.content.model, audit.rubric);
       return audit.rubric;
     }
     throw new Error(audit.error);
