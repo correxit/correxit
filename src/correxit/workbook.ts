@@ -579,14 +579,14 @@ export namespace Workbook {
       throw new Error('update error');
     }
 
-    const audit = Workbook.audit(workbook, rubric);
+    const audited = audit(workbook, rubric);
     const metadata = async ({ sharedModel }: INotebookModel, rubric: Rubric) =>
       sharedModel.setMetadata('correxit', await Rubric.lock(rubric));
-    if (audit.ok) {
-      set(workbook, audit.rubric);
-      void metadata(workbook.content.model, audit.rubric);
-      return audit.rubric;
+    if (audited.ok) {
+      set(workbook, audited.rubric);
+      void metadata(workbook.content.model, audited.rubric);
+      return audited.rubric;
     }
-    throw new Error(audit.error);
+    throw new Error(audited.error);
   }
 }
