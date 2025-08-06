@@ -23,13 +23,11 @@ export type Workbook = {
 
 export namespace Workbook {
   /**
-   * The collection of outputs for every scorable workbook cell.
+   * The result of an audit on a workbook's rubric.
    */
-  export type Outputs = { [id: Cell['id']]: Cell.Output[]; }
+  export type Audit = Audit.Pass | Audit.Fail;
 
-  export type Integrity = Integrity.Pass | Integrity.Fail;
-
-  namespace Integrity {
+  namespace Audit {
     export type Pass = {
       ok: true;
       pruned: { cell: Cell; reason: string; }[];
@@ -38,6 +36,10 @@ export namespace Workbook {
 
     export type Fail = { ok: false; error: string; rubric: Rubric | null; };
   }
+  /**
+   * The collection of outputs for every scorable workbook cell.
+   */
+  export type Outputs = { [id: Cell['id']]: Cell.Output[]; }
 
   /**
    * A workbook cell definition defines how to score a notebook cell.
@@ -245,7 +247,10 @@ export namespace Workbook {
     /**
      * Remove a cell from a workbook's rubric.
      */
-    export async function remove(workbook: Workbook, id: string) {
+    export async function remove(
+      workbook: Workbook,
+      id: string
+    ): Promise<void> {
       const rubric = open(workbook, quiet);
       const cell = rubric && Rubric.get(rubric, id);
       if (cell && !rubric.locked) {
@@ -285,7 +290,7 @@ export namespace Workbook {
         return answer(cell.payload, given);
       }
 
-      const expected = cell.reference ? outputs[cell.reference] : null;
+      const expected = outputs[cell.reference];
       if (!expected) {
         return Rubric.UNSCORED;
       }
@@ -313,32 +318,6 @@ export namespace Workbook {
     }
   }
 
-  /**
-   * Audit a workbook's rubric. Never throws.
-   * @returns the workbook rubric's integrity report.
-   */
-  const audit = (workbook: Workbook, rubric: Rubric): Integrity => {
-    const pruned: { cell: Cell; reason: string; }[] = [];
-    const known = reduce(workbook.content.model!.cells,
-      (known, { id, type }) => ({ ...known, [id]: type === 'code'}),
-      Object.create(null) as { [id: string]: boolean; }
-    );
-    const { locked, secret, shared } = rubric;
-    for (const { cells } of locked ? [shared] : [secret, shared]) {
-      for (const id in cells) {
-        const { is, payload, reference } = cells[id];
-        const unknown = !known[id];
-        const valid = is === 'answerable' ? payload.length : known[reference];
-        if (unknown || !valid) {
-          const reason = unknown ? 'unknown cell' : 'invalid cell';
-          pruned.push({ cell: { ...cells[id] }, reason });
-          delete cells[id];
-        }
-      }
-    };
-    return { ok: true, pruned, rubric: { ...rubric, accessed: Date.now() } };
-  }
-
   const quiet = true;
 
   const pool = new AttachedProperty<
@@ -349,6 +328,32 @@ export namespace Workbook {
   const get: typeof pool.get = (workbook) => pool.get(workbook);
 
   const set: typeof pool.set = (workbook, rubric) => pool.set(workbook, rubric);
+
+  /**
+   * Audits a rubric, prunes unknown or invalid cells. Never throws.
+   */
+  export function audit(workbook: Workbook, rubric: Rubric): Audit {
+    const pruned: { cell: Cell; reason: string; }[] = [];
+    const known = reduce(workbook.content.model!.cells,
+      (known, { id, type }) => ({ ...known, [id]: type === 'code'}),
+      Object.create(null) as { [id: string]: boolean; }
+    );
+    const { locked, secret, shared } = rubric;
+    for (const { cells } of locked ? [shared] : [secret, shared]) {
+      for (const id in cells) {
+        const { is, payload, reference } = cells[id];
+        const unknown = !known[id];
+        const invalid = is === 'answerable' ?
+          !payload.length : !known[reference];
+        if (unknown || invalid) {
+          const reason = unknown ? 'unknown cell' : 'invalid cell';
+          pruned.push({ cell: { ...cells[id] }, reason });
+          delete cells[id];
+        }
+      }
+    };
+    return { ok: true, pruned, rubric: { ...rubric, accessed: Date.now() } };
+  }
 
   /**
    * Convert a plain notebook into a workbook and return its rubric.
@@ -573,18 +578,18 @@ export namespace Workbook {
     workbook: Workbook,
     rubric: Rubric
   ): Promise<Rubric> {
-      if (!workbook.content.model) {
-        throw new Error('update error');
-      }
+    set(workbook, null);
+    if (!workbook.content.model) {
+      throw new Error('update error');
+    }
 
+    const audit = Workbook.audit(workbook, rubric);
+    if (audit.ok) {
       const { sharedModel } = workbook.content.model;
-      const integrity = audit(workbook, rubric);
-      set(workbook, null);
-      if (!integrity.ok) {
-        throw new Error(integrity.error);
-      }
-      sharedModel.setMetadata('correxit', await Rubric.lock(integrity.rubric));
-      set(workbook, integrity.rubric);
-      return get(workbook)!;
+      set(workbook, audit.rubric);
+      sharedModel.setMetadata('correxit', await Rubric.lock(audit.rubric));
+      return audit.rubric;
+    }
+    throw new Error(audit.error);
   }
 }
