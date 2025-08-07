@@ -131,14 +131,13 @@ export namespace Workbook {
 
     /**
      * Decrypts a workbook cell, modifying its source and changing its cell type
-     * from `raw` to `code`. This changes the cell `id`.
-     * @returns a promise that resolves with the resulting cell `id`.
+     * from `raw` to `code`.
      */
     export async function decrypt(
       workbook: Workbook,
       reference: string,
       key: string
-    ): Promise<string> {
+    ): Promise<void> {
       if (!key || !workbook.context.model) {
         throw new Error('decrypt error');
       }
@@ -169,19 +168,17 @@ export namespace Workbook {
         NotebookActions.clearAllOutputs(notebook);
         NotebookActions.deselectAll(notebook);
       }
-      return model.cells.get(index).id;
     }
 
     /**
      * Encrypts a workbook cell, modifying its source and changing its cell type
-     * from `code` to `raw`. This changes the cell `id`.
-     * @returns a promise that resolves with the resulting cell `id`.
+     * from `code` to `raw`.
      */
     export async function encrypt(
       workbook: Workbook,
       reference: string,
       key: string
-    ): Promise<string> {
+    ): Promise<void> {
       const { model } = workbook.context;
       const index = findIndex(model.cells, ({ id }) => id === reference);
       if (!key || index === -1) {
@@ -209,7 +206,6 @@ export namespace Workbook {
         NotebookActions.clearAllOutputs(notebook);
         NotebookActions.deselectAll(notebook);
       }
-      return model.cells.get(index).id;
     }
 
     /**
@@ -410,12 +406,9 @@ export namespace Workbook {
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
     const { key, secret: { cells } } = rubric;
     for (const id in cells) {
-      const { is, shared, payload, reference } = cells[id];
+      const { is, reference } = cells[id];
       if (is === 'comparable' || is === 'correctable') {
-        cells[id] = {
-          id, is, payload, shared,
-          reference: await Cell.decrypt(workbook, reference, key)
-        };
+        await Cell.decrypt(workbook, reference, key)
       }
     };
     return update(workbook, { ...rubric, accessed: Date.now() });
@@ -489,11 +482,9 @@ export namespace Workbook {
       return;
     }
     for (const id in rubric.secret.cells) {
-      const cell = rubric.secret.cells[id];
-      if (cell.is === 'comparable' || cell.is === 'correctable') {
-        const { key } = rubric;
-        const reference = await Cell.encrypt(workbook, cell.reference, key);
-        rubric.secret.cells[id] = { ...cell, reference };
+      const { is, reference } = rubric.secret.cells[id];
+      if (is === 'comparable' || is === 'correctable') {
+        await Cell.encrypt(workbook, reference, rubric.key);
       }
     };
     update(workbook, await Rubric.lock(rubric));
