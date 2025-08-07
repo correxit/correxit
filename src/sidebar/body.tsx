@@ -13,6 +13,10 @@ export const Body: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Correxit.Workbook;
 }> = ({ commands, trans, workbook }) => {
+  if (!workbook.content) {
+    return <></>;
+  }
+
   const quiet = true;
   const rubric = Correxit.open(workbook, quiet);
   const { activeCell, activeCellChanged } = workbook.content;

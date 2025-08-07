@@ -1,9 +1,9 @@
 import { InputDialog } from '@jupyterlab/apputils';
 import { Cell, ICellModel } from '@jupyterlab/cells';
+import { Notebook } from '@jupyterlab/notebook';
 import { filter } from '@lumino/algorithm';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
-import { Correxit } from '..';
 
 const EXCLUDE_CLASS = 'cxt-mod-exclude';
 
@@ -16,7 +16,7 @@ const TARGET_CELL_CLASS = 'correxit-target-cell';
 /**
  * @returns a promise that resolves to a user input cell or `null`.
  */
-export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
+export function cell(notebook: Notebook): Promise<ICellModel | null> {
   let target: Cell<ICellModel> | null = null;
   const delegate = new PromiseDelegate<ICellModel | null>();
   const overlay = document.createElement('div');
@@ -40,8 +40,8 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
   const pointerdown = () => submit();
   const throttler = new Throttler(
     ({ clientX, clientY }: PointerEvent) => {
-      const cells = workbook.content.widgets;
-      workbook.content.node.querySelectorAll(`.${TARGET_CELL_CLASS}`)
+      const cells = notebook.widgets;
+      notebook.node.querySelectorAll(`.${TARGET_CELL_CLASS}`)
         .forEach(({ classList }) =>
           classList.remove(TARGET_CELL_CLASS, EXCLUDE_CLASS, INCLUDE_CLASS));
       for (const cell of filter(cells, cell => cell.inViewport)) {
@@ -68,7 +68,7 @@ export function cell(workbook: Correxit.Workbook): Promise<ICellModel | null> {
     target = null;
   };
   overlay.classList.add(OVERLAY_CLASS);
-  workbook.content.viewportNode.appendChild(overlay);
+  notebook.viewportNode.appendChild(overlay);
   overlay.addEventListener('pointermove', pointermove);
   overlay.addEventListener('pointerout', pointerout);
   document.addEventListener('pointerdown', pointerdown);

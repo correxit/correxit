@@ -91,9 +91,9 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         next: Correxit.Workbook | null
       ) => {
         prev?.context.fileChanged.disconnect(handler);
-        prev?.content.model?.sharedModel.metadataChanged.disconnect(handler);
+        prev?.context.model?.sharedModel.metadataChanged.disconnect(handler);
         next?.context.fileChanged.connect(handler);
-        next?.content.model?.sharedModel.metadataChanged.connect(handler);
+        next?.context.model?.sharedModel.metadataChanged.connect(handler);
       };
       const handler = () => {
         // The sidebar can rely on metadata changes, but the native toolbar

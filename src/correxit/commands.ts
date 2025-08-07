@@ -81,19 +81,22 @@ export function addCommands(options: {
         return;
       }
 
-      const selected = await input.cell(workbook);
-      if (!selected) {
+      let reference = cell.reference;
+      if (!reference) {
+        const selected = workbook.content && await input.cell(workbook.content);
+        reference = selected && selected.id;
+      }
+
+      if (!reference || id === reference) {
         return;
       }
 
-      const { widgets } = workbook.content;
-      const reference = selected.id;
-      if (id === reference || selected.type !== 'code') {
-        return;
+      if (workbook.content) {
+        const { widgets } = workbook.content;
+        const original = find(widgets, ({ model }) => model.id === id)!;
+        await workbook.content.scrollToCell(original);
       }
 
-      const original = find(widgets, ({ model }) => model.id === id)!;
-      await workbook.content.scrollToCell(original);
       const payload = null;
       const shared = false;
       return Correxit.add(workbook, { id, is, payload, reference, shared });
@@ -137,7 +140,7 @@ export function addCommands(options: {
         return size(rubric) > 0;
       }
 
-      const model = active.workbook!.content.activeCell?.model;
+      const model = active.workbook!.content?.activeCell?.model;
       if (!model || model.id !== id || model.type !== 'code') {
         return false;
       }
@@ -170,7 +173,9 @@ export function addCommands(options: {
       }
 
       const workbook = active.workbook!;
-      workbook.content.scrollToCell(workbook.content.activeCell!);
+      if (workbook.content) {
+        workbook.content.scrollToCell(workbook.content.activeCell!);
+      }
 
       const score = await Correxit.correct(workbook, id);
       const unscored = score === Correxit.Rubric.UNSCORED;

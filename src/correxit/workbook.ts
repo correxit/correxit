@@ -12,11 +12,11 @@ import { Rubric } from './rubric';
 import * as security from './security';
 
 /**
- * `Workbook` as a type is equal to `NotebookPanel`. Conceptually, a notebook
+ * A `NotebookPanel` matches the `Workbook` type. Conceptually, a notebook
  * panel is only a Correxit workbook if it has Correxit metadata.
  */
 export type Workbook = {
-  readonly content: Notebook;
+  readonly content?: Notebook;
   readonly context: DocumentRegistry.IContext<INotebookModel>;
 };
 
@@ -156,8 +156,8 @@ export namespace Workbook {
       model.cells.get(index).sharedModel.setSource(decrypted);
       sharedModel.transact(() => {
         const raw = model.cells.get(index).toJSON();
-        sharedModel.deleteCell(index);
         raw.metadata.trusted = true;
+        sharedModel.deleteCell(index);
         sharedModel.insertCell(index, { ...raw, cell_type: 'code' });
       }, false);
       if (notebook) {
@@ -196,8 +196,8 @@ export namespace Workbook {
       model.cells.get(index).sharedModel.setMetadata('editable', false);
       sharedModel.transact(() => {
         const raw = model.cells.get(index).toJSON();
-        sharedModel.deleteCell(index);
         delete raw.metadata.trusted;
+        sharedModel.deleteCell(index);
         sharedModel.insertCell(index, { ...raw, cell_type: 'raw' });
       }, false);
       if (notebook) {
