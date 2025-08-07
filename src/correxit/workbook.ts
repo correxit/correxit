@@ -142,32 +142,33 @@ export namespace Workbook {
       if (!key || !workbook.context.model) {
         throw new Error('decrypt error');
       }
-
-      const { widgets } = workbook.content;
       const { model } = workbook.context;
-      const index = findIndex(model.cells, cell => cell.id === reference);
+      const index = findIndex(model.cells, ({ id }) => id === reference);
       if (index === -1) {
         throw new Error('decrypt error');
       }
 
+      const notebook = workbook.content;
       const source = model.cells.get(index).sharedModel.getSource();
       const decrypted = await security.decrypt(source, key);
-      const widget = find(widgets, ({ model }) => model.id === reference);
-      if (!widget) {
-        throw new Error('decrypt error');
-      }
-
-      const notebook = workbook.content;
-      const initial = notebook.activeCellIndex;
-      NotebookActions.clearAllOutputs(notebook);
-      NotebookActions.deselectAll(notebook);
-      notebook.select(widget);
-      notebook.activeCellIndex = index;
-      widget.inputHidden = false;
+      const { sharedModel } = model;
       model.cells.get(index).sharedModel.deleteMetadata('editable');
       model.cells.get(index).sharedModel.setSource(decrypted);
-      NotebookActions.changeCellType(notebook, 'code');
-      notebook.activeCellIndex = initial;
+      sharedModel.transact(() => {
+        const raw = model.cells.get(index).toJSON();
+        sharedModel.deleteCell(index);
+        raw.metadata.trusted = true;
+        sharedModel.insertCell(index, { ...raw, cell_type: 'code' });
+      }, false);
+      if (notebook) {
+        const { widgets } = notebook;
+        const widget = find(widgets, ({ model }) => model.id === reference);
+        if (widget) {
+          widget.inputHidden = false;
+        }
+        NotebookActions.clearAllOutputs(notebook);
+        NotebookActions.deselectAll(notebook);
+      }
       return model.cells.get(index).id;
     }
 
@@ -181,35 +182,33 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<string> {
-      if (!key || !workbook.context.model) {
-        throw new Error('encrypt error');
-      }
-
-      const { widgets } = workbook.content;
       const { model } = workbook.context;
       const index = findIndex(model.cells, ({ id }) => id === reference);
-      if (index === -1) {
-        throw new Error('encrypt error');
-      }
-
-      const source = model.cells.get(index).sharedModel.getSource();
-      const encrypted = await security.encrypt(source, key);
-      const widget = find(widgets, ({ model }) => model.id === reference);
-      if (!widget) {
+      if (!key || index === -1) {
         throw new Error('encrypt error');
       }
 
       const notebook = workbook.content;
-      const initial = notebook.activeCellIndex;
-      NotebookActions.clearAllOutputs(notebook);
-      NotebookActions.deselectAll(notebook);
-      notebook.select(widget);
-      notebook.activeCellIndex = index;
-      widget.inputHidden = true;
+      const source = model.cells.get(index).sharedModel.getSource();
+      const encrypted = await security.encrypt(source, key);
+      const { sharedModel } = model;
       model.cells.get(index).sharedModel.setSource(encrypted);
-      NotebookActions.changeCellType(notebook, 'raw');
-      notebook.activeCellIndex = initial;
       model.cells.get(index).sharedModel.setMetadata('editable', false);
+      sharedModel.transact(() => {
+        const raw = model.cells.get(index).toJSON();
+        sharedModel.deleteCell(index);
+        delete raw.metadata.trusted;
+        sharedModel.insertCell(index, { ...raw, cell_type: 'raw' });
+      }, false);
+      if (notebook) {
+        const { widgets } = notebook;
+        const widget = find(widgets, ({ model }) => model.id === reference);
+        if (widget) {
+          widget.inputHidden = true;
+        }
+        NotebookActions.clearAllOutputs(notebook);
+        NotebookActions.deselectAll(notebook);
+      }
       return model.cells.get(index).id;
     }
 
