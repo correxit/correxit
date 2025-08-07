@@ -7,7 +7,6 @@ import {
 } from '@jupyterlab/notebook';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
 import { find, findIndex, range, reduce } from '@lumino/algorithm';
-import { AttachedProperty } from '@lumino/properties';
 import { Correxit } from './correxit';
 import { Rubric } from './rubric';
 import * as security from './security';
@@ -44,7 +43,7 @@ export namespace Workbook {
   /**
    * A workbook cell definition defines how to score a notebook cell.
    */
-  export type Cell =  {
+  export type Cell = {
     readonly id: string;
     readonly is: 'answerable';
     readonly payload: string[];
@@ -311,13 +310,12 @@ export namespace Workbook {
 
   const quiet = true;
 
-  const pool = new AttachedProperty<Workbook, Rubric | null>({
-    create: _ => null, name: 'pool'
-  });
-
-  const get: typeof pool.get = (workbook) => pool.get(workbook);
-
-  const set: typeof pool.set = (workbook, rubric) => pool.set(workbook, rubric);
+  const [get, set] = (pool => {
+    const get = (workbook: Workbook) => pool.get(workbook) || null;
+    const set = (workbook: Workbook, rubric: Rubric | null) =>
+      pool.set(workbook, rubric).has(workbook);
+    return [get, set];
+  })(new WeakMap<Workbook, Rubric | null>());
 
   /**
    * Audits a rubric, prunes unknown or invalid cells. Never throws.
