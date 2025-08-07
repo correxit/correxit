@@ -32,13 +32,13 @@ export class Sidebar extends ReactWidget {
       return;
     }
     if (workbook) {
-      const { model } = workbook.content;
+      const { model } = workbook.context;
       model?.sharedModel.metadataChanged.connect(this.ping, this);
       workbook.context.fileChanged.connect(this.ping, this);
     }
     const previous = this.workbook;
     if (previous) {
-      const { model } = previous.content;
+      const { model } = previous.context;
       model?.sharedModel.metadataChanged.disconnect(this.ping, this);
       previous.context.fileChanged.disconnect(this.ping, this);
     }
@@ -52,14 +52,14 @@ export class Sidebar extends ReactWidget {
 
   protected render() {
     const { commands, trans, workbook } = this;
-    if (workbook === null || workbook.content.model === null) {
+    if (workbook === null || workbook.context.model === null) {
       return (
         <section>
           <small>[{trans.__('correxit idle, waiting for notebook')}]</small>
         </section>
       );
     }
-    const key = workbook.content.model.cells.get(0).id;
+    const key = workbook.context.model.cells.get(0).id;
     return (
       <UseSignal key={key} signal={this.pinged} initialSender={this}>
         {() => (

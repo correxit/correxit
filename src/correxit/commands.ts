@@ -31,7 +31,7 @@ export function addCommands(options: {
   const disposables = [];
   disposables.push(commands.addCommand(CommandIDs.add, {
     isEnabled: ({ id, reference }: Partial<Correxit.Workbook.Cell>) => {
-      const cells = active.workbook?.content.model?.cells || [];
+      const cells = active.workbook?.context.model?.cells || [];
       const model = find(cells, cell => cell.id === id);
       const rubric = Correxit.open(active.workbook, quiet);
       if (!model || !rubric || rubric.locked || !id || id === reference) {
@@ -152,7 +152,7 @@ export function addCommands(options: {
         return true;
       }
 
-      const cells = active.workbook!.content.model!.cells;
+      const cells = active.workbook!.context.model!.cells;
       const model = find(cells, model => model.id === id)
       return model?.type === 'code';
     },
@@ -221,7 +221,7 @@ export function addCommands(options: {
         return false;
       }
 
-      const cells = active.workbook?.content.model?.cells || [];
+      const cells = active.workbook?.context.model?.cells || [];
       const code = find(cells, cell => cell.id === id)?.type === 'code';
       return code && !has(rubric, id, deep) || has(rubric, id);
     },

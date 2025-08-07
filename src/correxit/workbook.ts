@@ -139,11 +139,12 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<string> {
-      if (!key || !workbook.content.model) {
+      if (!key || !workbook.context.model) {
         throw new Error('decrypt error');
       }
 
-      const { model, widgets } = workbook.content;
+      const { widgets } = workbook.content;
+      const { model } = workbook.context;
       const index = findIndex(model.cells, cell => cell.id === reference);
       if (index === -1) {
         throw new Error('decrypt error');
@@ -180,11 +181,12 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<string> {
-      if (!key || !workbook.content.model) {
+      if (!key || !workbook.context.model) {
         throw new Error('encrypt error');
       }
 
-      const { model, widgets } = workbook.content;
+      const { widgets } = workbook.content;
+      const { model } = workbook.context;
       const index = findIndex(model.cells, ({ id }) => id === reference);
       if (index === -1) {
         throw new Error('encrypt error');
@@ -321,13 +323,13 @@ export namespace Workbook {
    * Audits a rubric, prunes unknown or invalid cells. Never throws.
    */
   export function audit(workbook: Workbook, rubric: Rubric): Audit {
-    if (!workbook.content.model) {
-      return { ok: false, error: 'null content model', rubric };
+    if (!workbook.context.model) {
+      return { ok: false, error: 'null notebook model', rubric };
     }
 
     const pruned: { cell: Cell; reason: string; }[] = [];
     const { locked, secret, shared } = rubric;
-    const known = reduce(workbook.content.model.cells,
+    const known = reduce(workbook.context.model.cells,
       (accumulator, { id, type }) => ({
         ...accumulator,
         [id]: locked ? type === 'code' || type === 'raw' : type === 'code'
@@ -440,11 +442,12 @@ export namespace Workbook {
     rubric: Rubric,
     id?: Cell['id']
   ): Promise<Outputs | null> {
-    if (!rubric || !workbook.content.model) {
+    if (!rubric) {
       throw new Error('execute error');
     }
 
-    const { content: { model: { cells } }, context } = workbook;
+    const { context } = workbook;
+    const { model: { cells } } = context;
     let stop = cells.length;
     if (id) {
       const cell = Rubric.get(rubric, id);
@@ -510,7 +513,7 @@ export namespace Workbook {
     workbook: Workbook | null,
     quiet = false
   ): Rubric | null {
-    if (!workbook || !workbook.content.model) {
+    if (!workbook) {
       if (quiet) {
         return null;
       }
@@ -520,7 +523,7 @@ export namespace Workbook {
       return get(workbook);
     }
 
-    const metadata = workbook.content.model.sharedModel.getMetadata('correxit');
+    const metadata = workbook.context.model.sharedModel.getMetadata('correxit');
     try {
       if (!metadata) {
         throw Correxit.NO_CORREXIT_METADATA;
@@ -540,11 +543,11 @@ export namespace Workbook {
    */
   export async function reset(workbook: Workbook) {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked || !workbook.content.model) {
+    if (!rubric || rubric.locked) {
       throw new Error('reset error');
     }
     set(workbook, null);
-    workbook.content.model.sharedModel.deleteMetadata('correxit');
+    workbook.context.model.sharedModel.deleteMetadata('correxit');
   }
 
   /**
@@ -576,17 +579,13 @@ export namespace Workbook {
     rubric: Rubric.Unlocked
   ): Rubric.Unlocked
   export function update(workbook: Workbook, rubric: Rubric): Rubric {
-    set(workbook, null);
-    if (!workbook.content.model) {
-      throw new Error('update error');
-    }
-
     const audited = audit(workbook, rubric);
     const metadata = async ({ sharedModel }: INotebookModel, rubric: Rubric) =>
       sharedModel.setMetadata('correxit', await Rubric.lock(rubric));
+    set(workbook, null);
     if (audited.ok) {
       set(workbook, audited.rubric);
-      void metadata(workbook.content.model, audited.rubric);
+      void metadata(workbook.context.model, audited.rubric);
       return audited.rubric;
     }
     throw new Error(audited.error);

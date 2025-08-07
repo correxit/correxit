@@ -15,9 +15,9 @@ export const Body: React.FC<{
 }> = ({ commands, trans, workbook }) => {
   const quiet = true;
   const rubric = Correxit.open(workbook, quiet);
-  const { activeCell, activeCellChanged, model } = workbook.content;
+  const { activeCell, activeCellChanged } = workbook.content;
   const key = workbook.content.id;
-  if (!model || !activeCell || !rubric) {
+  if (!activeCell || !rubric) {
     return <section className="correxit-body"></section>;
   }
   return (
