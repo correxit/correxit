@@ -24,25 +24,26 @@ export class Sidebar extends ReactWidget {
 
   protected pinged = new Signal<unknown, undefined>(this);
 
-  protected get workbook(): Correxit.Workbook | null {
+  protected get workbook(): Correxit.Workbook.Headed | null {
     return this._workbook;
   }
   protected set workbook(workbook: Correxit.Workbook | null) {
     if (workbook === this.workbook) {
       return;
     }
-    if (workbook) {
-      const { model } = workbook.context;
-      model?.sharedModel.metadataChanged.connect(this.ping, this);
-      workbook.context.fileChanged.connect(this.ping, this);
-    }
+
     const previous = this.workbook;
+    this._workbook = workbook && workbook.content && workbook;
+    if (this._workbook) {
+      const { model } = this._workbook.context;
+      model.sharedModel.metadataChanged.connect(this.ping, this);
+      this._workbook.context.fileChanged.connect(this.ping, this);
+    }
     if (previous) {
       const { model } = previous.context;
-      model?.sharedModel.metadataChanged.disconnect(this.ping, this);
+      model.sharedModel.metadataChanged.disconnect(this.ping, this);
       previous.context.fileChanged.disconnect(this.ping, this);
     }
-    this._workbook = workbook;
     this.update();
   }
 
@@ -52,7 +53,7 @@ export class Sidebar extends ReactWidget {
 
   protected render() {
     const { commands, trans, workbook } = this;
-    if (workbook === null || workbook.context.model === null) {
+    if (workbook === null) {
       return (
         <section>
           <small>[{trans.__('correxit idle, waiting for notebook')}]</small>
@@ -82,7 +83,7 @@ export class Sidebar extends ReactWidget {
     }
   }
 
-  private _workbook: Correxit.Workbook | null = null;
+  private _workbook: Correxit.Workbook.Headed | null = null;
 }
 
 export namespace Sidebar {

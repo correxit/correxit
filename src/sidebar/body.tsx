@@ -11,16 +11,12 @@ import { Correxit } from '../correxit';
 export const Body: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
-  workbook: Correxit.Workbook;
+  workbook: Correxit.Workbook.Headed;
 }> = ({ commands, trans, workbook }) => {
-  if (!workbook.content) {
-    return <></>;
-  }
-
   const quiet = true;
   const rubric = Correxit.open(workbook, quiet);
   const { activeCell, activeCellChanged } = workbook.content;
-  const key = workbook.content.id;
+  const key = workbook.context.model.cells.get(0).id;
   if (!activeCell || !rubric) {
     return <section className="correxit-body"></section>;
   }

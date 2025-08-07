@@ -21,7 +21,9 @@ export namespace Correxit {
   export type Workbook = WORKBOOK; // Only export `Workbook` type.
 
   export namespace Workbook {
-    export type Cell = WORKBOOK.Cell; // Only export `Cell` type.
+    export type Cell = WORKBOOK.Cell;
+    export type Headed = WORKBOOK.Headed;
+    export type Headless = WORKBOOK.Headless;
   }
 
   /**

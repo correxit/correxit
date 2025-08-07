@@ -12,13 +12,9 @@ import { Rubric } from './rubric';
 import * as security from './security';
 
 /**
- * A `NotebookPanel` matches the `Workbook` type. Conceptually, a notebook
- * panel is only a Correxit workbook if it has Correxit metadata.
+ * A headed or headless Correxit workbook.
  */
-export type Workbook = {
-  readonly content?: Notebook;
-  readonly context: DocumentRegistry.IContext<INotebookModel>;
-};
+export type Workbook = Workbook.Headed | Workbook.Headless;
 
 export namespace Workbook {
   /**
@@ -35,6 +31,17 @@ export namespace Workbook {
 
     export type Fail = { ok: false; error: string; rubric: Rubric | null; };
   }
+
+  export type Headed = {
+    readonly content: Notebook;
+    readonly context: DocumentRegistry.IContext<INotebookModel>;
+  };
+
+  export type Headless = {
+    readonly content: null;
+    readonly context: DocumentRegistry.IContext<INotebookModel>;
+  };
+
   /**
    * The collection of outputs for every scorable workbook cell.
    */
