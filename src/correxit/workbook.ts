@@ -145,12 +145,9 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<void> {
-      if (!key || !workbook.context.model) {
-        throw new Error('decrypt error');
-      }
       const { model } = workbook.context;
       const index = findIndex(model.cells, ({ id }) => id === reference);
-      if (index === -1) {
+      if (!key || index === -1) {
         throw new Error('decrypt error');
       }
 
