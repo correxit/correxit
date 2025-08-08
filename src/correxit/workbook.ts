@@ -45,7 +45,7 @@ export namespace Workbook {
   /**
    * The collection of outputs for every scorable workbook cell.
    */
-  export type Outputs = { [id: Cell['id']]: Cell.Output[]; }
+  export type Outputs = { [id: string]: Cell.Output[]; }
 
   /**
    * A workbook cell definition defines how to score a notebook cell.
@@ -268,7 +268,7 @@ export namespace Workbook {
      */
     export async function score(
       workbook: Workbook,
-      id: Cell['id'],
+      id: string,
       outputs: Outputs,
     ): Promise<Rubric.Score> {
       const rubric = open(workbook, quiet);
@@ -301,7 +301,7 @@ export namespace Workbook {
     /**
      * Toggle a rubric cell between `secret` and `shared` sections of rubric.
      */
-    export function toggle(workbook: Workbook, id: Cell['id']): Rubric.Unlocked {
+    export function toggle(workbook: Workbook, id: string): Rubric.Unlocked {
       const rubric = open(workbook, quiet);
       if (!rubric || rubric.locked || !Rubric.has(rubric, id)) {
         throw new Error('toggle error');
@@ -384,7 +384,7 @@ export namespace Workbook {
    */
   export async function correct(
     workbook: Workbook,
-    id?: Cell['id']
+    id?: string
   ): Promise<Rubric.Score> {
     const { sum, UNSCORED } = Rubric;
     const rubric = open(workbook, quiet);
@@ -437,7 +437,7 @@ export namespace Workbook {
   export async function execute(
     workbook: Workbook,
     rubric: Rubric,
-    id?: Cell['id']
+    id?: string
   ): Promise<Outputs | null> {
     if (!rubric) {
       throw new Error('execute error');
@@ -502,7 +502,14 @@ export namespace Workbook {
    * @param quiet - Whether to return `null` or throw errors.
    *
    * #### Notes
-   * If `quiet` is set to true, the function returns `null` instead of throwing.
+   * If a rubric exists in the pool for the given workbook, it is returned.
+   *
+   * If no rubric exists in the pool for the given workbook, its notebook
+   * metadata for the key `correxit` is read, parsed, and normalized. Each of
+   * these steps may throw an error or return null. If every step is successful,
+   * a workbook `update` is invoked, which will `audit` the rubric and
+   * schedule a notebook metadata update.
+   * @see update
    */
   export function open(
     workbook: Workbook | null,
@@ -524,7 +531,7 @@ export namespace Workbook {
         throw Correxit.NO_CORREXIT_METADATA;
       }
       const normalized = Rubric.normalize(metadata as Partial<Rubric.Locked>);
-      return update(workbook, normalized);
+      return update(workbook, { ...normalized, accessed: Date.now() });
     } catch (error) {
       if (quiet) {
         return null;
@@ -564,6 +571,14 @@ export namespace Workbook {
 
   /**
    * Updates the workbook metadata after auditing the given rubric.
+   *
+   * #### Notes
+   * If the given rubric passes an audit, which may prune broken cells, it is
+   * asynchronously written to the notebook metadata `correxit` key while
+   * synchronously the audited rubric is returned.
+   *
+   * This function is typically invoked by functions that modify a workbook's
+   * rubric (e.g., `decrypt`, `encrypt`, etc.) in the `Workbook` namespace.
    */
   export function update(
     workbook: Workbook,

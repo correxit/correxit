@@ -56,10 +56,7 @@ export namespace Rubric {
   /**
    * @returns the rubric cell referenced by the `id` if found, otherwise `null`.
    */
-  export function get(
-    rubric: Rubric,
-    id: Workbook.Cell['id']
-  ): Workbook.Cell | null {
+  export function get(rubric: Rubric, id: string): Workbook.Cell | null {
     if (has(rubric, id)) {
       const { locked, secret, shared } = rubric;
       return locked ? shared.cells[id] : secret.cells[id] || shared.cells[id];
@@ -71,11 +68,7 @@ export namespace Rubric {
    * @param deep also check if given `id` is a `reference`, defaults to `false`.
    * @returns whether a rubric has or references a given id.
    */
-  export function has(
-    rubric: Rubric,
-    id: Workbook.Cell['id'],
-    deep = false
-  ): boolean {
+  export function has(rubric: Rubric, id: string, deep = false): boolean {
     const references = ({ cells }: Section, reference: string) =>
       find(Object.keys(cells), key => cells[key].reference === reference);
     const { locked, secret, shared } = rubric;
@@ -156,7 +149,7 @@ export namespace Rubric {
   /**
    * @returns a rubric where given cell is toggled between `secret` or `shared`.
    */
-  export function toggle(rubric: Unlocked, id: Workbook.Cell['id']): Unlocked {
+  export function toggle(rubric: Unlocked, id: string): Unlocked {
     if (!has(rubric, id)) {
       throw new Error('cannot toggle cell unknown in rubric');
     }
