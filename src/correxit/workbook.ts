@@ -154,8 +154,9 @@ export namespace Workbook {
       const source = model.cells.get(index).sharedModel.getSource();
       const decrypted = await security.decrypt(source, key);
       const { sharedModel } = model;
-      model.cells.get(index).sharedModel.deleteMetadata('editable');
-      model.cells.get(index).sharedModel.setSource(decrypted);
+      const cell = model.cells.get(index).sharedModel;
+      cell.deleteMetadata('editable');
+      cell.setSource(decrypted);
       sharedModel.transact(() => {
         const raw = model.cells.get(index).toJSON();
         raw.metadata.trusted = true;
@@ -191,8 +192,9 @@ export namespace Workbook {
       const source = model.cells.get(index).sharedModel.getSource();
       const encrypted = await security.encrypt(source, key);
       const { sharedModel } = model;
-      model.cells.get(index).sharedModel.setSource(encrypted);
-      model.cells.get(index).sharedModel.setMetadata('editable', false);
+      const cell = model.cells.get(index).sharedModel;
+      cell.setSource(encrypted);
+      cell.setMetadata('editable', false);
       sharedModel.transact(() => {
         const raw = model.cells.get(index).toJSON();
         delete raw.metadata.trusted;
@@ -567,12 +569,12 @@ export namespace Workbook {
   }
 
   /**
-   * Updates the workbook metadata after auditing the given rubric.
+   * Audits a given workbook rubric and updates the workbook if necessary.
    *
    * #### Notes
    * If the given rubric passes an audit, which may prune broken cells, it is
-   * asynchronously written to the notebook metadata `correxit` key while
-   * synchronously the audited rubric is returned.
+   * asynchronously written to the notebook metadata `correxit` key if the audit
+   * made rubric changes. The audited rubric is returned synchronously.
    *
    * This function is typically invoked by functions that modify a workbook's
    * rubric (e.g., `decrypt`, `encrypt`, etc.) in the `Workbook` namespace.
@@ -590,11 +592,13 @@ export namespace Workbook {
     const metadata = async ({ sharedModel }: INotebookModel, rubric: Rubric) =>
       sharedModel.setMetadata('correxit', await Rubric.lock(rubric));
     set(workbook, null);
-    if (audited.ok) {
-      set(workbook, audited.rubric);
-      void metadata(workbook.context.model, audited.rubric);
-      return audited.rubric;
+    if (!audited.ok) {
+      throw new Error(audited.error);
     }
-    throw new Error(audited.error);
+    set(workbook, audited.rubric);
+    if (audited.pruned.length) {
+      void metadata(workbook.context.model, audited.rubric);
+    }
+    return audited.rubric;
   }
 }
