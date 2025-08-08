@@ -1,9 +1,9 @@
 import { InputDialog } from '@jupyterlab/apputils';
 import { Cell, ICellModel } from '@jupyterlab/cells';
-import { Notebook } from '@jupyterlab/notebook';
 import { filter } from '@lumino/algorithm';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
+import { Workbook } from './workbook';
 
 const EXCLUDE_CLASS = 'cxt-mod-exclude';
 
@@ -16,7 +16,7 @@ const TARGET_CELL_CLASS = 'correxit-target-cell';
 /**
  * @returns a promise that resolves to a user input cell or `null`.
  */
-export function cell(notebook: Notebook): Promise<ICellModel | null> {
+export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
   let target: Cell<ICellModel> | null = null;
   const delegate = new PromiseDelegate<ICellModel | null>();
   const overlay = document.createElement('div');
@@ -40,6 +40,7 @@ export function cell(notebook: Notebook): Promise<ICellModel | null> {
   const pointerdown = () => submit();
   const throttler = new Throttler(
     ({ clientX, clientY }: PointerEvent) => {
+      const notebook = workbook.content;
       const cells = notebook.widgets;
       notebook.node.querySelectorAll(`.${TARGET_CELL_CLASS}`)
         .forEach(({ classList }) =>
@@ -68,7 +69,7 @@ export function cell(notebook: Notebook): Promise<ICellModel | null> {
     target = null;
   };
   overlay.classList.add(OVERLAY_CLASS);
-  notebook.viewportNode.appendChild(overlay);
+  workbook.content.viewportNode.appendChild(overlay);
   overlay.addEventListener('pointermove', pointermove);
   overlay.addEventListener('pointerout', pointerout);
   document.addEventListener('pointerdown', pointerdown);

@@ -83,14 +83,12 @@ export function addCommands(options: {
 
       let reference = cell.reference;
       if (!reference) {
-        const selected = workbook.content && await input.cell(workbook.content);
+        const selected = workbook.content && await input.cell(workbook);
         reference = selected && selected.id;
       }
-
       if (!reference || id === reference) {
         return;
       }
-
       if (workbook.content) {
         const { widgets } = workbook.content;
         const original = find(widgets, ({ model }) => model.id === id)!;
