@@ -27,17 +27,17 @@ export class Sidebar extends ReactWidget {
   protected get workbook(): Correxit.Workbook.Headed | null {
     return this._workbook;
   }
-  protected set workbook(workbook: Correxit.Workbook | null) {
+  protected set workbook(workbook: Correxit.Workbook.Headed | null) {
     if (workbook === this.workbook) {
       return;
     }
 
     const previous = this.workbook;
-    this._workbook = workbook && workbook.content && workbook;
-    if (this._workbook) {
-      const { model } = this._workbook.context;
+    this._workbook = workbook;
+    if (workbook) {
+      const { model } = workbook.context;
       model.sharedModel.metadataChanged.connect(this.ping, this);
-      this._workbook.context.fileChanged.connect(this.ping, this);
+      workbook.context.fileChanged.connect(this.ping, this);
     }
     if (previous) {
       const { model } = previous.context;

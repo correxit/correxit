@@ -29,7 +29,7 @@ export namespace Correxit {
   /**
    * The core Correxit plugin registers commands and returns a workbook source.
    */
-  export type Source = AsyncIterable<{ payload: Workbook | null }>;
+  export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 

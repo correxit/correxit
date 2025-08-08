@@ -77,7 +77,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       const added = addCommands({ commands, source, translator });
       const quiet = true;
       let current: Correxit.Workbook | null = null;
-      const schedule = (workbook: Correxit.Workbook | null) => {
+      const schedule = (workbook: Correxit.Workbook.Headed | null) => {
         if (workbook === source.state.payload) {
           return;
         }
@@ -105,8 +105,10 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       };
       const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) =>
         schedule(newValue instanceof NotebookPanel ? newValue : null);
-      const trackerSlot = (_: unknown, workbook: Correxit.Workbook | null) =>
-        schedule(workbook);
+      const trackerSlot = (
+        _: unknown,
+        workbook: Correxit.Workbook.Headed | null
+      ) => schedule(workbook);
       shell.currentChanged?.connect(shellSlot);
       tracker.currentChanged.connect(trackerSlot);
       deactivator = () => {
