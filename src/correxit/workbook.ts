@@ -507,7 +507,7 @@ export namespace Workbook {
    * metadata for the key `correxit` is read, parsed, and normalized. Each of
    * these steps may throw an error or return null. If every step is successful,
    * a workbook `update` is invoked, which will `audit` the rubric and
-   * schedule a notebook metadata update.
+   * schedule a notebook metadata update if necessary.
    * @see update
    */
   export function open(
@@ -530,7 +530,7 @@ export namespace Workbook {
         throw Correxit.NO_CORREXIT_METADATA;
       }
       const normalized = Rubric.normalize(metadata as Partial<Rubric.Locked>);
-      return update(workbook, { ...normalized, accessed: Date.now() });
+      return update(workbook, normalized, false);
     } catch (error) {
       if (quiet) {
         return null;
@@ -571,6 +571,9 @@ export namespace Workbook {
   /**
    * Audits a given workbook rubric and updates the workbook if necessary.
    *
+   * If `write` is set to `false` update will only change notebook metadata if
+   * it prunes a rubric. Otherwise, it will always update metadata.
+   *
    * #### Notes
    * If the given rubric passes an audit, which may prune broken cells, it is
    * asynchronously written to the notebook metadata `correxit` key if the audit
@@ -581,13 +584,19 @@ export namespace Workbook {
    */
   export function update(
     workbook: Workbook,
-    rubric: Rubric.Locked
+    rubric: Rubric.Locked,
+    write?: boolean
   ): Rubric.Locked
   export function update(
     workbook: Workbook,
-    rubric: Rubric.Unlocked
+    rubric: Rubric.Unlocked,
+    write?: boolean
   ): Rubric.Unlocked
-  export function update(workbook: Workbook, rubric: Rubric): Rubric {
+  export function update(
+    workbook: Workbook,
+    rubric: Rubric,
+    write = true
+  ): Rubric {
     const audited = audit(workbook, rubric);
     const metadata = async ({ sharedModel }: INotebookModel, rubric: Rubric) =>
       sharedModel.setMetadata('correxit', await Rubric.lock(rubric));
@@ -596,7 +605,7 @@ export namespace Workbook {
       throw new Error(audited.error);
     }
     set(workbook, audited.rubric);
-    if (audited.pruned.length) {
+    if (write || audited.pruned.length) {
       void metadata(workbook.context.model, audited.rubric);
     }
     return audited.rubric;
