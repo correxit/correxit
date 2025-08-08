@@ -133,18 +133,7 @@ export function addCommands(options: {
     icon: checkIcon,
     isEnabled: ({ id }: Partial<Correxit.Workbook.Cell>) => {
       const rubric = Correxit.open(active.workbook, quiet);
-      if (!rubric) {
-        return false;
-      }
-      if (!id) {
-        return size(rubric) > 0;
-      }
-
-      const model = active.workbook!.content?.activeCell?.model;
-      if (!model || model.id !== id || model.type !== 'code') {
-        return false;
-      }
-      return has(rubric, id);
+      return !!rubric && (id ? has(rubric, id) : size(rubric) > 0);
     },
     isVisible: ({ id }) => {
       const rubric = Correxit.open(active.workbook, quiet);
@@ -154,7 +143,6 @@ export function addCommands(options: {
       if (!id) {
         return true;
       }
-
       const cells = active.workbook!.context.model!.cells;
       const model = find(cells, model => model.id === id)
       return model?.type === 'code';
@@ -173,10 +161,6 @@ export function addCommands(options: {
       }
 
       const workbook = active.workbook!;
-      if (workbook.content) {
-        workbook.content.scrollToCell(workbook.content.activeCell!);
-      }
-
       const score = await Correxit.correct(workbook, id);
       const unscored = score === Correxit.Rubric.UNSCORED;
       const [x, y] = score;
@@ -184,6 +168,9 @@ export function addCommands(options: {
         title: trans.__('Computed score'),
         body: unscored ? trans.__('Unscored') : trans.__('%1 of %2', x, y)
       });
+      if (workbook.content) {
+        workbook.content.scrollToCell(workbook.content.activeCell!);
+      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.lock, {

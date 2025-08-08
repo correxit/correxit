@@ -154,7 +154,6 @@ export namespace Workbook {
         throw new Error('decrypt error');
       }
 
-      const notebook = workbook.content;
       const source = model.cells.get(index).sharedModel.getSource();
       const decrypted = await security.decrypt(source, key);
       const { sharedModel } = model;
@@ -166,14 +165,14 @@ export namespace Workbook {
         sharedModel.deleteCell(index);
         sharedModel.insertCell(index, { ...raw, cell_type: 'code' });
       }, false);
-      if (notebook) {
-        const { widgets } = notebook;
+      if (workbook.content) {
+        const { widgets } = workbook.content;
         const widget = find(widgets, ({ model }) => model.id === reference);
         if (widget) {
           widget.inputHidden = false;
         }
-        NotebookActions.clearAllOutputs(notebook);
-        NotebookActions.deselectAll(notebook);
+        NotebookActions.clearAllOutputs(workbook.content);
+        NotebookActions.deselectAll(workbook.content);
       }
     }
 
@@ -192,7 +191,6 @@ export namespace Workbook {
         throw new Error('encrypt error');
       }
 
-      const notebook = workbook.content;
       const source = model.cells.get(index).sharedModel.getSource();
       const encrypted = await security.encrypt(source, key);
       const { sharedModel } = model;
@@ -204,14 +202,14 @@ export namespace Workbook {
         sharedModel.deleteCell(index);
         sharedModel.insertCell(index, { ...raw, cell_type: 'raw' });
       }, false);
-      if (notebook) {
-        const { widgets } = notebook;
+      if (workbook.content) {
+        const { widgets } = workbook.content;
         const widget = find(widgets, ({ model }) => model.id === reference);
         if (widget) {
           widget.inputHidden = true;
         }
-        NotebookActions.clearAllOutputs(notebook);
-        NotebookActions.deselectAll(notebook);
+        NotebookActions.clearAllOutputs(workbook.content);
+        NotebookActions.deselectAll(workbook.content);
       }
     }
 
