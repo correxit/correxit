@@ -504,10 +504,11 @@ export namespace Workbook {
    * If a rubric exists in the pool for the given workbook, it is returned.
    *
    * If no rubric exists in the pool for the given workbook, its notebook
-   * metadata for the key `correxit` is read, parsed, and normalized. Each of
-   * these steps may throw an error or return null. If every step is successful,
-   * a workbook `update` is invoked, which will `audit` the rubric and
-   * schedule a notebook metadata update if necessary.
+   * metadata for the key `correxit` is read, parsed, normalized, and audited.
+   * Each of these steps may throw an error or return null. If every step is
+   * successful and the audit leaves the rubric unmodified, it is returned
+   * immediately. If the audit changes the rubric, it is returned immediately
+   * but also schedules a notebook metadata update.
    * @see update
    */
   export function open(
@@ -529,8 +530,16 @@ export namespace Workbook {
       if (!metadata) {
         throw Correxit.NO_CORREXIT_METADATA;
       }
-      const normalized = Rubric.normalize(metadata as Partial<Rubric.Locked>);
-      return update(workbook, normalized, false);
+      const rubric = Rubric.normalize(metadata as Partial<Rubric.Locked>);
+      const audit = Workbook.audit(workbook, rubric);
+      if (!audit.ok) {
+        throw new Error(`open error: ${audit.error}`);
+      }
+      if (audit.pruned.length) {
+        return update(workbook, rubric, audit);
+      }
+      set(workbook, rubric);
+      return get(workbook);
     } catch (error) {
       if (quiet) {
         return null;
@@ -585,29 +594,27 @@ export namespace Workbook {
   export function update(
     workbook: Workbook,
     rubric: Rubric.Locked,
-    write?: boolean
+    audit?: Audit
   ): Rubric.Locked
   export function update(
     workbook: Workbook,
     rubric: Rubric.Unlocked,
-    write?: boolean
+    audit?: Audit
   ): Rubric.Unlocked
   export function update(
     workbook: Workbook,
     rubric: Rubric,
-    write = true
+    audit?: Audit
   ): Rubric {
-    const audited = audit(workbook, rubric);
+    audit ||= Workbook.audit(workbook, rubric);
     const metadata = async ({ sharedModel }: INotebookModel, rubric: Rubric) =>
       sharedModel.setMetadata('correxit', await Rubric.lock(rubric));
     set(workbook, null);
-    if (!audited.ok) {
-      throw new Error(audited.error);
+    if (!audit.ok) {
+      throw new Error(audit.error);
     }
-    set(workbook, audited.rubric);
-    if (write || audited.pruned.length) {
-      void metadata(workbook.context.model, audited.rubric);
-    }
-    return audited.rubric;
+    set(workbook, audit.rubric);
+    void metadata(workbook.context.model, audit.rubric);
+    return audit.rubric;
   }
 }
