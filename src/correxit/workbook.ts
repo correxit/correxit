@@ -321,9 +321,9 @@ export namespace Workbook {
   /**
    * Audits a rubric, prunes unknown or invalid cells. Never throws.
    */
-  export function audit(workbook: Workbook, rubric: Rubric): Audit {
-    if (!workbook.context.model) {
-      return { ok: false, error: 'null notebook model', rubric };
+  export function audit(workbook: Workbook, rubric: Rubric | null): Audit {
+    if (!rubric) {
+      return { ok: false, error: 'null rubric', rubric };
     }
 
     const pruned: { cell: Cell; reason: string; }[] = [];
@@ -539,6 +539,7 @@ export namespace Workbook {
       if (audit.pruned.length) {
         return update(workbook, rubric, audit);
       }
+      // Update the pool and return the locked rubric.
       set(workbook, rubric);
       return rubric;
     } catch (error) {
@@ -609,14 +610,13 @@ export namespace Workbook {
   export function update(
     workbook: Workbook,
     rubric: Rubric | null,
-    audit?: Audit
+    audit = Workbook.audit(workbook, rubric)
   ): Rubric | null {
     set(workbook, null);
-    if (!rubric) {
+    if (!rubric || !audit) {
       workbook.context.model.sharedModel.deleteMetadata('correxit');
       return null;
     }
-    audit ||= Workbook.audit(workbook, rubric);
     const metadata = async ({ sharedModel }: INotebookModel, rubric: Rubric) =>
       sharedModel.setMetadata('correxit', await Rubric.lock(rubric));
     if (!audit.ok) {
