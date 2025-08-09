@@ -246,7 +246,7 @@ export namespace Rubric {
     if (cell.is === 'correctable') {
       return correct(outputs[cell.reference]);
     }
-    return null as never;
+    return 'unreachable' as never;
   }
 
   /**

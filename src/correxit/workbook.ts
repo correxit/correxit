@@ -128,14 +128,15 @@ export namespace Workbook {
      * @returns an array of of cell outputs.
      */
     export async function execute(
-      { sharedModel: { source } }: ICodeCellModel,
+      { sharedModel }: ICodeCellModel,
       kernel: Kernel.IKernelConnection
     ): Promise<Rubric.Cell.Output[]> {
       const outputs: Rubric.Cell.Output[] = [];
-      if (!source) {
+      const code = sharedModel.getSource();
+      if (!code.length) {
         return outputs;
       }
-      const future = kernel.requestExecute({ code: source });
+      const future = kernel.requestExecute({ code });
       future.onIOPub = (message: KernelMessage.IIOPubMessage) => {
         if (message.header.msg_type === 'execute_result' ||
             message.header.msg_type === 'display_data' ||
@@ -498,11 +499,11 @@ function update(
     return null;
   }
   if (!audit.ok) {
-    throw new Error(audit.error);
+    throw new Error(`update error: ${audit.error}`);
   }
   set(workbook, audit.rubric);
-  // TODO: Emit these warnings as events instead.
   for (const { cell: { id, is }, reason } of audit.pruned) {
+    // TODO: Emit these warnings as events instead.
     console.warn(`pruned ${is} (${id} ${reason}) from ${audit.rubric.id}`);
   }
   // Schedule a metadata write and return the audited rubric immediately.
