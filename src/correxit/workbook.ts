@@ -52,21 +52,19 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<void> {
-      const { model } = workbook.context;
-      const index = findIndex(model.cells, ({ id }) => id === reference);
+      const { model: { sharedModel } } = workbook.context;
+      const index = findIndex(sharedModel.cells, ({ id }) => id === reference);
       if (!key || index === -1) {
         throw new Error('decrypt error');
       }
 
-      const source = model.cells.get(index).sharedModel.getSource();
-      const decrypted = await security.decrypt(source, key);
-      const { sharedModel } = model;
-      const cell = model.cells.get(index).sharedModel;
-      cell.deleteMetadata('editable');
-      cell.setSource(decrypted);
+      const cell = sharedModel.cells[index];
+      cell.setSource(await security.decrypt(cell.getSource(), key));
+
+      const raw = cell.toJSON();
+      delete raw.metadata.editable;
+      raw.metadata.trusted = true;
       sharedModel.transact(() => {
-        const raw = model.cells.get(index).toJSON();
-        raw.metadata.trusted = true;
         sharedModel.deleteCell(index);
         sharedModel.insertCell(index, { ...raw, cell_type: 'code' });
       }, false);
@@ -90,21 +88,19 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<void> {
-      const { model } = workbook.context;
-      const index = findIndex(model.cells, ({ id }) => id === reference);
+      const { model: { sharedModel } } = workbook.context;
+      const index = findIndex(sharedModel.cells, ({ id }) => id === reference);
       if (!key || index === -1) {
         throw new Error('encrypt error');
       }
 
-      const source = model.cells.get(index).sharedModel.getSource();
-      const encrypted = await security.encrypt(source, key);
-      const { sharedModel } = model;
-      const cell = model.cells.get(index).sharedModel;
-      cell.setSource(encrypted);
-      cell.setMetadata('editable', false);
+      const cell = sharedModel.cells[index]
+      cell.setSource(await security.encrypt(cell.getSource(), key));
+
+      const raw = cell.toJSON();
+      raw.metadata.editable = false;
+      delete raw.metadata.trusted;
       sharedModel.transact(() => {
-        const raw = model.cells.get(index).toJSON();
-        delete raw.metadata.trusted;
         sharedModel.deleteCell(index);
         sharedModel.insertCell(index, { ...raw, cell_type: 'raw' });
       }, false);
@@ -172,10 +168,10 @@ export namespace Workbook {
 
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
     const { locked, secret, shared } = rubric;
-    const known = reduce(workbook.context.model.cells,
-      (accumulator, { id, type }) => ({
+    const known = reduce(workbook.context.model.sharedModel.cells,
+      (accumulator, { id, cell_type }) => ({
         ...accumulator,
-        [id]: type === 'code' || type === 'raw'
+        [id]: cell_type === 'code' || cell_type === 'raw'
       }), Object.create(null) as { [id: string]: boolean; }
     );
     for (const { cells } of locked ? [shared] : [secret, shared]) {

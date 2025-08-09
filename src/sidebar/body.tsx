@@ -16,7 +16,7 @@ export const Body: React.FC<{
   const quiet = true;
   const rubric = Workbook.open(workbook, quiet);
   const { activeCell, activeCellChanged } = workbook.content;
-  const key = workbook.context.model.cells.get(0).id;
+  const key = workbook.context.model.sharedModel.cells[0].id;
   if (!activeCell || !rubric) {
     return <section className="correxit-body"></section>;
   }

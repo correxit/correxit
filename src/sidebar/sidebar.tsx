@@ -60,7 +60,7 @@ export class Sidebar extends ReactWidget {
         </section>
       );
     }
-    const key = workbook.context.model.cells.get(0).id;
+    const key = workbook.context.model.sharedModel.cells[0].id;
     return (
       <UseSignal key={key} signal={this.pinged} initialSender={this}>
         {() => (

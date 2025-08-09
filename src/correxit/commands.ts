@@ -31,13 +31,13 @@ export function addCommands(options: {
   const disposables = [];
   disposables.push(commands.addCommand(CommandIDs.add, {
     isEnabled: ({ id, reference }: Partial<Rubric.Cell>) => {
-      const cells = active.workbook?.context.model.cells || [];
-      const model = find(cells, cell => cell.id === id);
+      const cells = active.workbook?.context.model.sharedModel.cells || [];
+      const cell = find(cells, cell => cell.id === id);
       const rubric = Workbook.open(active.workbook, quiet);
-      if (!model || !rubric || rubric.locked || !id || id === reference) {
+      if (!cell || !rubric || rubric.locked || !id || id === reference) {
         return false;
       }
-      return model.type === 'code' && !has(rubric, id, deep);
+      return cell.cell_type === 'code' && !has(rubric, id, deep);
     },
     isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
     label: (cell: Partial<Rubric.Cell>) => {
@@ -141,8 +141,8 @@ export function addCommands(options: {
       if (!id) {
         return true;
       }
-      const cells = active.workbook!.context.model.cells;
-      return find(cells, model => model.id === id)?.type === 'code';
+      const cells = active.workbook!.context.model.sharedModel.cells;
+      return find(cells, model => model.id === id)?.cell_type === 'code';
     },
     label: ({ id }: Partial<Rubric.Cell>) => {
       if (!Workbook.open(active.workbook, quiet)) {
@@ -208,8 +208,8 @@ export function addCommands(options: {
         return false;
       }
 
-      const cells = active.workbook?.context.model.cells || [];
-      const code = find(cells, cell => cell.id === id)?.type === 'code';
+      const cells = active.workbook?.context.model.sharedModel.cells || [];
+      const code = find(cells, cell => cell.id === id)?.cell_type === 'code';
       return code && !has(rubric, id, deep) || has(rubric, id);
     },
     label: (cell: Partial<Rubric.Cell>) =>
