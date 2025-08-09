@@ -331,7 +331,7 @@ export namespace Workbook {
     const known = reduce(workbook.context.model.cells,
       (accumulator, { id, type }) => ({
         ...accumulator,
-        [id]: locked ? type === 'code' || type === 'raw' : type === 'code'
+        [id]: type === 'code' || type === 'raw'
       }), Object.create(null) as { [id: string]: boolean; }
     );
     for (const { cells } of locked ? [shared] : [secret, shared]) {
@@ -408,14 +408,18 @@ export namespace Workbook {
    * Decrypts workbook content.
    */
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
-    const { key, secret: { cells } } = rubric;
+    const audit = Workbook.audit(workbook, rubric);
+    if (!audit.ok) {
+      throw new Error(`decrypt error: ${audit.error}`);
+    }
+    const { key, secret: { cells } } = audit.rubric as Rubric.Unlocked;
     for (const id in cells) {
       const { is, reference } = cells[id];
       if (is === 'comparable' || is === 'correctable') {
         await Cell.decrypt(workbook, reference, key)
       }
     };
-    return update(workbook, { ...rubric, accessed: Date.now() });
+    return update(workbook, rubric, audit);
   }
 
   /**
@@ -613,7 +617,7 @@ export namespace Workbook {
     audit = Workbook.audit(workbook, rubric)
   ): Rubric | null {
     set(workbook, null);
-    if (!rubric || !audit) {
+    if (!audit || !rubric) {
       workbook.context.model.sharedModel.deleteMetadata('correxit');
       return null;
     }
@@ -624,6 +628,10 @@ export namespace Workbook {
     }
     set(workbook, audit.rubric);
     void metadata(workbook.context.model, audit.rubric);
+    const warn = (message: string) => console.warn(message);
+    for (const { cell: { id, is }, reason } of audit.pruned) {
+      warn(`pruned ${is} cell (${id} ${reason}) from ${audit.rubric.id}`);
+    }
     return audit.rubric;
   }
 }
