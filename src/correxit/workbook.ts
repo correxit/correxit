@@ -25,7 +25,7 @@ export namespace Workbook {
   namespace Audit {
     export type Pass = {
       ok: true;
-      pruned: { cell: Cell; reason: string; }[];
+      pruned: { cell: Rubric.Cell; reason: string; }[];
       rubric: Rubric;
     };
 
@@ -42,100 +42,7 @@ export namespace Workbook {
     readonly context: DocumentRegistry.IContext<INotebookModel>;
   };
 
-  /**
-   * The collection of outputs for every scorable workbook cell.
-   */
-  export type Outputs = { [id: string]: Cell.Output[]; }
-
-  /**
-   * A workbook cell definition defines how to score a notebook cell.
-   */
-  export type Cell = {
-    readonly id: string;
-    readonly is: 'answerable';
-    readonly payload: string[];
-    readonly reference: null;
-    readonly shared: boolean;
-  } | {
-    readonly id: string;
-    readonly is: 'comparable' | 'correctable';
-    readonly payload: null;
-    readonly reference: string;
-    readonly shared: boolean;
-  };
-
   export namespace Cell {
-    /**
-     * An output is an `iopub` message of interest.
-     */
-    export type Output =
-      | KernelMessage.IIOPubMessage<'execute_result'>
-      | KernelMessage.IIOPubMessage<'display_data'>
-      | KernelMessage.IIOPubMessage<'stream'>
-      | KernelMessage.IIOPubMessage<'error'>;
-
-    const answer = async (expected: string[], given: Output[]) => {
-        const { CORRECT, INCORRECT, UNSCORED } = Rubric;
-        if (!given.length) {
-          return INCORRECT;
-        }
-
-        const message = given.slice(-1)[0];
-        if (message.header.msg_type === 'error') {
-          return INCORRECT;
-        }
-        if (message.header.msg_type === 'stream') {
-          const { content } = message as KernelMessage.IStreamMsg;
-          if (content.name === 'stdout') {
-            const value = await security.digest(content.text.trim());
-            return value === expected?.[0] ? CORRECT : INCORRECT;
-          }
-          return INCORRECT;
-        }
-      return UNSCORED;
-    };
-
-    const compare = (expected: Output[], given: Output[]) => {
-      const { CORRECT, INCORRECT, UNSCORED } = Rubric;
-      if (!expected.length) {
-        return UNSCORED;
-      }
-      if (!given.length) {
-        return INCORRECT;
-      }
-
-      const keys = (obj: Output['content']) => Object.keys(obj).sort().join('');
-      const x = given.slice(-1)[0].content;
-      const y = expected.slice(-1)[0].content;
-      if (keys(x) !== keys(y)) {
-        return INCORRECT;
-      }
-      if ('data' in x && 'data' in y) {
-        const equal = JSON.stringify(x.data) === JSON.stringify(y.data);
-        return equal ? CORRECT : INCORRECT;
-      }
-      if ('name' in x && 'name' in y) {
-        return x.name === y.name && x.text === y.text ? CORRECT : INCORRECT;
-      }
-      return UNSCORED;
-    };
-
-    const correct = (expected: Output[]) =>
-      expected.some(message => message.header.msg_type === 'error') ?
-        Rubric.INCORRECT : Rubric.CORRECT;
-
-    /**
-     * Add a cell to a workbook's rubric.
-     */
-    export function add(workbook: Workbook, cell: Cell): Rubric.Unlocked {
-      const rubric = open(workbook, quiet);
-      if (!rubric || rubric.locked || Rubric.has(rubric, cell.id)) {
-        throw new Error('add error');
-      }
-      (cell.shared ? rubric.shared : rubric.secret).cells[cell.id] = cell;
-      return update(workbook, { ...rubric, accessed: Date.now() });
-    }
-
     /**
      * Decrypts a workbook cell, modifying its source and changing its cell type
      * from `raw` to `code`.
@@ -223,8 +130,8 @@ export namespace Workbook {
     export async function execute(
       { sharedModel: { source } }: ICodeCellModel,
       kernel: Kernel.IKernelConnection
-    ): Promise<Output[]> {
-      const outputs: Output[] = [];
+    ): Promise<Rubric.Cell.Output[]> {
+      const outputs: Rubric.Cell.Output[] = [];
       if (!source) {
         return outputs;
       }
@@ -234,79 +141,24 @@ export namespace Workbook {
             message.header.msg_type === 'display_data' ||
             message.header.msg_type === 'stream' ||
             message.header.msg_type === 'error') {
-          outputs.push(message as Output);
+          outputs.push(message as Rubric.Cell.Output);
         }
       };
       await future.done;
       return outputs;
     }
+  }
 
-    /**
-     * Remove a cell from a workbook's rubric.
-     */
-    export function remove(workbook: Workbook, id: string): void {
-      const rubric = open(workbook, quiet);
-      const cell = rubric && !rubric.locked && Rubric.get(rubric, id);
-      if (cell) {
-        delete (cell.shared ? rubric.shared : rubric.secret).cells[id];
-        update(workbook, { ...rubric, accessed: Date.now() });
-      }
+  /**
+   * Add a cell to a workbook's rubric.
+   */
+  export function add(workbook: Workbook, cell: Rubric.Cell): Rubric.Unlocked {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked || Rubric.has(rubric, cell.id, deep)) {
+      throw new Error('add error');
     }
-
-    /**
-     * Get the score for a single cell.
-     *
-     * @param workbook - the workbook that contains the cell.
-     * @param id - the id of the cell to score.
-     * @param outputs - the outputs of all the executed workbook cells.
-     *
-     * @returns the score for this cell.
-     *
-     * #### Notes
-     * Currently the score is only 0/1 or 1/1 whether it is correct or not.
-     */
-    export async function score(
-      workbook: Workbook,
-      id: string,
-      outputs: Outputs,
-    ): Promise<Rubric.Score> {
-      const rubric = open(workbook, quiet);
-      if (!rubric) {
-        return Rubric.UNSCORED;
-      }
-
-      const cell = Rubric.get(rubric, id);
-      const given = outputs[id];
-      if (!cell || !given) {
-        return Rubric.UNSCORED;
-      }
-      if (cell.is === 'answerable') {
-        return answer(cell.payload, given);
-      }
-
-      const expected = outputs[cell.reference];
-      if (!expected) {
-        return Rubric.UNSCORED;
-      }
-      if (cell.is === 'comparable') {
-        return compare(expected, given);
-      }
-      if (cell.is === 'correctable') {
-        return correct(expected);
-      }
-      return Rubric.UNSCORED;
-    }
-
-    /**
-     * Toggle a rubric cell between `secret` and `shared` sections of rubric.
-     */
-    export function toggle(workbook: Workbook, id: string): Rubric.Unlocked {
-      const rubric = open(workbook, quiet);
-      if (!rubric || rubric.locked || !Rubric.has(rubric, id)) {
-        throw new Error('toggle error');
-      }
-      return update(workbook, Rubric.toggle(rubric, id));
-    }
+    (cell.shared ? rubric.shared : rubric.secret).cells[cell.id] = cell;
+    return update(workbook, { ...rubric, accessed: Date.now() });
   }
 
   /**
@@ -317,7 +169,7 @@ export namespace Workbook {
       return { ok: false, error: 'null rubric', rubric };
     }
 
-    const pruned: { cell: Cell; reason: string; }[] = [];
+    const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
     const { locked, secret, shared } = rubric;
     const known = reduce(workbook.context.model.cells,
       (accumulator, { id, type }) => ({
@@ -387,12 +239,12 @@ export namespace Workbook {
       return UNSCORED;
     }
     if (id) {
-      return Cell.score(workbook, id, outputs);
+      return Rubric.score(rubric, id, outputs);
     }
 
     const initial = Promise.resolve([0, 0] as Rubric.Score);
     return Object.keys(outputs).reduce(async (total, id) =>
-      sum(await total, await Cell.score(workbook, id, outputs)), initial);
+      sum(await total, await Rubric.score(rubric, id, outputs)), initial);
   }
 
   /**
@@ -432,7 +284,7 @@ export namespace Workbook {
     workbook: Workbook,
     rubric: Rubric,
     id?: string
-  ): Promise<Outputs | null> {
+  ): Promise<Rubric.Outputs | null> {
     if (!rubric) {
       throw new Error('execute error');
     }
@@ -461,7 +313,7 @@ export namespace Workbook {
       return null;
     }
 
-    const outputs: Outputs = {};
+    const outputs: Rubric.Outputs = {};
     for (const index of range(stop)) {
       const model = cells.get(index);
       if (model.type === 'code') {
@@ -535,13 +387,25 @@ export namespace Workbook {
         return update(workbook, rubric, audit);
       }
       // Update the pool and return the locked rubric.
-      set(workbook, rubric);
-      return rubric;
+      set(workbook, audit.rubric);
+      return audit.rubric;
     } catch (error) {
       if (quiet) {
         return null;
       }
       throw error;
+    }
+  }
+
+  /**
+   * Remove a cell from a workbook's rubric.
+   */
+  export function remove(workbook: Workbook, id: string): void {
+    const rubric = open(workbook, quiet);
+    const cell = rubric && !rubric.locked && Rubric.get(rubric, id);
+    if (cell) {
+      delete (cell.shared ? rubric.shared : rubric.secret).cells[id];
+      update(workbook, { ...rubric, accessed: Date.now() });
     }
   }
 
@@ -554,6 +418,17 @@ export namespace Workbook {
       throw new Error('reset error');
     }
     update(workbook, null);
+  }
+
+  /**
+   * Toggle a workbook cell between `secret` and `shared` sections of rubric.
+   */
+  export function toggle(workbook: Workbook, id: string): Rubric.Unlocked {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked || !Rubric.has(rubric, id)) {
+      throw new Error('toggle error');
+    }
+    return update(workbook, Rubric.toggle(rubric, id));
   }
 
   /**
@@ -573,6 +448,8 @@ export namespace Workbook {
     return rubric;
   }
 }
+
+const deep = true;
 
 const quiet = true;
 

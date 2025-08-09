@@ -4,7 +4,7 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { HTMLSelect, UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
-import { Correxit } from '../correxit';
+import { Correxit, Rubric, Workbook } from '..';
 
 const CELL_MODE_SWITCHER_CLASS = 'correxit-cell-mode-switcher';
 
@@ -28,21 +28,21 @@ const Switcher: React.FC<{
   commands: CommandRegistry;
   id: string;
   trans: IRenderMime.TranslationBundle;
-  workbook: Correxit.Workbook;
+  workbook: Workbook;
 }> = ({ commands, id, trans, workbook }) => {
   if (!commands.isEnabled(Correxit.CommandIDs.replace, { id })) {
     return <></>;
   }
 
   const quiet = true;
-  const rubric = Correxit.open(workbook, quiet)!;
+  const rubric = Workbook.open(workbook, quiet)!;
   return (
     <HTMLSelect
       className={CELL_MODE_SWITCHER_CLASS}
       onChange={({ target: { value } }) =>
         commands.execute(Correxit.CommandIDs.replace, { id, is: value })
       }
-      value={Correxit.Rubric.get(rubric, id)?.is ?? ''}
+      value={Rubric.get(rubric, id)?.is ?? ''}
       aria-label={trans.__('Workbook cell grading mode')}
       title={trans.__('Select the cell grading mode')}
     >

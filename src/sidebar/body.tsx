@@ -6,15 +6,15 @@ import {
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
-import { Correxit } from '../correxit';
+import { Correxit, Rubric, Workbook } from '..';
 
 export const Body: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
-  workbook: Correxit.Workbook.Headed;
+  workbook: Workbook.Headed;
 }> = ({ commands, trans, workbook }) => {
   const quiet = true;
-  const rubric = Correxit.open(workbook, quiet);
+  const rubric = Workbook.open(workbook, quiet);
   const { activeCell, activeCellChanged } = workbook.content;
   const key = workbook.context.model.cells.get(0).id;
   if (!activeCell || !rubric) {
@@ -44,7 +44,7 @@ export const Body: React.FC<{
 const WorkbookCell: React.FC<{
   cell: ICodeCellModel;
   commands: CommandRegistry;
-  rubric: Correxit.Rubric;
+  rubric: Rubric;
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell: { id }, commands, rubric, trans }) => {
   const { add, correct, remove, toggle } = Correxit.CommandIDs;
@@ -56,7 +56,7 @@ const WorkbookCell: React.FC<{
     { commands, id: toggle, args: { id } },
     { commands, id: remove, args: { id } }
   ];
-  const reference = Correxit.Rubric.get(rubric, id)?.reference;
+  const reference = Rubric.get(rubric, id)?.reference;
   return (
     <>
       <h4>{trans.__('Workbook cell:')}</h4>

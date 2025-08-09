@@ -4,7 +4,7 @@ import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { Signal } from '@lumino/signaling';
 import React from 'react';
-import { Correxit } from '../correxit';
+import { Correxit, Workbook } from '..';
 import { Body } from './body';
 import { Footer } from './footer';
 import { Header } from './header';
@@ -24,10 +24,10 @@ export class Sidebar extends ReactWidget {
 
   protected pinged = new Signal<unknown, undefined>(this);
 
-  protected get workbook(): Correxit.Workbook.Headed | null {
+  protected get workbook(): Workbook.Headed | null {
     return this._workbook;
   }
-  protected set workbook(workbook: Correxit.Workbook.Headed | null) {
+  protected set workbook(workbook: Workbook.Headed | null) {
     if (workbook === this.workbook) {
       return;
     }
@@ -83,7 +83,7 @@ export class Sidebar extends ReactWidget {
     }
   }
 
-  private _workbook: Correxit.Workbook.Headed | null = null;
+  private _workbook: Workbook.Headed | null = null;
 }
 
 export namespace Sidebar {

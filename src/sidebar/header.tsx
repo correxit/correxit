@@ -6,12 +6,12 @@ import {
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
-import { Correxit } from '../correxit';
+import { Correxit, Workbook } from '..';
 
 export const Header: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
-  workbook: Correxit.Workbook;
+  workbook: Workbook;
 }> = ({ commands, trans, workbook }) => {
   const { convert, correct, lock, unlock } = Correxit.CommandIDs;
   return (
@@ -27,10 +27,10 @@ export const Header: React.FC<{
 
 const File: React.FC<{
   trans: IRenderMime.TranslationBundle;
-  workbook: Correxit.Workbook;
+  workbook: Workbook;
 }> = ({ trans, workbook }) => {
   const quiet = true;
-  const rubric = Correxit.open(workbook, quiet);
+  const rubric = Workbook.open(workbook, quiet);
   const { context } = workbook;
   const heading = rubric
     ? trans.__('Workbook file:')
