@@ -6,7 +6,7 @@ import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Rubric, Workbook } from '.';
 import * as input from './input';
-import { digest, keygen } from './security';
+import * as security from './security';
 
 export function addCommands(options: {
   commands: CommandRegistry;
@@ -72,10 +72,11 @@ export function addCommands(options: {
           return;
         }
 
-        const payload = [await digest(expected)];
+        const payload = [await security.digest(expected)];
         const reference = null;
         const shared = false;
-        return Workbook.add(workbook, { id, is, payload, reference, shared });
+        Workbook.add(workbook, { id, is, payload, reference, shared });
+        return;
       }
       if (is !== 'comparable' && is !== 'correctable') {
         return;
@@ -97,7 +98,7 @@ export function addCommands(options: {
 
       const payload = null;
       const shared = false;
-      return Workbook.add(workbook, { id, is, payload, reference, shared });
+      Workbook.add(workbook, { id, is, payload, reference, shared });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.convert, {
@@ -121,9 +122,8 @@ export function addCommands(options: {
         label: trans.__('Enter a passphrase for this workbook')
       });
       if (passphrase) {
-        const rubric = await Workbook.convert(workbook, passphrase);
+        await Workbook.convert(workbook, passphrase);
         await workbook.context.save();
-        return rubric;
       }
     }
   }));
@@ -181,9 +181,8 @@ export function addCommands(options: {
       }
       try {
         const workbook = active.workbook!;
-        const rubric = await Workbook.lock(workbook);
+        await Workbook.lock(workbook);
         await workbook.context.save();
-        return rubric;
       } catch (error) {
         void showErrorMessage(trans.__('Could not lock'), error as Error);
       }
@@ -198,7 +197,7 @@ export function addCommands(options: {
     label: trans.__('Reset expected cell output'),
     execute: async (cell: Partial<Rubric.Cell>) => {
       if (commands.isEnabled(CommandIDs.remove, cell)) {
-        return Workbook.remove(active.workbook!, cell.id!);
+        Workbook.remove(active.workbook!, cell.id!);
       }
     }
   }));
@@ -266,7 +265,7 @@ export function addCommands(options: {
     },
     execute: async (cell: Partial<Rubric.Cell>) => {
       if (commands.isEnabled(CommandIDs.toggle, cell)) {
-        return Workbook.toggle(active.workbook!, cell.id!);
+        Workbook.toggle(active.workbook!, cell.id!);
       }
     }
   }));
@@ -278,16 +277,13 @@ export function addCommands(options: {
     usage: `
 The command execute args type is: { passphrase?: string }
 
-If no passphrase is provided, the command invokes a user prompt dialog.
-
-The command execute return type is: Promise<Rubric.Unlocked | null>
-The returned promise never rejects.
-
-The command invokes an error message dialog if unlock fails.
+If no passphrase is provided, the command invokes a user prompt dialog. The
+returned promise never rejects. The command invokes an error message dialog if
+unlock fails.
     `,
     execute: async ({ passphrase }: { passphrase?: string }) => {
       if (!commands.isEnabled(CommandIDs.unlock)) {
-        return null;
+        return;
       }
       const workbook = active.workbook!;
       try {
@@ -296,21 +292,19 @@ The command invokes an error message dialog if unlock fails.
           label: trans.__('Enter a passphrase to unlock this workbook')
         });
         if (!passphrase) {
-          return null;
+          return;
         }
 
         const opened = Workbook.open(workbook, quiet)!;
-        const key = await keygen(passphrase, opened.id);
-        const rubric = await Workbook.unlock(workbook, key);
+        const key = await security.keygen(passphrase, opened.id);
+        await Workbook.unlock(workbook, key);
         await workbook.context.save();
-        return rubric;
       } catch (error) {
         const file = PathExt.basename(workbook.context.path);
         void showErrorMessage(
           trans.__('Could not unlock %1', file),
           error as Error
         );
-        return null;
       }
     }
   }));

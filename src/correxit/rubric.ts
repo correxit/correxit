@@ -215,7 +215,7 @@ export namespace Rubric {
   /**
    * Get the score for a single cell.
    *
-   * @param workbook - the workbook that contains the cell.
+   * @param rubric - the rubric that defines the cell being scored.
    * @param id - the id of the cell to score.
    * @param outputs - the outputs of all the executed workbook cells.
    *
@@ -288,17 +288,9 @@ export namespace Rubric {
   /**
    * @returns an unlocked rubric after decrypting secret cells with given key.
    */
-  export async function unlock(
-    rubric: Rubric.Locked,
-    key: string
-  ): Promise<Rubric.Unlocked> {
-    return {
-      accessed: Date.now(),
-      id: rubric.id,
-      key,
-      locked: false,
-      secret: JSON.parse(await security.decrypt(rubric.secret as string, key)),
-      shared: rubric.shared
-    };
+  export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
+    const { id, shared } = rubric;
+    const secret = JSON.parse(await security.decrypt(rubric.secret, key));
+    return { accessed: Date.now(), id, key, locked: false, secret, shared };
   }
 }

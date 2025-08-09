@@ -461,7 +461,7 @@ const [get, set] = (pool => {
 })(new WeakMap<Workbook, Rubric | null>());
 
 /**
- * Audits a given workbook rubric and updates the workbook if necessary.
+ * Updates the workbook metadata with an audited rubric.
  *
  * #### Notes
  * If an `audit` is passed in, its results are used.
