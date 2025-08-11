@@ -6,17 +6,18 @@ import {
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
-import { Correxit } from '../correxit';
+import { Correxit, Rubric, Workbook } from '..';
 
 export const Body: React.FC<{
   commands: CommandRegistry;
   trans: IRenderMime.TranslationBundle;
-  workbook: Correxit.Workbook;
+  workbook: Workbook.Headed;
 }> = ({ commands, trans, workbook }) => {
-  const rubric = Correxit.open(workbook, { quiet: true });
-  const { activeCell, activeCellChanged, model } = workbook.content;
-  const key = workbook.content.id;
-  if (!model || !activeCell || !rubric) {
+  const quiet = true;
+  const rubric = Workbook.open(workbook, quiet);
+  const { activeCell, activeCellChanged } = workbook.content;
+  const key = workbook.context.model.sharedModel.cells[0].id;
+  if (!activeCell || !rubric) {
     return <section className="correxit-body"></section>;
   }
   return (
@@ -43,7 +44,7 @@ export const Body: React.FC<{
 const WorkbookCell: React.FC<{
   cell: ICodeCellModel;
   commands: CommandRegistry;
-  rubric: Correxit.Rubric;
+  rubric: Rubric;
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell: { id }, commands, rubric, trans }) => {
   const { add, correct, remove, toggle } = Correxit.CommandIDs;
@@ -55,7 +56,7 @@ const WorkbookCell: React.FC<{
     { commands, id: toggle, args: { id } },
     { commands, id: remove, args: { id } }
   ];
-  const reference = Correxit.Rubric.get(rubric, id)?.reference;
+  const reference = Rubric.get(rubric, id)?.reference?.[0];
   return (
     <>
       <h4>{trans.__('Workbook cell:')}</h4>

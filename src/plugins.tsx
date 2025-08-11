@@ -13,9 +13,9 @@ import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
 import React from 'react';
-import { CellModeSwitcher } from './toolbars';
-import { Correxit } from './correxit';
+import { Correxit, Workbook } from '.';
 import { addCommands } from './correxit/commands';
+import { CellModeSwitcher } from './toolbars';
 import { Sidebar } from './sidebar';
 
 /**
@@ -68,31 +68,29 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       if (registry) {
         void Private.loadSettings(registry);
       }
-      const source = new Poll<Correxit.Workbook | null>({
+      const source = new Poll<Workbook | null>({
         auto: false,
         // Set the poll to never tick except when manually scheduled.
         frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
         factory: async () => null
       });
       const added = addCommands({ commands, source, translator });
-      let current: Correxit.Workbook | null = null;
-      const schedule = (workbook: Correxit.Workbook | null) => {
+      const quiet = true;
+      let current: Workbook | null = null;
+      const schedule = (workbook: Workbook.Headed | null) => {
         if (workbook === source.state.payload) {
           return;
         }
-        Correxit.open(workbook, { quiet: true });
+        Workbook.open(workbook, quiet);
         subscribe(current, workbook);
         current = workbook;
         void source.schedule({ payload: workbook });
       };
-      const subscribe = (
-        prev: Correxit.Workbook | null,
-        next: Correxit.Workbook | null
-      ) => {
+      const subscribe = (prev: Workbook | null, next: Workbook | null) => {
         prev?.context.fileChanged.disconnect(handler);
-        prev?.content.model?.sharedModel.metadataChanged.disconnect(handler);
+        prev?.context.model.sharedModel.metadataChanged.disconnect(handler);
         next?.context.fileChanged.connect(handler);
-        next?.content.model?.sharedModel.metadataChanged.connect(handler);
+        next?.context.model.sharedModel.metadataChanged.connect(handler);
       };
       const handler = () => {
         // The sidebar can rely on metadata changes, but the native toolbar
@@ -104,7 +102,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       };
       const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) =>
         schedule(newValue instanceof NotebookPanel ? newValue : null);
-      const trackerSlot = (_: unknown, workbook: Correxit.Workbook | null) =>
+      const trackerSlot = (_: unknown, workbook: Workbook.Headed | null) =>
         schedule(workbook);
       shell.currentChanged?.connect(shellSlot);
       tracker.currentChanged.connect(trackerSlot);

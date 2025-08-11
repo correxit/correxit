@@ -4,7 +4,7 @@ import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { Signal } from '@lumino/signaling';
 import React from 'react';
-import { Correxit } from '../correxit';
+import { Correxit, Workbook } from '..';
 import { Body } from './body';
 import { Footer } from './footer';
 import { Header } from './header';
@@ -24,25 +24,26 @@ export class Sidebar extends ReactWidget {
 
   protected pinged = new Signal<unknown, undefined>(this);
 
-  protected get workbook(): Correxit.Workbook | null {
+  protected get workbook(): Workbook.Headed | null {
     return this._workbook;
   }
-  protected set workbook(workbook: Correxit.Workbook | null) {
+  protected set workbook(workbook: Workbook.Headed | null) {
     if (workbook === this.workbook) {
       return;
     }
+
+    const previous = this.workbook;
+    this._workbook = workbook;
     if (workbook) {
-      const { model } = workbook.content;
-      model?.sharedModel.metadataChanged.connect(this.ping, this);
+      const { model } = workbook.context;
+      model.sharedModel.metadataChanged.connect(this.ping, this);
       workbook.context.fileChanged.connect(this.ping, this);
     }
-    const previous = this.workbook;
     if (previous) {
-      const { model } = previous.content;
-      model?.sharedModel.metadataChanged.disconnect(this.ping, this);
+      const { model } = previous.context;
+      model.sharedModel.metadataChanged.disconnect(this.ping, this);
       previous.context.fileChanged.disconnect(this.ping, this);
     }
-    this._workbook = workbook;
     this.update();
   }
 
@@ -52,14 +53,14 @@ export class Sidebar extends ReactWidget {
 
   protected render() {
     const { commands, trans, workbook } = this;
-    if (workbook === null || workbook.content.model === null) {
+    if (workbook === null) {
       return (
         <section>
           <small>[{trans.__('correxit idle, waiting for notebook')}]</small>
         </section>
       );
     }
-    const key = workbook.content.model.cells.get(0).id;
+    const key = workbook.context.model.sharedModel.cells[0].id;
     return (
       <UseSignal key={key} signal={this.pinged} initialSender={this}>
         {() => (
@@ -82,7 +83,7 @@ export class Sidebar extends ReactWidget {
     }
   }
 
-  private _workbook: Correxit.Workbook | null = null;
+  private _workbook: Workbook.Headed | null = null;
 }
 
 export namespace Sidebar {

@@ -1,22 +1,65 @@
-import * as security from './security';
-import { Workbook } from './workbook';
+import { KernelMessage } from '@jupyterlab/services';
 import { find } from '@lumino/algorithm';
+import * as security from './security';
 
-export type Rubric<Secure = 'locked' | 'unlocked'> = {
-  readonly accessed: number;
-
-  readonly id: string;
-
-  readonly key: Secure extends 'locked' ? null : string;
-
-  readonly locked: Secure extends 'locked' ? true : false;
-
-  readonly secret: Secure extends 'locked' ? string : Rubric.Section;
-
-  readonly shared: Rubric.Section;
-};
+export type Rubric = Rubric.Locked | Rubric.Unlocked;
 
 export namespace Rubric {
+  /**
+   * The basic shape of a locked or unlocked rubric.
+   */
+  interface IRubric {
+    accessed: number;
+    id: string;
+    key: null | string;
+    locked: boolean;
+    secret: string | Section;
+    shared: Section;
+  };
+
+  export type Locked = Readonly<IRubric> & {
+    readonly key: null;
+    readonly locked: true;
+    readonly secret: string;
+  };
+
+  export type Unlocked = Readonly<IRubric> & {
+    readonly key: string;
+    readonly locked: false;
+    readonly secret: Section;
+  };
+
+  export namespace Cell {
+    /**
+     * An output is an `iopub` message of interest.
+     */
+    export type Output =
+      | KernelMessage.IIOPubMessage<'execute_result'>
+      | KernelMessage.IIOPubMessage<'display_data'>
+      | KernelMessage.IIOPubMessage<'stream'>
+      | KernelMessage.IIOPubMessage<'error'>;
+  }
+
+  export type Cell = {
+    readonly id: string;
+    readonly is: 'answerable';
+    readonly payload: string[];
+    readonly reference: null;
+    readonly shared: boolean;
+  } | {
+    readonly id: string;
+    readonly is: 'comparable' | 'correctable';
+    readonly payload: null;
+    readonly reference: string[];
+    readonly shared: boolean;
+  };
+
+  export type Outputs = { [id: string]: Cell.Output[]; }
+
+  export type Score = readonly [numerator: number, denominator: number];
+
+  export type Section = { readonly cells: { [id: string]: Cell; }; };
+
   export const CORRECT: Score = Object.freeze([1, 1]);
 
   export const INCORRECT: Score = Object.freeze([0, 1]);
@@ -26,22 +69,56 @@ export namespace Rubric {
     Number.POSITIVE_INFINITY
   ]);
 
-  export type Score = readonly [numerator: number, denominator: number];
+  export async function answer(expected: string[], given: Cell.Output[]) {
+      if (!given.length) {
+        return INCORRECT;
+      }
 
-  export type Section = { readonly cells: { [id: string]: Workbook.Cell; }; };
+      const message = given.slice(-1)[0];
+      if (message.header.msg_type === 'error') {
+        return INCORRECT;
+      }
+      if (message.header.msg_type === 'stream') {
+        const { content } = message as KernelMessage.IStreamMsg;
+        if (content.name === 'stdout') {
+          const value = await security.digest(content.text.trim());
+          return value === expected?.[0] ? CORRECT : INCORRECT;
+        }
+        return INCORRECT;
+      }
+    return UNSCORED;
+  };
 
-  const add = (section: Rubric.Section, cell: Workbook.Cell) => {
-    return { cells: { ...section.cells, [cell.id]: cell } } as Rubric.Section;
+  export function compare(expected: Cell.Output[], given: Cell.Output[]) {
+    if (!expected.length) {
+      return UNSCORED;
+    }
+    if (!given.length) {
+      return INCORRECT;
+    }
+
+    const keys = (obj: Cell.Output['content']) =>
+      Object.keys(obj).sort().join('');
+    const x = given.slice(-1)[0].content;
+    const y = expected.slice(-1)[0].content;
+    if (keys(x) !== keys(y)) {
+      return INCORRECT;
+    }
+    if ('data' in x && 'data' in y) {
+      const equal = JSON.stringify(x.data) === JSON.stringify(y.data);
+      return equal ? CORRECT : INCORRECT;
+    }
+    if ('name' in x && 'name' in y) {
+      return x.name === y.name && x.text === y.text ? CORRECT : INCORRECT;
+    }
+    return UNSCORED;
+  };
+
+  export function correct(expected: Cell.Output[]) {
+    return expected.some(message => message.header.msg_type === 'error') ?
+      INCORRECT : CORRECT;
   }
 
-  const references = ({ cells }: Section, reference: string) =>
-    find(Object.keys(cells), key => cells[key].reference === reference);
-
-  const remove = (section: Rubric.Section, cell: Workbook.Cell) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { [cell.id]: _, ...cells } = section.cells;
-    return { cells } as Rubric.Section;
-  }
 
   /**
    * @returns an unlocked rubric with the `key` field omitted. The client needs
@@ -49,21 +126,21 @@ export namespace Rubric {
    * the rubric is constructed as follows:
    *
    * `"wb"` + `accessed` timestamp's digits `[0-9]` shifted into ascii chars
-   * `[q-z]`, e.g., `"wbrxvtqyuxuszvq"`.
+   * `[d-m]`, e.g., `"wbekihhlhjdhmld"`.
    */
-  export function create(): Omit<Rubric<'unlocked'>, 'key'> {
+  export function create(): Omit<Unlocked, 'key'> {
     const accessed = Date.now();
     const id = 'wb' + `${accessed}`.split('')
-      .map(i => String.fromCharCode(parseInt(i, 10) + 113)).join('');
+      .map(i => String.fromCharCode(parseInt(i, 10) + 100)).join('');
     const secret: Section = { cells: {} };
     const shared: Section = { cells: {} };
     return { accessed, id, locked: false, secret, shared };
   }
 
-  export function get(
-    rubric: Rubric<'locked'> | Rubric<'unlocked'>,
-    id: Workbook.Cell['id']
-  ): Workbook.Cell | null {
+  /**
+   * @returns the rubric cell referenced by the `id` if found, otherwise `null`.
+   */
+  export function get(rubric: Rubric, id: string): Cell | null {
     if (has(rubric, id)) {
       const { locked, secret, shared } = rubric;
       return locked ? shared.cells[id] : secret.cells[id] || shared.cells[id];
@@ -72,13 +149,12 @@ export namespace Rubric {
   }
 
   /**
-   * Whether a rubric has or references a given id.
+   * @param deep also check if given `id` is a `reference`, defaults to `false`.
+   * @returns whether a rubric has or references a given id.
    */
-  export function has(
-    rubric: Rubric<'locked'> | Rubric<'unlocked'>,
-    id: Workbook.Cell['id'],
-    deep = false
-  ): boolean {
+  export function has(rubric: Rubric, id: string, deep = false): boolean {
+    const references = ({ cells }: Section, reference: string) =>
+      find(Object.keys(cells), key => cells[key].reference?.[0] === reference);
     const { locked, secret, shared } = rubric;
     return locked ?
       !!(shared.cells[id] || (deep && references(shared, id))) :
@@ -88,11 +164,13 @@ export namespace Rubric {
   }
 
   /**
-   * Lock a rubric and return a promise that resolves to the locked rubric.
+   * @returns a promise that resolves to the given rubric, locked.
    */
-  export async function lock(
-    rubric: Rubric<'unlocked'>
-  ): Promise<Rubric<'locked'>> {
+  export async function lock(rubric: Rubric): Promise<Locked> {
+    if (rubric.locked) {
+      return rubric;
+    }
+
     const { id, key, secret, shared } = rubric;
     return {
       accessed: Date.now(),
@@ -106,9 +184,7 @@ export namespace Rubric {
   /**
    * @returns a normalized complete rubric or throws an error.
    */
-  export function normalize(
-    rubric: Partial<Rubric<'locked'>>
-  ): Rubric<'locked'> {
+  export function normalize(rubric: Partial<Locked>): Locked {
     const { accessed, id, key, locked, secret, shared } = rubric || {};
     if (!accessed) {
       throw new Error('invalid rubric, missing accessed');
@@ -134,15 +210,54 @@ export namespace Rubric {
   /**
    * @returns the number of cells configured in a rubric.
    */
-  export function size(rubric: Rubric<'locked'> | Rubric<'unlocked'>): number {
+  export function size(rubric: Rubric): number {
     const { locked, secret, shared } = rubric;
     return locked ?
       Object.keys(shared.cells).length :
       Object.keys(secret.cells).length + Object.keys(shared.cells).length
   }
 
+
   /**
-   * Return the sum of two scores.
+   * Get the score for a single cell.
+   *
+   * @param rubric - the rubric that defines the cell being scored.
+   * @param id - the id of the cell to score.
+   * @param outputs - the outputs of all the executed workbook cells.
+   *
+   * @returns the score for this cell.
+   *
+   * #### Notes
+   * Currently the score is only 0/1 or 1/1 whether it is correct or not.
+   */
+  export async function score(
+    rubric: Rubric,
+    id: string,
+    outputs: Outputs
+  ): Promise<Score> {
+    const cell = get(rubric, id);
+    const given = outputs[id];
+    const reference = cell?.reference?.[0] ?? '';
+    if (!cell || !given) {
+      return UNSCORED;
+    }
+    if (cell.is === 'answerable') {
+      return answer(cell.payload, given);
+    }
+    if (!outputs[reference]) {
+      return UNSCORED;
+    }
+    if (cell.is === 'comparable') {
+      return compare(outputs[reference], given);
+    }
+    if (cell.is === 'correctable') {
+      return correct(outputs[reference]);
+    }
+    return 'unreachable' as never;
+  }
+
+  /**
+   * @returns the sum of two scores.
    */
   export function sum(a: Score, b: Score): Score {
     if (a === UNSCORED) {
@@ -157,39 +272,32 @@ export namespace Rubric {
   /**
    * @returns a rubric where given cell is toggled between `secret` or `shared`.
    */
-  export function toggle(
-    rubric: Rubric<'unlocked'>,
-    id: Workbook.Cell['id']
-  ): Rubric<'unlocked'> {
+  export function toggle(rubric: Unlocked, id: string): Unlocked {
     if (!has(rubric, id)) {
       throw new Error('cannot toggle cell unknown in rubric');
     }
+
     const cell = get(rubric, id)!;
+    const secret = { cells: { ...rubric.secret.cells } };
+    const shared = { cells: { ...rubric.shared.cells } };
     return {
+      ...rubric,
       accessed: Date.now(),
-      id: rubric.id,
-      key: rubric.key,
-      locked: rubric.locked,
       secret: cell.shared ?
-        add(rubric.secret, { ...cell, shared: false }) :
-        remove(rubric.secret, cell),
+        { cells: { ...secret.cells, [cell.id]: { ...cell, shared: false } } } :
+        { cells: { ...(delete secret.cells[cell.id], secret.cells) } },
       shared: cell.shared ?
-        remove(rubric.shared, cell) :
-        add(rubric.shared, { ...cell, shared: true })
+        { cells: { ...(delete shared.cells[cell.id], shared.cells) } } :
+        { cells: { ...shared.cells, [cell.id]: { ...cell, shared: true } } },
     };
   }
 
-  export async function unlock(
-    rubric: Rubric<'locked'>,
-    key: string
-  ): Promise<Rubric<'unlocked'>> {
-    return {
-      accessed: Date.now(),
-      id: rubric.id,
-      key,
-      locked: false,
-      secret: JSON.parse(await security.decrypt(rubric.secret as string, key)),
-      shared: rubric.shared
-    };
+  /**
+   * @returns an unlocked rubric after decrypting secret cells with given key.
+   */
+  export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
+    const { id, shared } = rubric;
+    const secret = JSON.parse(await security.decrypt(rubric.secret, key));
+    return { accessed: Date.now(), id, key, locked: false, secret, shared };
   }
 }
