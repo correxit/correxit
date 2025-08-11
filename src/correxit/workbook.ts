@@ -146,11 +146,21 @@ export namespace Workbook {
     }
   }
 
+  const quiet = true;
+
+  const [get, set] = (pool => {
+    const get = (workbook: Workbook) => pool.get(workbook) || null;
+    const set = (workbook: Workbook, rubric: Rubric | null) =>
+      pool.set(workbook, rubric).has(workbook);
+    return [get, set];
+  })(new WeakMap<Workbook, Rubric | null>());
+
   /**
    * Add a cell to a workbook's rubric.
    */
   export function add(workbook: Workbook, cell: Rubric.Cell): Rubric.Unlocked {
     const rubric = open(workbook, quiet);
+    const deep = true;
     if (!rubric || rubric.locked || Rubric.has(rubric, cell.id, deep)) {
       throw new Error('add error');
     }
@@ -446,66 +456,55 @@ export namespace Workbook {
     }
     return rubric;
   }
-}
 
-const deep = true;
-
-const quiet = true;
-
-const [get, set] = (pool => {
-  const get = (workbook: Workbook) => pool.get(workbook) || null;
-  const set = (workbook: Workbook, rubric: Rubric | null) =>
-    pool.set(workbook, rubric).has(workbook);
-  return [get, set];
-})(new WeakMap<Workbook, Rubric | null>());
-
-/**
- * Updates the workbook metadata with an audited rubric.
- *
- * #### Notes
- * If an `audit` is passed in, its results are used.
- *
- * If `rubric` is `null`, the workbook is reset back to a notebook.
- *
- * If the given rubric passes an audit, which may prune broken cells, it is
- * asynchronously written to the notebook metadata `correxit` key if the audit
- * made rubric changes. The audited rubric is returned synchronously.
- */
-function update(
-  workbook: Workbook,
-  rubric: Rubric.Locked,
-  audit?: Workbook.Audit
-): Rubric.Locked;
-function update(
-  workbook: Workbook,
-  rubric: Rubric.Unlocked,
-  audit?: Workbook.Audit
-): Rubric.Unlocked;
-function update(
-  workbook: Workbook,
-  rubric: null
-): null;
-function update(
-  workbook: Workbook,
-  rubric: Rubric | null,
-  audit = Workbook.audit(workbook, rubric)
-): Rubric | null {
-  const { sharedModel } = workbook.context.model;
-  set(workbook, null);
-  if (!audit || !rubric) {
-    sharedModel.deleteMetadata('correxit');
-    return null;
+  /**
+   * Updates the workbook metadata with an audited rubric.
+   *
+   * #### Notes
+   * If an `audit` is passed in, its results are used.
+   *
+   * If `rubric` is `null`, the workbook is reset back to a notebook.
+   *
+   * If the given rubric passes an audit, which may prune broken cells, it is
+   * asynchronously written to the notebook metadata `correxit` key if the audit
+   * made rubric changes. The audited rubric is returned synchronously.
+   */
+  export function update(
+    workbook: Workbook,
+    rubric: Rubric.Locked,
+    audit?: Audit
+  ): Rubric.Locked;
+  export function update(
+    workbook: Workbook,
+    rubric: Rubric.Unlocked,
+    audit?: Audit
+  ): Rubric.Unlocked;
+  export function update(
+    workbook: Workbook,
+    rubric: null
+  ): null;
+  export function update(
+    workbook: Workbook,
+    rubric: Rubric | null,
+    audit = Workbook.audit(workbook, rubric)
+  ): Rubric | null {
+    const { sharedModel } = workbook.context.model;
+    set(workbook, null);
+    if (!audit || !rubric) {
+      sharedModel.deleteMetadata('correxit');
+      return null;
+    }
+    if (!audit.ok) {
+      throw new Error(`update error: ${audit.error}`);
+    }
+    set(workbook, audit.rubric);
+    for (const { cell: { id, is }, reason } of audit.pruned) {
+      // TODO: Emit these warnings as events instead.
+      console.warn(`pruned ${is} (${id} ${reason}) from ${audit.rubric.id}`);
+    }
+    // Schedule a metadata write and return the audited rubric immediately.
+    (async (notebook, locked) => notebook.setMetadata('correxit', await locked))
+      (sharedModel, Rubric.lock(audit.rubric));
+    return audit.rubric;
   }
-  if (!audit.ok) {
-    throw new Error(`update error: ${audit.error}`);
-  }
-  set(workbook, audit.rubric);
-  for (const { cell: { id, is }, reason } of audit.pruned) {
-    // TODO: Emit these warnings as events instead.
-    console.warn(`pruned ${is} (${id} ${reason}) from ${audit.rubric.id}`);
-  }
-  // Schedule a metadata write and return the audited rubric immediately.
-  (async (notebook, locked) => notebook.setMetadata('correxit', await locked))
-    (sharedModel, Rubric.lock(audit.rubric));
-  return audit.rubric;
 }
