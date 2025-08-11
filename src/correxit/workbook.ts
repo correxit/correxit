@@ -176,7 +176,8 @@ export namespace Workbook {
     );
     for (const { cells } of locked ? [shared] : [secret, shared]) {
       for (const id in cells) {
-        const { is, payload, reference } = cells[id];
+        const { is, payload } = cells[id];
+        const reference = cells[id].reference?.[0] ?? '';
         const valid = is === 'answerable' ? !!payload.length : known[reference];
         if (known[id] && valid) {
           continue;
@@ -254,8 +255,8 @@ export namespace Workbook {
     }
     const { key, secret: { cells } } = audit.rubric as Rubric.Unlocked;
     for (const id in cells) {
-      const { is, reference } = cells[id];
-      if (is === 'comparable' || is === 'correctable') {
+      const reference = cells[id].reference?.[0] ?? '';
+      if (cells[id].is === 'comparable' || cells[id].is === 'correctable') {
         await Cell.decrypt(workbook, reference, key)
       }
     };
@@ -297,7 +298,7 @@ export namespace Workbook {
       stop = Math.max(
         1 + findIndex(cells, ({ id }) => id === cell.id),
         cell.is === 'correctable' || cell.is === 'comparable' ?
-          1 + findIndex(cells, ({ id }) => id === cell.reference) :
+          1 + findIndex(cells, ({ id }) => id === cell.reference?.[0]) :
           Number.NEGATIVE_INFINITY
       );
     }
@@ -330,7 +331,8 @@ export namespace Workbook {
       return;
     }
     for (const id in rubric.secret.cells) {
-      const { is, reference } = rubric.secret.cells[id];
+      const { is } = rubric.secret.cells[id];
+      const reference = rubric.secret.cells[id].reference?.[0] ?? '';
       if (is === 'comparable' || is === 'correctable') {
         await Cell.encrypt(workbook, reference, rubric.key);
       }

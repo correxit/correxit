@@ -56,7 +56,7 @@ const WorkbookCell: React.FC<{
     { commands, id: toggle, args: { id } },
     { commands, id: remove, args: { id } }
   ];
-  const reference = Rubric.get(rubric, id)?.reference;
+  const reference = Rubric.get(rubric, id)?.reference?.[0];
   return (
     <>
       <h4>{trans.__('Workbook cell:')}</h4>

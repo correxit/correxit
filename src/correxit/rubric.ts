@@ -5,6 +5,30 @@ import * as security from './security';
 export type Rubric = Rubric.Locked | Rubric.Unlocked;
 
 export namespace Rubric {
+  /**
+   * The basic shape of a locked or unlocked rubric.
+   */
+  interface IRubric {
+    accessed: number;
+    id: string;
+    key: null | string;
+    locked: boolean;
+    secret: string | Section;
+    shared: Section;
+  };
+
+  export type Locked = Readonly<IRubric> & {
+    readonly key: null;
+    readonly locked: true;
+    readonly secret: string;
+  };
+
+  export type Unlocked = Readonly<IRubric> & {
+    readonly key: string;
+    readonly locked: false;
+    readonly secret: Section;
+  };
+
   export namespace Cell {
     /**
      * An output is an `iopub` message of interest.
@@ -26,17 +50,8 @@ export namespace Rubric {
     readonly id: string;
     readonly is: 'comparable' | 'correctable';
     readonly payload: null;
-    readonly reference: string;
+    readonly reference: string[];
     readonly shared: boolean;
-  };
-
-  export type Locked = {
-    readonly accessed: number;
-    readonly id: string;
-    readonly key: null;
-    readonly locked: true;
-    readonly secret: string;
-    readonly shared: Section;
   };
 
   export type Outputs = { [id: string]: Cell.Output[]; }
@@ -44,15 +59,6 @@ export namespace Rubric {
   export type Score = readonly [numerator: number, denominator: number];
 
   export type Section = { readonly cells: { [id: string]: Cell; }; };
-
-  export type Unlocked = {
-    readonly accessed: number;
-    readonly id: string;
-    readonly key: string;
-    readonly locked: false;
-    readonly secret: Section;
-    readonly shared: Section;
-  };
 
   export const CORRECT: Score = Object.freeze([1, 1]);
 
@@ -148,7 +154,7 @@ export namespace Rubric {
    */
   export function has(rubric: Rubric, id: string, deep = false): boolean {
     const references = ({ cells }: Section, reference: string) =>
-      find(Object.keys(cells), key => cells[key].reference === reference);
+      find(Object.keys(cells), key => cells[key].reference?.[0] === reference);
     const { locked, secret, shared } = rubric;
     return locked ?
       !!(shared.cells[id] || (deep && references(shared, id))) :
@@ -231,20 +237,21 @@ export namespace Rubric {
   ): Promise<Score> {
     const cell = get(rubric, id);
     const given = outputs[id];
+    const reference = cell?.reference?.[0] ?? '';
     if (!cell || !given) {
       return UNSCORED;
     }
     if (cell.is === 'answerable') {
       return answer(cell.payload, given);
     }
-    if (!outputs[cell.reference]) {
+    if (!outputs[reference]) {
       return UNSCORED;
     }
     if (cell.is === 'comparable') {
-      return compare(outputs[cell.reference], given);
+      return compare(outputs[reference], given);
     }
     if (cell.is === 'correctable') {
-      return correct(outputs[cell.reference]);
+      return correct(outputs[reference]);
     }
     return 'unreachable' as never;
   }

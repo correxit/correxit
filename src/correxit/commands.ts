@@ -34,7 +34,7 @@ export function addCommands(options: {
       const cells = active.workbook?.context.model.sharedModel.cells || [];
       const cell = find(cells, cell => cell.id === id);
       const rubric = Workbook.open(active.workbook, quiet);
-      if (!cell || !rubric || rubric.locked || !id || id === reference) {
+      if (!cell || !rubric || rubric.locked || !id || id === reference?.[0]) {
         return false;
       }
       return cell.cell_type === 'code' && !has(rubric, id, deep);
@@ -85,9 +85,9 @@ export function addCommands(options: {
       let reference = cell.reference;
       if (!reference) {
         const selected = workbook.content && await input.cell(workbook);
-        reference = selected && selected.id;
+        reference = selected && [selected.id];
       }
-      if (!reference || id === reference) {
+      if (!reference || id === reference?.[0]) {
         return;
       }
       if (workbook.content) {
