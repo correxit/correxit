@@ -158,9 +158,9 @@ export function addCommands(options: {
       }
 
       const workbook = active.workbook!;
-      const score = await Workbook.correct(workbook, id);
-      const unscored = score === Rubric.UNSCORED;
-      const [x, y] = score;
+      const result = await Workbook.correct(workbook, id);
+      const unscored = result.score === Rubric.UNSCORED;
+      const [x, y] = result.score;
       void showDialog({
         title: trans.__('Computed score'),
         body: unscored ? trans.__('Unscored') : trans.__('%1 of %2', x, y)

@@ -28,11 +28,14 @@ export namespace Correxit {
 
   export const TOOLBARS = 'correxit:toolbars';
 
+  export const MULTI_CORRECT = 'correxit:multi-correct';
+
   export const Source = new Token<Source>(SOURCE);
 
   export const DESCRIPTION = {
     SIDEBAR: description.SIDEBAR,
     SOURCE: description.SOURCE,
-    TOOLBARS: description.TOOLBARS
+    TOOLBARS: description.TOOLBARS,
+    MULTI_CORRECT: description.MULTI_CORRECT
   };
 }

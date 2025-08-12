@@ -5,7 +5,7 @@ import {
   Notebook,
   NotebookActions
 } from '@jupyterlab/notebook';
-import { Kernel, KernelMessage } from '@jupyterlab/services';
+import { Kernel, KernelMessage, KernelSpec } from '@jupyterlab/services';
 import { find, findIndex, range, reduce } from '@lumino/algorithm';
 import { Correxit } from './correxit';
 import { Rubric } from './rubric';
@@ -40,6 +40,34 @@ export namespace Workbook {
   export type Headless = {
     readonly content: null;
     readonly context: DocumentRegistry.IContext<INotebookModel>;
+  };
+
+  /**
+   * The return value of the cell(s) execution, including the kernel used and the outputs.
+   */
+  export type ExecutionResult = {
+    /**
+     * The specs of the kernel used for cell(s) execution.
+     */
+    kernelSpec: KernelSpec.ISpecModel | undefined;
+    /**
+     * The outputs of the cell(s) execution.
+     */
+    outputs: Rubric.Outputs;
+  };
+
+  /**
+   * The return value of the cell(s) correction, including the kernel used and the scores.
+   */
+  export type CorrectionResult = {
+    /**
+     * The spec of the kernel used for cell(s) execution.
+     */
+    kernelSpec: KernelSpec.ISpecModel | undefined;
+    /**
+     * The score of the correction.
+     */
+    score: Rubric.Score;
   };
 
   export namespace Cell {
@@ -230,29 +258,38 @@ export namespace Workbook {
    * @param workbook - the workbook to correct.
    * @param id - the id of the cell to correct.
    *
-   * @returns a score for the cell or the whole workbook.
+   * @returns teh correction result, including
+   *  - the score for the cell or the whole workbook
+   *  - the spec of the kernel used to get that score
    */
   export async function correct(
     workbook: Workbook,
-    id?: string
-  ): Promise<Rubric.Score> {
+    id?:string
+  ): Promise<CorrectionResult> {
     const { sum, UNSCORED } = Rubric;
+    const result: CorrectionResult = {
+      kernelSpec: undefined,
+      score: UNSCORED
+    }
     const rubric = open(workbook, quiet);
     if (!rubric) {
-      return UNSCORED;
+      return result
     }
 
-    const outputs = await execute(workbook, rubric, id);
-    if (!outputs) {
-      return UNSCORED;
+    const executionResult = await execute(workbook, rubric, id);
+    if (!executionResult) {
+      return result;
     }
+    result.kernelSpec = executionResult.kernelSpec;
+
     if (id) {
-      return Rubric.score(rubric, id, outputs);
+      result.score = await Rubric.score(rubric, id, executionResult.outputs);
+    } else {
+      const initial = Promise.resolve([0, 0] as Rubric.Score);
+      result.score =  await Object.keys(executionResult.outputs).reduce(async (total, id) =>
+        sum(await total, await Rubric.score(rubric, id, executionResult.outputs)), initial);
     }
-
-    const initial = Promise.resolve([0, 0] as Rubric.Score);
-    return Object.keys(outputs).reduce(async (total, id) =>
-      sum(await total, await Rubric.score(rubric, id, outputs)), initial);
+    return result;
   }
 
   /**
@@ -292,7 +329,7 @@ export namespace Workbook {
     workbook: Workbook,
     rubric: Rubric,
     id?: string
-  ): Promise<Rubric.Outputs | null> {
+  ): Promise<ExecutionResult | null> {
     if (!rubric) {
       throw new Error('execute error');
     }
@@ -320,7 +357,7 @@ export namespace Workbook {
       console.warn('execute error, could not start kernel');
       return null;
     }
-
+    const kernelSpec  = await kernel.spec;
     const outputs: Rubric.Outputs = {};
     for (const index of range(stop)) {
       const model = cells.get(index);
@@ -329,7 +366,11 @@ export namespace Workbook {
       }
     }
     void kernel.shutdown().catch(_ => {});
-    return outputs;
+
+    return {
+      kernelSpec,
+      outputs
+    };
   }
 
   /**

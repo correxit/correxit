@@ -1,3 +1,3 @@
-import { sidebar, source, toolbars } from './plugins';
+import { multiCorrect, sidebar, source, toolbars } from './plugins';
 export * from './correxit';
-export default [sidebar, source, toolbars];
+export default [multiCorrect, sidebar, source, toolbars];

@@ -1,13 +1,20 @@
+import { INotebookTree } from '@jupyter-notebook/tree';
 import {
   ILayoutRestorer,
+  JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 import {
   CommandToolbarButton,
+  ICommandPalette,
   IToolbarWidgetRegistry,
-  ReactWidget
+  MainAreaWidget,
+  ReactWidget,
+  WidgetTracker
 } from '@jupyterlab/apputils';
 import { Cell } from '@jupyterlab/cells';
+import { IDocumentManager } from '@jupyterlab/docmanager';
+import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
@@ -17,6 +24,8 @@ import { Correxit, Workbook } from '.';
 import { addCommands } from './correxit/commands';
 import { CellModeSwitcher } from './toolbars';
 import { Sidebar } from './sidebar';
+import { MultiCorrectCommandIDs } from './multicorrect/types';
+import { MultiCorrect } from './multicorrect/widget';
 
 /**
  * The Correxit sidebar UI.
@@ -147,6 +156,115 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
       'correxit-replace',
       (cell: Cell) => new Private.CellMode({ cell, commands, trans })
     );
+  }
+};
+
+export const multiCorrect: JupyterFrontEndPlugin<void> = {
+  id: Correxit.MULTI_CORRECT,
+  description: Correxit.DESCRIPTION.MULTI_CORRECT,
+  autoStart: true,
+  requires: [IDocumentManager],
+  optional: [
+    ICommandPalette,
+    IDefaultFileBrowser,
+    ILayoutRestorer,
+    INotebookTree,
+    ITranslator
+  ],
+  activate: (
+    app: JupyterFrontEnd,
+    docManager: IDocumentManager,
+    palette: ICommandPalette,
+    filebrowser: IDefaultFileBrowser,
+    restorer: ILayoutRestorer,
+    notebookTree: INotebookTree,
+    translator: ITranslator
+  ) => {
+    // Declare a widget variable
+    let widget: MainAreaWidget<MultiCorrect>;
+
+    // Track the widget state
+    const tracker = new WidgetTracker<MainAreaWidget<MultiCorrect>>({
+      namespace: 'correxit'
+    });
+
+    const openMultiCorrect = (path?: string) => {
+      if (!widget || widget.isDisposed) {
+        const serviceManager = app.serviceManager;
+        const initialPath = path ?? filebrowser?.model.path ?? '';
+        const content = new MultiCorrect({
+          serviceManager,
+          docManager,
+          initialPath
+        });
+
+        widget = new MainAreaWidget({ content });
+        widget.id = 'multi-correct';
+        widget.title.label = 'Correxit';
+        widget.title.closable = true;
+      }
+
+      if (!tracker.has(widget)) {
+        // Track the state of the widget for later restoration
+        tracker.add(widget);
+      }
+
+      // Attach the widget to the main area if it's not there
+      if (notebookTree) {
+        if (!widget.isAttached) {
+          notebookTree.addWidget(widget);
+        }
+        notebookTree.currentWidget = widget;
+      } else if (!widget.isAttached) {
+        app.shell.add(widget, 'main');
+      }
+
+      widget.content.update();
+
+      app.shell.activateById(widget.id);
+
+      // Notify the instance tracker if restore data needs to update.
+      widget.content.pathChanged.connect(() => {
+        tracker.save(widget);
+      });
+    };
+
+    // Command to open formgrader
+    app.commands.addCommand(MultiCorrectCommandIDs.open, {
+      label: 'Open Multi Correct',
+      execute: args => {
+        const path = (args.path as string) ?? undefined;
+        openMultiCorrect(path);
+      },
+      describedBy: {
+        args: {
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              description: 'Optional path'
+            }
+          }
+        }
+      }
+    });
+
+    if (palette) {
+      palette.addItem({
+        category: 'correxit',
+        command: MultiCorrectCommandIDs.open
+      });
+    }
+    // Restore the widget state
+    if (restorer) {
+      restorer.restore(tracker, {
+        command: MultiCorrectCommandIDs.open,
+        name: () => 'multi-correct',
+        args: widget => ({
+          path: widget.content.path
+        })
+      });
+    }
   }
 };
 
