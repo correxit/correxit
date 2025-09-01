@@ -22,7 +22,7 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
   const overlay = document.createElement('div');
   const submit = () => {
     const model = target?.model || null;
-    document.removeEventListener('pointerdown', pointerdown);
+    document.removeEventListener('click', click);
     document.removeEventListener('keydown', keydown);
     overlay.remove();
     target?.node.classList.remove(TARGET_CELL_CLASS);
@@ -37,7 +37,7 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
       submit();
     }
   };
-  const pointerdown = () => submit();
+  const click = () => submit();
   const throttler = new Throttler(
     ({ clientX, clientY }: PointerEvent) => {
       const notebook = workbook.content;
@@ -72,7 +72,7 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
   workbook.content.viewportNode.appendChild(overlay);
   overlay.addEventListener('pointermove', pointermove);
   overlay.addEventListener('pointerout', pointerout);
-  document.addEventListener('pointerdown', pointerdown);
+  document.addEventListener('click', click);
   document.addEventListener('keydown', keydown);
   return delegate.promise;
 }

@@ -5,31 +5,42 @@
   "type": "object",
   "properties": {},
   "jupyter.lab.toolbars": {
-    "Cell": [{ "name": "correxit-replace" }, { "name": "correxit-correct" }],
+    "Cell": [
+      { "name": "correxit-replace" },
+      {
+        "name": "correxit-correct",
+        "command": "correxit:correct",
+        "args": { "correxit:cell-toolbar": true },
+        "label": ""
+      },
+      {
+        "name": "correxit-toggle",
+        "command": "correxit:toggle",
+        "args": { "correxit:cell-toolbar": true },
+        "label": ""
+      }
+    ],
     "Notebook": [
       {
         "name": "correxit-convert",
         "command": "correxit:convert",
-        "label": "Convert",
-        "caption": "Convert notebook to workbook"
+        "label": ""
       },
       {
         "name": "correxit-correct",
         "command": "correxit:correct",
-        "label": "Correct",
-        "caption": "Correct workbook"
+        "label": ""
       },
       {
         "name": "correxit-lock",
         "command": "correxit:lock",
-        "label": "Lock",
-        "caption": "Lock workbook"
+        "icon": "correxit:unlocked",
+        "label": ""
       },
       {
         "name": "correxit-unlock",
         "command": "correxit:unlock",
-        "label": "Unlock",
-        "caption": "Unlock workbook"
+        "label": ""
       }
     ]
   },

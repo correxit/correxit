@@ -17,7 +17,7 @@ into a gradable workbook.
 - All of the workbook creation and grading logic happens in the Jupyter
   frontend (JupyterLab / Jupyter Notebook / JupyterLite). There is no backend.
 - All workbook data for both a grader and a student is contained within the
-  document itself, which is jJupyter notebook (`.ipynb`) file with a `correxit`
+  document itself, which is a Jupyter notebook (`.ipynb`) file with a `correxit`
   field in its metadata. There is no other data store.
 - The author converts a Jupyter notebook into a workbook by configuring which
   cells to grade and encrypting the grading logic with a passphrase.
@@ -51,7 +51,7 @@ pip uninstall correxit
 
 ## Troubleshoot
 
-If you cannot see the Correxit sidebar in Jupyter, check that tghe frontend
+If you cannot see the Correxit sidebar in Jupyter, check that the frontend
 extension is installed:
 
 ```bash

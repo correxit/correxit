@@ -1,0 +1,109 @@
+.correxit-corrector-widget {
+  background-color: var(--jp-rendermime-table-row-background);
+}
+
+.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='status'] {
+  width: 100px;
+}
+
+table.correxit-corrector {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+}
+
+table.correxit-corrector img,
+table.correxit-corrector svg {
+  height: 16px;
+  width: 16px;
+}
+
+table.correxit-corrector tr {
+  background-color: var(--jp-rendermime-table-row-background);
+}
+
+table.correxit-corrector tr:hover {
+  background-color: var(--jp-rendermime-table-row-hover-background);
+}
+
+table.correxit-corrector tr td {
+  border-color: var(--jp-border-color0);
+  border-style: solid;
+  border-width: var(--jp-border-width);
+  height: 32px;
+  padding: 5px;
+}
+
+table.correxit-corrector tr.cxt-mod-pending td {
+  border-color: var(--jp-border-color0) transparent var(--jp-border-color0)
+    transparent;
+}
+
+td.correxit-corrector-kernel,
+td.correxit-corrector-lock,
+td.correxit-corrector-rescore {
+  width: 20px;
+
+  .correxit-corrector-icon {
+    align-items: center;
+    display: flex;
+    height: 100%;
+    justify-content: center;
+  }
+}
+
+td.correxit-corrector-score-report {
+  width: 60px;
+  text-align: right;
+}
+
+td.correxit-corrector-spec {
+  width: 200px;
+
+  .correxit-corrector-spec-name {
+    font-family: var(--jp-code-font-family-default);
+  }
+}
+
+td.correxit-corrector-pending > span {
+  position: absolute;
+  right: 0;
+  align-items: center;
+  display: flex;
+  gap: 2px;
+  padding: 2px 4px;
+}
+
+.correxit-corrector-pending-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--jp-brand-color1);
+  animation: correxit-corrector-pending-dot-bounce 1.4s infinite ease-in-out;
+}
+
+.correxit-corrector-pending-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.correxit-corrector-pending-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.correxit-corrector-pending-dot:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes correxit-corrector-pending-dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}

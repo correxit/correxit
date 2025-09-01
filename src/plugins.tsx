@@ -5,10 +5,8 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 import {
-  CommandToolbarButton,
   ICommandPalette,
   IToolbarWidgetRegistry,
-  MainAreaWidget,
   ReactWidget,
   WidgetTracker
 } from '@jupyterlab/apputils';
@@ -20,16 +18,54 @@ import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
 import React from 'react';
-import { Correxit, Workbook } from '.';
-import { addCommands } from './correxit/commands';
-import { CellModeSwitcher } from './toolbars';
+import { addCommands, Correxit, Workbook } from './correxit';
+import { Corrector } from './corrector';
 import { Sidebar } from './sidebar';
-import { MultiCorrectCommandIDs } from './multicorrect/types';
-import { MultiCorrect } from './multicorrect/widget';
+import { CellModeSwitcher } from './toolbars';
 
-/**
- * The Correxit sidebar UI.
- */
+export const corrector: JupyterFrontEndPlugin<void> = {
+  id: Correxit.CORRECTOR,
+  description: Correxit.DESCRIPTION.CORRECTOR,
+  requires: [IDocumentManager],
+  optional: [
+    IDefaultFileBrowser,
+    ICommandPalette,
+    ILayoutRestorer,
+    INotebookTree,
+    ITranslator
+  ],
+  autoStart: true,
+  ...((deactivator?: () => void) => ({
+    activate: (
+      { commands, shell }: JupyterFrontEnd,
+      manager: IDocumentManager,
+      browser: IDefaultFileBrowser | null,
+      palette: ICommandPalette | null,
+      restorer: ILayoutRestorer | null,
+      tree: INotebookTree | null,
+      translator: ITranslator | null
+    ) => {
+      const name = 'correxit-corrector';
+      const trans = (translator || nullTranslator).load('correxit');
+      const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
+      const { launch } = Correxit.CommandIDs;
+      const args = { browser, commands, manager, shell, tracker, trans, tree };
+      const added = Corrector.addCommands(args);
+      if (palette) {
+        palette.addItem({ category: 'correxit', command: launch });
+      }
+      if (restorer) {
+        restorer.restore(tracker, { command: launch, name: () => name });
+      }
+      deactivator = () => {
+        added.forEach(item => item.dispose());
+        tracker.dispose();
+      };
+    },
+    deactivate: () => deactivator?.()
+  }))()
+};
+
 export const sidebar: JupyterFrontEndPlugin<void> = {
   id: Correxit.SIDEBAR,
   description: Correxit.DESCRIPTION.SIDEBAR,
@@ -43,13 +79,16 @@ export const sidebar: JupyterFrontEndPlugin<void> = {
       translator: ITranslator | null,
       restorer: ILayoutRestorer | null
     ) => {
-      const sidebar = new Sidebar({ commands, source, translator });
-      sidebar.id = 'correxit-sidebar';
-      shell.add(sidebar, 'right');
+      const trans = (translator || nullTranslator).load('correxit');
+      const widget = new Sidebar.Widget({ commands, source, trans });
+      widget.id = 'correxit-sidebar';
+      widget.title.caption = 'Correxit';
+      widget.title.icon = Correxit.Icons.correct;
+      shell.add(widget, 'right', {});
       if (restorer) {
-        restorer.add(sidebar, sidebar.id);
+        restorer.add(widget, widget.id);
       }
-      deactivator = () => sidebar.dispose();
+      deactivator = () => widget.dispose();
     },
     deactivate: () => deactivator?.()
   }))()
@@ -68,7 +107,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
-      { commands, shell },
+      { commands, serviceManager, shell },
       tracker: INotebookTracker,
       registry: ISettingRegistry | null,
       translator: ITranslator | null
@@ -77,14 +116,15 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       if (registry) {
         void Private.loadSettings(registry);
       }
+      const services = serviceManager;
       const source = new Poll<Workbook | null>({
         auto: false,
         // Set the poll to never tick except when manually scheduled.
         frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
         factory: async () => null
       });
-      const added = addCommands({ commands, source, translator });
       const quiet = true;
+      const added = addCommands({ commands, services, source, translator });
       let current: Workbook | null = null;
       const schedule = (workbook: Workbook.Headed | null) => {
         if (workbook === source.state.payload) {
@@ -107,6 +147,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         commands.notifyCommandChanged(Correxit.CommandIDs.convert);
         commands.notifyCommandChanged(Correxit.CommandIDs.correct);
         commands.notifyCommandChanged(Correxit.CommandIDs.lock);
+        commands.notifyCommandChanged(Correxit.CommandIDs.toggle);
         commands.notifyCommandChanged(Correxit.CommandIDs.unlock);
       };
       const shellSlot = (_: unknown, { newValue }: { newValue: unknown }) =>
@@ -142,129 +183,9 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
     const trans = (translator || nullTranslator).load('correxit');
     toolbarRegistry.addFactory(
       'Cell',
-      'correxit-correct',
-      ({ model: { id } }: Cell) =>
-        new CommandToolbarButton({
-          commands,
-          id: Correxit.CommandIDs.correct,
-          label: '',
-          args: { id }
-        })
-    );
-    toolbarRegistry.addFactory(
-      'Cell',
       'correxit-replace',
       (cell: Cell) => new Private.CellMode({ cell, commands, trans })
     );
-  }
-};
-
-export const multiCorrect: JupyterFrontEndPlugin<void> = {
-  id: Correxit.MULTI_CORRECT,
-  description: Correxit.DESCRIPTION.MULTI_CORRECT,
-  autoStart: true,
-  requires: [IDocumentManager],
-  optional: [
-    ICommandPalette,
-    IDefaultFileBrowser,
-    ILayoutRestorer,
-    INotebookTree,
-    ITranslator
-  ],
-  activate: (
-    app: JupyterFrontEnd,
-    docManager: IDocumentManager,
-    palette: ICommandPalette,
-    filebrowser: IDefaultFileBrowser,
-    restorer: ILayoutRestorer,
-    notebookTree: INotebookTree,
-    translator: ITranslator
-  ) => {
-    // Declare a widget variable
-    let widget: MainAreaWidget<MultiCorrect>;
-
-    // Track the widget state
-    const tracker = new WidgetTracker<MainAreaWidget<MultiCorrect>>({
-      namespace: 'correxit'
-    });
-
-    const openMultiCorrect = (path?: string) => {
-      if (!widget || widget.isDisposed) {
-        const serviceManager = app.serviceManager;
-        const initialPath = path ?? filebrowser?.model.path ?? '';
-        const content = new MultiCorrect({
-          serviceManager,
-          docManager,
-          initialPath
-        });
-
-        widget = new MainAreaWidget({ content });
-        widget.id = 'multi-correct';
-        widget.title.label = 'Correxit';
-        widget.title.closable = true;
-      }
-
-      if (!tracker.has(widget)) {
-        // Track the state of the widget for later restoration
-        tracker.add(widget);
-      }
-
-      // Attach the widget to the main area if it's not there
-      if (notebookTree) {
-        if (!widget.isAttached) {
-          notebookTree.addWidget(widget);
-        }
-        notebookTree.currentWidget = widget;
-      } else if (!widget.isAttached) {
-        app.shell.add(widget, 'main');
-      }
-
-      widget.content.update();
-
-      app.shell.activateById(widget.id);
-
-      // Notify the instance tracker if restore data needs to update.
-      widget.content.pathChanged.connect(() => {
-        tracker.save(widget);
-      });
-    };
-
-    // Command to open formgrader
-    app.commands.addCommand(MultiCorrectCommandIDs.open, {
-      label: 'Open Multi Correct',
-      execute: args => {
-        const path = (args.path as string) ?? undefined;
-        openMultiCorrect(path);
-      },
-      describedBy: {
-        args: {
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'Optional path'
-            }
-          }
-        }
-      }
-    });
-
-    if (palette) {
-      palette.addItem({
-        category: 'correxit',
-        command: MultiCorrectCommandIDs.open
-      });
-    }
-    // Restore the widget state
-    if (restorer) {
-      restorer.restore(tracker, {
-        command: MultiCorrectCommandIDs.open,
-        name: () => 'multi-correct',
-        args: widget => ({
-          path: widget.content.path
-        })
-      });
-    }
   }
 };
 

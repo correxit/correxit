@@ -1,0 +1,117 @@
+import { MainAreaWidget } from '@jupyterlab/apputils';
+import { PathExt } from '@jupyterlab/coreutils';
+import { IRenderMime } from '@jupyterlab/rendermime';
+import {
+  CommandToolbarButton,
+  ReactWidget,
+  Toolbar,
+  ToolbarButton
+} from '@jupyterlab/ui-components';
+import { CommandRegistry } from '@lumino/commands';
+import React, { useRef } from 'react';
+import { Correxit } from '..';
+import { Corrector } from '.';
+
+export class CorrectorWidget extends MainAreaWidget<Content> {
+  constructor({ commands, path, trans }: CorrectorWidget.IOptions) {
+    super({ content: new Content({ commands, path, trans }) });
+    this.commands = commands;
+    this.addClass('correxit-corrector-widget');
+
+    let status = ReactWidget.create(<></>);
+    const notify = (scanned: boolean, corrected: boolean) => {
+      const current = scanned
+        ? corrected
+          ? trans.__('Idle')
+          : trans.__('Correcting...')
+        : trans.__('Scanning...');
+      status.dispose();
+      status = ReactWidget.create(<span>{current}</span>);
+      toolbar.insertItem(6, 'status', status);
+    };
+    const { cd } = Correxit.CommandIDs;
+    const { content, toolbar } = this;
+    const correct = new ToolbarButton({
+      icon: Correxit.Icons.correct,
+      label: trans.__('Correct workbooks'),
+      tooltip: trans.__('Correct all workbooks in directory'),
+      onClick: () => content.set({ correct: true })
+    });
+    const enter = (passphrase: string) =>
+      content.set({ correct: false, passphrase });
+    const passphrase = ReactWidget.create(<Passphrase {...{ enter, trans }} />);
+    toolbar.addItem('cd', new CommandToolbarButton({ commands, id: cd }));
+    toolbar.addItem('spacer-one', Toolbar.createSpacerItem());
+    toolbar.addItem('passphrase', passphrase);
+    toolbar.addItem('spacer-two', Toolbar.createSpacerItem());
+    toolbar.addItem('correct', correct);
+    toolbar.addItem('spacer-three', Toolbar.createSpacerItem());
+    toolbar.addItem('status', status);
+    content.set({ notify });
+  }
+
+  get path(): string {
+    return this.content.path;
+  }
+  set path(path: string) {
+    this.content.set({ correct: false, path: PathExt.normalize(path) });
+    this.commands.notifyCommandChanged(Correxit.CommandIDs.cd);
+  }
+
+  protected commands: CommandRegistry;
+}
+
+export namespace CorrectorWidget {
+  export interface IOptions {
+    commands: CommandRegistry;
+    path: string;
+    trans: IRenderMime.TranslationBundle;
+  }
+}
+
+class Content extends ReactWidget {
+  constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
+    super();
+    this.props = { ...props, correct: false, notify: () => {}, passphrase: '' };
+  }
+
+  get path(): string {
+    return this.props.path;
+  }
+
+  set(updates: Partial<Corrector.Props>) {
+    this.props = { ...this.props, ...updates, key: `${Date.now()}` };
+    this.update();
+  }
+
+  render() {
+    return <Corrector {...this.props} />;
+  }
+
+  protected props: Corrector.Props & { key?: string };
+}
+
+const Passphrase: React.FC<{
+  trans: IRenderMime.TranslationBundle;
+  enter: (passphrase: string) => void;
+}> = props => {
+  const { enter, trans } = props;
+  const icon = Correxit.Icons.key;
+  const input = useRef<HTMLInputElement>(null);
+  const empty = (element: HTMLInputElement) => {
+    const { value } = element;
+    element.value = '';
+    return value;
+  };
+  const onClick = () => input.current && enter(empty(input.current));
+  return (
+    <div>
+      <label>
+        {trans.__('Passphrase')} <input ref={input} type="password" />
+      </label>
+      <button {...{ onClick }} className="jp-Button jp-mod-minimal">
+        <icon.react tag="span" title={trans.__('Unlock workbooks')} />
+      </button>
+    </div>
+  );
+};

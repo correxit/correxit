@@ -10,6 +10,7 @@ export namespace Rubric {
    */
   interface IRubric {
     accessed: number;
+    assignee: string | null;
     id: string;
     key: null | string;
     locked: boolean;
@@ -130,11 +131,12 @@ export namespace Rubric {
    */
   export function create(): Omit<Unlocked, 'key'> {
     const accessed = Date.now();
+    const assignee = null;
     const id = 'wb' + `${accessed}`.split('')
       .map(i => String.fromCharCode(parseInt(i, 10) + 100)).join('');
     const secret: Section = { cells: {} };
     const shared: Section = { cells: {} };
-    return { accessed, id, locked: false, secret, shared };
+    return { assignee, accessed, id, locked: false, secret, shared };
   }
 
   /**
@@ -171,9 +173,10 @@ export namespace Rubric {
       return rubric;
     }
 
-    const { id, key, secret, shared } = rubric;
+    const { assignee, id, key, secret, shared } = rubric;
     return {
       accessed: Date.now(),
+      assignee,
       id, key: null,
       locked: true,
       secret: await security.encrypt(JSON.stringify(secret), key),
@@ -182,12 +185,16 @@ export namespace Rubric {
   }
 
   /**
-   * @returns a normalized complete rubric or throws an error.
+   * @returns a normalized locked rubric or throws an error.
    */
-  export function normalize(rubric: Partial<Locked>): Locked {
-    const { accessed, id, key, locked, secret, shared } = rubric || {};
+  export function normalize(rubric: Partial<Locked> = {}): Locked {
+    const { accessed, id, key, locked, secret, shared } = rubric;
+    let { assignee } = rubric;
     if (!accessed) {
       throw new Error('invalid rubric, missing accessed');
+    }
+    if (assignee !== null && typeof assignee !== 'string') {
+      assignee = null;
     }
     if (!id) {
       throw new Error('invalid rubric, missing id');
@@ -204,7 +211,7 @@ export namespace Rubric {
     if (!(shared && shared.cells)) {
       throw new Error('invalid rubric, invalid shared section')
     }
-    return { accessed, id, key, locked, secret, shared };
+    return { accessed, assignee, id, key, locked, secret, shared };
   }
 
   /**
@@ -296,8 +303,10 @@ export namespace Rubric {
    * @returns an unlocked rubric after decrypting secret cells with given key.
    */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
-    const { id, shared } = rubric;
+    const { assignee, id, shared } = rubric;
     const secret = JSON.parse(await security.decrypt(rubric.secret, key));
-    return { accessed: Date.now(), id, key, locked: false, secret, shared };
+    return {
+      accessed: Date.now(), assignee, id, key, locked: false, secret, shared
+    };
   }
 }

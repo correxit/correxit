@@ -1,95 +1,162 @@
+import { ICodeCellModel } from '@jupyterlab/cells';
+import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { ITranslator, nullTranslator } from '@jupyterlab/translation';
-import { ReactWidget, UseSignal } from '@jupyterlab/ui-components';
+import {
+  CommandToolbarButtonComponent,
+  UseSignal
+} from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { Signal } from '@lumino/signaling';
+import { ISignal } from '@lumino/signaling';
 import React from 'react';
-import { Correxit, Workbook } from '..';
-import { Body } from './body';
-import { Footer } from './footer';
-import { Header } from './header';
+import { Correxit, Rubric, Workbook } from '..';
+import { SidebarWidget } from './widget';
 
-export class Sidebar extends ReactWidget {
-  constructor({ commands, source, translator }: Sidebar.IOptions) {
-    super();
-    this.addClass('correxit-sidebar');
-    this.commands = commands;
-    this.trans = (translator || nullTranslator).load('correxit');
-    void this.subscribe(source);
-  }
-
-  readonly trans: IRenderMime.TranslationBundle;
-
-  protected commands: CommandRegistry;
-
-  protected pinged = new Signal<unknown, undefined>(this);
-
-  protected get workbook(): Workbook.Headed | null {
-    return this._workbook;
-  }
-  protected set workbook(workbook: Workbook.Headed | null) {
-    if (workbook === this.workbook) {
-      return;
-    }
-
-    const previous = this.workbook;
-    this._workbook = workbook;
-    if (workbook) {
-      const { model } = workbook.context;
-      model.sharedModel.metadataChanged.connect(this.ping, this);
-      workbook.context.fileChanged.connect(this.ping, this);
-    }
-    if (previous) {
-      const { model } = previous.context;
-      model.sharedModel.metadataChanged.disconnect(this.ping, this);
-      previous.context.fileChanged.disconnect(this.ping, this);
-    }
-    this.update();
-  }
-
-  protected ping() {
-    this.pinged.emit(undefined);
-  }
-
-  protected render() {
-    const { commands, trans, workbook } = this;
-    if (workbook === null) {
-      return (
-        <section>
-          <small>[{trans.__('correxit idle, waiting for notebook')}]</small>
-        </section>
-      );
-    }
-    const key = workbook.context.model.sharedModel.cells[0].id;
-    return (
-      <UseSignal key={key} signal={this.pinged} initialSender={this}>
-        {() => (
-          <>
-            <Header commands={commands} trans={trans} workbook={workbook} />
-            <Body commands={commands} trans={trans} workbook={workbook} />
-            <Footer commands={commands} />
-          </>
-        )}
-      </UseSignal>
-    );
-  }
-
-  protected async subscribe(source: Correxit.Source) {
-    for await (const { payload } of source) {
-      if (this.isDisposed) {
-        return;
-      }
-      this.workbook = payload;
-    }
-  }
-
-  private _workbook: Workbook.Headed | null = null;
+export function Sidebar(props: Sidebar.Props) {
+  const { commands, sender, signal, trans, workbook } = props;
+  const key = workbook.context.model.sharedModel.cells[0].id;
+  return (
+    <UseSignal key={key} signal={signal} initialSender={sender}>
+      {() => (
+        <>
+          <Header {...{ commands, trans, workbook }} />
+          <Body {...{ commands, trans, workbook }} />
+          <Footer {...{ commands }} />
+        </>
+      )}
+    </UseSignal>
+  );
 }
 
 export namespace Sidebar {
-  export interface IOptions {
+  export type Props = {
     commands: CommandRegistry;
-    source: Correxit.Source;
-    translator?: ITranslator | null;
-  }
+    sender: any;
+    signal: ISignal<unknown, void>;
+    trans: IRenderMime.TranslationBundle;
+    workbook: Workbook.Headed;
+  };
+  export type Widget = SidebarWidget;
+  export const Widget = SidebarWidget;
 }
+
+export const Header: React.FC<{
+  commands: CommandRegistry;
+  trans: IRenderMime.TranslationBundle;
+  workbook: Workbook;
+}> = ({ commands, trans, workbook }) => {
+  const { convert, correct, lock, unlock } = Correxit.CommandIDs;
+  return (
+    <section className="correxit-header">
+      <File trans={trans} workbook={workbook} />
+      <CommandToolbarButtonComponent commands={commands} id={convert} />
+      <CommandToolbarButtonComponent commands={commands} id={lock} />
+      <CommandToolbarButtonComponent commands={commands} id={unlock} />
+      <CommandToolbarButtonComponent commands={commands} id={correct} />
+    </section>
+  );
+};
+
+const File: React.FC<{
+  trans: IRenderMime.TranslationBundle;
+  workbook: Workbook;
+}> = ({ trans, workbook }) => {
+  const quiet = true;
+  const rubric = Workbook.open(workbook, quiet);
+  const { context } = workbook;
+  const heading = rubric
+    ? trans.__('Workbook file:')
+    : trans.__('Notebook file:');
+  return (
+    <UseSignal signal={context.pathChanged} initialSender={context}>
+      {() => (
+        <>
+          <h4>{heading}</h4>
+          <div className="correxit-monospace">
+            {PathExt.basename(context.path)}
+          </div>
+        </>
+      )}
+    </UseSignal>
+  );
+};
+
+export const Body: React.FC<{
+  commands: CommandRegistry;
+  trans: IRenderMime.TranslationBundle;
+  workbook: Workbook.Headed;
+}> = ({ commands, trans, workbook }) => {
+  const quiet = true;
+  const rubric = Workbook.open(workbook, quiet);
+  const { activeCell, activeCellChanged } = workbook.content;
+  const key = workbook.context.model.sharedModel.cells[0].id;
+  if (!activeCell || !rubric) {
+    return <section className="correxit-body"></section>;
+  }
+  return (
+    <section className="correxit-body">
+      <UseSignal initialArgs={activeCell} key={key} signal={activeCellChanged}>
+        {(_, cell) => {
+          if (!cell?.model || cell.model.type !== 'code') {
+            return <></>;
+          }
+          return (
+            <WorkbookCell
+              cell={cell.model as ICodeCellModel}
+              commands={commands}
+              rubric={rubric}
+              trans={trans}
+            />
+          );
+        }}
+      </UseSignal>
+    </section>
+  );
+};
+
+const WorkbookCell: React.FC<{
+  cell: ICodeCellModel;
+  commands: CommandRegistry;
+  rubric: Rubric;
+  trans: IRenderMime.TranslationBundle;
+}> = ({ cell: { id }, commands, rubric, trans }) => {
+  const { add, correct, remove, toggle } = Correxit.CommandIDs;
+  const buttons: CommandToolbarButtonComponent.IProps[] = [
+    { commands, id: add, args: { id, is: 'answerable' } },
+    { commands, id: add, args: { id, is: 'comparable' } },
+    { commands, id: add, args: { id, is: 'correctable' } },
+    { commands, id: correct, args: { id } },
+    { commands, id: toggle, args: { id } },
+    { commands, id: remove, args: { id } }
+  ];
+  const reference = Rubric.get(rubric, id)?.reference?.[0];
+  return (
+    <>
+      <h4>{trans.__('Workbook cell:')}</h4>
+      <div className="correxit-monospace" title={id}>
+        {id}
+      </div>
+      {reference && (
+        <>
+          <h4>{trans.__('Reference cell:')}</h4>
+          <div className="correxit-monospace" title={reference}>
+            {reference}
+          </div>
+        </>
+      )}
+      {buttons.map((props, index) => (
+        <CommandToolbarButtonComponent key={index} {...props} />
+      ))}
+    </>
+  );
+};
+
+export const Footer: React.FC<{
+  commands: CommandRegistry;
+}> = ({ commands }) => {
+  const { reset } = Correxit.CommandIDs;
+  return (
+    <section className="correxit-footer">
+      <CommandToolbarButtonComponent commands={commands} id={reset} />
+    </section>
+  );
+};

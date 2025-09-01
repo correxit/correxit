@@ -1,3 +1,3 @@
-import { multiCorrect, sidebar, source, toolbars } from './plugins';
-export * from './correxit';
-export default [multiCorrect, sidebar, source, toolbars];
+import { corrector, sidebar, source, toolbars } from './plugins';
+export { Correxit, Rubric, Workbook } from './correxit';
+export default [corrector, sidebar, source, toolbars];

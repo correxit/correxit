@@ -32,6 +32,17 @@ export namespace Workbook {
     export type Fail = { ok: false; error: string; rubric: Rubric | null; };
   }
 
+  export type Credentials = |
+    { path: string; passphrase: null; key: null; } |
+    { path: string; passphrase: null; key: string; } |
+    { path: string; passphrase: string; key: null; };
+
+  export type Grade = {
+    path: string;
+    score: Rubric.Score;
+    spec: KernelSpec.ISpecModel | null;
+  };
+
   export type Headed = {
     readonly content: Notebook;
     readonly context: DocumentRegistry.IContext<INotebookModel>;
@@ -40,34 +51,6 @@ export namespace Workbook {
   export type Headless = {
     readonly content: null;
     readonly context: DocumentRegistry.IContext<INotebookModel>;
-  };
-
-  /**
-   * The return value of the cell(s) execution, including the kernel used and the outputs.
-   */
-  export type ExecutionResult = {
-    /**
-     * The specs of the kernel used for cell(s) execution.
-     */
-    kernelSpec: KernelSpec.ISpecModel | undefined;
-    /**
-     * The outputs of the cell(s) execution.
-     */
-    outputs: Rubric.Outputs;
-  };
-
-  /**
-   * The return value of the cell(s) correction, including the kernel used and the scores.
-   */
-  export type CorrectionResult = {
-    /**
-     * The spec of the kernel used for cell(s) execution.
-     */
-    kernelSpec: KernelSpec.ISpecModel | undefined;
-    /**
-     * The score of the correction.
-     */
-    score: Rubric.Score;
   };
 
   export namespace Cell {
@@ -239,13 +222,15 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
-      const key = await security.keygen(passphrase, opened.id);
+      const { assignee, id } = opened;
+      const key = await security.keygen(passphrase, id, assignee ?? void 0);
       const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
       return update(workbook, rubric);
     } catch (error) {
       if (error === Correxit.NO_CORREXIT_METADATA) {
         const created = Rubric.create();
-        const key = await security.keygen(passphrase, created.id);
+        const { assignee, id } = created;
+        const key = await security.keygen(passphrase, id, assignee ?? void 0);
         return update(workbook, { ...created, key });
       }
       throw error;
@@ -258,38 +243,34 @@ export namespace Workbook {
    * @param workbook - the workbook to correct.
    * @param id - the id of the cell to correct.
    *
-   * @returns teh correction result, including
+   * @returns a promise that resolves to the correction result, i.e.,
    *  - the score for the cell or the whole workbook
    *  - the spec of the kernel used to get that score
    */
   export async function correct(
     workbook: Workbook,
     id?:string
-  ): Promise<CorrectionResult> {
+  ): Promise<Omit<Grade, 'path'>> {
     const { sum, UNSCORED } = Rubric;
-    const result: CorrectionResult = {
-      kernelSpec: undefined,
-      score: UNSCORED
-    }
     const rubric = open(workbook, quiet);
     if (!rubric) {
-      return result
+      return { spec: null, score: UNSCORED}
     }
 
-    const executionResult = await execute(workbook, rubric, id);
-    if (!executionResult) {
-      return result;
+    const result = await execute(workbook, rubric, id);
+    if (!result) {
+      return { spec: null, score: UNSCORED};
     }
-    result.kernelSpec = executionResult.kernelSpec;
 
+    const { spec, outputs } = result;
     if (id) {
-      result.score = await Rubric.score(rubric, id, executionResult.outputs);
-    } else {
-      const initial = Promise.resolve([0, 0] as Rubric.Score);
-      result.score =  await Object.keys(executionResult.outputs).reduce(async (total, id) =>
-        sum(await total, await Rubric.score(rubric, id, executionResult.outputs)), initial);
+      return { spec, score: await Rubric.score(rubric, id, outputs) };
     }
-    return result;
+
+    const initial = Promise.resolve([0, 0] as Rubric.Score);
+    const score =  await Object.keys(outputs).reduce(async (total, id) =>
+      sum(await total, await Rubric.score(rubric, id, outputs)), initial);
+    return { spec, score };
   }
 
   /**
@@ -329,7 +310,10 @@ export namespace Workbook {
     workbook: Workbook,
     rubric: Rubric,
     id?: string
-  ): Promise<ExecutionResult | null> {
+  ): Promise<{
+    spec: KernelSpec.ISpecModel | null;
+    outputs: Rubric.Outputs;
+  } | null> {
     if (!rubric) {
       throw new Error('execute error');
     }
@@ -350,14 +334,24 @@ export namespace Workbook {
       );
     }
 
-    const { kernelManager, kernelPreference } = context.sessionContext;
-    const { name } = kernelPreference;
-    const kernel = await (kernelManager?.startNew({ name }).catch(_ => {}));
-    if (!kernel) {
-      console.warn('execute error, could not start kernel');
+    const { kernelManager } = context.sessionContext;
+    const name = context.model.defaultKernelName;
+    if (!name) {
+      console.warn('execute error, unknown kernel');
       return null;
     }
-    const kernelSpec  = await kernel.spec;
+
+    let kernel: Kernel.IKernelConnection | null;
+    try {
+      kernel = await kernelManager?.startNew({ name }) || null;
+      if (!kernel) {
+        return null;
+      }
+    } catch (error){
+      console.warn(`execute error, could not start kernel ${name}`, error);
+      return null;
+    }
+
     const outputs: Rubric.Outputs = {};
     for (const index of range(stop)) {
       const model = cells.get(index);
@@ -367,10 +361,7 @@ export namespace Workbook {
     }
     void kernel.shutdown().catch(_ => {});
 
-    return {
-      kernelSpec,
-      outputs
-    };
+    return { spec: await kernel.spec || null, outputs };
   }
 
   /**
