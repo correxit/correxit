@@ -4,10 +4,15 @@ import { WidgetTracker } from '@jupyterlab/apputils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { folderIcon } from '@jupyterlab/ui-components';
+import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { Correxit } from '..';
 import { Corrector } from '.';
+
+export namespace CommandIDs {
+  export const cd = 'correxit-corrector:cd';
+  export const launch = 'correxit-corrector:launch';
+  export const refresh = 'correxit-corrector:refresh';
+}
 
 export function addCommands(options: {
   browser: IDefaultFileBrowser | null;
@@ -20,12 +25,13 @@ export function addCommands(options: {
 }) {
   const { browser, commands, manager, shell, tracker, trans, tree } = options;
   const disposables = [];
-  const { cd, launch } = Correxit.CommandIDs;
+  const { cd, launch, refresh } = CommandIDs;
   let widget: Corrector.Widget;
   disposables.push(
     commands.addCommand(cd, {
       icon: folderIcon,
-      label: () => trans.__('Change directory – current: %1', widget?.path),
+      caption: () => trans.__('Change directory – current: %1', widget?.path),
+      label: () => ` ${widget?.path}`,
       execute: async () => {
         const title = trans.__('Change directory');
         const label = trans.__('Select a directory to run Correxit Corrector');
@@ -62,6 +68,17 @@ export function addCommands(options: {
           shell.add(widget, 'main');
         }
         shell.activateById(widget.id);
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(refresh, {
+      icon: refreshIcon,
+      caption: () => trans.__('Rescan directory'),
+      execute: () => {
+        if (widget) {
+          widget.path = `${widget.path}`;
+        }
       }
     })
   );

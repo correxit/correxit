@@ -48,7 +48,7 @@ export const corrector: JupyterFrontEndPlugin<void> = {
       const name = 'correxit-corrector';
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
-      const { launch } = Correxit.CommandIDs;
+      const { launch } = Corrector.CommandIDs;
       const args = { browser, commands, manager, shell, tracker, trans, tree };
       const added = Corrector.addCommands(args);
       if (palette) {

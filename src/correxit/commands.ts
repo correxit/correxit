@@ -12,6 +12,21 @@ import { Correxit, Rubric, Workbook } from '.';
 import * as input from './input';
 import * as security from './security';
 
+export namespace CommandIDs {
+  export const add = 'correxit:add';
+  export const convert = 'correxit:convert';
+  export const correct = 'correxit:correct';
+  export const fetch = 'correxit:fetch';
+  export const lock = 'correxit:lock';
+  export const multicorrect = 'correxit:multicorrect';
+  export const remove = 'correxit:remove';
+  export const replace = 'correxit:replace';
+  export const reset = 'correxit:reset';
+  export const scan = 'correxit:scan';
+  export const toggle = 'correxit:toggle';
+  export const unlock = 'correxit:unlock';
+}
+
 export function addCommands(options: {
   commands: CommandRegistry;
   services: ServiceManager.IManager;
@@ -26,7 +41,6 @@ export function addCommands(options: {
   const { commands, services, source, translator } = options;
   const active: { workbook: Headed | null } = { workbook: null };
   const trans = (translator || nullTranslator).load('correxit');
-  const { CommandIDs } = Correxit;
   const { get, has, size } = Rubric;
   const deep = true;
   const quiet = true;

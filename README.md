@@ -9,6 +9,10 @@ the Latin verb _corrigere_, to correct.
 This extension is composed of a Python package named `correxit` and an NPM
 package named `correxit`.
 
+## Design principles
+
+See [DESIGN](DESIGN.md)
+
 ## What does it do? How does it work?
 
 With Correxit, a user can convert a Jupyter notebook using any language kernel

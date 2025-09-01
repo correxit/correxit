@@ -3,7 +3,10 @@ import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { collect } from '../correxit/commands';
-import { addCommands as ADD_COMMANDS } from './commands';
+import {
+  addCommands as ADD_COMMANDS,
+  CommandIDs as COMMAND_IDS
+} from './commands';
 import { CorrectorWidget } from './widget';
 import { ToolbarButtonComponent } from '@jupyterlab/ui-components';
 
@@ -45,6 +48,7 @@ export function Corrector(props: Corrector.Props) {
 
 export namespace Corrector {
   export const addCommands = ADD_COMMANDS;
+  export const CommandIDs = COMMAND_IDS;
   export type Widget = CorrectorWidget;
   export const Widget = CorrectorWidget;
   export type Props = {
@@ -74,7 +78,7 @@ const Row: React.FC<{
   return (
     <tr className={state === 'pending' ? PENDING_CLASS : ''}>
       <Lock {...{ trans, workbook }} />
-      <Path path={path} />
+      <Path {...{ commands, path }} />
       {state !== 'idle' && <Score row={state} {...{ rescore, trans }} />}
     </tr>
   );
@@ -99,9 +103,17 @@ const Lock: React.FC<{
   );
 };
 
-const Path: React.FC<{ path: string }> = ({ path }) => (
-  <td width="*">{path}</td>
-);
+const Path: React.FC<{
+  commands: CommandRegistry;
+  path: string;
+}> = ({ commands, path }) => {
+  const open = () => void commands.execute('docmanager:open', { path });
+  return (
+    <td width="*" onDoubleClick={open}>
+      {path}
+    </td>
+  );
+};
 
 const Score: React.FC<{
   rescore: () => unknown;

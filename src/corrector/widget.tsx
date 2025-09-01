@@ -27,10 +27,13 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
         : trans.__('Scanning...');
       status.dispose();
       status = ReactWidget.create(<span>{current}</span>);
-      toolbar.insertItem(6, 'status', status);
+      toolbar.insertItem(7, 'status', status);
     };
-    const { cd } = Correxit.CommandIDs;
     const { content, toolbar } = this;
+    const cd = new CommandToolbarButton({
+      commands,
+      id: Corrector.CommandIDs.cd
+    });
     const correct = new ToolbarButton({
       icon: Correxit.Icons.correct,
       label: trans.__('Correct workbooks'),
@@ -40,7 +43,12 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     const enter = (passphrase: string) =>
       content.set({ correct: false, passphrase });
     const passphrase = ReactWidget.create(<Passphrase {...{ enter, trans }} />);
-    toolbar.addItem('cd', new CommandToolbarButton({ commands, id: cd }));
+    const refresh = new CommandToolbarButton({
+      commands,
+      id: Corrector.CommandIDs.refresh
+    });
+    toolbar.addItem('refresh', refresh);
+    toolbar.addItem('cd', cd);
     toolbar.addItem('spacer-one', Toolbar.createSpacerItem());
     toolbar.addItem('passphrase', passphrase);
     toolbar.addItem('spacer-two', Toolbar.createSpacerItem());
@@ -55,7 +63,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
   }
   set path(path: string) {
     this.content.set({ correct: false, path: PathExt.normalize(path) });
-    this.commands.notifyCommandChanged(Correxit.CommandIDs.cd);
+    this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
   }
 
   protected commands: CommandRegistry;

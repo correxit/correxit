@@ -2,10 +2,6 @@
   background-color: var(--jp-rendermime-table-row-background);
 }
 
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='status'] {
-  width: 100px;
-}
-
 table.correxit-corrector {
   border-collapse: collapse;
   table-layout: fixed;
@@ -105,5 +101,23 @@ td.correxit-corrector-pending > span {
   40% {
     transform: scale(1.2);
     opacity: 1;
+  }
+}
+
+.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='status'] {
+  width: 125px;
+
+  span {
+    padding-right: 10px;
+    text-align: right;
+    width: 100%;
+  }
+}
+
+.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='cd'] {
+  .jp-ToolbarButtonComponent-label {
+    font-family: var(--jp-code-font-family-default);
+    padding-left: 3px;
+    padding-right: 3px;
   }
 }
