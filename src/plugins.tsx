@@ -15,6 +15,7 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
+import { IStateDB, StateDB } from '@jupyterlab/statedb';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
 import React from 'react';
@@ -32,25 +33,35 @@ export const corrector: JupyterFrontEndPlugin<void> = {
     ICommandPalette,
     ILayoutRestorer,
     INotebookTree,
-    ITranslator
+    ITranslator,
+    IStateDB
   ],
   autoStart: true,
   ...((deactivator?: () => void) => ({
     activate: (
-      { commands, shell }: JupyterFrontEnd,
+      app: JupyterFrontEnd,
       manager: IDocumentManager,
       browser: IDefaultFileBrowser | null,
       palette: ICommandPalette | null,
       restorer: ILayoutRestorer | null,
       tree: INotebookTree | null,
-      translator: ITranslator | null
+      translator: ITranslator | null,
+      db: IStateDB | null
     ) => {
       const name = 'correxit-corrector';
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const { launch } = Corrector.CommandIDs;
-      const args = { browser, commands, manager, shell, tracker, trans, tree };
-      const added = Corrector.addCommands(args);
+      const added = Corrector.addCommands({
+        browser,
+        commands: app.commands,
+        db: db || new StateDB(),
+        manager,
+        shell: app.shell,
+        tracker,
+        trans,
+        tree
+      });
       if (palette) {
         palette.addItem({ category: 'correxit', command: launch });
       }

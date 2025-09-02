@@ -1,3 +1,4 @@
+import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
@@ -110,7 +111,7 @@ const Path: React.FC<{
   const open = () => void commands.execute('docmanager:open', { path });
   return (
     <td width="*" onDoubleClick={open}>
-      {path}
+      {PathExt.basename(path)}
     </td>
   );
 };

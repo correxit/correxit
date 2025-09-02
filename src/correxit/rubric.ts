@@ -6,9 +6,9 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 
 export namespace Rubric {
   /**
-   * The basic shape of a locked or unlocked rubric.
+   * The base shape of a locked or unlocked rubric.
    */
-  interface IRubric {
+  type Base = {
     accessed: number;
     assignee: string | null;
     id: string;
@@ -18,13 +18,13 @@ export namespace Rubric {
     shared: Section;
   };
 
-  export type Locked = Readonly<IRubric> & {
+  export type Locked = Readonly<Base> & {
     readonly key: null;
     readonly locked: true;
     readonly secret: string;
   };
 
-  export type Unlocked = Readonly<IRubric> & {
+  export type Unlocked = Readonly<Base> & {
     readonly key: string;
     readonly locked: false;
     readonly secret: Section;

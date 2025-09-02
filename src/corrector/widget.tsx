@@ -1,6 +1,7 @@
 import { MainAreaWidget } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { IStateDB } from '@jupyterlab/statedb';
 import {
   CommandToolbarButton,
   ReactWidget,
@@ -12,13 +13,22 @@ import React, { useRef } from 'react';
 import { Correxit } from '..';
 import { Corrector } from '.';
 
+const PATH_KEY = 'correxit-corrector:path';
+
 export class CorrectorWidget extends MainAreaWidget<Content> {
-  constructor({ commands, path, trans }: CorrectorWidget.IOptions) {
+  constructor({ commands, db, path, trans }: CorrectorWidget.IOptions) {
     super({ content: new Content({ commands, path, trans }) });
     this.commands = commands;
+    this.db = db;
     this.addClass('correxit-corrector-widget');
 
     let status = ReactWidget.create(<></>);
+    const initialize = async () => {
+      const path = (await db.fetch(PATH_KEY)) as string;
+      if (path) {
+        this.path = path;
+      }
+    };
     const notify = (scanned: boolean, corrected: boolean) => {
       const current = scanned
         ? corrected
@@ -27,7 +37,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
         : trans.__('Scanning...');
       status.dispose();
       status = ReactWidget.create(<span>{current}</span>);
-      toolbar.insertItem(7, 'status', status);
+      toolbar.insertItem(5, 'status', status);
     };
     const { content, toolbar } = this;
     const cd = new CommandToolbarButton({
@@ -47,15 +57,14 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
       commands,
       id: Corrector.CommandIDs.refresh
     });
-    toolbar.addItem('refresh', refresh);
     toolbar.addItem('cd', cd);
-    toolbar.addItem('spacer-one', Toolbar.createSpacerItem());
+    toolbar.addItem('refresh', refresh);
     toolbar.addItem('passphrase', passphrase);
-    toolbar.addItem('spacer-two', Toolbar.createSpacerItem());
+    toolbar.addItem('spacer', Toolbar.createSpacerItem());
     toolbar.addItem('correct', correct);
-    toolbar.addItem('spacer-three', Toolbar.createSpacerItem());
     toolbar.addItem('status', status);
     content.set({ notify });
+    void initialize();
   }
 
   get path(): string {
@@ -64,14 +73,17 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
   set path(path: string) {
     this.content.set({ correct: false, path: PathExt.normalize(path) });
     this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
+    void this.db.save(PATH_KEY, path);
   }
 
   protected commands: CommandRegistry;
+  protected db: IStateDB;
 }
 
 export namespace CorrectorWidget {
   export interface IOptions {
     commands: CommandRegistry;
+    db: IStateDB;
     path: string;
     trans: IRenderMime.TranslationBundle;
   }
@@ -106,20 +118,25 @@ const Passphrase: React.FC<{
   const { enter, trans } = props;
   const icon = Correxit.Icons.key;
   const input = useRef<HTMLInputElement>(null);
-  const empty = (element: HTMLInputElement) => {
-    const { value } = element;
-    element.value = '';
-    return value;
+  const onSubmit: React.FormEventHandler = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (input.current) {
+      enter(input.current.value);
+      input.current.value = '';
+    }
   };
-  const onClick = () => input.current && enter(empty(input.current));
+  const id = 'correxit-corrector-passphrase';
+  const placeholder = trans.__('Enter passphrase');
   return (
-    <div>
-      <label>
-        {trans.__('Passphrase')} <input ref={input} type="password" />
+    <form {...{ onSubmit }}>
+      <label htmlFor={id} className="sr-only">
+        {trans.__('Passphrase')}
       </label>
-      <button {...{ onClick }} className="jp-Button jp-mod-minimal">
+      <input {...{ id, placeholder }} ref={input} type="password" />
+      <button type="submit" className="jp-Button jp-mod-minimal">
         <icon.react tag="span" title={trans.__('Unlock workbooks')} />
       </button>
-    </div>
+    </form>
   );
 };

@@ -7,6 +7,7 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { Corrector } from '.';
+import { IStateDB } from '@jupyterlab/statedb';
 
 export namespace CommandIDs {
   export const cd = 'correxit-corrector:cd';
@@ -14,16 +15,17 @@ export namespace CommandIDs {
   export const refresh = 'correxit-corrector:refresh';
 }
 
-export function addCommands(options: {
+export function addCommands(args: {
   browser: IDefaultFileBrowser | null;
   commands: CommandRegistry;
+  db: IStateDB;
   manager: IDocumentManager;
   shell: JupyterFrontEnd.IShell;
   tracker: WidgetTracker<Corrector.Widget>;
   trans: IRenderMime.TranslationBundle;
   tree: INotebookTree | null;
 }) {
-  const { browser, commands, manager, shell, tracker, trans, tree } = options;
+  const { browser, commands, db, manager, shell, tracker, trans, tree } = args;
   const disposables = [];
   const { cd, launch, refresh } = CommandIDs;
   let widget: Corrector.Widget;
@@ -31,7 +33,7 @@ export function addCommands(options: {
     commands.addCommand(cd, {
       icon: folderIcon,
       caption: () => trans.__('Change directory – current: %1', widget?.path),
-      label: () => ` ${widget?.path}`,
+      label: () => `/ ${widget?.path} /`,
       execute: async () => {
         const title = trans.__('Change directory');
         const label = trans.__('Select a directory to run Correxit Corrector');
@@ -50,7 +52,7 @@ export function addCommands(options: {
       execute: ({ path }: { path?: string }) => {
         if (!widget || widget.isDisposed) {
           path ||= browser?.model.path || '.';
-          widget = new Corrector.Widget({ commands, path, trans });
+          widget = new Corrector.Widget({ commands, db, path, trans });
           widget.id = 'correxit-corrector-widget';
           widget.title.label = trans.__('Correxit Corrector');
           widget.title.closable = true;

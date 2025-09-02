@@ -104,20 +104,23 @@ td.correxit-corrector-pending > span {
   }
 }
 
+.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='cd'],
+.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='correct'] {
+  .jp-ToolbarButtonComponent-label {
+    padding-left: 3px;
+  }
+}
+
+.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='refresh'] {
+  padding-right: 5px;
+}
+
 .correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='status'] {
-  width: 125px;
+  width: 100px;
 
   span {
     padding-right: 10px;
     text-align: right;
     width: 100%;
-  }
-}
-
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='cd'] {
-  .jp-ToolbarButtonComponent-label {
-    font-family: var(--jp-code-font-family-default);
-    padding-left: 3px;
-    padding-right: 3px;
   }
 }

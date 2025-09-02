@@ -2577,6 +2577,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@jupyterlab/statedb@npm:^4.4.6":
+  version: 4.4.6
+  resolution: "@jupyterlab/statedb@npm:4.4.6"
+  dependencies:
+    "@lumino/commands": ^2.3.2
+    "@lumino/coreutils": ^2.2.1
+    "@lumino/disposable": ^2.1.4
+    "@lumino/properties": ^2.0.3
+    "@lumino/signaling": ^2.1.4
+  checksum: 36fdfaf971ba3442e514565d35cd731f5d1bd3801bb695f4e71386d33e4497e70b7790d0b60d5ae68b6b70bcb8233f2abc42842057a31217c1a6337289332c59
+  languageName: node
+  linkType: hard
+
 "@jupyterlab/statusbar@npm:^4.4.3":
   version: 4.4.3
   resolution: "@jupyterlab/statusbar@npm:4.4.3"
@@ -4534,6 +4547,7 @@ __metadata:
     "@jupyterlab/rendermime": ^4.4.3
     "@jupyterlab/services": ^7.0.0
     "@jupyterlab/settingregistry": ^4.0.0
+    "@jupyterlab/statedb": ^4.4.6
     "@jupyterlab/testutils": ^4.0.0
     "@jupyterlab/translation": ^4.4.3
     "@jupyterlab/ui-components": ^4.4.3
