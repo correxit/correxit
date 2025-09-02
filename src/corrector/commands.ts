@@ -33,7 +33,7 @@ export function addCommands(args: {
     commands.addCommand(cd, {
       icon: folderIcon,
       caption: () => trans.__('Change directory – current: %1', widget?.path),
-      label: () => `/ ${widget?.path} /`,
+      label: () => `/ ${widget?.path.split('/').join(' / ')} /`,
       execute: async () => {
         const title = trans.__('Change directory');
         const label = trans.__('Select a directory to run Correxit Corrector');
