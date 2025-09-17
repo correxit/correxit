@@ -1,10 +1,12 @@
 .correxit-sidebar {
+  min-width: 285px !important;
   display: flex;
   flex-flow: column;
 }
 
 .correxit-sidebar h4 {
-  margin: 5px 0;
+  font-weight: 600;
+  font-size: var(--jp-ui-font-size1);
 }
 
 .correxit-sidebar > section {
@@ -26,16 +28,52 @@
   white-space: nowrap;
 }
 
-.correxit-sidebar .jp-ToolbarButtonComponent {
-  display: block;
-  margin: 0 0 5px;
-  padding: 0 0 7px;
+.correxit-sidebar-buttons {
+  display: flex;
+  gap: 8px;
+  height: 21px !important;
+  justify-content: center;
+  text-align: center;
+  margin-bottom: 10px;
+  color: var(--jp-ui-font-color3) !important;
+}
+
+.correxit-sidebar .jp-ToolbarButtonComponent > span {
+  font-size: small;
+  color: var(--jp-inverse-layout-color);
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent svg {
   margin-right: 5px;
 }
 
+.correxit-sidebar .correxit-inner-header .jp-ToolbarButtonComponent svg {
+  transform: scale(1.5);
+}
+
 .correxit-sidebar .jp-ToolbarButtonComponent.lm-mod-hidden {
   display: none;
+}
+
+.correxit-inner-header {
+  display: flex;
+  justify-content: space-between;
+  margin: 5px 15px;
+  align-items: center;
+  color: var(--jp-ui-font-color0) !important;
+}
+
+.correxit-inner-header .jp-ToolbarButtonComponent:hover {
+  background-color: transparent;
+}
+
+.correxit-sidebar p {
+  margin: 25px 0 5px;
+}
+
+.correxit-sidebar-additional-operations {
+  display: flex;
+  flex-flow: column;
+  align-items: start;
+  margin: 20px 0;
 }

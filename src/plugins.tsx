@@ -194,7 +194,7 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
     const trans = (translator || nullTranslator).load('correxit');
     toolbarRegistry.addFactory(
       'Cell',
-      'correxit-replace',
+      'correxit-add',
       (cell: Cell) => new Private.CellMode({ cell, commands, trans })
     );
   }

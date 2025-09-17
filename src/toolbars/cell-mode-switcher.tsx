@@ -1,12 +1,13 @@
 import { Cell } from '@jupyterlab/cells';
 import { NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { HTMLSelect, UseSignal } from '@jupyterlab/ui-components';
+import {
+  CommandToolbarButtonComponent,
+  UseSignal
+} from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
-import { Correxit, Rubric, Workbook } from '..';
-
-const CELL_MODE_SWITCHER_CLASS = 'correxit-cell-mode-switcher';
+import { Correxit, Workbook } from '..';
 
 export const CellModeSwitcher: React.FC<{
   cell: Cell;
@@ -30,26 +31,20 @@ const Switcher: React.FC<{
   trans: IRenderMime.TranslationBundle;
   workbook: Workbook;
 }> = ({ commands, id, trans, workbook }) => {
-  if (!commands.isEnabled(Correxit.CommandIDs.replace, { id })) {
+  if (!commands.isEnabled(Correxit.CommandIDs.add, { id })) {
     return <></>;
   }
-
-  const quiet = true;
-  const rubric = Workbook.open(workbook, quiet)!;
+  const { add } = Correxit.CommandIDs;
+  const buttons: CommandToolbarButtonComponent.IProps[] = [
+    { commands, id: add, args: { id, is: 'answerable' }, label: '' },
+    { commands, id: add, args: { id, is: 'correctable' }, label: '' },
+    { commands, id: add, args: { id, is: 'comparable' }, label: '' }
+  ];
   return (
-    <HTMLSelect
-      className={CELL_MODE_SWITCHER_CLASS}
-      onChange={({ target: { value } }) =>
-        commands.execute(Correxit.CommandIDs.replace, { id, is: value })
-      }
-      value={Rubric.get(rubric, id)?.is ?? ''}
-      aria-label={trans.__('Workbook cell grading mode')}
-      title={trans.__('Select the cell grading mode')}
-    >
-      <option value="">{trans.__('Not configured')}</option>
-      <option value="answerable">{trans.__('Answer')}</option>
-      <option value="comparable">{trans.__('Compare')}</option>
-      <option value="correctable">{trans.__('Correct')}</option>
-    </HTMLSelect>
+    <div className="x-gap">
+      {buttons.map((props, index) => (
+        <CommandToolbarButtonComponent key={index} {...props} />
+      ))}
+    </div>
   );
 };

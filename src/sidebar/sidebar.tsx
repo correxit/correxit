@@ -1,5 +1,4 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
-import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import {
   CommandToolbarButtonComponent,
@@ -47,10 +46,12 @@ export const Header: React.FC<{
   const { convert, correct, lock, unlock } = Correxit.CommandIDs;
   return (
     <section className="correxit-header">
-      <File trans={trans} workbook={workbook} />
+      <div className="correxit-inner-header">
+        <File trans={trans} workbook={workbook} />
+        <CommandToolbarButtonComponent commands={commands} id={lock} />
+        <CommandToolbarButtonComponent commands={commands} id={unlock} />
+      </div>
       <CommandToolbarButtonComponent commands={commands} id={convert} />
-      <CommandToolbarButtonComponent commands={commands} id={lock} />
-      <CommandToolbarButtonComponent commands={commands} id={unlock} />
       <CommandToolbarButtonComponent commands={commands} id={correct} />
     </section>
   );
@@ -62,21 +63,11 @@ const File: React.FC<{
 }> = ({ trans, workbook }) => {
   const quiet = true;
   const rubric = Workbook.open(workbook, quiet);
-  const { context } = workbook;
-  const heading = rubric
-    ? trans.__('Workbook file:')
-    : trans.__('Notebook file:');
+  const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   return (
-    <UseSignal signal={context.pathChanged} initialSender={context}>
-      {() => (
-        <>
-          <h4>{heading}</h4>
-          <div className="correxit-monospace">
-            {PathExt.basename(context.path)}
-          </div>
-        </>
-      )}
-    </UseSignal>
+    <>
+      <h4>{heading}</h4>
+    </>
   );
 };
 
@@ -120,32 +111,47 @@ const WorkbookCell: React.FC<{
   trans: IRenderMime.TranslationBundle;
 }> = ({ cell: { id }, commands, rubric, trans }) => {
   const { add, correct, remove, toggle } = Correxit.CommandIDs;
-  const buttons: CommandToolbarButtonComponent.IProps[] = [
+  const correctOptions: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: add, args: { id, is: 'answerable' } },
-    { commands, id: add, args: { id, is: 'comparable' } },
     { commands, id: add, args: { id, is: 'correctable' } },
+    { commands, id: add, args: { id, is: 'comparable' } }
+  ];
+  const additionalOperations: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: correct, args: { id } },
     { commands, id: toggle, args: { id } },
     { commands, id: remove, args: { id } }
   ];
-  const reference = Rubric.get(rubric, id)?.reference?.[0];
+
+  const rubricCellType = Rubric.get(rubric, id)?.is;
+  let hint: string = '';
+  if (rubricCellType === 'answerable') {
+    hint = 'Expected output has been set.';
+  } else if (rubricCellType === 'correctable') {
+    hint =
+      'Reference cell has been selected, its contents will be used for correcting.';
+  } else if (rubricCellType === 'comparable') {
+    hint = 'Cell has been selected, its output will be  used for comparison.';
+  } else if (Rubric.has(rubric, id, true)) {
+    hint = 'Selected cell is a reference cell.';
+  }
+
   return (
     <>
-      <h4>{trans.__('Workbook cell:')}</h4>
-      <div className="correxit-monospace" title={id}>
-        {id}
-      </div>
-      {reference && (
+      {id && (
         <>
-          <h4>{trans.__('Reference cell:')}</h4>
-          <div className="correxit-monospace" title={reference}>
-            {reference}
+          <div className="correxit-sidebar-buttons">
+            {correctOptions.map((props, index) => (
+              <CommandToolbarButtonComponent key={index} {...props} />
+            ))}
+          </div>
+          {hint && <p>{hint}</p>}
+          <div className="correxit-sidebar-additional-operations">
+            {additionalOperations.map((props, index) => (
+              <CommandToolbarButtonComponent key={index} {...props} />
+            ))}
           </div>
         </>
       )}
-      {buttons.map((props, index) => (
-        <CommandToolbarButtonComponent key={index} {...props} />
-      ))}
     </>
   );
 };

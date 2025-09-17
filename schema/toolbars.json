@@ -6,7 +6,7 @@
   "properties": {},
   "jupyter.lab.toolbars": {
     "Cell": [
-      { "name": "correxit-replace" },
+      { "name": "correxit-add" },
       {
         "name": "correxit-correct",
         "command": "correxit:correct",

@@ -20,7 +20,6 @@ export namespace CommandIDs {
   export const lock = 'correxit:lock';
   export const multicorrect = 'correxit:multicorrect';
   export const remove = 'correxit:remove';
-  export const replace = 'correxit:replace';
   export const reset = 'correxit:reset';
   export const scan = 'correxit:scan';
   export const toggle = 'correxit:toggle';
@@ -41,7 +40,7 @@ export function addCommands(options: {
   const { commands, services, source, translator } = options;
   const active: { workbook: Headed | null } = { workbook: null };
   const trans = (translator || nullTranslator).load('correxit');
-  const { get, has, size } = Rubric;
+  const { has, size } = Rubric;
   const deep = true;
   const quiet = true;
 
@@ -60,28 +59,46 @@ export function addCommands(options: {
   };
   const disposables = [];
   disposables.push(commands.addCommand(CommandIDs.add, {
-    isEnabled: ({ id, reference }: Partial<Rubric.Cell>) => {
-      const cells = active.workbook?.context.model.sharedModel.cells || [];
-      const cell = find(cells, cell => cell.id === id);
+    className: 'correxit-ToolbarButtonComponent',
+    icon: (args: Partial<Rubric.Cell>) => {
+      if (args.is === 'answerable') {
+        return Correxit.Icons.answer;
+      }
+      if (args.is === 'comparable') {
+        return Correxit.Icons.compare;
+      }
+      if (args.is === 'correctable') {
+        return Correxit.Icons.cellCorrect;
+      }
+    },
+    isEnabled: ({ id }: Partial<Rubric.Cell>) => {
       const rubric = open(active.workbook, quiet);
-      if (!cell || !rubric || rubric.locked || !id || id === reference?.[0]) {
+      if (!rubric || rubric.locked || !id) {
         return false;
       }
-      return cell.cell_type === 'code' && !has(rubric, id, deep);
+
+      const cells = active.workbook?.context.model.sharedModel.cells || [];
+      const code = find(cells, cell => cell.id === id)?.cell_type === 'code';
+      return code && !has(rubric, id, deep) || has(rubric, id);
     },
-    isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
+    isToggled: (cell: Partial<Rubric.Cell>) => {
+      const rubric = open(active.workbook, quiet)!;
+      const is =  Rubric.get(rubric, cell.id!)?.is;
+      return is === cell.is;
+    },
+    isVisible: () => open(active.workbook, quiet)?.locked === false,
     label: (cell: Partial<Rubric.Cell>) => {
       if (!commands.isEnabled(CommandIDs.add, cell)) {
         return '';
       }
       if (cell.is === 'answerable') {
-        return trans.__('Expect output of this cell to match answer...');
+        return trans.__('Answer');
       }
       if (cell.is === 'comparable') {
-        return trans.__('Select another cell for comparing cell output...');
+        return trans.__('Compare');
       }
       if (cell.is === 'correctable') {
-        return trans.__('Select another cell that corrects this cell...');
+        return trans.__('Correct');
       }
       return '';
     },
@@ -93,6 +110,10 @@ export function addCommands(options: {
       const id = cell.id!;
       const is = cell.is!;
       const workbook = active.workbook!;
+
+      // Remove previous cell correcting configuration. 
+      await commands.execute(CommandIDs.remove, { id });
+
       if (is === 'answerable') {
         const expected = await input.text({
           title: trans.__('Enter expected cell output'),
@@ -267,10 +288,10 @@ export function addCommands(options: {
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.lock, {
-    icon: Correxit.Icons.unlocked,
+    icon: Correxit.Icons.locked,
     isEnabled: () => open(active.workbook, quiet)?.locked === false,
     isVisible: () => commands.isEnabled(CommandIDs.lock),
-    label: trans.__('Lock grader mode'),
+    label: trans.__('Lock'),
     execute: async () => {
       if (!commands.isEnabled(CommandIDs.lock)) {
         return;
@@ -302,36 +323,11 @@ export function addCommands(options: {
       return !!id && !!rubric && !rubric.locked && has(rubric, id);
     },
     isVisible: cell => commands.isEnabled(CommandIDs.remove, cell),
-    label: trans.__('Reset expected cell output'),
+    icon: Correxit.Icons.reset,
+    label: trans.__('Reset cell configuration'),
     execute: async (cell: Partial<Rubric.Cell>) => {
       if (commands.isEnabled(CommandIDs.remove, cell)) {
         Workbook.remove(active.workbook!, cell.id!);
-      }
-    }
-  }));
-  disposables.push(commands.addCommand(CommandIDs.replace, {
-    isEnabled: ({ id }: Partial<Rubric.Cell>) => {
-      const rubric = open(active.workbook, quiet);
-      if (!rubric || rubric.locked || !id) {
-        return false;
-      }
-
-      const cells = active.workbook?.context.model.sharedModel.cells || [];
-      const code = find(cells, cell => cell.id === id)?.cell_type === 'code';
-      return code && !has(rubric, id, deep) || has(rubric, id);
-    },
-    label: (cell: Partial<Rubric.Cell>) =>
-      commands.isEnabled(CommandIDs.replace, cell) ?
-        trans.__('Replace workbook cell in rubric') : '',
-    execute: async ({ id, is }: Partial<Rubric.Cell>) => {
-      if (!commands.isEnabled(CommandIDs.replace, { id, is })) {
-        return;
-      }
-      const rubric = open(active.workbook, quiet)!;
-      const replace = is && get(rubric, id!)?.is !== is;
-      await commands.execute(CommandIDs.remove, { id });
-      if (replace) {
-        await commands.execute(CommandIDs.add, { id, is });
       }
     }
   }));
@@ -422,10 +418,10 @@ export function addCommands(options: {
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.unlock, {
-    icon: Correxit.Icons.key,
+    icon: Correxit.Icons.unlocked,
     isEnabled: () => open(active.workbook, quiet)?.locked ?? false,
     isVisible: () => commands.isEnabled(CommandIDs.unlock),
-    label: trans.__('Unlock grader mode...'),
+    label: trans.__('unlock'),
     usage: `
 The command execute args type is: { passphrase?: string }
 

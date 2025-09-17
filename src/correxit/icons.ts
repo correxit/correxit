@@ -7,6 +7,10 @@ import LOCKED from '../../style/icons/locked.svg';
 import SECRET from '../../style/icons/secret.svg';
 import SHARED from '../../style/icons/shared.svg';
 import UNLOCKED from '../../style/icons/unlocked.svg';
+import ANSWER from '../../style/icons/answer.svg';
+import COMPARE from '../../style/icons/compare.svg';
+import CELLCORRECT from '../../style/icons/cellCorrect.svg';
+import RESET from '../../style/icons/reset.svg';
 
 export namespace Icons {
   export const convert =
@@ -25,4 +29,12 @@ export namespace Icons {
     new LabIcon({ name: 'correxit:shared', svgstr: SHARED });
   export const unlocked =
     new LabIcon({ name: 'correxit:unlocked', svgstr: UNLOCKED });
+  export const answer =
+    new LabIcon({ name: 'correxit:answer', svgstr: ANSWER });
+  export const compare =
+    new LabIcon({ name: 'correxit:compare', svgstr: COMPARE });
+  export const cellCorrect =
+    new LabIcon({ name: 'correxit:cell-correct', svgstr: CELLCORRECT });
+  export const reset =
+    new LabIcon({ name: 'correxit:reset', svgstr: RESET });
 }
