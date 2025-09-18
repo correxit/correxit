@@ -2,6 +2,12 @@
   background-color: var(--jp-rendermime-table-row-background);
 }
 
+.correxit-corrector-widget-content {
+  overflow-y: auto;
+  height: 100%;
+  width: 100%;
+}
+
 table.correxit-corrector {
   border-collapse: collapse;
   table-layout: fixed;
@@ -35,9 +41,19 @@ table.correxit-corrector tr.cxt-mod-pending td {
     transparent;
 }
 
+table.correxit-corrector tr.cxt-mod-selected td {
+  background-color: var(--jp-brand-color1);
+  color: var(--jp-ui-inverse-font-color1);
+
+  .jp-icon-selectable[fill] {
+    fill: var(--jp-ui-inverse-font-color0);
+  }
+}
+
+td.correxit-corrector-assignment,
 td.correxit-corrector-kernel,
 td.correxit-corrector-lock,
-td.correxit-corrector-rescore {
+td.correxit-corrector-open {
   width: 20px;
 
   .correxit-corrector-icon {
@@ -123,4 +139,11 @@ td.correxit-corrector-pending > span {
     text-align: right;
     width: 100%;
   }
+}
+
+.correxit-corrector-widget.cxt-mod-cd .jp-Dialog .jp-Dialog-content {
+  min-height: 80%;
+  max-height: 80%;
+  min-width: 80%;
+  max-width: 80%;
 }

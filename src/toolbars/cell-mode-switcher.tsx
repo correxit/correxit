@@ -9,10 +9,12 @@ import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit, Workbook } from '..';
 
+type TranslationBundle = IRenderMime.TranslationBundle;
+
 export const CellModeSwitcher: React.FC<{
   cell: Cell;
   commands: CommandRegistry;
-  trans: IRenderMime.TranslationBundle;
+  trans: TranslationBundle;
 }> = ({ cell: { model, parent }, commands, trans }) => {
   const { id } = model;
   const workbook = parent?.parent instanceof NotebookPanel && parent.parent;
@@ -28,7 +30,7 @@ export const CellModeSwitcher: React.FC<{
 const Switcher: React.FC<{
   commands: CommandRegistry;
   id: string;
-  trans: IRenderMime.TranslationBundle;
+  trans: TranslationBundle;
   workbook: Workbook;
 }> = ({ commands, id, trans, workbook }) => {
   if (!commands.isEnabled(Correxit.CommandIDs.add, { id })) {

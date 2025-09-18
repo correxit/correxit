@@ -1,10 +1,29 @@
 import { Token } from '@lumino/coreutils';
-import { Workbook } from '.';
+import { Rubric, Workbook } from '.';
 import { CommandIDs as COMMAND_IDS } from './commands';
 import * as description from './description';
 import { Icons as ICONS } from './icons';
 
 export namespace Correxit {
+  /**
+   * A message emitter for notifications and other Correxit UI updates.
+   */
+  export type Emitter = AsyncIterable<{ payload: Emitter.Emission }>;
+
+  export namespace Emitter {
+    /**
+     * An notification/message emission with slots to populated interpolations.
+     */
+    export type Emission = { slots: (string | number)[]; type: string; };
+  }
+
+  export type Propagator = {
+    assign: (workbook: Workbook, assignment: Rubric.Assignment)
+      => Promise<void>;
+    location: (workbook: Workbook)
+      => Promise<string>;
+  }
+
   /**
    * The core Correxit plugin registers commands and returns a workbook source.
    */

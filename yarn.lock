@@ -2423,6 +2423,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@jupyterlab/nbformat@npm:^4.4.7":
+  version: 4.4.7
+  resolution: "@jupyterlab/nbformat@npm:4.4.7"
+  dependencies:
+    "@lumino/coreutils": ^2.2.1
+  checksum: 4ce6173b937a5873b3a634a7da6a8472f400f25c28be93b04d4570070178e4804f598d1d3b4c0e2901935e18b86639d5f780304f2acd70ec761d97e2236a5ac1
+  languageName: node
+  linkType: hard
+
 "@jupyterlab/notebook@npm:^4.4.2, @jupyterlab/notebook@npm:^4.4.3":
   version: 4.4.3
   resolution: "@jupyterlab/notebook@npm:4.4.3"
@@ -4534,7 +4543,6 @@ __metadata:
   resolution: "correxit@workspace:."
   dependencies:
     "@jupyter-notebook/tree": ^7.0.0
-    "@jupyter/react-components": ^0.16.6
     "@jupyterlab/application": ^4.0.0
     "@jupyterlab/apputils": ^4.5.2
     "@jupyterlab/builder": ^4.0.0
@@ -4543,6 +4551,7 @@ __metadata:
     "@jupyterlab/docmanager": ^4.4.3
     "@jupyterlab/docregistry": ^4.4.3
     "@jupyterlab/filebrowser": ^4.4.3
+    "@jupyterlab/nbformat": ^4.4.7
     "@jupyterlab/notebook": ^4.4.2
     "@jupyterlab/rendermime": ^4.4.3
     "@jupyterlab/services": ^7.0.0

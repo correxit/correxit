@@ -8,7 +8,12 @@ import { CommandRegistry } from '@lumino/commands';
 import { ISignal } from '@lumino/signaling';
 import React from 'react';
 import { Correxit, Rubric, Workbook } from '..';
+import { Assignment } from './assignment';
 import { SidebarWidget } from './widget';
+
+type TranslationBundle = IRenderMime.TranslationBundle;
+
+const open = (workbook: Workbook) => Workbook.open(workbook, true);
 
 export function Sidebar(props: Sidebar.Props) {
   const { commands, sender, signal, trans, workbook } = props;
@@ -31,8 +36,8 @@ export namespace Sidebar {
     commands: CommandRegistry;
     sender: any;
     signal: ISignal<unknown, void>;
-    trans: IRenderMime.TranslationBundle;
-    workbook: Workbook.Headed;
+    trans: TranslationBundle;
+    workbook: Workbook;
   };
   export type Widget = SidebarWidget;
   export const Widget = SidebarWidget;
@@ -40,17 +45,22 @@ export namespace Sidebar {
 
 export const Header: React.FC<{
   commands: CommandRegistry;
-  trans: IRenderMime.TranslationBundle;
+  trans: TranslationBundle;
   workbook: Workbook;
 }> = ({ commands, trans, workbook }) => {
   const { convert, correct, lock, unlock } = Correxit.CommandIDs;
+  const rubric = open(workbook);
+  const keys = rubric;
+  const assignment = rubric?.assignment ?? null;
+  const key = rubric?.accessed ?? '';
   return (
-    <section className="correxit-header">
-      <div className="correxit-inner-header">
+    <section className="correxit-sidebar-header">
+      <div className="correxit-sidebar-inner-header">
         <File trans={trans} workbook={workbook} />
         <CommandToolbarButtonComponent commands={commands} id={lock} />
         <CommandToolbarButtonComponent commands={commands} id={unlock} />
       </div>
+      <Assignment key={key} {...{ assignment, commands, keys, trans }} />
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <CommandToolbarButtonComponent commands={commands} id={correct} />
     </section>
@@ -58,11 +68,10 @@ export const Header: React.FC<{
 };
 
 const File: React.FC<{
-  trans: IRenderMime.TranslationBundle;
+  trans: TranslationBundle;
   workbook: Workbook;
 }> = ({ trans, workbook }) => {
-  const quiet = true;
-  const rubric = Workbook.open(workbook, quiet);
+  const rubric = open(workbook);
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   return (
     <>
@@ -73,18 +82,18 @@ const File: React.FC<{
 
 export const Body: React.FC<{
   commands: CommandRegistry;
-  trans: IRenderMime.TranslationBundle;
-  workbook: Workbook.Headed;
+  trans: TranslationBundle;
+  workbook: Workbook;
 }> = ({ commands, trans, workbook }) => {
-  const quiet = true;
-  const rubric = Workbook.open(workbook, quiet);
-  const { activeCell, activeCellChanged } = workbook.content;
+  const rubric = open(workbook);
   const key = workbook.context.model.sharedModel.cells[0].id;
-  if (!activeCell || !rubric) {
-    return <section className="correxit-body"></section>;
+  const headless = !workbook.content;
+  if (!rubric || headless || !workbook.content.activeCell) {
+    return <section className="correxit-sidebar-body"></section>;
   }
+  const { activeCell, activeCellChanged } = workbook.content;
   return (
-    <section className="correxit-body">
+    <section className="correxit-sidebar-body">
       <UseSignal initialArgs={activeCell} key={key} signal={activeCellChanged}>
         {(_, cell) => {
           if (!cell?.model || cell.model.type !== 'code') {
@@ -95,7 +104,6 @@ export const Body: React.FC<{
               cell={cell.model as ICodeCellModel}
               commands={commands}
               rubric={rubric}
-              trans={trans}
             />
           );
         }}
@@ -108,8 +116,7 @@ const WorkbookCell: React.FC<{
   cell: ICodeCellModel;
   commands: CommandRegistry;
   rubric: Rubric;
-  trans: IRenderMime.TranslationBundle;
-}> = ({ cell: { id }, commands, rubric, trans }) => {
+}> = ({ cell: { id }, commands, rubric }) => {
   const { add, correct, remove, toggle } = Correxit.CommandIDs;
   const correctOptions: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: add, args: { id, is: 'answerable' } },
@@ -161,7 +168,7 @@ export const Footer: React.FC<{
 }> = ({ commands }) => {
   const { reset } = Correxit.CommandIDs;
   return (
-    <section className="correxit-footer">
+    <section className="correxit-sidebar-footer">
       <CommandToolbarButtonComponent commands={commands} id={reset} />
     </section>
   );

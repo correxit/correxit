@@ -28,21 +28,30 @@ export function addCommands(args: {
   const { browser, commands, db, manager, shell, tracker, trans, tree } = args;
   const disposables = [];
   const { cd, launch, refresh } = CommandIDs;
-  let widget: Corrector.Widget;
+  let widget: Corrector.Widget | null = null;
   disposables.push(
     commands.addCommand(cd, {
       icon: folderIcon,
       caption: () => trans.__('Change directory – current: %1', widget?.path),
       label: () => `/ ${widget?.path.split('/').join(' / ')} /`,
-      execute: async () => {
-        const title = trans.__('Change directory');
-        const label = trans.__('Select a directory to run Correxit Corrector');
-        const options = { label, title, manager };
-        const directory = await FileDialog.getExistingDirectory(options);
-        if (directory.value && widget) {
-          const [{ path }] = directory.value;
+      execute: async ({ path }: { path?: string }) => {
+        if (!widget || widget.isDisposed) {
+          return;
+        }
+        widget.addClass('cxt-mod-cd');
+        if (typeof path !== 'string') {
+          const title = trans.__('Correxit Corrector: change directory');
+          const label = trans.__('Choose a directory for Correxit Corrector');
+          const defaultPath = widget.path;
+          const host = widget.node;
+          const options = { defaultPath, host, label, title, manager };
+          const pending = await FileDialog.getExistingDirectory(options);
+          path = pending.value?.[0].path;
+        }
+        if (typeof path === 'string') {
           widget.path = path || '.';
         }
+        widget.removeClass('cxt-mod-cd');
       }
     })
   );
@@ -77,9 +86,9 @@ export function addCommands(args: {
     commands.addCommand(refresh, {
       icon: refreshIcon,
       caption: () => trans.__('Rescan directory'),
-      execute: () => {
-        if (widget) {
-          widget.path = `${widget.path}`;
+      execute: ({ hard }: { hard?: boolean }) => {
+        if (widget && !widget.isDisposed) {
+          return hard ? void (widget.path = `${widget.path}`) : widget.update();
         }
       }
     })

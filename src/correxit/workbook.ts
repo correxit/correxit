@@ -1,15 +1,24 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
-import { DocumentRegistry } from '@jupyterlab/docregistry';
+import { PathExt } from '@jupyterlab/coreutils';
+import { Context, DocumentRegistry } from '@jupyterlab/docregistry';
+import { INotebookContent } from '@jupyterlab/nbformat';
 import {
   INotebookModel,
   Notebook,
-  NotebookActions
+  NotebookActions,
+  NotebookModelFactory
 } from '@jupyterlab/notebook';
-import { Kernel, KernelMessage, KernelSpec } from '@jupyterlab/services';
-import { find, findIndex, range, reduce } from '@lumino/algorithm';
+import {
+  Kernel,
+  KernelMessage,
+  KernelSpec,
+  ServiceManager
+} from '@jupyterlab/services';
+import { findIndex, range, reduce } from '@lumino/algorithm';
 import { Correxit } from './correxit';
 import { Rubric } from './rubric';
 import * as security from './security';
+import { Poll } from '@lumino/polling';
 
 /**
  * A headed or headless Correxit workbook.
@@ -70,21 +79,22 @@ export namespace Workbook {
       }
 
       const cell = sharedModel.cells[index];
-      cell.setSource(await security.decrypt(cell.getSource(), key));
+      const decrypted = await security.decrypt(cell.getSource(), key);
+      cell.transact(() => {
+        const jupyter = (cell.getMetadata('jupyter') as any || {});
+        delete jupyter['source_hidden'];
+        cell.setMetadata('jupyter', jupyter);
+        cell.setMetadata('trusted', true);
+        cell.deleteMetadata('editable');
+        cell.setSource(decrypted);
+      });
 
       const raw = cell.toJSON();
-      delete raw.metadata.editable;
-      raw.metadata.trusted = true;
       sharedModel.transact(() => {
         sharedModel.deleteCell(index);
         sharedModel.insertCell(index, { ...raw, cell_type: 'code' });
       }, false);
       if (workbook.content) {
-        const { widgets } = workbook.content;
-        const widget = find(widgets, ({ model }) => model.id === reference);
-        if (widget) {
-          widget.inputHidden = false;
-        }
         NotebookActions.clearAllOutputs(workbook.content);
         NotebookActions.deselectAll(workbook.content);
       }
@@ -105,22 +115,22 @@ export namespace Workbook {
         throw new Error('encrypt error');
       }
 
-      const cell = sharedModel.cells[index]
-      cell.setSource(await security.encrypt(cell.getSource(), key));
+      const cell = sharedModel.cells[index];
+      const encrypted = await security.encrypt(cell.getSource(), key);
+      cell.transact(() => {
+        const jupyter = (cell.getMetadata('jupyter') || {}) as any;
+        cell.setMetadata('jupyter', { ...jupyter, 'source_hidden': true });
+        cell.deleteMetadata('trusted');
+        cell.setMetadata('editable', false);
+        cell.setSource(encrypted);
+      });
 
       const raw = cell.toJSON();
-      raw.metadata.editable = false;
-      delete raw.metadata.trusted;
       sharedModel.transact(() => {
         sharedModel.deleteCell(index);
         sharedModel.insertCell(index, { ...raw, cell_type: 'raw' });
       }, false);
       if (workbook.content) {
-        const { widgets } = workbook.content;
-        const widget = find(widgets, ({ model }) => model.id === reference);
-        if (widget) {
-          widget.inputHidden = true;
-        }
         NotebookActions.clearAllOutputs(workbook.content);
         NotebookActions.deselectAll(workbook.content);
       }
@@ -169,7 +179,10 @@ export namespace Workbook {
   /**
    * Add a cell to a workbook's rubric.
    */
-  export function add(workbook: Workbook, cell: Rubric.Cell): Rubric.Unlocked {
+  export async function add(
+    workbook: Workbook,
+    cell: Rubric.Cell
+  ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     const deep = true;
     if (!rubric || rubric.locked || Rubric.has(rubric, cell.id, deep)) {
@@ -179,8 +192,20 @@ export namespace Workbook {
     return update(workbook, { ...rubric, accessed: Date.now() });
   }
 
+  export async function assign(
+    workbook: Workbook,
+    { assignee, roster }: Partial<Rubric.Assignment> = {}
+  ): Promise<Rubric.Unlocked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked) {
+      throw new Error('assign error');
+    }
+    const assigned = await Rubric.assign(rubric, assignee || '', roster || []);
+    return update(workbook, assigned);
+  }
+
   /**
-   * Audits a rubric, prunes unknown or invalid cells. Never throws.
+   * Audits a workbook's rubric, prunes unknown or invalid cells. Never throws.
    */
   export function audit(workbook: Workbook, rubric: Rubric | null): Audit {
     if (!rubric) {
@@ -222,15 +247,13 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
-      const { assignee, id } = opened;
-      const key = await security.keygen(passphrase, id, assignee ?? void 0);
+      const key = await security.keygen(passphrase, opened.id);
       const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
       return update(workbook, rubric);
     } catch (error) {
       if (error === Correxit.NO_CORREXIT_METADATA) {
         const created = Rubric.create();
-        const { assignee, id } = created;
-        const key = await security.keygen(passphrase, id, assignee ?? void 0);
+        const key = await security.keygen(passphrase, created.id);
         return update(workbook, { ...created, key });
       }
       throw error;
@@ -272,6 +295,35 @@ export namespace Workbook {
       sum(await total, await Rubric.score(rubric, id, outputs)), initial);
     return { spec, score };
   }
+
+  export async function create(options: {
+    draft: INotebookContent;
+    factory: NotebookModelFactory;
+    manager: ServiceManager.IManager;
+    path: string;
+  }): Promise<Headless | null> {
+    const { draft, factory, manager } = options;
+    const { contents } = manager;
+    const ext = '.ipynb';
+    const file = PathExt.basename(options.path);
+    const path = PathExt.dirname(options.path);
+    const type = 'notebook';
+    let context: Context<INotebookModel> | null = null;
+    try {
+      const untitled = await contents.newUntitled({ ext, path, type });
+      const renamed = contents.rename(untitled.path, PathExt.join(path, file));
+      context = new Context({ manager, factory, path: (await renamed).path });
+      await context.initialize(true);
+      await context.ready;
+      context.model.sharedModel.fromJSON(draft);
+      await context.save();
+      return { content: null, context };
+    } catch (error) {
+      console.warn('create error', error);
+      context?.dispose();
+      return null;
+    }
+  };
 
   /**
    * Decrypts workbook content.
@@ -393,10 +445,7 @@ export namespace Workbook {
    *
    * If no rubric exists in the pool for the given workbook, its notebook
    * metadata for the key `correxit` is read, parsed, normalized, and audited.
-   * Each of these steps may throw an error or return null. If every step is
-   * successful and the audit leaves the rubric unmodified, it is returned
-   * immediately. If the audit changes the rubric, it is returned immediately
-   * but also schedules a notebook metadata update.
+   * Each of these steps may throw an error or return null.
    * @see update
    */
   export function open(
@@ -423,11 +472,6 @@ export namespace Workbook {
       if (!audit.ok) {
         throw new Error(`open error: ${audit.error}`);
       }
-      // Only update workbook metadata if rubric is pruned.
-      if (audit.pruned.length) {
-        return update(workbook, rubric, audit);
-      }
-      // Update the pool and return the locked rubric.
       set(workbook, audit.rubric);
       return audit.rubric;
     } catch (error) {
@@ -437,6 +481,78 @@ export namespace Workbook {
       throw error;
     }
   }
+
+  export function propagate(options: {
+    factory: NotebookModelFactory;
+    location: { base: string; pwd: string; };
+    manager: ServiceManager.IManager;
+    workbook: Workbook;
+  }): Correxit.Emitter {
+    const { factory, location: { base, pwd }, manager, workbook } = options;
+    const emitter = new Poll<Correxit.Emitter.Emission>({
+      auto: false,
+      frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
+      factory: async () => ({ type: 'never', slots: [] })
+    });
+    const log = async (payload: Correxit.Emitter.Emission) => {
+      await emitter.schedule({ payload });
+      await emitter.refresh();
+      await emitter.tick;
+    };
+    const rubric = open(workbook, true);
+    if (!rubric || rubric.locked) {
+      log({ type: 'error', slots: ['rubric'] }).then(() => emitter.dispose());
+      return emitter;
+    }
+
+    const { assignment: { roster }, key } = rubric;
+    const { sign } = Rubric.Assignment;
+    const canonical = async (workbook: Workbook): Promise<INotebookContent> => {
+      const file = PathExt.basename(workbook.context.path);
+      await unlock(workbook, key);
+      await log({ type: 'unlocked', slots: [file] });
+      await lock(workbook);
+      await log({ type: 'locked', slots: [file] });
+      return workbook.context.model.sharedModel.toJSON();
+    };
+    const reassign = async (draft: INotebookContent, assignee: string) => {
+      const rubric = draft.metadata['correxit'] as Rubric.Locked;
+      rubric.assignment.assignee = assignee;
+      rubric.assignment.signature = await sign({ assignee, roster }, key);
+    };
+    const save = ({ context }: Workbook) => context.save().then(() => true)
+      .catch(() => false).finally(() => workbook.context.dispose());
+    (async (original: INotebookContent, progress = 0) => {
+      let template: INotebookContent | null = null;
+      await log({ type: '', slots: [pwd] });
+      for (const assignee of roster) {
+        const draft = JSON.parse(JSON.stringify(template || original));
+        await log({ type: 'separator', slots: [] });
+
+        const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
+        const path = PathExt.join(pwd, file);
+        await log({ type: 'progress', slots: [++progress, roster.length] });
+        await reassign(draft, assignee);
+        await log({ type: 'assigned', slots: [assignee] });
+
+        const created = await create({ draft, factory, manager, path });
+        if (!created) {
+          await log({ type: 'create-error', slots: [path] });
+          continue;
+        }
+        await log({ type: 'created', slots: [file] });
+        template ||= await canonical(created);
+        await save(created)
+          ? await log({ type: 'saved', slots: [file] })
+          : await log({ type: 'save-error', slots: [path] });
+      }
+      await log({ type: 'separator', slots: [] });
+      await log({ type: 'success', slots: [`${roster.length}`] });
+    })(workbook.context.model.sharedModel.toJSON())
+      .catch(error => void log({ type: 'error', slots: [`${error}`] }))
+      .finally(() => emitter.dispose());
+    return emitter;
+  };
 
   /**
    * Remove a cell from a workbook's rubric.
@@ -464,7 +580,9 @@ export namespace Workbook {
   /**
    * Toggle a workbook cell between `secret` and `shared` sections of rubric.
    */
-  export function toggle(workbook: Workbook, id: string): Rubric.Unlocked {
+  export async function toggle(
+    workbook: Workbook, id: string
+  ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked || !Rubric.has(rubric, id)) {
       throw new Error('toggle error');
@@ -498,32 +616,33 @@ export namespace Workbook {
    * If `rubric` is `null`, the workbook is reset back to a notebook.
    *
    * If the given rubric passes an audit, which may prune broken cells, it is
-   * asynchronously written to the notebook metadata `correxit` key if the audit
-   * made rubric changes. The audited rubric is returned synchronously.
+   * written to the notebook metadata `correxit` key if the audit changes the
+   * rubric.
    */
-  export function update(
+  export async function update(
     workbook: Workbook,
     rubric: Rubric.Locked,
     audit?: Audit
-  ): Rubric.Locked;
-  export function update(
+  ): Promise<Rubric.Locked>;
+  export async function update(
     workbook: Workbook,
     rubric: Rubric.Unlocked,
     audit?: Audit
-  ): Rubric.Unlocked;
-  export function update(
+  ): Promise<Rubric.Unlocked>;
+  export async function update(
     workbook: Workbook,
     rubric: null
-  ): null;
-  export function update(
+  ): Promise<null>;
+  export async function update(
     workbook: Workbook,
     rubric: Rubric | null,
     audit = Workbook.audit(workbook, rubric)
-  ): Rubric | null {
+  ): Promise<Rubric | null> {
     const { sharedModel } = workbook.context.model;
     set(workbook, null);
     if (!audit || !rubric) {
       sharedModel.deleteMetadata('correxit');
+      sharedModel.clearUndoHistory();
       return null;
     }
     if (!audit.ok) {
@@ -534,9 +653,7 @@ export namespace Workbook {
       // TODO: Emit these warnings as events instead.
       console.warn(`pruned ${is} (${id} ${reason}) from ${audit.rubric.id}`);
     }
-    // Schedule a metadata write and return the audited rubric immediately.
-    (async (notebook, locked) => notebook.setMetadata('correxit', await locked))
-      (sharedModel, Rubric.lock(audit.rubric));
+    sharedModel.setMetadata('correxit', await Rubric.lock(audit.rubric));
     return audit.rubric;
   }
 }

@@ -44,10 +44,14 @@ very little state except what is resident in memory for a UI to render and a
 private cache for rubrics to prevent constant re-parsing of notebook metadata.
 
 React is helpful here because the design of functional components along with
-hooks (cf. `collect()` for commands) fits the function-based API of Correxit.
+hooks (cf. `useCommand()` for commands) fits the function-based API of Correxit.
 
 ## Prefer single-word nouns, verbs, and adjectives
 
 This is subjective and not always practical, especially in cases where
 destructuring or using spread operators. But when it _is_ possible and practical
-a single word identifier is better than a compound `camelCase` identifier.
+a single word identifier is better than a compound identifier.
+
+One prominent counterexample is `set*` and `use*` React state managment
+functions, which are both well-established conventions and are enforced by some
+React tooling. So, e.g., the hook mentioned above is named `useCommand`.

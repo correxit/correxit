@@ -53,7 +53,7 @@ export class SidebarWidget extends ReactWidget {
     if (workbook === null) {
       return (
         <section>
-          <small>{trans.__('Correxit: idle, waiting for notebook')}</small>
+          <h4>{trans.__('Correxit')}</h4>
         </section>
       );
     }

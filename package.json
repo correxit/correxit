@@ -58,7 +58,6 @@
     },
     "dependencies": {
         "@jupyter-notebook/tree": "^7.0.0",
-        "@jupyter/react-components": "^0.16.6",
         "@jupyterlab/application": "^4.0.0",
         "@jupyterlab/apputils": "^4.5.2",
         "@jupyterlab/cells": "^4.4.3",
@@ -66,6 +65,7 @@
         "@jupyterlab/docmanager": "^4.4.3",
         "@jupyterlab/docregistry": "^4.4.3",
         "@jupyterlab/filebrowser": "^4.4.3",
+        "@jupyterlab/nbformat": "^4.4.7",
         "@jupyterlab/notebook": "^4.4.2",
         "@jupyterlab/rendermime": "^4.4.3",
         "@jupyterlab/services": "^7.0.0",

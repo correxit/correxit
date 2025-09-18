@@ -5,30 +5,86 @@ import * as security from './security';
 export type Rubric = Rubric.Locked | Rubric.Unlocked;
 
 export namespace Rubric {
-  /**
-   * The base shape of a locked or unlocked rubric.
-   */
-  type Base = {
+  export type Assignment = {
+    assignee: string;
+    roster: string[];
+    signature: string;
+  };
+
+  type Base = Readonly<{
     accessed: number;
-    assignee: string | null;
+    assignment: Assignment;
     id: string;
-    key: null | string;
-    locked: boolean;
-    secret: string | Section;
     shared: Section;
-  };
+  }>;
 
-  export type Locked = Readonly<Base> & {
-    readonly key: null;
-    readonly locked: true;
-    readonly secret: string;
-  };
+  export type Cell = Readonly<{
+    id: string;
+    is: 'answerable';
+    payload: string[];
+    reference: null;
+    shared: boolean;
+  }> | Readonly<{
+    id: string;
+    is: 'comparable' | 'correctable';
+    payload: null;
+    reference: string[];
+    shared: boolean;
+  }>;
 
-  export type Unlocked = Readonly<Base> & {
-    readonly key: string;
-    readonly locked: false;
-    readonly secret: Section;
-  };
+  export type Locked = Base &
+    Readonly<{ key: null; locked: true; secret: string; }>;
+
+  export type Outputs = { [id: string]: Cell.Output[]; }
+
+  export type Score = Readonly<[numerator: number, denominator: number]>;
+
+  export type Section = Readonly<{ cells: { [id: string]: Cell; }; }>;
+
+  export type Unlocked = Base &
+    Readonly<{ key: string; locked: false; secret: Section; }>;
+
+  export const CORRECT: Score = Object.freeze([1, 1]);
+
+  export const INCORRECT: Score = Object.freeze([0, 1]);
+
+  export const UNSCORED: Score = Object.freeze([
+    Number.NEGATIVE_INFINITY,
+    Number.POSITIVE_INFINITY
+  ]);
+
+  export namespace Assignment {
+    export const EMPTY: Assignment = {
+      assignee: '',
+      roster: [],
+      signature: ''
+    };
+
+    export async function sign(
+      { assignee, roster }: Pick<Assignment, 'assignee' | 'roster'>,
+      key: string
+    ): Promise<string> {
+      return security.digest(`${assignee}:${key}${roster.join('|')}`);
+    }
+
+    export async function validate(
+      { assignment, key }: Pick<Unlocked, 'assignment' | 'key'>
+    ) {
+      const { assignee, roster, signature } = assignment;
+      if (assignee && !signature) {
+        throw new Error('missing signature for assignee');
+      }
+      if (assignee && signature !== await sign(assignment, key)) {
+        throw new Error('assignee signature mismatch');
+      }
+      if (assignee && !find(roster, record => record === assignee)) {
+        throw new Error('assignee does not exist in roster');
+      }
+      if (roster.length && !signature) {
+        throw new Error('missing signature for roster');
+      }
+    }
+  }
 
   export namespace Cell {
     /**
@@ -40,35 +96,6 @@ export namespace Rubric {
       | KernelMessage.IIOPubMessage<'stream'>
       | KernelMessage.IIOPubMessage<'error'>;
   }
-
-  export type Cell = {
-    readonly id: string;
-    readonly is: 'answerable';
-    readonly payload: string[];
-    readonly reference: null;
-    readonly shared: boolean;
-  } | {
-    readonly id: string;
-    readonly is: 'comparable' | 'correctable';
-    readonly payload: null;
-    readonly reference: string[];
-    readonly shared: boolean;
-  };
-
-  export type Outputs = { [id: string]: Cell.Output[]; }
-
-  export type Score = readonly [numerator: number, denominator: number];
-
-  export type Section = { readonly cells: { [id: string]: Cell; }; };
-
-  export const CORRECT: Score = Object.freeze([1, 1]);
-
-  export const INCORRECT: Score = Object.freeze([0, 1]);
-
-  export const UNSCORED: Score = Object.freeze([
-    Number.NEGATIVE_INFINITY,
-    Number.POSITIVE_INFINITY
-  ]);
 
   export async function answer(expected: string[], given: Cell.Output[]) {
       if (!given.length) {
@@ -90,6 +117,24 @@ export namespace Rubric {
     return UNSCORED;
   };
 
+  export async function assign(
+    { key, ...rubric }: Unlocked,
+    assignee = '',
+    roster: string[] = []
+  ): Promise<Rubric.Unlocked> {
+    function unique(list: string[]): string[] {
+      return list.reduce<[string[], { [key: string]: 1 }]>(
+        ([unique, keys], key) => (
+          [keys[key] ? unique : [...unique, key], { ...keys, [key]: 1 }]
+        ), [[], {}])[0];
+    }
+
+    const assignment = { assignee, roster: unique(roster), signature: '' };
+    assignment.signature = await Assignment.sign(assignment, key);
+    await Assignment.validate({ assignment, key });
+    return { ...rubric, accessed: Date.now(), assignment, key };
+  }
+
   export function compare(expected: Cell.Output[], given: Cell.Output[]) {
     if (!expected.length) {
       return UNSCORED;
@@ -98,8 +143,8 @@ export namespace Rubric {
       return INCORRECT;
     }
 
-    const keys = (obj: Cell.Output['content']) =>
-      Object.keys(obj).sort().join('');
+    const keys = (content: Cell.Output['content']) =>
+      Object.keys(content).sort().join('');
     const x = given.slice(-1)[0].content;
     const y = expected.slice(-1)[0].content;
     if (keys(x) !== keys(y)) {
@@ -123,20 +168,16 @@ export namespace Rubric {
 
   /**
    * @returns an unlocked rubric with the `key` field omitted. The client needs
-   * to add a `key` field to use the rubric. The automatically generated `id` of
-   * the rubric is constructed as follows:
-   *
-   * `"wb"` + `accessed` timestamp's digits `[0-9]` shifted into ascii chars
-   * `[d-m]`, e.g., `"wbekihhlhjdhmld"`.
+   * to add a `key` field to use the rubric.
    */
   export function create(): Omit<Unlocked, 'key'> {
     const accessed = Date.now();
-    const assignee = null;
-    const id = 'wb' + `${accessed}`.split('')
-      .map(i => String.fromCharCode(parseInt(i, 10) + 100)).join('');
+    const assignment = { ...Assignment.EMPTY };
+    const encoded = accessed.toString(36);
+    const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
     const secret: Section = { cells: {} };
     const shared: Section = { cells: {} };
-    return { assignee, accessed, id, locked: false, secret, shared };
+    return { accessed, assignment, id, locked: false, secret, shared };
   }
 
   /**
@@ -173,15 +214,15 @@ export namespace Rubric {
       return rubric;
     }
 
-    const { assignee, id, key, secret, shared } = rubric;
-    return {
-      accessed: Date.now(),
-      assignee,
-      id, key: null,
-      locked: true,
-      secret: await security.encrypt(JSON.stringify(secret), key),
-      shared
-    };
+    const locked = true;
+    const { id, key, shared } = rubric;
+    const { assignee, roster, signature } = rubric.assignment;
+    const encrypted = await security.encrypt(JSON.stringify(roster), key);
+    const assignment = { assignee, roster: [encrypted], signature }
+    const secret = await security.encrypt(JSON.stringify(rubric.secret), key);
+    const accessed = Date.now();
+    await Assignment.validate(rubric);
+    return { accessed, assignment, id, key: null, locked, secret, shared };
   }
 
   /**
@@ -189,14 +230,14 @@ export namespace Rubric {
    */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
     const { accessed, id, key, locked, secret, shared } = rubric;
-    let { assignee } = rubric;
+    let { assignment } = rubric;
     if (!accessed) {
       throw new Error('invalid rubric, missing accessed');
     }
-    if (assignee !== null && typeof assignee !== 'string') {
-      assignee = null;
+    if (!assignment) {
+      assignment = { ...Assignment.EMPTY };
     }
-    if (!id) {
+    if (typeof id !== 'string' || !id) {
       throw new Error('invalid rubric, missing id');
     }
     if (key !== null) {
@@ -211,7 +252,7 @@ export namespace Rubric {
     if (!(shared && shared.cells)) {
       throw new Error('invalid rubric, invalid shared section')
     }
-    return { accessed, assignee, id, key, locked, secret, shared };
+    return { accessed, assignment, id, key, locked, secret, shared };
   }
 
   /**
@@ -223,7 +264,6 @@ export namespace Rubric {
       Object.keys(shared.cells).length :
       Object.keys(secret.cells).length + Object.keys(shared.cells).length
   }
-
 
   /**
    * Get the score for a single cell.
@@ -303,10 +343,14 @@ export namespace Rubric {
    * @returns an unlocked rubric after decrypting secret cells with given key.
    */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
-    const { assignee, id, shared } = rubric;
+    const locked = false;
+    const { assignment: { roster: [ raw ] }, id } = rubric;
+    const roster = raw ? JSON.parse(await security.decrypt(raw, key)) : [];
     const secret = JSON.parse(await security.decrypt(rubric.secret, key));
-    return {
-      accessed: Date.now(), assignee, id, key, locked: false, secret, shared
-    };
+    const shared = { ...rubric.shared };
+    const assignment = { ...rubric.assignment, roster };
+    const accessed = Date.now();
+    await Assignment.validate({ assignment, key });
+    return { accessed, assignment, id, key, locked, secret, shared };
   }
 }
