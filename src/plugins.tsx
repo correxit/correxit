@@ -8,6 +8,7 @@ import {
   ICommandPalette,
   IToolbarWidgetRegistry,
   ReactWidget,
+  ToolbarRegistry,
   WidgetTracker
 } from '@jupyterlab/apputils';
 import { Cell } from '@jupyterlab/cells';
@@ -23,6 +24,10 @@ import { addCommands, Correxit, Workbook } from './correxit';
 import { Corrector } from './corrector';
 import { Sidebar } from './sidebar';
 import { CellModeSwitcher } from './toolbars';
+import { PermanentCellBarExtension } from './toolbars/permanentcelltoolbartracker';
+import { ObservableList } from '@jupyterlab/observables';
+import { Widget } from '@lumino/widgets';
+import { PermanenetCellMode } from './toolbars/cell-mode-switcher';
 
 export const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
@@ -193,7 +198,7 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
   requires: [Correxit.Source, IToolbarWidgetRegistry],
   optional: [ITranslator],
   activate: async (
-    { commands },
+    { commands, docRegistry },
     _: Correxit.Source, // Load source to ensure commands are available.
     toolbarRegistry: IToolbarWidgetRegistry,
     translator: ITranslator | null
@@ -204,6 +209,30 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
       'correxit-add',
       (cell: Cell) => new Private.CellMode({ cell, commands, trans })
     );
+
+    const toolbarFactory = (
+      widget: Widget,
+      commandArgs?: Record<string, any>
+    ): ObservableList<ToolbarRegistry.IToolbarItem> => {
+      if (!(widget instanceof Cell)) {
+        return new ObservableList<ToolbarRegistry.IToolbarItem>({ values: [] });
+      }
+
+      const cell = widget;
+
+      return new ObservableList<ToolbarRegistry.IToolbarItem>({
+        values: [
+          {
+            name: 'correxit-add-permanent',
+            widget: new Private.PermanentCellMode({ cell, commands, trans })
+          }
+        ]
+      });
+    };
+
+    const extension = new PermanentCellBarExtension(commands, toolbarFactory);
+
+    docRegistry.addWidgetExtension('Notebook', extension);
   }
 };
 
@@ -223,6 +252,14 @@ namespace Private {
     }
     render() {
       return <CellModeSwitcher {...this.props} />;
+    }
+  }
+  export class PermanentCellMode extends ReactWidget {
+    constructor(readonly props: Parameters<typeof CellModeSwitcher>[0]) {
+      super();
+    }
+    render() {
+      return <PermanenetCellMode {...this.props} />;
     }
   }
 }

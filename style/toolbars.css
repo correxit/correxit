@@ -17,3 +17,18 @@
   display: flex;
   gap: 0.1rem;
 }
+
+.correxit-cell-toolbar {
+  display: flex;
+  flex-direction: row;
+  padding: 0;
+  min-height: 25px;
+  z-index: 6;
+  position: absolute;
+  right: 3px;
+
+  /* Override .jp-Toolbar */
+  background-color: transparent;
+  border-bottom: inherit;
+  box-shadow: none;
+}

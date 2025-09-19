@@ -7,7 +7,7 @@ import {
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
-import { Correxit, Workbook } from '..';
+import { Correxit, Rubric, Workbook } from '..';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
@@ -42,6 +42,63 @@ const Switcher: React.FC<{
     { commands, id: add, args: { id, is: 'correctable' }, label: '' },
     { commands, id: add, args: { id, is: 'comparable' }, label: '' }
   ];
+  return (
+    <div className="x-gap">
+      {buttons.map((props, index) => (
+        <CommandToolbarButtonComponent key={index} {...props} />
+      ))}
+    </div>
+  );
+};
+
+export const PermanenetCellMode: React.FC<{
+  cell: Cell;
+  commands: CommandRegistry;
+  trans: IRenderMime.TranslationBundle;
+}> = ({ cell: { model, parent }, commands, trans }) => {
+  const { id } = model;
+  const workbook = parent?.parent instanceof NotebookPanel && parent.parent;
+  if (!workbook || !workbook.model) {
+    return <></>;
+  }
+
+  const { sharedModel } = workbook.model;
+  const permanent = () => <Permanent {...{ commands, id, trans, workbook }} />;
+  return (
+    <UseSignal signal={sharedModel.metadataChanged}>{permanent}</UseSignal>
+  );
+};
+
+const Permanent: React.FC<{
+  commands: CommandRegistry;
+  id: string;
+  trans: IRenderMime.TranslationBundle;
+  workbook: Workbook;
+}> = ({ commands, id, trans, workbook }) => {
+  if (!commands.isEnabled(Correxit.CommandIDs.add, { id })) {
+    return <></>;
+  }
+  const { add } = Correxit.CommandIDs;
+  let buttons: CommandToolbarButtonComponent.IProps[] = [];
+
+  const quiet = true;
+  const rubric = Workbook.open(workbook, quiet)!;
+  const is = Rubric.get(rubric, id)?.is;
+
+  if (is === 'answerable') {
+    buttons = [
+      { commands, id: add, args: { id, is: 'answerable' }, label: '' }
+    ];
+  } else if (is === 'comparable') {
+    buttons = [
+      { commands, id: add, args: { id, is: 'comparable' }, label: '' }
+    ];
+  } else if (is === 'correctable') {
+    buttons = [
+      { commands, id: add, args: { id, is: 'correctable' }, label: '' }
+    ];
+  }
+
   return (
     <div className="x-gap">
       {buttons.map((props, index) => (
