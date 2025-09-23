@@ -4,14 +4,7 @@ import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-import {
-  ICommandPalette,
-  IToolbarWidgetRegistry,
-  ReactWidget,
-  ToolbarRegistry,
-  WidgetTracker
-} from '@jupyterlab/apputils';
-import { Cell } from '@jupyterlab/cells';
+import { ICommandPalette, WidgetTracker } from '@jupyterlab/apputils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
@@ -19,15 +12,9 @@ import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB, StateDB } from '@jupyterlab/statedb';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
-import React from 'react';
 import { addCommands, Correxit, Workbook } from './correxit';
 import { Corrector } from './corrector';
 import { Sidebar } from './sidebar';
-import { CellModeSwitcher } from './toolbars';
-import { PermanentCellBarExtension } from './toolbars/permanentcelltoolbartracker';
-import { ObservableList } from '@jupyterlab/observables';
-import { Widget } from '@lumino/widgets';
-import { PermanenetCellMode } from './toolbars/cell-mode-switcher';
 
 export const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
@@ -45,7 +32,7 @@ export const corrector: JupyterFrontEndPlugin<void> = {
   ...((deactivator?: () => void) => ({
     activate: (
       app: JupyterFrontEnd,
-      manager: IDocumentManager,
+      documents: IDocumentManager,
       browser: IDefaultFileBrowser | null,
       palette: ICommandPalette | null,
       restorer: ILayoutRestorer | null,
@@ -61,7 +48,8 @@ export const corrector: JupyterFrontEndPlugin<void> = {
         browser,
         commands: app.commands,
         db: db || new StateDB(),
-        manager,
+        documents,
+        manager: app.serviceManager,
         shell: app.shell,
         tracker,
         trans,
@@ -145,6 +133,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
       const handler = () => {
         // The sidebar can rely on metadata changes, but the native toolbar
         // buttons only change when their respective command has changed.
+        commands.notifyCommandChanged(Correxit.CommandIDs.add);
         commands.notifyCommandChanged(Correxit.CommandIDs.convert);
         commands.notifyCommandChanged(Correxit.CommandIDs.correct);
         commands.notifyCommandChanged(Correxit.CommandIDs.lock);
@@ -158,13 +147,12 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         next?.context.model.sharedModel.metadataChanged.connect(handler);
       };
       const schedule = (workbook: Workbook | null) => {
-        if (workbook === source.state.payload) {
-          return;
+        if (workbook !== source.state.payload) {
+          Workbook.open(workbook, quiet);
+          subscribe(current, workbook);
+          current = workbook;
+          void source.schedule({ payload: workbook });
         }
-        Workbook.open(workbook, quiet);
-        subscribe(current, workbook);
-        current = workbook;
-        void source.schedule({ payload: workbook });
       };
       const trans = (translator || nullTranslator).load('correxit');
       const options = { commands, manager, schedule, source, trans };
@@ -195,45 +183,8 @@ export const toolbars: JupyterFrontEndPlugin<void> = {
   id: Correxit.TOOLBARS,
   description: Correxit.DESCRIPTION.TOOLBARS,
   autoStart: true,
-  requires: [Correxit.Source, IToolbarWidgetRegistry],
-  optional: [ITranslator],
-  activate: async (
-    { commands, docRegistry },
-    _: Correxit.Source, // Load source to ensure commands are available.
-    toolbarRegistry: IToolbarWidgetRegistry,
-    translator: ITranslator | null
-  ) => {
-    const trans = (translator || nullTranslator).load('correxit');
-    toolbarRegistry.addFactory(
-      'Cell',
-      'correxit-add',
-      (cell: Cell) => new Private.CellMode({ cell, commands, trans })
-    );
-
-    const toolbarFactory = (
-      widget: Widget,
-      commandArgs?: Record<string, any>
-    ): ObservableList<ToolbarRegistry.IToolbarItem> => {
-      if (!(widget instanceof Cell)) {
-        return new ObservableList<ToolbarRegistry.IToolbarItem>({ values: [] });
-      }
-
-      const cell = widget;
-
-      return new ObservableList<ToolbarRegistry.IToolbarItem>({
-        values: [
-          {
-            name: 'correxit-add-permanent',
-            widget: new Private.PermanentCellMode({ cell, commands, trans })
-          }
-        ]
-      });
-    };
-
-    const extension = new PermanentCellBarExtension(commands, toolbarFactory);
-
-    docRegistry.addWidgetExtension('Notebook', extension);
-  }
+  requires: [Correxit.Source],
+  activate: async (_, __: Correxit.Source) => void 0
 };
 
 namespace Private {
@@ -243,23 +194,6 @@ namespace Private {
       console.log(`${Correxit.SOURCE} settings loaded:`, settings.composite);
     } catch (error) {
       console.error(`Failed to load settings for ${Correxit.SOURCE}.`, error);
-    }
-  }
-
-  export class CellMode extends ReactWidget {
-    constructor(readonly props: Parameters<typeof CellModeSwitcher>[0]) {
-      super();
-    }
-    render() {
-      return <CellModeSwitcher {...this.props} />;
-    }
-  }
-  export class PermanentCellMode extends ReactWidget {
-    constructor(readonly props: Parameters<typeof CellModeSwitcher>[0]) {
-      super();
-    }
-    render() {
-      return <PermanenetCellMode {...this.props} />;
     }
   }
 }

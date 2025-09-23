@@ -1,5 +1,8 @@
+#correxit-sidebar.correxit-sidebar {
+  min-width: 285px;
+}
+
 .correxit-sidebar {
-  min-width: 285px !important;
   display: flex;
   flex-flow: column;
 }
@@ -20,7 +23,7 @@
 .correxit-sidebar .correxit-monospace {
   background-color: var(--jp-layout-color2);
   font-family: var(--jp-code-font-family);
-  font-size: small;
+  font-size: var(--jp-ui-font-size1);
   overflow: hidden;
   margin: 2px 0;
   padding: 5px;
@@ -28,18 +31,22 @@
   white-space: nowrap;
 }
 
-.correxit-sidebar-buttons {
-  display: flex;
-  gap: 8px;
-  height: 21px !important;
+.correxit-sidebar-cell-config {
+  height: 21px;
   justify-content: center;
   text-align: center;
-  margin-bottom: 10px;
-  color: var(--jp-ui-font-color3) !important;
+  color: var(--jp-ui-font-color3);
+
+  .correxit-add {
+    margin: 0;
+    min-width: 30%;
+    padding: 0 1px;
+    width: auto;
+  }
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent > span {
-  font-size: small;
+  font-size: var(--jp-ui-font-size1);
   color: var(--jp-inverse-layout-color);
 }
 
@@ -60,7 +67,10 @@
   justify-content: space-between;
   margin: 5px 15px;
   align-items: center;
-  color: var(--jp-ui-font-color0) !important;
+}
+
+.correxit-assignment-propagate .jp-ToolbarButtonComponent {
+  margin: 5px 0;
 }
 
 .correxit-sidebar-inner-header .jp-ToolbarButtonComponent:hover {
@@ -68,7 +78,14 @@
 }
 
 .correxit-sidebar p {
-  margin: 25px 0 5px;
+  background-color: var(--jp-layout-color4);
+  border-color: var(--jp-border-color4);
+  border-width: 2px;
+  border-radius: 3px;
+  color: var(--jp-ui-font-color4);
+  font-size: var(--jp-ui-font-size1);
+  margin: 25px 10px 5px;
+  padding: 8px;
 }
 
 .correxit-sidebar-additional-operations {
@@ -78,29 +95,39 @@
   margin: 20px 0;
 }
 
+.correxit-assignment {
+  border-color: var(--jp-border-color2);
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 3px;
+  background-color: var(--jp-layout-color2);
+  margin: 0 2px;
+  padding: 2px 0;
+}
+
 .correxit-assignment-assignee,
 .correxit-assignment-roster {
   display: flex;
-}
 
-.correxit-assignment-assignee > div,
-.correxit-assignment-roster > div {
-  flex: 1;
-}
+  > div {
+    flex: 1;
+  }
 
-.correxit-assignment-assignee select,
-.correxit-assignment-roster textarea {
-  min-height: 28px;
-  width: 95%;
-}
+  label {
+    display: inline-block;
+    padding: 4px 0;
+  }
 
-.correxit-assignment-assignee select {
-  height: 28px;
-}
+  select,
+  textarea {
+    min-height: 28px;
+    width: 95%;
+  }
 
-.correxit-assignment-roster label {
-  display: inline-block;
-  padding: 4px 0;
+  select {
+    height: 28px;
+    margin-top: 3px;
+  }
 }
 
 .correxit-assignment-propagate {
@@ -109,7 +136,7 @@
     border: 1px solid;
     border-color: var(--jp-border-color2);
     color: var(--jp-ui-font-color2);
-    font-size: smaller;
+    font-size: var(--jp-ui-font-size0);
     height: 250px;
     width: 95%;
     padding: 2px;
@@ -128,10 +155,43 @@
   min-height: 20px;
   min-width: 20px;
   width: 20px;
-  padding: 2px 0;
+  padding: 3px 0;
 }
 
 .correxit-assignment-toggle.jp-mod-minimal > span {
   align-self: flex-start;
   padding-top: 3px;
+}
+
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after,
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after,
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
+  --cxt-annotate-size: 28px;
+  --cxt-annotate-icon: 16px 16px;
+
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 10;
+  background-color: var(--jp-brand-color0);
+  box-shadow: none;
+  width: var(--cxt-annotate-size);
+  height: var(--cxt-annotate-size);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: var(--cxt-annotate-icon);
+  pointer-events: none;
+}
+
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after {
+  background-image: url('icons/answerable.svg');
+}
+
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after {
+  background-image: url('icons/comparable.svg');
+}
+
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
+  background-image: url('icons/correctable.svg');
 }

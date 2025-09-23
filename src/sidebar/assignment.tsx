@@ -8,24 +8,24 @@ import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
 import { Correxit, Rubric } from '..';
-import { useCommand } from '../correxit/commands';
+import { useCommand } from '../correxit/use-command';
 
 type Assignment = Rubric.Assignment;
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 export const Assignment: React.FC<{
+  accessed: number;
   assignment: Assignment | null;
   commands: CommandRegistry;
-  keys: Pick<Rubric, 'accessed' | 'locked'> | null;
+  locked: boolean;
   trans: TranslationBundle;
 }> = props => {
-  if (!props.assignment || !props.keys) {
+  if (!props.assignment) {
     return <></>;
   }
 
-  const { commands, keys, trans } = props;
-  const { accessed, locked } = keys;
+  const { accessed, commands, locked, trans } = props;
   const [assignment, setAssignment] = useState<Assignment>(props.assignment);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
   const toggle = (to: 'assignee' | 'roster', updated: Assignment) => {
@@ -38,14 +38,14 @@ export const Assignment: React.FC<{
     }
   }, [assignment]);
   return (
-    <>
+    <div className="correxit-assignment">
       {view === 'assignee' ? (
-        <Assignee key={accessed} {...{ assignment, locked, toggle, trans }} />
+        <Assignee {...{ assignment, locked, toggle, trans }} />
       ) : (
-        <Roster key={accessed} {...{ assignment, locked, toggle, trans }} />
+        <Roster {...{ assignment, locked, toggle, trans }} />
       )}
       {!locked && <Propagate {...{ accessed, commands, trans }} />}
-    </>
+    </div>
   );
 };
 
@@ -63,7 +63,7 @@ const Assignee: React.FC<{
     const icon = assignment.assignee ? Icons.assignee : Icons.template;
     return (
       <div className="correxit-assignment-assignee">
-        <Disabled icon={icon} title={trans.__('Roster view')} />
+        <Toggle disabled icon={icon} title={trans.__('Roster view')} />
         <div className="correxit-monospace">{assignee}</div>
       </div>
     );
@@ -155,7 +155,8 @@ const Propagate: React.FC<{
   type Message = [string, Correxit.Emitter.Emission];
   const { propagate } = Correxit.CommandIDs;
   const [command, setCommand] = useState('');
-  const [log, done] = useCommand<Message>(commands, command, { accessed });
+  const [timestamp, setTimestamp] = useState(accessed);
+  const [log, done] = useCommand<Message>(commands, command, { timestamp });
   const messages = log
     .filter(([_, { type }]) => type !== 'progress')
     .map(([message]) => message);
@@ -167,22 +168,29 @@ const Propagate: React.FC<{
   const progress = trans.__('%1 of %2', value, max);
   return (
     <div className="correxit-assignment-propagate">
-      {!done && <progress {...{ max, value }}>{progress}</progress>}
-      {!!messages.length && <Log {...{ messages }} />}
+      <Log {...{ done, messages }} />
       <ToolbarButtonComponent
         {...{
           enabled: done && commands.isEnabled(propagate),
           icon: Correxit.Icons.assignment,
           label: commands.label(propagate),
-          onClick: () => setCommand(propagate)
+          onClick: () => {
+            setCommand(propagate);
+            setTimestamp(Date.now());
+          }
         }}
         noFocusOnClick
       />
+      {!done && <progress {...{ max, value }}>{progress}</progress>}
     </div>
   );
 };
 
-const Log: React.FC<{ messages: string[] }> = ({ messages }) => {
+const Log: React.FC<{ done: boolean; messages: string[] }> = props => {
+  const { done, messages } = props;
+  if (done && !messages.length) {
+    return <></>;
+  }
   const ref = useRef<HTMLPreElement | null>(null);
   const scroll = () =>
     void (ref.current && (ref.current.scrollTop = ref.current.scrollHeight));
@@ -190,7 +198,7 @@ const Log: React.FC<{ messages: string[] }> = ({ messages }) => {
   return (
     <pre ref={ref}>
       {messages.map((message, key) => (
-        <Message key={key} message={message} />
+        <Message {...{ key, message }} />
       ))}
     </pre>
   );
@@ -203,30 +211,16 @@ const Message: React.FC<{ message: string }> = React.memo(({ message }) => (
   </span>
 ));
 
-const Disabled: React.FC<{
-  title: string;
-  icon: LabIcon;
-}> = ({ icon, title }) => (
-  <Button
-    className="jp-mod-minimal correxit-assignment-toggle"
-    disabled={true}
-    title={title}
-  >
-    <icon.react title={title} tag="span" />
-  </Button>
-);
-
 const Toggle: React.FC<{
+  disabled?: boolean;
   icon: LabIcon;
   title: string;
-  toggle: () => void;
-}> = ({ icon, title, toggle }) => (
+  toggle?: () => void;
+}> = ({ disabled, icon, title, toggle }) => (
   <Button
     className="jp-mod-minimal correxit-assignment-toggle"
-    onClick={event => {
-      event.preventDefault();
-      toggle();
-    }}
+    disabled={disabled || false}
+    onClick={toggle ? event => (event.preventDefault(), toggle()) : void 0}
     title={title}
   >
     <icon.react title={title} tag="span" />

@@ -8,7 +8,7 @@ import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import { useCommand } from '../correxit/commands';
+import { useCommand } from '../correxit/use-command';
 import {
   addCommands as ADD_COMMANDS,
   CommandIDs as COMMAND_IDS
@@ -16,15 +16,11 @@ import {
 import { CorrectorWidget } from './widget';
 
 type Grade = Workbook.Grade;
-
 type Headless = Workbook.Headless;
-
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const PENDING = 'cxt-mod-pending';
-
 const SELECTED = 'cxt-mod-selected';
-
 const { basename } = PathExt;
 
 /**
@@ -79,8 +75,8 @@ const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Corrector(props: Corrector.Props) {
   const { commands, correct, notify, passphrase, path, trans } = props;
-  const batch = correct ? Correxit.CommandIDs.batch : '';
-  const scan = Correxit.CommandIDs.scan;
+  const batch = correct ? Corrector.CommandIDs.batch : '';
+  const scan = Corrector.CommandIDs.scan;
   const handle = { passphrase, path };
   const skip = correct ? { path } : null;
   const scanner = useCommand<Headless>(commands, scan, skip || handle);

@@ -27,14 +27,14 @@ encrypted solutions to the workbook, the assignee (if any), and other metadata.
 
 `2` More complex operations that require multiple steps are commands in the Jupyter command system, e.g.
 
-- `correxit:scan`
-- `correxit:multicorrect`, etc.
+- `correxit-corrector:scan`
+- `correxit-corrector:batch`
 
 ## User interfaces are thin clients
 
 All of the logic executed by Correxit user interfaces (e.g., Correxit Corrector,
-Correxit sidebar, notebook/cell toolbar buttons) is implemented in the Jupyter
-command system (i.e., `2` above).
+notebook/cell toolbar buttons, etc.) is implemented in the Jupyter command
+system (i.e., `2` above).
 
 ## `function` `>` `class`
 

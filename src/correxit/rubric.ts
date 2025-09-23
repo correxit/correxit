@@ -32,6 +32,14 @@ export namespace Rubric {
     shared: boolean;
   }>;
 
+  export namespace Cell {
+    export type Toolbar = { [TOOLBAR]?: boolean; };
+
+    export const TOOLBAR = 'correxit:cell-toolbar';
+
+    export const types = ['answerable', 'comparable', 'correctable'];
+  }
+
   export type Locked = Base &
     Readonly<{ key: null; locked: true; secret: string; }>;
 

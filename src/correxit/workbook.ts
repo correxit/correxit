@@ -46,6 +46,18 @@ export namespace Workbook {
     { path: string; passphrase: null; key: string; } |
     { path: string; passphrase: string; key: null; };
 
+  export namespace Credentials {
+    export function normalize (credentials: Partial<Credentials> | null) {
+      const { key, passphrase, path } = credentials || {};
+      if (key && passphrase || !path) {
+        return null;
+      }
+      return {
+        key: key || null, passphrase: passphrase || null, path
+      } as Credentials;
+    }
+  }
+
   export type Grade = {
     path: string;
     score: Rubric.Score;
@@ -89,10 +101,10 @@ export namespace Workbook {
         cell.setSource(decrypted);
       });
 
-      const raw = cell.toJSON();
+      const code = { ...cell.toJSON(), cell_type: 'code' };
       sharedModel.transact(() => {
         sharedModel.deleteCell(index);
-        sharedModel.insertCell(index, { ...raw, cell_type: 'code' });
+        sharedModel.insertCell(index, code);
       }, false);
       if (workbook.content) {
         NotebookActions.clearAllOutputs(workbook.content);
@@ -125,10 +137,10 @@ export namespace Workbook {
         cell.setSource(encrypted);
       });
 
-      const raw = cell.toJSON();
+      const raw = { ...cell.toJSON(), cell_type: 'raw' };
       sharedModel.transact(() => {
         sharedModel.deleteCell(index);
-        sharedModel.insertCell(index, { ...raw, cell_type: 'raw' });
+        sharedModel.insertCell(index, raw);
       }, false);
       if (workbook.content) {
         NotebookActions.clearAllOutputs(workbook.content);
@@ -521,7 +533,7 @@ export namespace Workbook {
       rubric.assignment.signature = await sign({ assignee, roster }, key);
     };
     const save = ({ context }: Workbook) => context.save().then(() => true)
-      .catch(() => false).finally(() => workbook.context.dispose());
+      .catch(() => false).finally(() => context.dispose());
     (async (original: INotebookContent, progress = 0) => {
       let template: INotebookContent | null = null;
       await log({ type: '', slots: [pwd] });

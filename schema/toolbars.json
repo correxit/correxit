@@ -6,7 +6,24 @@
   "properties": {},
   "jupyter.lab.toolbars": {
     "Cell": [
-      { "name": "correxit-add" },
+      {
+        "name": "correxit-add-answerable",
+        "command": "correxit:add",
+        "args": { "correxit:cell-toolbar": true, "is": "answerable" },
+        "label": ""
+      },
+      {
+        "name": "correxit-add-comparable",
+        "command": "correxit:add",
+        "args": { "correxit:cell-toolbar": true, "is": "comparable" },
+        "label": ""
+      },
+      {
+        "name": "correxit-add-correctable",
+        "command": "correxit:add",
+        "args": { "correxit:cell-toolbar": true, "is": "correctable" },
+        "label": ""
+      },
       {
         "name": "correxit-correct",
         "command": "correxit:correct",

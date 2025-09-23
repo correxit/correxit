@@ -1,7 +1,6 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ReactWidget } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { Signal } from '@lumino/signaling';
 import React from 'react';
 import { Correxit, Workbook } from '..';
 import { Sidebar } from '.';
@@ -19,52 +18,34 @@ export class SidebarWidget extends ReactWidget {
 
   protected commands: CommandRegistry;
 
-  protected pinged = new Signal<unknown, void>(this);
-
-  protected get workbook(): Workbook.Headed | null {
+  protected get workbook(): Workbook | null {
     return this._workbook;
   }
-  protected set workbook(workbook: Workbook.Headed | null) {
-    if (workbook === this.workbook) {
+  protected set workbook(workbook: Workbook | null) {
+    const previous = this.workbook;
+    if (workbook === previous) {
       return;
     }
-
-    const previous = this.workbook;
     this._workbook = workbook;
     if (workbook) {
       const { model } = workbook.context;
-      model.sharedModel.metadataChanged.connect(this.ping, this);
-      workbook.context.fileChanged.connect(this.ping, this);
+      model.sharedModel.metadataChanged.connect(this.update, this);
+      workbook.context.fileChanged.connect(this.update, this);
+      workbook.content?.activeCellChanged.connect(this.update, this);
     }
     if (previous) {
       const { model } = previous.context;
-      model.sharedModel.metadataChanged.disconnect(this.ping, this);
-      previous.context.fileChanged.disconnect(this.ping, this);
+      model.sharedModel.metadataChanged.disconnect(this.update, this);
+      previous.context.fileChanged.disconnect(this.update, this);
+      previous.content?.activeCellChanged.disconnect(this.update, this);
     }
     this.update();
   }
 
-  protected ping() {
-    this.pinged.emit(void 0);
-  }
-
   protected render() {
     const { commands, trans, workbook } = this;
-    if (workbook === null) {
-      return (
-        <section>
-          <h4>{trans.__('Correxit')}</h4>
-        </section>
-      );
-    }
-
-    return (
-      <Sidebar
-        {...{ commands, trans, workbook }}
-        sender={this}
-        signal={this.pinged}
-      />
-    );
+    const key = `correxit-sidebar-${Date.now()}`;
+    return <Sidebar {...{ commands, trans, workbook }} key={key} />;
   }
 
   protected async subscribe(source: Correxit.Source) {
@@ -76,7 +57,7 @@ export class SidebarWidget extends ReactWidget {
     }
   }
 
-  private _workbook: Workbook.Headed | null = null;
+  private _workbook: Workbook | null = null;
 }
 
 export namespace SidebarWidget {

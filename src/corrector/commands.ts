@@ -4,31 +4,63 @@ import { WidgetTracker } from '@jupyterlab/apputils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
-import { CommandRegistry } from '@lumino/commands';
-import { Corrector } from '.';
+import { Contents, ServiceManager } from '@jupyterlab/services';
 import { IStateDB } from '@jupyterlab/statedb';
+import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
+import { filter } from '@lumino/algorithm';
+import { CommandRegistry } from '@lumino/commands';
+import { Correxit, Workbook } from '..';
+import { Corrector } from '.';
 
 export namespace CommandIDs {
+  export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
   export const launch = 'correxit-corrector:launch';
   export const refresh = 'correxit-corrector:refresh';
+  export const scan = 'correxit-corrector:scan';
 }
 
-export function addCommands(args: {
+type Credentials = Workbook.Credentials;
+type Grade = Workbook.Grade;
+type Headless = Workbook.Headless;
+
+export function addCommands(dependencies: {
   browser: IDefaultFileBrowser | null;
   commands: CommandRegistry;
   db: IStateDB;
-  manager: IDocumentManager;
+  documents: IDocumentManager;
+  manager: ServiceManager.IManager;
   shell: JupyterFrontEnd.IShell;
   tracker: WidgetTracker<Corrector.Widget>;
   trans: IRenderMime.TranslationBundle;
   tree: INotebookTree | null;
 }) {
-  const { browser, commands, db, manager, shell, tracker, trans, tree } = args;
+  const { correct } = Workbook;
   const disposables = [];
-  const { cd, launch, refresh } = CommandIDs;
+  const { batch, cd, launch, refresh, scan } = CommandIDs;
+  const { commands, trans } = dependencies;
+  const fetch = (handle: Credentials) =>
+    commands.execute(Correxit.CommandIDs.fetch, handle);
+  const { normalize } = Workbook.Credentials;
   let widget: Corrector.Widget | null = null;
+  disposables.push(
+    commands.addCommand(batch, {
+      label: trans.__('Batch grade a scanned workbook directory...'),
+      execute: (
+        args: Partial<Credentials>
+      ): AsyncGenerator<[Grade, Headless]> =>
+        (async function* (handle) {
+          const workbooks = await commands.execute(scan, handle);
+          for await (const workbook of workbooks as AsyncGenerator<Headless>) {
+            yield [
+              { ...(await correct(workbook)), path: workbook.context.path },
+              workbook
+            ];
+            workbook.context.dispose();
+          }
+        })(normalize(args) || {})
+    })
+  );
   disposables.push(
     commands.addCommand(cd, {
       icon: folderIcon,
@@ -44,7 +76,8 @@ export function addCommands(args: {
           const label = trans.__('Choose a directory for Correxit Corrector');
           const defaultPath = widget.path;
           const host = widget.node;
-          const options = { defaultPath, host, label, title, manager };
+          const manager = dependencies.documents;
+          const options = { defaultPath, host, label, manager, title };
           const pending = await FileDialog.getExistingDirectory(options);
           path = pending.value?.[0].path;
         }
@@ -59,6 +92,7 @@ export function addCommands(args: {
     commands.addCommand(launch, {
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
+        const { browser, db, shell, tracker, tree } = dependencies;
         if (!widget || widget.isDisposed) {
           path ||= browser?.model.path || '.';
           widget = new Corrector.Widget({ commands, db, path, trans });
@@ -91,6 +125,46 @@ export function addCommands(args: {
           return hard ? void (widget.path = `${widget.path}`) : widget.update();
         }
       }
+    })
+  );
+  disposables.push(
+    commands.addCommand(scan, {
+      label: trans.__('Scan a directory for Correxit workbooks'),
+      describedBy: {
+        args: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: trans.__('Optional path') }
+          }
+        }
+      },
+      execute: (handle: Partial<Credentials>): AsyncGenerator<Headless> =>
+        (async function* (handle) {
+          const directory = handle && handle.path;
+          const notebook = ({ type }: Contents.IModel) => type === 'notebook';
+          const sort = (list: Contents.IModel[]) =>
+            list.sort((a, b) => a.name.localeCompare(b.name));
+          let response: Contents.IModel;
+          if (!directory) {
+            return;
+          }
+          try {
+            response = await dependencies.manager.contents.get(directory);
+          } catch (error) {
+            console.warn(CommandIDs.scan, directory, error);
+            return;
+          }
+          if (response.type !== 'directory') {
+            console.warn(CommandIDs.scan, directory, 'not a directory');
+            return;
+          }
+          for (const { path } of filter(sort(response.content), notebook)) {
+            const fetched = await fetch({ ...handle, path });
+            if (fetched) {
+              yield fetched as Headless;
+            }
+          }
+        })(normalize({ ...handle, path: handle.path || '.' }))
     })
   );
   return disposables;

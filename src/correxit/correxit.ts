@@ -15,6 +15,13 @@ export namespace Correxit {
      * An notification/message emission with slots to populated interpolations.
      */
     export type Emission = { slots: (string | number)[]; type: string; };
+
+    export async function after(emitter: Emitter, action: () => void) {
+      for await (const _ of emitter) {
+        void _;
+      }
+      action();
+    }
   }
 
   export type Propagator = {
@@ -28,8 +35,6 @@ export namespace Correxit {
    * The core Correxit plugin registers commands and returns a workbook source.
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
-
-  export const CELL_TOOLBAR = 'correxit:cell-toolbar';
 
   export const CommandIDs = COMMAND_IDS;
 

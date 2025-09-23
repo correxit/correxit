@@ -3,7 +3,7 @@ import { Cell, ICellModel } from '@jupyterlab/cells';
 import { filter } from '@lumino/algorithm';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
-import { Workbook } from '.';
+import { Workbook } from '..';
 
 const EXCLUDE = 'cxt-mod-exclude';
 
