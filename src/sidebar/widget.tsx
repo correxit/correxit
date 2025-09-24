@@ -4,15 +4,19 @@ import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit, Workbook } from '..';
 import { Sidebar } from '.';
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
 export class SidebarWidget extends ReactWidget {
-  constructor({ commands, source, trans }: SidebarWidget.IOptions) {
+  constructor({ commands, settings, source, trans }: SidebarWidget.IOptions) {
     super();
     this.addClass('correxit-sidebar');
     this.commands = commands;
     this.trans = trans;
+    void this.initialize(settings);
     void this.subscribe(source);
   }
+
+  protected annotate = true;
 
   readonly trans: IRenderMime.TranslationBundle;
 
@@ -42,10 +46,20 @@ export class SidebarWidget extends ReactWidget {
     this.update();
   }
 
+  protected async initialize(pending: SidebarWidget.IOptions['settings']) {
+    const settings = await pending;
+    if (settings) {
+      settings.changed.connect(
+        ({ composite }) => void (this.annotate = !!composite.annotate)
+      );
+      this.annotate = !!settings.composite.annotate;
+    }
+  }
+
   protected render() {
-    const { commands, trans, workbook } = this;
+    const { annotate, commands, trans, workbook } = this;
     const key = `correxit-sidebar-${Date.now()}`;
-    return <Sidebar {...{ commands, trans, workbook }} key={key} />;
+    return <Sidebar {...{ annotate, commands, key, trans, workbook }} />;
   }
 
   protected async subscribe(source: Correxit.Source) {
@@ -63,6 +77,7 @@ export class SidebarWidget extends ReactWidget {
 export namespace SidebarWidget {
   export interface IOptions {
     commands: CommandRegistry;
+    settings: ReturnType<ISettingRegistry['load']> | null;
     source: Correxit.Source;
     trans: IRenderMime.TranslationBundle;
   }

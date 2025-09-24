@@ -1,11 +1,10 @@
+import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { ServiceManager } from '@jupyterlab/services';
 import { notebookIcon, saveIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
-import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Rubric, Workbook } from '..';
 import { Corrector } from '../corrector';
 import * as input from './input';
@@ -41,14 +40,17 @@ const {
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
-export function addCommands(dependencies: {
-  commands: CommandRegistry;
-  manager: ServiceManager.IManager;
+export function addCommands(
+  app: JupyterFrontEnd,
+  dependencies: {
   schedule: (workbook: Workbook | null) => void;
   source: Correxit.Source;
   trans: IRenderMime.TranslationBundle;
-}) {
-  const { commands, schedule, manager, source, trans } = dependencies;
+  }
+) {
+  const { commands } = app;
+  const manager = app.serviceManager;
+  const { schedule, source, trans } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) => io.request(handle, factory, manager);
@@ -341,10 +343,9 @@ export function addCommands(dependencies: {
     execute: async (
       args: Partial<Credentials>
     ): Promise<AsyncIterable<[string, Correxit.Emitter.Emission]>> => {
-      async function* empty() {}
       const { rubric, workbook } = await reify(args);
       if (!workbook || !rubric || rubric.locked) {
-        return empty();
+        return (async function*() {})();
       }
 
       const { path } = workbook.context;
@@ -361,7 +362,7 @@ export function addCommands(dependencies: {
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
-      return empty();
+      return (async function*() {})();
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {

@@ -322,11 +322,11 @@ export namespace Workbook {
     const type = 'notebook';
     let context: Context<INotebookModel> | null = null;
     try {
-      const untitled = await contents.newUntitled({ ext, path, type });
-      const renamed = contents.rename(untitled.path, PathExt.join(path, file));
-      context = new Context({ manager, factory, path: (await renamed).path });
+      const workbook = await contents.newUntitled({ ext, path, type });
+      context = new Context({ manager, factory, path: workbook.path });
       await context.initialize(true);
       await context.ready;
+      await context.rename(file);
       context.model.sharedModel.fromJSON(draft);
       await context.save();
       return { content: null, context };

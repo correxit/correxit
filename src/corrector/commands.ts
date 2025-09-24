@@ -4,11 +4,10 @@ import { WidgetTracker } from '@jupyterlab/apputils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { Contents, ServiceManager } from '@jupyterlab/services';
+import { Contents } from '@jupyterlab/services';
 import { IStateDB } from '@jupyterlab/statedb';
 import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
-import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
 import { Corrector } from '.';
 
@@ -24,24 +23,26 @@ type Credentials = Workbook.Credentials;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 
-export function addCommands(dependencies: {
-  browser: IDefaultFileBrowser | null;
-  commands: CommandRegistry;
-  db: IStateDB;
-  documents: IDocumentManager;
-  manager: ServiceManager.IManager;
-  shell: JupyterFrontEnd.IShell;
-  tracker: WidgetTracker<Corrector.Widget>;
-  trans: IRenderMime.TranslationBundle;
-  tree: INotebookTree | null;
-}) {
-  const { correct } = Workbook;
-  const disposables = [];
+export function addCommands(
+  app: JupyterFrontEnd,
+  dependencies: {
+    browser: IDefaultFileBrowser | null;
+    db: IStateDB;
+    documents: IDocumentManager;
+    tracker: WidgetTracker<Corrector.Widget>;
+    trans: IRenderMime.TranslationBundle;
+    tree: INotebookTree | null;
+  }
+) {
+  const { commands, shell } = app;
+  const manager = app.serviceManager;
+  const { browser, db, tracker, tree } = dependencies;
   const { batch, cd, launch, refresh, scan } = CommandIDs;
-  const { commands, trans } = dependencies;
+  const { trans } = dependencies;
   const fetch = (handle: Credentials) =>
     commands.execute(Correxit.CommandIDs.fetch, handle);
   const { normalize } = Workbook.Credentials;
+  const disposables = [];
   let widget: Corrector.Widget | null = null;
   disposables.push(
     commands.addCommand(batch, {
@@ -50,6 +51,7 @@ export function addCommands(dependencies: {
         args: Partial<Credentials>
       ): AsyncGenerator<[Grade, Headless]> =>
         (async function* (handle) {
+          const { correct } = Workbook;
           const workbooks = await commands.execute(scan, handle);
           for await (const workbook of workbooks as AsyncGenerator<Headless>) {
             yield [
@@ -92,7 +94,6 @@ export function addCommands(dependencies: {
     commands.addCommand(launch, {
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
-        const { browser, db, shell, tracker, tree } = dependencies;
         if (!widget || widget.isDisposed) {
           path ||= browser?.model.path || '.';
           widget = new Corrector.Widget({ commands, db, path, trans });
@@ -149,7 +150,7 @@ export function addCommands(dependencies: {
             return;
           }
           try {
-            response = await dependencies.manager.contents.get(directory);
+            response = await manager.contents.get(directory);
           } catch (error) {
             console.warn(CommandIDs.scan, directory, error);
             return;

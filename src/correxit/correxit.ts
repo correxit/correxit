@@ -42,18 +42,17 @@ export namespace Correxit {
 
   export const DESCRIPTION = {
     CORRECTOR: description.CORRECTOR,
-    SIDEBAR: description.SIDEBAR,
     SOURCE: description.SOURCE,
-    TOOLBARS: description.TOOLBARS
+    UI: description.UI
   };
 
   export const Icons = ICONS;
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
-  export const SIDEBAR = 'correxit:sidebar';
-
   export const SOURCE = 'correxit:source';
+
+  export const UI = 'correxit:ui';
 
   export const Source = new Token<Source>(SOURCE);
 

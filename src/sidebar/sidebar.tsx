@@ -14,10 +14,11 @@ const { add, convert, correct, lock, remove, reset, toggle, unlock } =
   Correxit.CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
-export function Sidebar({ commands, trans, workbook }: Sidebar.Props) {
+export function Sidebar(props: Sidebar.Props) {
+  const { annotate, commands, trans, workbook } = props;
   return (
     <>
-      <Annotate {...{ workbook }} />
+      {annotate && <Annotate {...{ workbook }} />}
       <Header {...{ commands, trans, workbook }} />
       {workbook && (
         <>
@@ -33,6 +34,7 @@ export function Sidebar({ commands, trans, workbook }: Sidebar.Props) {
 
 export namespace Sidebar {
   export type Props = {
+    annotate: boolean;
     commands: CommandRegistry;
     trans: TranslationBundle;
     workbook: Workbook | null;

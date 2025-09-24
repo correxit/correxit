@@ -29,5 +29,6 @@
 }
 
 .correxit-add + .correxit-add {
+  background-color: green;
   margin-left: 0.1rem;
 }

@@ -40,21 +40,14 @@ export const corrector: JupyterFrontEndPlugin<void> = {
       translator: ITranslator | null,
       db: IStateDB | null
     ) => {
+      db ||= new StateDB();
+
       const name = 'correxit-corrector';
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const { launch } = Corrector.CommandIDs;
-      const added = Corrector.addCommands({
-        browser,
-        commands: app.commands,
-        db: db || new StateDB(),
-        documents,
-        manager: app.serviceManager,
-        shell: app.shell,
-        tracker,
-        trans,
-        tree
-      });
+      const dependencies = { browser, db, documents, tracker, trans, tree };
+      const added = Corrector.addCommands(app, dependencies);
       if (palette) {
         palette.addItem({ category: 'correxit', command: launch });
       }
@@ -72,34 +65,6 @@ export const corrector: JupyterFrontEndPlugin<void> = {
   }))()
 };
 
-export const sidebar: JupyterFrontEndPlugin<void> = {
-  id: Correxit.SIDEBAR,
-  description: Correxit.DESCRIPTION.SIDEBAR,
-  autoStart: true,
-  requires: [Correxit.Source],
-  optional: [ITranslator, ILayoutRestorer],
-  ...((deactivator?: () => void) => ({
-    activate: (
-      { commands, shell },
-      source: Correxit.Source,
-      translator: ITranslator | null,
-      restorer: ILayoutRestorer | null
-    ) => {
-      const trans = (translator || nullTranslator).load('correxit');
-      const widget = new Sidebar.Widget({ commands, source, trans });
-      widget.id = 'correxit-sidebar';
-      widget.title.caption = 'Correxit';
-      widget.title.icon = Correxit.Icons.correct;
-      shell.add(widget, 'right', {});
-      if (restorer) {
-        restorer.add(widget, widget.id);
-      }
-      deactivator = () => widget.dispose();
-    },
-    deactivate: () => deactivator?.()
-  }))()
-};
-
 /**
  * The Correxit source plugin loads settings, adds commands, and provides an
  * async iterable workbook source that emits when the user changes tabs.
@@ -109,20 +74,16 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
   requires: [INotebookTracker],
-  optional: [ISettingRegistry, ITranslator],
+  optional: [ITranslator],
   provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
-      { commands, serviceManager, shell },
+      app,
       tracker: INotebookTracker,
-      registry: ISettingRegistry | null,
       translator: ITranslator | null
     ): Correxit.Source => {
       console.log('JupyterLab extension correxit is activated!');
-      if (registry) {
-        void Private.loadSettings(registry);
-      }
-      const manager = serviceManager;
+      const { commands, shell } = app;
       const source = new Poll<Workbook | null>({
         auto: false,
         frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
@@ -155,8 +116,8 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         }
       };
       const trans = (translator || nullTranslator).load('correxit');
-      const options = { commands, manager, schedule, source, trans };
-      const added = addCommands(options);
+      const dependencies = { schedule, source, trans };
+      const added = addCommands(app, dependencies);
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>
           schedule(newValue instanceof NotebookPanel ? newValue : null),
@@ -179,21 +140,32 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   }))()
 };
 
-export const toolbars: JupyterFrontEndPlugin<void> = {
-  id: Correxit.TOOLBARS,
-  description: Correxit.DESCRIPTION.TOOLBARS,
+export const ui: JupyterFrontEndPlugin<void> = {
+  id: Correxit.UI,
+  description: Correxit.DESCRIPTION.UI,
   autoStart: true,
   requires: [Correxit.Source],
-  activate: async (_, __: Correxit.Source) => void 0
+  optional: [ITranslator, ILayoutRestorer, ISettingRegistry],
+  ...((deactivator?: () => void) => ({
+    activate: (
+      { commands, shell },
+      source: Correxit.Source,
+      translator: ITranslator | null,
+      restorer: ILayoutRestorer | null,
+      registry: ISettingRegistry
+    ) => {
+      const settings = registry ? registry.load(Correxit.UI) : null;
+      const trans = (translator || nullTranslator).load('correxit');
+      const widget = new Sidebar.Widget({ commands, settings, source, trans });
+      widget.id = 'correxit-sidebar';
+      widget.title.caption = 'Correxit';
+      widget.title.icon = Correxit.Icons.correct;
+      shell.add(widget, 'right', {});
+      if (restorer) {
+        restorer.add(widget, widget.id);
+      }
+      deactivator = () => widget.dispose();
+    },
+    deactivate: () => deactivator?.()
+  }))()
 };
-
-namespace Private {
-  export async function loadSettings(registry: ISettingRegistry) {
-    try {
-      const settings = await registry.load(Correxit.SOURCE);
-      console.log(`${Correxit.SOURCE} settings loaded:`, settings.composite);
-    } catch (error) {
-      console.error(`Failed to load settings for ${Correxit.SOURCE}.`, error);
-    }
-  }
-}
