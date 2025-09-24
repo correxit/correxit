@@ -1,4 +1,4 @@
-@import url('corrector.css');
-@import url('source.css');
-@import url('ui-sidebar.css');
-@import url('ui-toolbars.css');
+@import url('corrector/index.css');
+@import url('source/index.css');
+@import url('ui/sidebar.css');
+@import url('ui/toolbars.css');

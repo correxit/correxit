@@ -14,7 +14,7 @@ import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
 import { addCommands, Correxit, Workbook } from './correxit';
 import { Corrector } from './corrector';
-import { Sidebar } from './sidebar';
+import { Sidebar } from './ui';
 
 export const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
