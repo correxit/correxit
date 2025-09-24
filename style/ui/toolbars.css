@@ -28,7 +28,8 @@
   }
 }
 
-.correxit-add + .correxit-add {
-  background-color: green;
-  margin-left: 0.1rem;
+/* The middle cell config button spaces out the correction config. */
+.jp-Toolbar-item[data-jp-item-name='correxit-add-comparable'] {
+  margin-left: 2px;
+  margin-right: 2px;
 }

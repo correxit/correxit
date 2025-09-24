@@ -120,8 +120,8 @@ const Body: React.FC<{
   const { id } = cell;
   const configuration: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: add, args: { id, is: 'answerable' } },
-    { commands, id: add, args: { id, is: 'correctable' } },
-    { commands, id: add, args: { id, is: 'comparable' } }
+    { commands, id: add, args: { id, is: 'comparable' } },
+    { commands, id: add, args: { id, is: 'correctable' } }
   ];
   const operations: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: correct, args: { id } },
