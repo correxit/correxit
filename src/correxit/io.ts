@@ -20,26 +20,36 @@ export async function cd(commands: CommandRegistry, path: string) {
   }
 }
 
-export async function create(options: {
+export async function create({ draft, factory, manager, path }: {
   draft: INotebookContent;
   factory: NotebookModelFactory;
   manager: ServiceManager.IManager;
   path: string;
 }): Promise<Headless | null> {
-  const { draft, factory, manager } = options;
   const { contents } = manager;
-  const ext = '.ipynb';
-  const path = PathExt.dirname(options.path);
-  const type = 'notebook';
   let context: Context<INotebookModel> | null = null;
   try {
-    const created = await contents.newUntitled({ ext, path, type });
-    const workbook = await contents.rename(created.path, options.path)
+    const created = await contents.newUntitled({
+      ext: '.ipynb',
+      path: PathExt.dirname(path),
+      type: 'notebook'
+    });
+    console.log('created successfully', created.path);
+    const fetched = await contents.get(created.path);
+    console.log('fetched successfully', fetched.path);
+    const renamed = await contents.rename(fetched.path, path);
+    console.log('renamed successfully', renamed.path);
+    const workbook = await contents.get(renamed.path);
+    console.log('get successfully', workbook.path, workbook.path === path);
     context = new Context({ manager, factory, path: workbook.path });
     await context.initialize(true);
+    console.log('context initialized', path);
     await context.ready;
+    console.log('context ready', path);
     context.model.sharedModel.fromJSON(draft);
+    console.log('context shared model populated with draft');
     await context.save();
+    console.log('context saved', path);
     return { content: null, context };
   } catch (error) {
     console.warn('create error', error);
