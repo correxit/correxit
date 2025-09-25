@@ -29,18 +29,17 @@ export async function create(options: {
   const { draft, factory, manager } = options;
   const { contents } = manager;
   const ext = '.ipynb';
-  const file = PathExt.basename(options.path);
   const path = PathExt.dirname(options.path);
   const type = 'notebook';
   let context: Context<INotebookModel> | null = null;
   try {
-    const workbook = await contents.newUntitled({ ext, path, type });
+    const created = await contents.newUntitled({ ext, path, type });
+    const workbook = await contents.rename(created.path, options.path)
     context = new Context({ manager, factory, path: workbook.path });
     await context.initialize(true);
     await context.ready;
     context.model.sharedModel.fromJSON(draft);
     await context.save();
-    await context.rename(file);
     return { content: null, context };
   } catch (error) {
     console.warn('create error', error);
