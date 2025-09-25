@@ -15,10 +15,10 @@ import {
   ServiceManager
 } from '@jupyterlab/services';
 import { findIndex, range, reduce } from '@lumino/algorithm';
-import { Correxit } from './correxit';
-import { Rubric } from './rubric';
-import * as security from './security';
 import { Poll } from '@lumino/polling';
+import { Correxit, Rubric } from '.';
+import * as executor from './executor';
+import * as security from './security';
 
 /**
  * A headed or headless Correxit workbook.
@@ -165,6 +165,7 @@ export namespace Workbook {
       if (!code.length) {
         return outputs;
       }
+
       const future = kernel.requestExecute({ code });
       future.onIOPub = (message: KernelMessage.IIOPubMessage) => {
         if (message.header.msg_type === 'execute_result' ||
@@ -180,7 +181,6 @@ export namespace Workbook {
   }
 
   const quiet = true;
-
   const [get, set] = (pool => {
     const get = (workbook: Workbook) => pool.get(workbook) || null;
     const set = (workbook: Workbook, rubric: Rubric | null) =>
@@ -299,12 +299,12 @@ export namespace Workbook {
 
     const { spec, outputs } = result;
     if (id) {
-      return { spec, score: await Rubric.score(rubric, id, outputs) };
+      return { spec, score: (await Rubric.score(rubric, id, outputs))[0] };
     }
 
     const initial = Promise.resolve([0, 0] as Rubric.Score);
     const score =  await Object.keys(outputs).reduce(async (total, id) =>
-      sum(await total, await Rubric.score(rubric, id, outputs)), initial);
+      sum(await total, (await Rubric.score(rubric, id, outputs))[0]), initial);
     return { spec, score };
   }
 
@@ -326,8 +326,8 @@ export namespace Workbook {
       context = new Context({ manager, factory, path: workbook.path });
       await context.initialize(true);
       await context.ready;
-      await context.rename(file);
       context.model.sharedModel.fromJSON(draft);
+      await context.rename(file);
       await context.save();
       return { content: null, context };
     } catch (error) {
@@ -398,33 +398,18 @@ export namespace Workbook {
       );
     }
 
-    const { kernelManager } = context.sessionContext;
-    const name = context.model.defaultKernelName;
-    if (!name) {
-      console.warn('execute error, unknown kernel');
-      return null;
-    }
-
-    let kernel: Kernel.IKernelConnection | null;
-    try {
-      kernel = await kernelManager?.startNew({ name }) || null;
-      if (!kernel) {
-        return null;
-      }
-    } catch (error){
-      console.warn(`execute error, could not start kernel ${name}`, error);
-      return null;
-    }
-
     const outputs: Rubric.Outputs = {};
+    const [kernel, release] = await executor.initialize(context, true);
+    if (!kernel) {
+      return null;
+    }
     for (const index of range(stop)) {
-      const model = cells.get(index);
-      if (model.type === 'code') {
-        outputs[model.id] = await Cell.execute(model as ICodeCellModel, kernel);
+      const cell = cells.get(index);
+      if (cell.type === 'code') {
+        outputs[cell.id] = await Cell.execute(cell as ICodeCellModel, kernel);
       }
     }
-    void kernel.shutdown().catch(_ => {});
-
+    release();
     return { spec: await kernel.spec || null, outputs };
   }
 

@@ -1,5 +1,5 @@
 import { KernelMessage } from '@jupyterlab/services';
-import { find } from '@lumino/algorithm';
+import { filter, find, reduce } from '@lumino/algorithm';
 import * as security from './security';
 
 export type Rubric = Rubric.Locked | Rubric.Unlocked;
@@ -33,11 +33,92 @@ export namespace Rubric {
   }>;
 
   export namespace Cell {
+    /**
+     * An output is an `iopub` message of interest.
+     */
+    export type Output =
+      | KernelMessage.IIOPubMessage<'execute_result'>
+      | KernelMessage.IIOPubMessage<'display_data'>
+      | KernelMessage.IIOPubMessage<'stream'>
+      | KernelMessage.IIOPubMessage<'error'>;
+
     export type Toolbar = { [TOOLBAR]?: boolean; };
 
     export const TOOLBAR = 'correxit:cell-toolbar';
 
     export const types = ['answerable', 'comparable', 'correctable'];
+
+    export async function answer(
+      [expected]: string[],
+      given: Output[]
+    ): Promise<[Score, Score.Message]> {
+      if (!expected) {
+        return [UNSCORED, 'empty-expected'];
+      }
+      if (!given.length) {
+        return [INCORRECT, 'empty-given'];
+      }
+      if (find(given, ({ header }) => header.msg_type === 'error')) {
+        return [INCORRECT, 'error-given'];
+      }
+      if (find(given, ({ header }) => header.msg_type === 'stream')) {
+        const name = (content: Cell.Output['content']) =>
+          (content as KernelMessage.IStreamMsg['content']).name;
+        const text = (content: Cell.Output['content']) =>
+          (content as KernelMessage.IStreamMsg['content']).text;
+        const stdout = reduce(
+          filter(given, ({ content, header }) =>
+            header.msg_type === 'stream' && name(content) === 'stdout'
+          ),
+          (stdout, { content }) => [...stdout, text(content)],
+          [] as string[]
+        ).join('').trim();
+        if (stdout) {
+          const digest = await security.digest(stdout);
+          const score = digest === expected ? CORRECT : INCORRECT;
+          return [score, score === INCORRECT ? 'mismatch-digest' : 'success'];
+        }
+        return [INCORRECT, 'missing-stdout'];
+      }
+      return [UNSCORED, 'mismatch-message'];
+    }
+
+    export async function compare(
+      expected: Output[],
+      given: Output[]
+    ): Promise<[Score, Score.Message]> {
+      if (!expected.length) {
+        return [UNSCORED, 'empty-expected'];
+      }
+      if (!given.length) {
+        return [INCORRECT, 'empty-given'];
+      }
+
+      const keys = (content: Output['content']) =>
+        Object.keys(content).sort().join('');
+      const x = given.slice(-1)[0].content;
+      const y = expected.slice(-1)[0].content;
+      if (keys(x) !== keys(y)) {
+        return [INCORRECT, 'mismatch-congruence'];
+      }
+      if ('data' in x && 'data' in y) {
+        const equal = JSON.stringify(x.data) === JSON.stringify(y.data);
+        return equal ? [CORRECT, 'success'] : [INCORRECT, 'mismatch-data'];
+      }
+      if ('name' in x && 'name' in y) {
+        return x.name === y.name && x.text === y.text
+          ? [CORRECT, 'success']
+          : [INCORRECT, 'mismatch-name-text'];
+      }
+      return [UNSCORED, 'error-compare'];
+    };
+
+    export async function correct(
+      expected: Output[]
+    ): Promise<[Score, Score.Message]> {
+      return expected.some(message => message.header.msg_type === 'error') ?
+        [INCORRECT, 'error-correct'] : [CORRECT, 'success'];
+    }
   }
 
   export type Locked = Base &
@@ -51,15 +132,6 @@ export namespace Rubric {
 
   export type Unlocked = Base &
     Readonly<{ key: string; locked: false; secret: Section; }>;
-
-  export const CORRECT: Score = Object.freeze([1, 1]);
-
-  export const INCORRECT: Score = Object.freeze([0, 1]);
-
-  export const UNSCORED: Score = Object.freeze([
-    Number.NEGATIVE_INFINITY,
-    Number.POSITIVE_INFINITY
-  ]);
 
   export namespace Assignment {
     export const EMPTY: Assignment = {
@@ -94,36 +166,36 @@ export namespace Rubric {
     }
   }
 
-  export namespace Cell {
-    /**
-     * An output is an `iopub` message of interest.
-     */
-    export type Output =
-      | KernelMessage.IIOPubMessage<'execute_result'>
-      | KernelMessage.IIOPubMessage<'display_data'>
-      | KernelMessage.IIOPubMessage<'stream'>
-      | KernelMessage.IIOPubMessage<'error'>;
+  export namespace Score {
+    export type Message =
+      | 'empty-given'
+      | 'empty-expected'
+      | 'error-compare'
+      | 'error-correct'
+      | 'error-given'
+      | 'error-is-unknown'
+      | 'mismatch-congruence'
+      | 'mismatch-data'
+      | 'missing-given'
+      | 'mismatch-digest'
+      | 'mismatch-message'
+      | 'mismatch-name-text'
+      | 'missing-cell-given'
+      | 'missing-reference'
+      | 'missing-stdout'
+      | 'success';
+
+    export type Report = [Score, Message[]];
   }
 
-  export async function answer(expected: string[], given: Cell.Output[]) {
-      if (!given.length) {
-        return INCORRECT;
-      }
+  export const CORRECT: Score = Object.freeze([1, 1]);
 
-      const message = given.slice(-1)[0];
-      if (message.header.msg_type === 'error') {
-        return INCORRECT;
-      }
-      if (message.header.msg_type === 'stream') {
-        const { content } = message as KernelMessage.IStreamMsg;
-        if (content.name === 'stdout') {
-          const value = await security.digest(content.text.trim());
-          return value === expected?.[0] ? CORRECT : INCORRECT;
-        }
-        return INCORRECT;
-      }
-    return UNSCORED;
-  };
+  export const INCORRECT: Score = Object.freeze([0, 1]);
+
+  export const UNSCORED: Score = Object.freeze([
+    Number.NEGATIVE_INFINITY,
+    Number.POSITIVE_INFINITY
+  ]);
 
   export async function assign(
     { key, ...rubric }: Unlocked,
@@ -142,37 +214,6 @@ export namespace Rubric {
     await Assignment.validate({ assignment, key });
     return { ...rubric, accessed: Date.now(), assignment, key };
   }
-
-  export function compare(expected: Cell.Output[], given: Cell.Output[]) {
-    if (!expected.length) {
-      return UNSCORED;
-    }
-    if (!given.length) {
-      return INCORRECT;
-    }
-
-    const keys = (content: Cell.Output['content']) =>
-      Object.keys(content).sort().join('');
-    const x = given.slice(-1)[0].content;
-    const y = expected.slice(-1)[0].content;
-    if (keys(x) !== keys(y)) {
-      return INCORRECT;
-    }
-    if ('data' in x && 'data' in y) {
-      const equal = JSON.stringify(x.data) === JSON.stringify(y.data);
-      return equal ? CORRECT : INCORRECT;
-    }
-    if ('name' in x && 'name' in y) {
-      return x.name === y.name && x.text === y.text ? CORRECT : INCORRECT;
-    }
-    return UNSCORED;
-  };
-
-  export function correct(expected: Cell.Output[]) {
-    return expected.some(message => message.header.msg_type === 'error') ?
-      INCORRECT : CORRECT;
-  }
-
 
   /**
    * @returns an unlocked rubric with the `key` field omitted. The client needs
@@ -280,7 +321,7 @@ export namespace Rubric {
    * @param id - the id of the cell to score.
    * @param outputs - the outputs of all the executed workbook cells.
    *
-   * @returns the score for this cell.
+   * @returns A tuple with the score for this cell and any log messages.
    *
    * #### Notes
    * Currently the score is only 0/1 or 1/1 whether it is correct or not.
@@ -289,26 +330,26 @@ export namespace Rubric {
     rubric: Rubric,
     id: string,
     outputs: Outputs
-  ): Promise<Score> {
+  ): Promise<[Score, Score.Message]> {
     const cell = get(rubric, id);
     const given = outputs[id];
     const reference = cell?.reference?.[0] ?? '';
     if (!cell || !given) {
-      return UNSCORED;
+      return [UNSCORED, 'missing-cell-given'];
     }
     if (cell.is === 'answerable') {
-      return answer(cell.payload, given);
+      return Cell.answer(cell.payload, given);
     }
     if (!outputs[reference]) {
-      return UNSCORED;
+      return [UNSCORED, 'missing-reference'];
     }
     if (cell.is === 'comparable') {
-      return compare(outputs[reference], given);
+      return Cell.compare(outputs[reference], given);
     }
     if (cell.is === 'correctable') {
-      return correct(outputs[reference]);
+      return Cell.correct(outputs[reference]);
     }
-    return 'unreachable' as never;
+    return [UNSCORED, 'error-is-unknown'];
   }
 
   /**
@@ -328,23 +369,26 @@ export namespace Rubric {
    * @returns a rubric where given cell is toggled between `secret` or `shared`.
    */
   export function toggle(rubric: Unlocked, id: string): Unlocked {
-    if (!has(rubric, id)) {
+    const cell = get(rubric, id);
+    if (!cell) {
       throw new Error('cannot toggle cell unknown in rubric');
     }
-
-    const cell = get(rubric, id)!;
-    const secret = { cells: { ...rubric.secret.cells } };
-    const shared = { cells: { ...rubric.shared.cells } };
-    return {
-      ...rubric,
-      accessed: Date.now(),
-      secret: cell.shared ?
-        { cells: { ...secret.cells, [cell.id]: { ...cell, shared: false } } } :
-        { cells: { ...(delete secret.cells[cell.id], secret.cells) } },
-      shared: cell.shared ?
-        { cells: { ...(delete shared.cells[cell.id], shared.cells) } } :
-        { cells: { ...shared.cells, [cell.id]: { ...cell, shared: true } } },
-    };
+    let secret: Section;
+    let shared: Section;
+    if (cell.shared) {
+      const { [id]: referent, ...rest } = rubric.shared.cells;
+      secret = {
+        cells: {...rubric.secret.cells, [id]: { ...referent, shared: false }}
+      };
+      shared = { cells: {...rest} };
+    } else {
+      const { [id]: referent, ...rest } = rubric.secret.cells;
+      secret = { cells: { ...rest } };
+      shared = {
+        cells: { ...rubric.shared.cells, [id]: { ...referent, shared: true } }
+      };
+    }
+    return { ...rubric, accessed: Date.now(), secret, shared };
   }
 
   /**
