@@ -1,6 +1,6 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { PathExt } from '@jupyterlab/coreutils';
-import { Context, DocumentRegistry } from '@jupyterlab/docregistry';
+import { DocumentRegistry } from '@jupyterlab/docregistry';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import {
   INotebookModel,
@@ -18,6 +18,7 @@ import { findIndex, range, reduce } from '@lumino/algorithm';
 import { Poll } from '@lumino/polling';
 import { Correxit, Rubric } from '.';
 import * as executor from './executor';
+import * as io from './io';
 import * as security from './security';
 
 /**
@@ -308,35 +309,6 @@ export namespace Workbook {
     return { spec, score };
   }
 
-  export async function create(options: {
-    draft: INotebookContent;
-    factory: NotebookModelFactory;
-    manager: ServiceManager.IManager;
-    path: string;
-  }): Promise<Headless | null> {
-    const { draft, factory, manager } = options;
-    const { contents } = manager;
-    const ext = '.ipynb';
-    const file = PathExt.basename(options.path);
-    const path = PathExt.dirname(options.path);
-    const type = 'notebook';
-    let context: Context<INotebookModel> | null = null;
-    try {
-      const workbook = await contents.newUntitled({ ext, path, type });
-      context = new Context({ manager, factory, path: workbook.path });
-      await context.initialize(true);
-      await context.ready;
-      context.model.sharedModel.fromJSON(draft);
-      await context.rename(file);
-      await context.save();
-      return { content: null, context };
-    } catch (error) {
-      console.warn('create error', error);
-      context?.dispose();
-      return null;
-    }
-  };
-
   /**
    * Decrypts workbook content.
    */
@@ -532,7 +504,7 @@ export namespace Workbook {
         await reassign(draft, assignee);
         await log({ type: 'assigned', slots: [assignee] });
 
-        const created = await create({ draft, factory, manager, path });
+        const created = await io.create({ draft, factory, manager, path });
         if (!created) {
           await log({ type: 'create-error', slots: [path] });
           continue;

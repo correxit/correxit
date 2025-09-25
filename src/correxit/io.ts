@@ -1,11 +1,12 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { Context } from '@jupyterlab/docregistry';
-import { NotebookModelFactory } from '@jupyterlab/notebook';
+import { INotebookModel, NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Workbook } from '..';
 import { Corrector } from '../corrector';
 import * as security from './security';
+import { INotebookContent } from '@jupyterlab/nbformat';
 
 type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
@@ -18,6 +19,35 @@ export async function cd(commands: CommandRegistry, path: string) {
     commands.execute('filebrowser:go-to-path', { path });
   }
 }
+
+export async function create(options: {
+  draft: INotebookContent;
+  factory: NotebookModelFactory;
+  manager: ServiceManager.IManager;
+  path: string;
+}): Promise<Headless | null> {
+  const { draft, factory, manager } = options;
+  const { contents } = manager;
+  const ext = '.ipynb';
+  const file = PathExt.basename(options.path);
+  const path = PathExt.dirname(options.path);
+  const type = 'notebook';
+  let context: Context<INotebookModel> | null = null;
+  try {
+    const workbook = await contents.newUntitled({ ext, path, type });
+    context = new Context({ manager, factory, path: workbook.path });
+    await context.initialize(true);
+    await context.ready;
+    context.model.sharedModel.fromJSON(draft);
+    await context.save();
+    await context.rename(file);
+    return { content: null, context };
+  } catch (error) {
+    console.warn('create error', error);
+    context?.dispose();
+    return null;
+  }
+};
 
 export async function folder(
   manager: ServiceManager.IManager,
