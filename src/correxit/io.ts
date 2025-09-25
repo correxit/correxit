@@ -20,6 +20,14 @@ export async function cd(commands: CommandRegistry, path: string) {
   }
 }
 
+/**
+ * @returns A promise that resolves to a headless workbook or null.
+ *
+ * #### Notes
+ * This function never throws. Its write strategy is to be maximally safe at
+ * the cost of speed by inserting a contents service `get` between each file
+ * operation to ensure caching does not trigger file overwrite warnings.
+ */
 export async function create({ draft, factory, manager, path }: {
   draft: INotebookContent;
   factory: NotebookModelFactory;
@@ -34,22 +42,14 @@ export async function create({ draft, factory, manager, path }: {
       path: PathExt.dirname(path),
       type: 'notebook'
     });
-    console.log('created successfully', created.path);
     const fetched = await contents.get(created.path);
-    console.log('fetched successfully', fetched.path);
     const renamed = await contents.rename(fetched.path, path);
-    console.log('renamed successfully', renamed.path);
     const workbook = await contents.get(renamed.path);
-    console.log('get successfully', workbook.path, workbook.path === path);
     context = new Context({ manager, factory, path: workbook.path });
     await context.initialize(true);
-    console.log('context initialized', path);
     await context.ready;
-    console.log('context ready', path);
     context.model.sharedModel.fromJSON(draft);
-    console.log('context shared model populated with draft');
     await context.save();
-    console.log('context saved', path);
     return { content: null, context };
   } catch (error) {
     console.warn('create error', error);
