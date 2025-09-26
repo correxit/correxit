@@ -22,29 +22,22 @@ export async function cd(commands: CommandRegistry, path: string) {
 
 /**
  * @returns A promise that resolves to a headless workbook or null.
- *
- * #### Notes
- * This function never throws. Its write strategy is to be maximally safe at
- * the cost of speed by inserting a contents service `get` between each file
- * operation to ensure caching does not trigger file overwrite warnings.
  */
-export async function create({ draft, factory, manager, path }: {
+export async function create(options: {
   draft: INotebookContent;
   factory: NotebookModelFactory;
   manager: ServiceManager.IManager;
   path: string;
 }): Promise<Headless | null> {
+  const { draft, factory, manager } = options;
   const { contents } = manager;
+  const ext = '.ipynb';
+  const path = PathExt.dirname(options.path);
+  const type = 'notebook';
   let context: Context<INotebookModel> | null = null;
   try {
-    const created = await contents.newUntitled({
-      ext: '.ipynb',
-      path: PathExt.dirname(path),
-      type: 'notebook'
-    });
-    const fetched = await contents.get(created.path);
-    const renamed = await contents.rename(fetched.path, path);
-    const workbook = await contents.get(renamed.path);
+    const created = await contents.newUntitled({ ext, path, type });
+    const workbook = await contents.rename(created.path, options.path)
     context = new Context({ manager, factory, path: workbook.path });
     await context.initialize(true);
     await context.ready;
@@ -56,7 +49,7 @@ export async function create({ draft, factory, manager, path }: {
     context?.dispose();
     return null;
   }
-};
+}
 
 export async function folder(
   manager: ServiceManager.IManager,
