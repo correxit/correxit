@@ -5,16 +5,57 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 import { ICommandPalette, WidgetTracker } from '@jupyterlab/apputils';
+import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
-import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
+import {
+  INotebookTracker,
+  NotebookModelFactory,
+  NotebookPanel
+} from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { IStateDB, StateDB } from '@jupyterlab/statedb';
+import { IStateDB } from '@jupyterlab/statedb';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
-import { addCommands, Correxit, Workbook } from './correxit';
 import { Corrector } from './corrector';
+import { addCommands, Correxit, Workbook } from './correxit';
+import * as io from './correxit/io';
 import { Sidebar } from './ui';
+
+export const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
+  id: Correxit.CONSUMER,
+  description: Correxit.DESCRIPTION.CONSUMER,
+  provides: Correxit.Consumer,
+  ...((deactivator?: () => void) => ({
+    activate: ({ commands, serviceManager }): Correxit.Consumer => {
+      const manager = serviceManager;
+      const factory = new NotebookModelFactory();
+      const mkdir = async (path: string) => {
+        const parent = PathExt.dirname(path);
+        const base = PathExt.basename(path, '.ipynb');
+        const potential = await io.folder(manager, parent, base);
+        const directory = await io.mkdir(manager, parent, potential);
+        const pwd = directory.path;
+        return { directory, location: { base, pwd } };
+      };
+      deactivator = () => factory.dispose();
+      return async function consumer({ log, stream, path, rubric }) {
+        const { directory, location } = await mkdir(path);
+        const total = rubric.assignment.roster.length;
+        let progress = 0;
+        for await (const { notebook, path } of await stream(location)) {
+          await log({ type: 'separator', slots: [] });
+          const saved = await io.create({ factory, manager, notebook, path });
+          await log({ type: saved ? 'saved' : 'create-error', slots: [path] });
+          await log({ type: 'progress', slots: [++progress, total] });
+        }
+        await io.cd(commands, directory.path);
+        await log({ type: 'success', slots: [total] });
+      };
+    },
+    deactivate: () => deactivator?.()
+  }))()
+};
 
 export const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
@@ -40,9 +81,7 @@ export const corrector: JupyterFrontEndPlugin<void> = {
       translator: ITranslator | null,
       db: IStateDB | null
     ) => {
-      db ||= new StateDB();
-
-      const name = 'correxit-corrector';
+      const name = Correxit.CORRECTOR;
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const { launch } = Corrector.CommandIDs;
@@ -55,9 +94,7 @@ export const corrector: JupyterFrontEndPlugin<void> = {
         restorer.restore(tracker, { command: launch, name: () => name });
       }
       deactivator = () => {
-        for (const command of added) {
-          command.dispose();
-        }
+        added.forEach(command => command.dispose());
         tracker.dispose();
       };
     },
@@ -73,12 +110,13 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
-  requires: [INotebookTracker],
+  requires: [Correxit.Consumer, INotebookTracker],
   optional: [ITranslator],
   provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
       app,
+      consumer: Correxit.Consumer,
       tracker: INotebookTracker,
       translator: ITranslator | null
     ): Correxit.Source => {
@@ -116,7 +154,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         }
       };
       const trans = (translator || nullTranslator).load('correxit');
-      const dependencies = { schedule, source, trans };
+      const dependencies = { consumer, schedule, source, trans };
       const added = addCommands(app, dependencies);
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>

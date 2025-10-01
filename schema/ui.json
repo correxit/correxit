@@ -51,19 +51,18 @@
         "label": ""
       },
       {
-        "name": "correxit-correct",
-        "command": "correxit:correct",
-        "label": ""
-      },
-      {
         "name": "correxit-lock",
         "command": "correxit:lock",
-        "icon": "correxit:unlocked",
         "label": ""
       },
       {
         "name": "correxit-unlock",
         "command": "correxit:unlock",
+        "label": ""
+      },
+      {
+        "name": "correxit-correct",
+        "command": "correxit:correct",
         "label": ""
       }
     ]

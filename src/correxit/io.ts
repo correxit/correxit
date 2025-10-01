@@ -1,20 +1,13 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { Context } from '@jupyterlab/docregistry';
+import { INotebookContent } from '@jupyterlab/nbformat';
 import { INotebookModel, NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Workbook } from '..';
-import { Corrector } from '../corrector';
 import * as security from './security';
-import { INotebookContent } from '@jupyterlab/nbformat';
-
-type Credentials = Workbook.Credentials;
-type Headless = Workbook.Headless;
 
 export async function cd(commands: CommandRegistry, path: string) {
-  if (commands.hasCommand(Corrector.CommandIDs.cd)) {
-    commands.execute(Corrector.CommandIDs.cd, { path })
-  }
   if (commands.hasCommand('filebrowser:go-to-path')) {
     commands.execute('filebrowser:go-to-path', { path });
   }
@@ -24,31 +17,32 @@ export async function cd(commands: CommandRegistry, path: string) {
  * @returns A promise that resolves to a headless workbook or null.
  */
 export async function create(options: {
-  draft: INotebookContent;
   factory: NotebookModelFactory;
   manager: ServiceManager.IManager;
+  notebook: INotebookContent;
   path: string;
-}): Promise<Headless | null> {
-  const { draft, factory, manager } = options;
+}): Promise<boolean> {
+  const { notebook, factory, manager } = options;
   const { contents } = manager;
   const ext = '.ipynb';
   const path = PathExt.dirname(options.path);
   const type = 'notebook';
   let context: Context<INotebookModel> | null = null;
   try {
-    const created = await contents.newUntitled({ ext, path, type });
-    const workbook = await contents.rename(created.path, options.path)
-    context = new Context({ manager, factory, path: workbook.path });
+    const untitled = await contents.newUntitled({ ext, path, type });
+    const renamed = await contents.rename(untitled.path, options.path)
+    context = new Context({ manager, factory, path: renamed.path });
     await context.initialize(true);
     await context.ready;
-    context.model.sharedModel.fromJSON(draft);
+    context.model.sharedModel.fromJSON(notebook);
     await context.save();
-    return { content: null, context };
+    context.dispose();
+    return true;
   } catch (error) {
     console.warn('create error', error);
-    context?.dispose();
-    return null;
   }
+  context?.dispose();
+  return false;
 }
 
 export async function folder(
@@ -84,10 +78,10 @@ export async function mkdir(
 }
 
 export async function request(
-  handle: Credentials,
+  handle: Workbook.Credentials,
   factory: NotebookModelFactory,
   manager: ServiceManager.IManager
-): Promise<Headless | null> {
+): Promise<Workbook.Headless | null> {
   const { path } = handle;
   const context = new Context({ manager, factory, path });
   const workbook = { content: null, context };

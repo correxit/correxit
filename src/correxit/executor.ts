@@ -22,7 +22,7 @@ export async function initialize(
   ): ReturnType<typeof initialize> => {
     try {
       if (kernel) {
-        const live = await kernel.restart().then(() => true).catch(() => false);
+        const live = await kernel.restart().then(() => true).catch(_ => false);
         if (!live) {
           await kernel?.shutdown().catch(_ => kernel?.dispose());
           kernel = undefined;

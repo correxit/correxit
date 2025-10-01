@@ -1,3 +1,4 @@
+import { INotebookContent } from '@jupyterlab/nbformat';
 import { Token } from '@lumino/coreutils';
 import { Rubric, Workbook } from '.';
 import { CommandIDs as COMMAND_IDS } from './commands';
@@ -5,6 +6,13 @@ import * as description from './description';
 import { Icons as ICONS } from './icons';
 
 export namespace Correxit {
+  export type Consumer = (output: {
+    log: Emitter.Log;
+    path: string;
+    rubric: Rubric.Unlocked;
+    stream: Propagator;
+  }) => Promise<void>;
+
   /**
    * A message emitter for notifications and other Correxit UI updates.
    */
@@ -12,23 +20,21 @@ export namespace Correxit {
 
   export namespace Emitter {
     /**
-     * An notification/message emission with slots to populated interpolations.
+     * An notification/message emission with slots to populate interpolations.
      */
     export type Emission = { slots: (string | number)[]; type: string; };
 
-    export async function after(emitter: Emitter, action: () => void) {
-      for await (const _ of emitter) {
-        void _;
-      }
-      action();
-    }
+    export type Log = (payload: Emitter.Emission) => Promise<void>;
   }
 
-  export type Propagator = {
-    assign: (workbook: Workbook, assignment: Rubric.Assignment)
-      => Promise<void>;
-    location: (workbook: Workbook)
-      => Promise<string>;
+  /**
+   * An async propagator of assigned workbook content.
+   */
+  export type Propagator = (location: { base: string; pwd: string }) =>
+    Promise<AsyncIterable<Propagator.Notebook>>;
+
+  export namespace Propagator {
+    export type Notebook = { notebook: INotebookContent; path: string; };
   }
 
   /**
@@ -38,9 +44,14 @@ export namespace Correxit {
 
   export const CommandIDs = COMMAND_IDS;
 
+  export const CONSUMER = 'correxit:consumer';
+
+  export const Consumer = new Token<Consumer>(CONSUMER);
+
   export const CORRECTOR = 'correxit:corrector';
 
   export const DESCRIPTION = {
+    CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
     SOURCE: description.SOURCE,
     UI: description.UI
@@ -52,9 +63,9 @@ export namespace Correxit {
 
   export const SOURCE = 'correxit:source';
 
-  export const UI = 'correxit:ui';
-
   export const Source = new Token<Source>(SOURCE);
 
   export const TOOLBARS = 'correxit:toolbars';
+
+  export const UI = 'correxit:ui';
 }

@@ -1,7 +1,7 @@
 import { MainAreaWidget } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { IStateDB } from '@jupyterlab/statedb';
+import { IStateDB, StateDB } from '@jupyterlab/statedb';
 import {
   CommandToolbarButton,
   ReactWidget,
@@ -19,7 +19,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
   constructor({ commands, db, path, trans }: CorrectorWidget.IOptions) {
     super({ content: new Content({ commands, path, trans }) });
     this.commands = commands;
-    this.db = db;
+    this.db = db || new StateDB();
     this.trans = trans;
     this.addClass('correxit-corrector-widget');
     void this.initialize();
@@ -91,7 +91,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
 export namespace CorrectorWidget {
   export interface IOptions {
     commands: CommandRegistry;
-    db: IStateDB;
+    db: IStateDB | null;
     path: string;
     trans: IRenderMime.TranslationBundle;
   }

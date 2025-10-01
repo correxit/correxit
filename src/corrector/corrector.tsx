@@ -69,31 +69,35 @@ const match = (workbooks: Headless[], path = '') =>
   find(workbooks, ({ context }) => context.path === path) || null;
 
 /**
+ * @returns A merged list workbooks that prioritizes the graded collection.
+ */
+const merge = (workbooks: Headless[], grades: ReturnType<typeof collate>) =>
+  workbooks.map(workbook => {
+    const { path } = workbook.context;
+    return path in grades ? grades[path].workbook : workbook;
+  });
+
+/**
  * Open a workbook rubric quietly.
  */
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Corrector(props: Corrector.Props) {
   const { commands, correct, notify, passphrase, path, trans } = props;
-  const batch = correct ? Corrector.CommandIDs.batch : '';
+  const grade = correct ? Corrector.CommandIDs.batch : '';
   const scan = Corrector.CommandIDs.scan;
-  const handle = { passphrase, path };
-  const skip = correct ? { path } : null;
-  const scanner = useCommand<Headless>(commands, scan, skip || handle);
-  const grader = useCommand<[Grade, Headless]>(commands, batch, handle);
-  const [workbooks, scanned] = scanner;
-  const [grades, graded] = grader;
+  const handle = correct ? { path } : { passphrase, path };
+  const auth = { passphrase, path };
+  const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
+  const [grades, graded] = useCommand<[Grade, Headless]>(commands, grade, auth);
   const collated = collate(grades);
-  const merged = workbooks.map(workbook => {
-    const { path } = workbook.context;
-    return path in collated ? collated[path].workbook : workbook;
-  });
+  const merged = merge(workbooks, collated);
   const [selection, setSelection] = useState('');
-  const [workbook, setWorkbook] = useState(match(merged, selection));
+  const [workbook, setWorkbook] = useState(() => match(merged, selection));
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => () => dispose(workbooks), [scanned]);
   useEffect(() => () => dispose(grades.map(([_, file]) => file)), [graded]);
-  useEffect(() => setWorkbook(match(merged, selection)), [selection]);
+  useEffect(() => setWorkbook(match(merged, selection)), [merged, selection]);
   useEffect(() => emit(commands, workbook), [workbook]);
   return (
     <table className="correxit-corrector">

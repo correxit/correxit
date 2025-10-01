@@ -27,7 +27,7 @@ export function addCommands(
   app: JupyterFrontEnd,
   dependencies: {
     browser: IDefaultFileBrowser | null;
-    db: IStateDB;
+    db: IStateDB | null;
     documents: IDocumentManager;
     tracker: WidgetTracker<Corrector.Widget>;
     trans: IRenderMime.TranslationBundle;

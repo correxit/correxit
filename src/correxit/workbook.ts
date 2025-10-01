@@ -1,24 +1,18 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
-import { PathExt } from '@jupyterlab/coreutils';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
-import { INotebookContent } from '@jupyterlab/nbformat';
 import {
   INotebookModel,
   Notebook,
-  NotebookActions,
-  NotebookModelFactory
+  NotebookActions
 } from '@jupyterlab/notebook';
 import {
   Kernel,
   KernelMessage,
-  KernelSpec,
-  ServiceManager
+  KernelSpec
 } from '@jupyterlab/services';
 import { findIndex, range, reduce } from '@lumino/algorithm';
-import { Poll } from '@lumino/polling';
 import { Correxit, Rubric } from '.';
 import * as executor from './executor';
-import * as io from './io';
 import * as security from './security';
 
 /**
@@ -450,78 +444,6 @@ export namespace Workbook {
       throw error;
     }
   }
-
-  export function propagate(options: {
-    factory: NotebookModelFactory;
-    location: { base: string; pwd: string; };
-    manager: ServiceManager.IManager;
-    workbook: Workbook;
-  }): Correxit.Emitter {
-    const { factory, location: { base, pwd }, manager, workbook } = options;
-    const emitter = new Poll<Correxit.Emitter.Emission>({
-      auto: false,
-      frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
-      factory: async () => ({ type: 'never', slots: [] })
-    });
-    const log = async (payload: Correxit.Emitter.Emission) => {
-      await emitter.schedule({ payload });
-      await emitter.refresh();
-      await emitter.tick;
-    };
-    const rubric = open(workbook, true);
-    if (!rubric || rubric.locked) {
-      log({ type: 'error', slots: ['rubric'] }).then(() => emitter.dispose());
-      return emitter;
-    }
-
-    const { assignment: { roster }, key } = rubric;
-    const { sign } = Rubric.Assignment;
-    const canonical = async (workbook: Workbook): Promise<INotebookContent> => {
-      const file = PathExt.basename(workbook.context.path);
-      await unlock(workbook, key);
-      await log({ type: 'unlocked', slots: [file] });
-      await lock(workbook);
-      await log({ type: 'locked', slots: [file] });
-      return workbook.context.model.sharedModel.toJSON();
-    };
-    const reassign = async (draft: INotebookContent, assignee: string) => {
-      const rubric = draft.metadata['correxit'] as Rubric.Locked;
-      rubric.assignment.assignee = assignee;
-      rubric.assignment.signature = await sign({ assignee, roster }, key);
-    };
-    const save = ({ context }: Workbook) => context.save().then(() => true)
-      .catch(() => false).finally(() => context.dispose());
-    (async (original: INotebookContent, progress = 0) => {
-      let template: INotebookContent | null = null;
-      await log({ type: '', slots: [pwd] });
-      for (const assignee of roster) {
-        const draft = JSON.parse(JSON.stringify(template || original));
-        await log({ type: 'separator', slots: [] });
-
-        const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
-        const path = PathExt.join(pwd, file);
-        await log({ type: 'progress', slots: [++progress, roster.length] });
-        await reassign(draft, assignee);
-        await log({ type: 'assigned', slots: [assignee] });
-
-        const created = await io.create({ draft, factory, manager, path });
-        if (!created) {
-          await log({ type: 'create-error', slots: [path] });
-          continue;
-        }
-        await log({ type: 'created', slots: [file] });
-        template ||= await canonical(created);
-        await save(created)
-          ? await log({ type: 'saved', slots: [file] })
-          : await log({ type: 'save-error', slots: [path] });
-      }
-      await log({ type: 'separator', slots: [] });
-      await log({ type: 'success', slots: [`${roster.length}`] });
-    })(workbook.context.model.sharedModel.toJSON())
-      .catch(error => void log({ type: 'error', slots: [`${error}`] }))
-      .finally(() => emitter.dispose());
-    return emitter;
-  };
 
   /**
    * Remove a cell from a workbook's rubric.

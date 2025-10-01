@@ -1,0 +1,124 @@
+import { PathExt } from '@jupyterlab/coreutils';
+import { INotebookContent } from '@jupyterlab/nbformat';
+import { filter, findIndex } from '@lumino/algorithm';
+import { Poll } from '@lumino/polling';
+import { Correxit, Rubric, Workbook } from '.';
+import * as security from './security';
+
+export function invoke({ consumer, workbook }: {
+  consumer: Correxit.Consumer;
+  workbook: Workbook;
+}): Correxit.Emitter {
+  const rubric = Workbook.open(workbook, true);
+  const [emitter, log, end] = logger();
+  if (!rubric || rubric.locked) {
+    log({ type: 'error', slots: ['invalid rubric'] }).then(end);
+    return emitter;
+  }
+  propagate({ consumer, log, rubric, workbook })
+    .catch(error => void log({ type: 'error', slots: [`${error}`] }))
+    .finally(end);
+  return emitter;
+};
+
+async function encrypt(
+  notebook: INotebookContent,
+  reference: string,
+  key: string
+): Promise<void> {
+  const index = findIndex(notebook.cells, ({ id }) => id === reference);
+  if (!key || index === -1) {
+    throw new Error('encrypt error');
+  }
+
+  const cell = notebook.cells[index];
+  const source = Array.isArray(cell.source)
+    ? cell.source.join('\n')
+    : cell.source;
+  const encrypted = await security.encrypt(source, key);
+  const jupyter = cell.metadata.jupyter || {};
+  cell.cell_type = 'raw';
+  cell.metadata.editable = false;
+  cell.metadata.jupyter = { ...jupyter, 'source_hidden': true };
+  cell.source = encrypted;
+  delete cell.metadata.trusted;
+}
+
+function logger(): [
+  emitter: Correxit.Emitter,
+  log: (payload: Correxit.Emitter.Emission) => Promise<void>,
+  end: () => void
+] {
+  const emitter = new Poll<Correxit.Emitter.Emission>({
+    auto: false,
+    frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
+    factory: async () => ({ type: 'never', slots: [] })
+  });
+  const log = async (payload: Correxit.Emitter.Emission) => {
+    await emitter.schedule({ payload });
+    await emitter.refresh();
+    await emitter.tick;
+  };
+  const end = () => emitter.dispose();
+  return [emitter, log, end];
+}
+
+async function propagate({ consumer, log, rubric, workbook }: {
+  consumer: Correxit.Consumer;
+  log: (payload: Correxit.Emitter.Emission) => Promise<void>;
+  rubric: Rubric.Unlocked;
+  workbook: Workbook;
+}): Promise<void> {
+  const { assignment: { roster }, key } = rubric;
+  const original = workbook.context.model.sharedModel.toJSON();
+  const path = workbook.context.path;
+  async function* loop(
+    template: INotebookContent,
+    location: { base: string; pwd: string }
+  ) {
+    const { base, pwd } = location;
+    for (const assignee of roster) {
+      const notebook: INotebookContent = JSON.parse(JSON.stringify(template));
+      const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
+      const path = PathExt.join(pwd, file);
+      await log({ type: 'separator', slots: [] });
+      await reassign({ assignee, key, notebook, roster });
+      await log({ type: 'assigned', slots: [assignee] });
+      yield { notebook, path };
+    }
+  }
+  const stream = async (location: { base: string; pwd: string }) =>
+    loop(await template(original, rubric, log), location);
+  await consumer({ log, path, rubric, stream });
+}
+
+async function reassign({ assignee, key, notebook, roster }: {
+  assignee: string;
+  key: string;
+  notebook: INotebookContent;
+  roster: string[];
+}) {
+  const { sign } = Rubric.Assignment;
+  const rubric = notebook.metadata['correxit'] as Rubric.Locked;
+  (rubric as Rubric.Locked & { accessed: number }).accessed = Date.now();
+  rubric.assignment.assignee = assignee;
+  rubric.assignment.signature = await sign({ assignee, roster }, key);
+}
+
+async function template(
+  decrypted: INotebookContent,
+  rubric: Rubric.Unlocked,
+  log: (payload: Correxit.Emitter.Emission) => Promise<void>
+): Promise<INotebookContent> {
+  const encrypted: INotebookContent = JSON.parse(JSON.stringify(decrypted));
+  const cells = rubric.secret.cells;
+  const referrable =
+    ({ is }: Rubric.Cell) => is === 'comparable' || is === 'correctable';
+  for (const id of filter(Object.keys(cells), id => referrable(cells[id]))) {
+    const [reference] = cells[id].reference!;
+    await encrypt(encrypted, reference, rubric.key);
+    await log({ type: 'encrypted', slots: [reference] });
+  }
+  await log({ type: 'separator', slots: [] });
+  return encrypted;
+}

@@ -9,6 +9,7 @@ import { Correxit, Rubric, Workbook } from '..';
 import { Corrector } from '../corrector';
 import * as input from './input';
 import * as io from './io';
+import * as propagator from './propagator';
 import * as security from './security';
 import * as state from './state';
 
@@ -36,21 +37,22 @@ type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
 const {
-  add, assign, convert, correct, lock, propagate, remove, reset, toggle, unlock
+  add, assign, convert, correct, lock, remove, reset, toggle, unlock
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
   app: JupyterFrontEnd,
   dependencies: {
-  schedule: (workbook: Workbook | null) => void;
-  source: Correxit.Source;
-  trans: IRenderMime.TranslationBundle;
+    consumer: Correxit.Consumer;
+    schedule: (workbook: Workbook | null) => void;
+    source: Correxit.Source;
+    trans: IRenderMime.TranslationBundle;
   }
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
-  const { schedule, source, trans } = dependencies;
+  const { consumer, schedule, source, trans } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) => io.request(handle, factory, manager);
@@ -270,8 +272,15 @@ export function addCommands(
   }));
   disposables.push(commands.addCommand(CommandIDs.emit, {
     label: trans.__('Schedule one Correxit source emission'),
-    execute: () => (once => (emission: Workbook | null) =>
-      void (once &&= Boolean(schedule(emission))))(true)
+    execute: () => (fired => {
+      return (emission: Workbook | null) => {
+        if (fired) {
+          return;
+        }
+        fired = true;
+        schedule(emission);
+      };
+    })(false)
   }));
   disposables.push(commands.addCommand(CommandIDs.fetch, {
     label: trans.__('Fetch a headless Correxit workbook for a given path'),
@@ -348,16 +357,8 @@ export function addCommands(
         return (async function*() {})();
       }
 
-      const { path } = workbook.context;
-      const base = PathExt.basename(path, '.ipynb');
-      const parent = PathExt.dirname(path);
-      const { after } = Correxit.Emitter;
       try {
-        const potential = await io.folder(manager, parent, base);
-        const directory = await io.mkdir(manager, parent, potential);
-        const location = { base, pwd: directory.path };
-        const output = propagate({ factory, location, manager, workbook });
-        after(output, () => io.cd(commands, directory.path));
+        const output = propagator.invoke({ consumer, workbook });
         return translate(output, trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
@@ -516,16 +517,13 @@ async function* translate(
     return ({
       '': slots.join(' '),
       'assigned': trans.__('Assigned to %1', ...slots),
-      'created': trans.__('Created %1', ...slots),
       'create-error': trans.__('Create ERROR %1', ...slots),
+      'encrypted': trans.__('Encrypted cell %1', ...slots),
       'error': trans.__('ERROR %1', ...slots),
-      'locked': trans.__('Locked %1', ...slots),
       'progress': trans.__('%1 of %2', ...slots),
       'saved': trans.__('Saved %1', ...slots),
-      'save-error': trans.__('Save ERROR %1', ...slots),
       'separator': '------------',
-      'success': trans.__('Finished! (roster: %1}', ...slots),
-      'unlocked': trans.__('Unlocked %1', ...slots)
+      'success': trans.__('Finished! (roster: %1}', ...slots)
     })[type] || '';
   };
   for await (const { payload } of emitter) {

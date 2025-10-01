@@ -11,32 +11,26 @@ import { Correxit, Rubric } from '..';
 import { useCommand } from '../correxit/use-command';
 
 type Assignment = Rubric.Assignment;
-
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-export const Assignment: React.FC<{
-  accessed: number;
-  assignment: Assignment | null;
-  commands: CommandRegistry;
-  locked: boolean;
-  trans: TranslationBundle;
-}> = props => {
-  if (!props.assignment) {
-    return <></>;
-  }
+const { assign } = Correxit.CommandIDs;
 
-  const { accessed, commands, locked, trans } = props;
-  const [assignment, setAssignment] = useState<Assignment>(props.assignment);
+export const Assignment: React.FC<{
+  commands: CommandRegistry;
+  rubric: Rubric;
+  trans: TranslationBundle;
+}> = ({ commands, rubric, trans }) => {
+  const { accessed, locked } = rubric;
+  const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
   const toggle = (to: 'assignee' | 'roster', updated: Assignment) => {
     setAssignment(updated);
     setView(to || view);
   };
-  useEffect(() => {
-    if (!locked) {
-      commands.execute(Correxit.CommandIDs.assign, assignment).catch(_ => {});
-    }
-  }, [assignment]);
+  const reassign = async (assignment: Assignment, locked: boolean) =>
+    void (!locked && commands.execute(assign, assignment).catch(_ => {}));
+  useEffect(() => setAssignment(rubric.assignment), [rubric]);
+  useEffect(() => void reassign(assignment, locked), [assignment]);
   return (
     <div className="correxit-assignment">
       {view === 'assignee' ? (

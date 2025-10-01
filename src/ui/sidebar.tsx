@@ -84,9 +84,6 @@ const Header: React.FC<{
   }
 
   const rubric = open(workbook);
-  const accessed = rubric?.accessed ?? Date.now();
-  const assignment = rubric?.assignment ?? null;
-  const locked = rubric?.locked ?? true;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   return (
     <section className="correxit-sidebar-header">
@@ -95,7 +92,7 @@ const Header: React.FC<{
         <CommandToolbarButtonComponent commands={commands} id={lock} />
         <CommandToolbarButtonComponent commands={commands} id={unlock} />
       </div>
-      <Assignment {...{ accessed, assignment, commands, locked, trans }} />
+      {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <CommandToolbarButtonComponent commands={commands} id={correct} />
     </section>
