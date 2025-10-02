@@ -520,6 +520,7 @@ async function* translate(
       'create-error': trans.__('Create ERROR %1', ...slots),
       'encrypted': trans.__('Encrypted cell %1', ...slots),
       'error': trans.__('ERROR %1', ...slots),
+      'mkdir': trans.__('Created directory %1', ...slots),
       'progress': trans.__('%1 of %2', ...slots),
       'saved': trans.__('Saved %1', ...slots),
       'separator': '------------',
