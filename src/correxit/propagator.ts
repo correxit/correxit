@@ -98,11 +98,11 @@ async function reassign({ assignee, key, notebook, roster }: {
   notebook: INotebookContent;
   roster: string[];
 }) {
-  const { sign } = Rubric.Assignment;
-  const rubric = notebook.metadata['correxit'] as Rubric.Locked;
-  (rubric as Rubric.Locked & { accessed: number }).accessed = Date.now();
-  rubric.assignment.assignee = assignee;
-  rubric.assignment.signature = await sign({ assignee, roster }, key);
+  const metadata = notebook.metadata['correxit'] as Rubric.Locked;
+  const signature = await Rubric.Assignment.sign({ assignee, roster }, key);
+  (metadata as Rubric.Locked & { accessed: number }).accessed = Date.now();
+  (metadata.assignment.assignee as string) = assignee;
+  (metadata.assignment.signature as string) = signature;
 }
 
 async function template(

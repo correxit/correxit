@@ -14,7 +14,6 @@ import {
   NotebookPanel
 } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { IStateDB } from '@jupyterlab/statedb';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
 import { Corrector } from './corrector';
@@ -69,8 +68,7 @@ export const corrector: JupyterFrontEndPlugin<void> = {
     ICommandPalette,
     ILayoutRestorer,
     INotebookTree,
-    ITranslator,
-    IStateDB
+    ITranslator
   ],
   autoStart: true,
   ...((deactivator?: () => void) => ({
@@ -81,20 +79,23 @@ export const corrector: JupyterFrontEndPlugin<void> = {
       palette: ICommandPalette | null,
       restorer: ILayoutRestorer | null,
       tree: INotebookTree | null,
-      translator: ITranslator | null,
-      db: IStateDB | null
+      translator: ITranslator | null
     ) => {
-      const name = Correxit.CORRECTOR;
+      const name = 'correxit-corrector';
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const { launch } = Corrector.CommandIDs;
-      const dependencies = { browser, db, documents, tracker, trans, tree };
+      const dependencies = { browser, documents, tracker, trans, tree };
       const added = Corrector.addCommands(app, dependencies);
       if (palette) {
         palette.addItem({ category: 'correxit', command: launch });
       }
       if (restorer) {
-        restorer.restore(tracker, { command: launch, name: () => name });
+        restorer.restore(tracker, {
+          command: launch,
+          name: ({ id }) => id,
+          args: ({ path }) => ({ path })
+        });
       }
       deactivator = () => {
         added.forEach(command => command.dispose());

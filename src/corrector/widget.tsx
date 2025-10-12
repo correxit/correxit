@@ -1,7 +1,6 @@
 import { MainAreaWidget } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { IStateDB, StateDB } from '@jupyterlab/statedb';
 import {
   CommandToolbarButton,
   ReactWidget,
@@ -13,13 +12,10 @@ import React, { useRef, useState } from 'react';
 import { Correxit } from '..';
 import { Corrector } from '.';
 
-const PATH_KEY = 'correxit-corrector:path';
-
 export class CorrectorWidget extends MainAreaWidget<Content> {
-  constructor({ commands, db, path, trans }: CorrectorWidget.IOptions) {
+  constructor({ commands, path, trans }: CorrectorWidget.IOptions) {
     super({ content: new Content({ commands, path, trans }) });
     this.commands = commands;
-    this.db = db || new StateDB();
     this.trans = trans;
     this.addClass('correxit-corrector-widget');
     void this.initialize();
@@ -31,15 +27,13 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
   set path(path: string) {
     this.content.set({ correct: false, path: PathExt.normalize(path) });
     this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
-    void this.db.save(PATH_KEY, path);
   }
 
   protected commands: CommandRegistry;
-  protected db: IStateDB;
   protected trans: IRenderMime.TranslationBundle;
 
   protected async initialize() {
-    const { commands, content, db, toolbar, trans } = this;
+    const { commands, content, toolbar, trans } = this;
     let status = ReactWidget.create(<></>);
     const notify = (updates: { graded: boolean; scanned: boolean }) => {
       const { graded, scanned } = updates;
@@ -80,18 +74,12 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     toolbar.addItem('correct', correct);
     toolbar.addItem('status', status);
     content.set({ notify });
-
-    const path = (await db.fetch(PATH_KEY)) as string;
-    if (path) {
-      this.path = path;
-    }
   }
 }
 
 export namespace CorrectorWidget {
   export interface IOptions {
     commands: CommandRegistry;
-    db: IStateDB | null;
     path: string;
     trans: IRenderMime.TranslationBundle;
   }

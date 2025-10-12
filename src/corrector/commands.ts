@@ -5,7 +5,6 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
-import { IStateDB } from '@jupyterlab/statedb';
 import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
 import { Correxit, Workbook } from '..';
@@ -27,7 +26,6 @@ export function addCommands(
   app: JupyterFrontEnd,
   dependencies: {
     browser: IDefaultFileBrowser | null;
-    db: IStateDB | null;
     documents: IDocumentManager;
     tracker: WidgetTracker<Corrector.Widget>;
     trans: IRenderMime.TranslationBundle;
@@ -36,7 +34,7 @@ export function addCommands(
 ) {
   const { commands, shell } = app;
   const manager = app.serviceManager;
-  const { browser, db, tracker, tree } = dependencies;
+  const { browser, tracker, tree } = dependencies;
   const { batch, cd, launch, refresh, scan } = CommandIDs;
   const { trans } = dependencies;
   const fetch = (handle: Credentials) =>
@@ -96,7 +94,7 @@ export function addCommands(
       execute: ({ path }: { path?: string }) => {
         if (!widget || widget.isDisposed) {
           path ||= browser?.model.path || '.';
-          widget = new Corrector.Widget({ commands, db, path, trans });
+          widget = new Corrector.Widget({ commands, path, trans });
           widget.id = 'correxit-corrector-widget';
           widget.title.label = trans.__('Correxit Corrector');
           widget.title.closable = true;

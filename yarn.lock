@@ -2695,7 +2695,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jupyterlab/statedb@npm:^4.4.6, @jupyterlab/statedb@npm:^4.4.9, @jupyterlab/statedb@npm:~4.4.9":
+"@jupyterlab/statedb@npm:^4.4.9, @jupyterlab/statedb@npm:~4.4.9":
   version: 4.4.9
   resolution: "@jupyterlab/statedb@npm:4.4.9"
   dependencies:
@@ -5160,7 +5160,6 @@ __metadata:
     "@jupyterlab/rendermime": ^4.4.3
     "@jupyterlab/services": ^7.0.0
     "@jupyterlab/settingregistry": ^4.0.0
-    "@jupyterlab/statedb": ^4.4.6
     "@jupyterlab/testutils": ^4.0.0
     "@jupyterlab/translation": ^4.4.3
     "@jupyterlab/ui-components": ^4.4.3

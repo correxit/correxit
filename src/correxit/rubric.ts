@@ -1,15 +1,23 @@
-import { KernelMessage } from '@jupyterlab/services';
+import { ICodeCellModel } from '@jupyterlab/cells';
+import { Kernel, KernelMessage } from '@jupyterlab/services';
 import { filter, find, reduce } from '@lumino/algorithm';
 import * as security from './security';
 
+/**
+ * A rubric is the specification that describes how to augment a Jupyter
+ * notebook with the functionality of a Correxit workbook, including shared and
+ * secret cell correction configuration, assignment metadata, etc.
+ *
+ * Rubrics are immutable.
+ */
 export type Rubric = Rubric.Locked | Rubric.Unlocked;
 
 export namespace Rubric {
-  export type Assignment = {
+  export type Assignment = Readonly<{
     assignee: string;
     roster: string[];
     signature: string;
-  };
+  }>;
 
   type Base = Readonly<{
     accessed: number;
@@ -119,6 +127,38 @@ export namespace Rubric {
       return expected.some(message => message.header.msg_type === 'error') ?
         [INCORRECT, 'error-correct'] : [CORRECT, 'success'];
     }
+
+    /**
+     * Execute one cell's source in a kernel.
+     *
+     * @param kernel - the kernel to use.
+     * @param cell - the model of the cell to execute.
+     *
+     * @returns an array of of cell outputs.
+     */
+    export async function execute(
+      { sharedModel }: ICodeCellModel,
+      kernel: Kernel.IKernelConnection
+    ): Promise<Output[]> {
+      const outputs: Output[] = [];
+      const code = sharedModel.getSource();
+      if (!code.length) {
+        return outputs;
+      }
+
+      const dispose = true;
+      const future = kernel.requestExecute({ code }, dispose);
+      future.onIOPub = (message: KernelMessage.IIOPubMessage) => {
+        if (message.header.msg_type === 'execute_result' ||
+            message.header.msg_type === 'display_data' ||
+            message.header.msg_type === 'stream' ||
+            message.header.msg_type === 'error') {
+          outputs.push(message as Output);
+        }
+      };
+      await future.done;
+      return outputs;
+    }
   }
 
   export type Locked = Base &
@@ -128,7 +168,9 @@ export namespace Rubric {
 
   export type Score = Readonly<[numerator: number, denominator: number]>;
 
-  export type Section = Readonly<{ cells: { [id: string]: Cell; }; }>;
+  export type Section = Readonly<{
+    cells: Readonly<{ [id: string]: Cell; }>;
+  }>;
 
   export type Unlocked = Base &
     Readonly<{ key: string; locked: false; secret: Section; }>;
@@ -197,18 +239,32 @@ export namespace Rubric {
     Number.POSITIVE_INFINITY
   ]);
 
+  export function add(rubric: Unlocked, cell: Cell): Unlocked {
+    if (has(rubric, cell.id, true)) {
+      throw new Error(`add error, rubric already has cell id ${cell.id}`);
+    }
+    return {
+      ...rubric,
+      accessed: Date.now(),
+      secret: cell.shared
+        ? { cells: { ...rubric.secret.cells } }
+        : { cells: { ...rubric.secret.cells, [cell.id]: cell  } },
+      shared: cell.shared
+        ? { cells: { ...rubric.shared.cells, [cell.id]: cell } }
+        : { cells: { ...rubric.shared.cells } }
+    };
+  }
+
   export async function assign(
     { key, ...rubric }: Unlocked,
     assignee = '',
     roster: string[] = []
   ): Promise<Rubric.Unlocked> {
-    function unique(list: string[]): string[] {
-      return list.reduce<[string[], { [key: string]: 1 }]>(
+    const unique = (list: string[]): string[] =>
+      list.reduce<[string[], { [key: string]: true }]>(
         ([unique, keys], key) => (
-          [keys[key] ? unique : [...unique, key], { ...keys, [key]: 1 }]
+          [keys[key] ? unique : [...unique, key], { ...keys, [key]: true }]
         ), [[], {}])[0];
-    }
-
     const assignment = { assignee, roster: unique(roster), signature: '' };
     assignment.signature = await Assignment.sign(assignment, key);
     await Assignment.validate({ assignment, key });
@@ -302,6 +358,27 @@ export namespace Rubric {
       throw new Error('invalid rubric, invalid shared section')
     }
     return { accessed, assignment, id, key, locked, secret, shared };
+  }
+
+  export function remove(rubric: Unlocked, id: string): Unlocked;
+  export function remove(rubric: Locked, id: string): Locked;
+  export function remove(rubric: Rubric, id: string): Rubric;
+  export function remove(rubric: Rubric, id: string): Rubric {
+    const cell = get(rubric, id);
+    const drop = (section: Section | string, cell: Cell): Section | string => {
+      if (typeof section === 'string') {
+        return section;
+      }
+      const { [cell.id]: _, ...rest } = section.cells;
+      void _; // This is the removed cell.
+      return { cells: rest }
+    };
+    if (!cell){
+      return rubric;
+    }
+    const secret = cell.shared ? rubric.secret : drop(rubric.secret, cell);
+    const shared = cell.shared ? drop(rubric.shared, cell) : rubric.shared;
+    return { ...rubric, accessed: Date.now(), secret, shared } as Rubric;
   }
 
   /**

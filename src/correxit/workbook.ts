@@ -5,14 +5,10 @@ import {
   Notebook,
   NotebookActions
 } from '@jupyterlab/notebook';
-import {
-  Kernel,
-  KernelMessage,
-  KernelSpec
-} from '@jupyterlab/services';
+import { KernelSpec } from '@jupyterlab/services';
 import { findIndex, range, reduce } from '@lumino/algorithm';
 import { Correxit, Rubric } from '.';
-import * as executor from './executor';
+import * as kernels from './kernels';
 import * as security from './security';
 
 /**
@@ -142,37 +138,6 @@ export namespace Workbook {
         NotebookActions.deselectAll(workbook.content);
       }
     }
-
-    /**
-     * Execute one cell's source in a kernel.
-     *
-     * @param kernel - the kernel to use.
-     * @param cell - the model of the cell to execute.
-     *
-     * @returns an array of of cell outputs.
-     */
-    export async function execute(
-      { sharedModel }: ICodeCellModel,
-      kernel: Kernel.IKernelConnection
-    ): Promise<Rubric.Cell.Output[]> {
-      const outputs: Rubric.Cell.Output[] = [];
-      const code = sharedModel.getSource();
-      if (!code.length) {
-        return outputs;
-      }
-
-      const future = kernel.requestExecute({ code });
-      future.onIOPub = (message: KernelMessage.IIOPubMessage) => {
-        if (message.header.msg_type === 'execute_result' ||
-            message.header.msg_type === 'display_data' ||
-            message.header.msg_type === 'stream' ||
-            message.header.msg_type === 'error') {
-          outputs.push(message as Rubric.Cell.Output);
-        }
-      };
-      await future.done;
-      return outputs;
-    }
   }
 
   const quiet = true;
@@ -191,12 +156,10 @@ export namespace Workbook {
     cell: Rubric.Cell
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    const deep = true;
-    if (!rubric || rubric.locked || Rubric.has(rubric, cell.id, deep)) {
-      throw new Error('add error');
+    if (!rubric || rubric.locked) {
+      throw new Error('add error, invalid rubric');
     }
-    (cell.shared ? rubric.shared : rubric.secret).cells[cell.id] = cell;
-    return update(workbook, { ...rubric, accessed: Date.now() });
+    return update(workbook, Rubric.add(rubric, cell));
   }
 
   export async function assign(
@@ -213,6 +176,9 @@ export namespace Workbook {
 
   /**
    * Audits a workbook's rubric, prunes unknown or invalid cells. Never throws.
+   *
+   * #### Notes
+   * If the rubric is locked, it is left unmodified.
    */
   export function audit(workbook: Workbook, rubric: Rubric | null): Audit {
     if (!rubric) {
@@ -239,10 +205,15 @@ export namespace Workbook {
           cell: { ...cells[id] },
           reason: known[id] ? 'invalid cell' : 'unknown cell'
         });
-        delete cells[id];
       }
     };
-    return { ok: true, pruned, rubric: { ...rubric, accessed: Date.now() } };
+    if (pruned.length) {
+      console.warn('audit pruned these rubric cells', pruned);
+      const modified: Rubric = pruned.reduce((rubric, { cell }) =>
+        Rubric.remove(rubric, cell.id), rubric);
+      return { ok: true, pruned, rubric: modified };
+    }
+    return { ok: true, pruned: [], rubric };
   }
 
   /**
@@ -365,14 +336,21 @@ export namespace Workbook {
     }
 
     const outputs: Rubric.Outputs = {};
-    const [kernel, release] = await executor.initialize(context, true);
-    if (!kernel) {
+    const leased = await kernels.lease(workbook);
+    if (!leased) {
       return null;
     }
+
+    const [kernel, release] = leased;
     for (const index of range(stop)) {
       const cell = cells.get(index);
       if (cell.type === 'code') {
-        outputs[cell.id] = await Cell.execute(cell as ICodeCellModel, kernel);
+        try {
+          const { execute } = Rubric.Cell;
+          outputs[cell.id] = await execute(cell as ICodeCellModel, kernel);
+        } catch (error) {
+          console.warn('cell execute error', cell, error);
+        }
       }
     }
     release();
@@ -450,11 +428,10 @@ export namespace Workbook {
    */
   export function remove(workbook: Workbook, id: string): void {
     const rubric = open(workbook, quiet);
-    const cell = rubric && !rubric.locked && Rubric.get(rubric, id);
-    if (cell) {
-      delete (cell.shared ? rubric.shared : rubric.secret).cells[id];
-      update(workbook, { ...rubric, accessed: Date.now() });
+    if (!rubric || rubric.locked) {
+      throw new Error('remove error, invalid rubric');
     }
+    update(workbook, Rubric.remove(rubric, id));
   }
 
   /**
@@ -502,23 +479,25 @@ export namespace Workbook {
    * Updates the workbook metadata with an audited rubric.
    *
    * #### Notes
-   * If an `audit` is passed in, its results are used.
+   * If an `audited` value is passed in, its results are used instead of running
+   * another audit.
    *
    * If `rubric` is `null`, the workbook is reset back to a notebook.
    *
    * If the given rubric passes an audit, which may prune broken cells, it is
-   * written to the notebook metadata `correxit` key if the audit changes the
-   * rubric.
+   * locked and written to the notebook metadata `correxit` key.
+   *
+   * The audited rubric is returned.
    */
   export async function update(
     workbook: Workbook,
     rubric: Rubric.Locked,
-    audit?: Audit
+    audited?: Audit
   ): Promise<Rubric.Locked>;
   export async function update(
     workbook: Workbook,
     rubric: Rubric.Unlocked,
-    audit?: Audit
+    audited?: Audit
   ): Promise<Rubric.Unlocked>;
   export async function update(
     workbook: Workbook,
@@ -527,24 +506,20 @@ export namespace Workbook {
   export async function update(
     workbook: Workbook,
     rubric: Rubric | null,
-    audit = Workbook.audit(workbook, rubric)
+    audited = Workbook.audit(workbook, rubric)
   ): Promise<Rubric | null> {
     const { sharedModel } = workbook.context.model;
     set(workbook, null);
-    if (!audit || !rubric) {
+    if (!audited || !rubric) {
       sharedModel.deleteMetadata('correxit');
       sharedModel.clearUndoHistory();
       return null;
     }
-    if (!audit.ok) {
-      throw new Error(`update error: ${audit.error}`);
+    if (!audited.ok) {
+      throw new Error(`update error: ${audited.error}`);
     }
-    set(workbook, audit.rubric);
-    for (const { cell: { id, is }, reason } of audit.pruned) {
-      // TODO: Emit these warnings as events instead.
-      console.warn(`pruned ${is} (${id} ${reason}) from ${audit.rubric.id}`);
-    }
-    sharedModel.setMetadata('correxit', await Rubric.lock(audit.rubric));
-    return audit.rubric;
+    set(workbook, audited.rubric);
+    sharedModel.setMetadata('correxit', await Rubric.lock(audited.rubric));
+    return audited.rubric;
   }
 }
