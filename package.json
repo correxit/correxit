@@ -161,6 +161,7 @@
             "@typescript-eslint"
         ],
         "rules": {
+            "semi": "error",
             "@typescript-eslint/naming-convention": [
                 "error",
                 {

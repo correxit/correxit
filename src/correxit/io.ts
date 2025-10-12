@@ -30,7 +30,7 @@ export async function create(options: {
   let context: Context<INotebookModel> | null = null;
   try {
     const untitled = await contents.newUntitled({ ext, path, type });
-    const renamed = await contents.rename(untitled.path, options.path)
+    const renamed = await contents.rename(untitled.path, options.path);
     context = new Context({ manager, factory, path: renamed.path });
     await context.initialize(true);
     await context.ready;

@@ -3,7 +3,7 @@ import { Correxit, Rubric, Workbook } from '.';
 const current: { workbook: Workbook | null } = { workbook: null };
 
 export function workbook(update?: Workbook | null) {
-  return current.workbook = update ?? current.workbook
+  return current.workbook = update ?? current.workbook;
 }
 
 export function cell(args: Partial<

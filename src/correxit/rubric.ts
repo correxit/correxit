@@ -323,7 +323,7 @@ export namespace Rubric {
     const { id, key, shared } = rubric;
     const { assignee, roster, signature } = rubric.assignment;
     const encrypted = await security.encrypt(JSON.stringify(roster), key);
-    const assignment = { assignee, roster: [encrypted], signature }
+    const assignment = { assignee, roster: [encrypted], signature };
     const secret = await security.encrypt(JSON.stringify(rubric.secret), key);
     const accessed = Date.now();
     await Assignment.validate(rubric);
@@ -355,7 +355,7 @@ export namespace Rubric {
       throw new Error('invalid rubric, missing secret section');
     }
     if (!(shared && shared.cells)) {
-      throw new Error('invalid rubric, invalid shared section')
+      throw new Error('invalid rubric, invalid shared section');
     }
     return { accessed, assignment, id, key, locked, secret, shared };
   }
@@ -371,7 +371,7 @@ export namespace Rubric {
       }
       const { [cell.id]: _, ...rest } = section.cells;
       void _; // This is the removed cell.
-      return { cells: rest }
+      return { cells: rest };
     };
     if (!cell){
       return rubric;
@@ -388,7 +388,7 @@ export namespace Rubric {
     const { locked, secret, shared } = rubric;
     return locked ?
       Object.keys(shared.cells).length :
-      Object.keys(secret.cells).length + Object.keys(shared.cells).length
+      Object.keys(secret.cells).length + Object.keys(shared.cells).length;
   }
 
   /**

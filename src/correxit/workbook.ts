@@ -255,7 +255,7 @@ export namespace Workbook {
     const { sum, UNSCORED } = Rubric;
     const rubric = open(workbook, quiet);
     if (!rubric) {
-      return { spec: null, score: UNSCORED}
+      return { spec: null, score: UNSCORED};
     }
 
     const result = await execute(workbook, rubric, id);
@@ -286,7 +286,7 @@ export namespace Workbook {
     for (const id in cells) {
       const reference = cells[id].reference?.[0] ?? '';
       if (cells[id].is === 'comparable' || cells[id].is === 'correctable') {
-        await Cell.decrypt(workbook, reference, key)
+        await Cell.decrypt(workbook, reference, key);
       }
     };
     return update(workbook, rubric, audit);

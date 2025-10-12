@@ -66,7 +66,7 @@ export function addCommands(
     const workbook = handle ? await fetch(handle) : state.workbook();
     const rubric = open(workbook);
     return { handle, rubric, workbook };
-  }
+  };
   const disposables = [];
   void state.subscribe(source);
   disposables.push(commands.addCommand(CommandIDs.add, {

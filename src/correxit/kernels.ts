@@ -48,7 +48,7 @@ function lend({ kernel, ready }: Omit<Started, 'timeout'>): Leased | null {
 }
 
 function queue(name: string): Started[] {
-  return pool.get(name) || pool.set(name, []).get(name)!
+  return pool.get(name) || pool.set(name, []).get(name)!;
 }
 
 function release(kernel: Kernel.IKernelConnection): void {

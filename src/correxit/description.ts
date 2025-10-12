@@ -1,4 +1,4 @@
-export const CONSUMER = 'A consumer of propagated Correxit workbook assignments'
+export const CONSUMER = 'A consumer of propagated Correxit workbook assignments';
 
 export const CORRECTOR = 'Correxit Corrector user interface for batch grading workbooks';
 

@@ -54,7 +54,7 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
           clientX <= rect.x + rect.width;
         if (overlap) {
           cell.node.classList.add(TARGET_CELL);
-          cell.node.classList.add(code ? INCLUDE : EXCLUDE)
+          cell.node.classList.add(code ? INCLUDE : EXCLUDE);
           target = cell;
           return;
         }
