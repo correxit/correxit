@@ -148,6 +148,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         prev?.context.model.sharedModel.metadataChanged.disconnect(handler);
         next?.context.fileChanged.connect(handler);
         next?.context.model.sharedModel.metadataChanged.connect(handler);
+        handler();
       };
       const schedule = (workbook: Workbook | null) => {
         if (workbook !== source.state.payload) {

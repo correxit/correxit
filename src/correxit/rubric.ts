@@ -259,7 +259,7 @@ export namespace Rubric {
     { key, ...rubric }: Unlocked,
     assignee = '',
     roster: string[] = []
-  ): Promise<Rubric.Unlocked> {
+  ): Promise<Unlocked> {
     const unique = (list: string[]): string[] =>
       list.reduce<[string[], { [key: string]: true }]>(
         ([unique, keys], key) => (
@@ -306,9 +306,8 @@ export namespace Rubric {
     const { locked, secret, shared } = rubric;
     return locked ?
       !!(shared.cells[id] || (deep && references(shared, id))) :
-      !!(shared.cells[id] || (deep && references(shared, id))) ||
-      !!((secret as Section).cells[id] ||
-        (deep && references(secret as Section, id)));
+      !!(secret.cells[id] || (deep && references(secret, id))) ||
+      !!(shared.cells[id] || (deep && references(shared, id)));
   }
 
   /**
