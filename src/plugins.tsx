@@ -131,9 +131,9 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
         factory: async () => null
       });
+      const { open } = Workbook;
       const quiet = true;
-      let current: Workbook | null = null;
-      const handler = () => {
+      const notify = () => {
         // The sidebar can rely on metadata changes, but the native toolbar
         // buttons only change when their respective command has changed.
         commands.notifyCommandChanged(Correxit.CommandIDs.add);
@@ -144,20 +144,22 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         commands.notifyCommandChanged(Correxit.CommandIDs.unlock);
       };
       const subscribe = (prev: Workbook | null, next: Workbook | null) => {
-        prev?.context.fileChanged.disconnect(handler);
-        prev?.context.model.sharedModel.metadataChanged.disconnect(handler);
-        next?.context.fileChanged.connect(handler);
-        next?.context.model.sharedModel.metadataChanged.connect(handler);
-        handler();
+        prev?.context.fileChanged.disconnect(notify);
+        prev?.context.model.sharedModel.metadataChanged.disconnect(notify);
+        next?.context.fileChanged.connect(notify);
+        next?.context.model.sharedModel.metadataChanged.connect(notify);
+        notify();
       };
-      const schedule = (workbook: Workbook | null) => {
-        if (workbook !== source.state.payload) {
-          Workbook.open(workbook, quiet);
-          subscribe(current, workbook);
-          current = workbook;
-          void source.schedule({ payload: workbook });
+      const schedule: (workbook: Workbook | null) => void = (
+        current => workbook => {
+          if (workbook !== source.state.payload) {
+            open(workbook, quiet);
+            subscribe(current, workbook);
+            current = workbook;
+            void source.schedule({ payload: workbook });
+          }
         }
-      };
+      )(null as Workbook | null);
       const trans = (translator || nullTranslator).load('correxit');
       const dependencies = { consumer, schedule, source, trans };
       const added = addCommands(app, dependencies);
