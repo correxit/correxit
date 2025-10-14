@@ -447,23 +447,17 @@ export namespace Rubric {
   export function toggle(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
     if (!cell) {
-      throw new Error('cannot toggle cell unknown in rubric');
+      throw new Error(`toggle: cell ${id} not found in rubric`);
     }
-    let secret: Section;
-    let shared: Section;
-    if (cell.shared) {
-      const { [id]: referent, ...rest } = rubric.shared.cells;
-      secret = {
-        cells: {...rubric.secret.cells, [id]: { ...referent, shared: false }}
-      };
-      shared = { cells: {...rest} };
-    } else {
-      const { [id]: referent, ...rest } = rubric.secret.cells;
-      secret = { cells: { ...rest } };
-      shared = {
-        cells: { ...rubric.shared.cells, [id]: { ...referent, shared: true } }
-      };
-    }
+
+    const section = cell.shared ? rubric.shared : rubric.secret;
+    const { [id]: swap, ...rest } = section.cells;
+    const secret: Section = cell.shared
+      ? { cells: { ...rubric.secret.cells, [id]: { ...swap, shared: false } } }
+      : { cells: { ...rest } };
+    const shared: Section = cell.shared
+      ? { cells: { ...rest } }
+      : { cells: { ...rubric.shared.cells, [id]: { ...swap, shared: true } } };
     return { ...rubric, accessed: Date.now(), secret, shared };
   }
 
