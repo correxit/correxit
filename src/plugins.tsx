@@ -138,7 +138,8 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         // The sidebar can rely on metadata changes, but the native toolbar
         // buttons only change when their respective command has changed.
         const { add, convert, correct, lock, toggle, unlock } = CommandIDs;
-        for (const command of [add, convert, correct, lock, toggle, unlock]) {
+        const buttons = [add, convert, correct, lock, toggle, unlock];
+        for (const command of buttons) {
           commands.notifyCommandChanged(command);
         }
       };
@@ -147,15 +148,15 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         prev?.context.model.sharedModel.metadataChanged.disconnect(notify);
         next?.context.fileChanged.connect(notify);
         next?.context.model.sharedModel.metadataChanged.connect(notify);
-        notify();
       };
       const schedule: (workbook: Workbook | null) => void = (
-        current => workbook => {
+        previous => workbook => {
           if (workbook !== source.state.payload) {
-            open(workbook, quiet);
-            subscribe(current, workbook);
-            current = workbook;
+            void open(workbook, quiet);
+            subscribe(previous, workbook);
+            previous = workbook;
             void source.schedule({ payload: workbook });
+            notify();
           }
         }
       )(null as Workbook | null);
