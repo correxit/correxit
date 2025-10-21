@@ -83,11 +83,12 @@ const merge = (workbooks: Headless[], grades: ReturnType<typeof collate>) =>
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Corrector(props: Corrector.Props) {
-  const { commands, correct, notify, passphrase, path, trans } = props;
+  const { commands, correct, notify, path, trans, unlock, updateLocked } =
+    props;
   const grade = correct ? Corrector.CommandIDs.batch : '';
   const scan = Corrector.CommandIDs.scan;
-  const handle = correct ? { path } : { passphrase, path };
-  const auth = { passphrase, path };
+  const handle = correct ? { path } : { unlock, path };
+  const auth = { unlock, path };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
   const [grades, graded] = useCommand<[Grade, Headless]>(commands, grade, auth);
   const collated = collate(grades);
@@ -99,6 +100,10 @@ export function Corrector(props: Corrector.Props) {
   useEffect(() => () => dispose(grades.map(([_, file]) => file)), [graded]);
   useEffect(() => setWorkbook(match(merged, selection)), [merged, selection]);
   useEffect(() => emit(commands, workbook), [workbook]);
+  useEffect(() => {
+    updateLocked(merged.every(workbook => open(workbook)?.locked ?? true));
+  });
+
   return (
     <table className="correxit-corrector">
       {merged.map(workbook => {
@@ -107,7 +112,7 @@ export function Corrector(props: Corrector.Props) {
           path in collated ? collated[path].grade : graded ? 'idle' : 'pending';
         const key = `${path}:${JSON.stringify(grade)}`;
         const select = (selection: string) => setSelection(selection);
-        const props = { commands, grade, passphrase, select, trans, workbook };
+        const props = { commands, grade, select, trans, workbook };
         return <Row key={key} selected={path === selection} {...props} />;
       })}
     </table>
@@ -119,9 +124,10 @@ export namespace Corrector {
     commands: CommandRegistry;
     correct: boolean;
     notify: (updates: { graded: boolean; scanned: boolean }) => void;
-    passphrase: string;
+    unlock: boolean;
     path: string;
     trans: TranslationBundle;
+    updateLocked: (locked: boolean) => void;
   };
   export type Widget = CorrectorWidget;
   export const addCommands = ADD_COMMANDS;
@@ -132,7 +138,6 @@ export namespace Corrector {
 const Row: React.FC<{
   commands: CommandRegistry;
   grade: Grade | 'idle' | 'pending';
-  passphrase: string;
   select: (path: string) => void;
   selected: boolean;
   trans: TranslationBundle;

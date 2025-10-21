@@ -5,12 +5,14 @@ import {
   CommandToolbarButton,
   ReactWidget,
   Toolbar,
-  ToolbarButton
+  ToolbarButton,
+  ToolbarButtonComponent
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Correxit } from '..';
 import { Corrector } from '.';
+import { ISignal, Signal } from '@lumino/signaling';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
   constructor({ commands, path, trans }: CorrectorWidget.IOptions) {
@@ -58,9 +60,17 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
       noFocusOnClick: true,
       onClick: () => content.set({ correct: true })
     });
-    const enter = (passphrase: string) =>
-      content.set({ correct: false, passphrase });
-    const passphrase = ReactWidget.create(<Passphrase {...{ enter, trans }} />);
+    const toggleUnlock = (unlock: boolean) =>
+      content.set({ correct: false, unlock });
+    const passphrase = ReactWidget.create(
+      <Unlock
+        {...{
+          trans,
+          toggleUnlock,
+          lockedChanged: this.content.lockedChanged
+        }}
+      />
+    );
     const refresh = new CommandToolbarButton({
       args: { hard: true },
       commands,
@@ -88,7 +98,13 @@ export namespace CorrectorWidget {
 class Content extends ReactWidget {
   constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
     super();
-    this.props = { ...props, correct: false, notify: () => {}, passphrase: '' };
+    this.props = {
+      ...props,
+      correct: false,
+      notify: () => {},
+      unlock: false,
+      updateLocked: this.updateLocked
+    };
     this.addClass('correxit-corrector-widget-content');
   }
 
@@ -96,7 +112,29 @@ class Content extends ReactWidget {
     return this.props.path || '';
   }
 
+  /**
+   * Trigger the change of lock state.
+   */
+  updateLocked = (value: boolean) => {
+    this._lockedChanged.emit(value);
+  };
+
+  /**
+   * A signal emitting when the locked state changed.
+   */
+  get lockedChanged(): ISignal<Content, boolean> {
+    return this._lockedChanged;
+  }
+
   set(updates: Partial<Corrector.Props>) {
+    // Set the content as locked before locking/unlocking.
+    if (updates.unlock !== undefined) {
+      this.updateLocked(true);
+    }
+    // Prevent triggering the unlock when changing directory.
+    if (updates.path !== undefined) {
+      this.props.unlock = false;
+    }
     this.props = { ...this.props, ...updates, key: `${Date.now()}` };
     this.update();
   }
@@ -106,42 +144,35 @@ class Content extends ReactWidget {
   }
 
   protected props: Corrector.Props & { key?: string };
+  private _lockedChanged = new Signal<Content, boolean>(this);
 }
 
-const Passphrase: React.FC<{
+const Unlock: React.FC<{
+  toggleUnlock: (unlock: boolean) => void;
   trans: IRenderMime.TranslationBundle;
-  enter: (passphrase: string) => void;
+  lockedChanged: ISignal<Content, boolean>;
 }> = props => {
   const { trans } = props;
-  const [entered, setEntered] = useState(false);
-  const icon = Correxit.Icons.key;
-  const input = useRef<HTMLInputElement>(null);
-  const id = 'correxit-corrector-passphrase';
-  const placeholder = entered
-    ? trans.__('Update in-memory passphrase')
-    : trans.__('Apply passphrase to workbooks');
-  const size = 32;
+  const [locked, setLocked] = useState(true);
+  const unlockIcon = Correxit.Icons.key;
+  const lockIcon = Correxit.Icons.locked;
+
+  useEffect(() => {
+    props.lockedChanged.connect((_, value) => {
+      setLocked(value);
+    });
+  }, [props.lockedChanged]);
+
   return (
-    <form
-      onSubmit={event => {
-        event.preventDefault();
-        event.stopPropagation();
-        const value = input.current?.value;
-        if (value) {
-          input.current.value = '';
-          input.current.blur();
-          props.enter(value);
-          setEntered(true);
-        }
+    <ToolbarButtonComponent
+      className="jp-Button jp-mod-minimal"
+      onClick={() => {
+        props.toggleUnlock(locked);
       }}
-    >
-      <label htmlFor={id} className="sr-only">
-        {trans.__('Passphrase')}
-      </label>
-      <input {...{ id, placeholder, size }} ref={input} type="password" />
-      <button type="submit" className="jp-Button jp-mod-minimal">
-        <icon.react tag="span" title={trans.__('Unlock workbooks')} />
-      </button>
-    </form>
+      icon={locked ? unlockIcon : lockIcon}
+      iconLabel={
+        locked ? trans.__('Unlock workbooks') : trans.__('Lock workbooks')
+      }
+    />
   );
 };

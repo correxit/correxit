@@ -94,7 +94,11 @@ export function addCommands(
       execute: ({ path }: { path?: string }) => {
         if (!widget || widget.isDisposed) {
           path ||= browser?.model.path || '.';
-          widget = new Corrector.Widget({ commands, path, trans });
+          widget = new Corrector.Widget({
+            commands,
+            path,
+            trans
+          });
           widget.id = 'correxit-corrector-widget';
           widget.title.label = trans.__('Correxit Corrector');
           widget.title.closable = true;

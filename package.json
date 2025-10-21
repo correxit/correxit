@@ -79,6 +79,7 @@
         "@lumino/polling": "^2.1.4",
         "@lumino/signaling": "^2.1.4",
         "@lumino/widgets": "^2.7.0",
+        "jupyter-secrets-manager": "^0.4.1",
         "openpgp": "^5.11.3",
         "react": "^18.2.0"
     },

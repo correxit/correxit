@@ -16,8 +16,9 @@ import {
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Poll } from '@lumino/polling';
+import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
-import { addCommands, Correxit, Workbook } from './correxit';
+import { addCommands, Correxit, Unlocker, Workbook } from './correxit';
 import * as io from './correxit/io';
 import { Sidebar } from './ui';
 
@@ -58,6 +59,21 @@ export const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
     deactivate: () => deactivator?.()
   }))()
 };
+
+export const unlocker: JupyterFrontEndPlugin<Correxit.IUnlocker> =
+  SecretsManager.sign(Correxit.UNLOCK, token => ({
+    id: Correxit.UNLOCK,
+    description: 'Centralized unlock service for Correxit workbooks',
+    autoStart: true,
+    provides: Correxit.IUnlocker,
+    optional: [ISecretsManager],
+    ...((deactivator?: () => void) => ({
+      activate: (app, secretsManager: ISecretsManager): Correxit.IUnlocker => {
+        return new Unlocker({ token, secretsManager });
+      },
+      deactivate: () => deactivator?.()
+    }))()
+  }));
 
 export const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
@@ -114,13 +130,14 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
-  requires: [Correxit.Consumer, INotebookTracker],
+  requires: [Correxit.Consumer, Correxit.IUnlocker, INotebookTracker],
   optional: [ITranslator],
   provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
       app,
       consumer: Correxit.Consumer,
+      unlocker: Correxit.IUnlocker,
       tracker: INotebookTracker,
       translator: ITranslator | null
     ): Correxit.Source => {
@@ -159,7 +176,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         }
       };
       const trans = (translator || nullTranslator).load('correxit');
-      const dependencies = { consumer, schedule, source, trans };
+      const dependencies = { consumer, schedule, source, trans, unlocker };
       const added = addCommands(app, dependencies);
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>

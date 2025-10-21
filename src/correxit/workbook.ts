@@ -33,18 +33,18 @@ export namespace Workbook {
   }
 
   export type Credentials = |
-    { path: string; passphrase: null; key: null; } |
-    { path: string; passphrase: null; key: string; } |
-    { path: string; passphrase: string; key: null; };
+    { path: string; unlock: null; key: null; } |
+    { path: string; unlock: null; key: string; } |
+    { path: string; unlock: boolean; key: null; };
 
   export namespace Credentials {
     export function normalize (credentials: Partial<Credentials> | null) {
-      const { key, passphrase, path } = credentials || {};
-      if (key && passphrase || !path) {
+      const { key, unlock, path } = credentials || {};
+      if (key && unlock || !path) {
         return null;
       }
       return {
-        key: key || null, passphrase: passphrase || null, path
+        key: key || null, unlock: unlock || null, path
       } as Credentials;
     }
   }
@@ -221,7 +221,8 @@ export namespace Workbook {
    */
   export async function convert(
     workbook: Workbook,
-    passphrase: string
+    passphrase: string,
+    unlocker: Correxit.IUnlocker
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
@@ -232,6 +233,7 @@ export namespace Workbook {
       if (error === Correxit.NO_CORREXIT_METADATA) {
         const created = Rubric.create();
         const key = await security.keygen(passphrase, created.id);
+        unlocker.storeKey(created.id, key);
         return update(workbook, { ...created, key });
       }
       throw error;

@@ -4,8 +4,7 @@ import { INotebookContent } from '@jupyterlab/nbformat';
 import { INotebookModel, NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
-import { Workbook } from '..';
-import * as security from './security';
+import { Correxit, Workbook } from '..';
 
 export async function cd(commands: CommandRegistry, path: string) {
   if (commands.hasCommand('filebrowser:go-to-path')) {
@@ -80,7 +79,8 @@ export async function mkdir(
 export async function request(
   handle: Workbook.Credentials,
   factory: NotebookModelFactory,
-  manager: ServiceManager.IManager
+  manager: ServiceManager.IManager,
+  unlocker: Correxit.IUnlocker
 ): Promise<Workbook.Headless | null> {
   const { path } = handle;
   const context = new Context({ manager, factory, path });
@@ -92,13 +92,13 @@ export async function request(
     context.dispose();
     return null;
   }
-  if (!rubric.locked || !(handle.passphrase || handle.key)) {
+  if (!rubric.locked || handle.unlock === false || !(handle.unlock || handle.key)) {
+    await Workbook.lock(workbook);
     return workbook;
   }
   try {
-    const { passphrase } = handle;
-    const key = handle.key || await security.keygen(passphrase!, rubric.id);
-    await Workbook.unlock(workbook, key);
+    const key = handle.key || rubric.key;
+    await unlocker.unlock(workbook, rubric, key);
   } catch (error) {
     console.warn(`access error, ${path}`, error);
   }

@@ -37,7 +37,7 @@ type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
 const {
-  add, assign, convert, correct, lock, remove, reset, toggle, unlock
+  add, assign, convert, correct, lock, remove, reset, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -48,14 +48,15 @@ export function addCommands(
     schedule: (workbook: Workbook | null) => void;
     source: Correxit.Source;
     trans: IRenderMime.TranslationBundle;
+    unlocker: Correxit.IUnlocker;
   }
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
-  const { consumer, schedule, source, trans } = dependencies;
+  const { consumer, schedule, source, trans, unlocker } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
-  const fetch = (handle: Credentials) => io.request(handle, factory, manager);
+  const fetch = (handle: Credentials) => io.request(handle, factory, manager, unlocker);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
   const reify = async (args: Partial<Credentials>): Promise<{
     handle: Credentials | null;
@@ -216,7 +217,7 @@ export function addCommands(
         label: trans.__('Enter a passphrase for this workbook')
       });
       if (passphrase) {
-        await convert(workbook, passphrase);
+        await convert(workbook, passphrase, unlocker);
         await commands.execute(CommandIDs.save, args);
       }
     }
@@ -474,24 +475,14 @@ if unlock fails.
     execute: async (args: Partial<Credentials>):
       Promise<Rubric.Unlocked | null> => {
       const { handle, rubric, workbook } = await reify(args);
+
       if (!workbook) {
         return null;
       }
-      try {
-        let key = handle?.key || rubric?.key || null;
-        let passphrase: string | null = null;
-        if (!key) {
-          passphrase = handle?.passphrase || await input.text({
-            title: trans.__('Enter a passphrase to unlock'),
-            label: trans.__('Enter a passphrase to unlock this workbook')
-          }) || null;
-        }
 
-        if (!rubric || !rubric.locked || !(key || passphrase)) {
-          return null;
-        }
-        key ||= await security.keygen(passphrase!, rubric.id);
-        const unlocked = await unlock(workbook, key);
+      try {
+        const key = handle?.key || rubric?.key || null;
+        const unlocked = unlocker.unlock(workbook, rubric, key);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
         return unlocked;
       } catch (error) {
