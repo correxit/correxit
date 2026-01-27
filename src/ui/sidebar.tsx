@@ -4,6 +4,7 @@ import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
+import { Annotate } from './annotate';
 import { Assignment } from './assignment';
 import { Toggle } from './toggle';
 import { SidebarWidget } from './widget';
@@ -43,49 +44,6 @@ export namespace Sidebar {
   export type Widget = SidebarWidget;
   export const Widget = SidebarWidget;
 }
-
-const Annotate: React.FC<{ workbook: Workbook | null }> = ({ workbook }) => {
-  const notebook = workbook?.content;
-  const rubric = open(workbook);
-  const classes = Rubric.Cell.types.map(type => `cxt-mod-${type}`);
-  const selector = Rubric.Cell.types.map(type => `.cxt-mod-${type}`).join(', ');
-  useEffect(() => {
-    const status = ['cxt-mod-correct', 'cxt-mod-incorrect'];
-    const reset = (node: Element) => {
-      node.classList.remove(...classes);
-      node.classList.remove(...status);
-    };
-    const clear = () =>
-      void notebook?.node.querySelectorAll(selector).forEach(reset);
-    if (!notebook || notebook.isDisposed || !rubric) {
-      return clear;
-    }
-
-    let remaining = Rubric.size(rubric);
-    for (const { node, model } of notebook.widgets) {
-      const cell = Rubric.get(rubric, model.id);
-      if (!cell) {
-        continue;
-      }
-      node.classList.add(`cxt-mod-${cell.is}`);
-
-      const report = Rubric.Cell.report(rubric, cell.id);
-      const [correct, incorrect] = status;
-      if (report) {
-        if (report.status === 'correct') {
-          node.classList.add(correct);
-        } else if (report.status === 'incorrect') {
-          node.classList.add(incorrect);
-        }
-      }
-      if (--remaining === 0) {
-        break;
-      }
-    }
-    return clear;
-  }, [notebook, rubric]);
-  return null;
-};
 
 const Header: React.FC<{
   commands: CommandRegistry;
