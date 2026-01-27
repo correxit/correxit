@@ -75,10 +75,7 @@ const Assignee: React.FC<{
         <select
           name="correxit-assignment-assignee"
           onChange={({ target: { value } }) =>
-            toggle('assignee', {
-              ...assignment,
-              assignee: value
-            })
+            toggle('assignee', { ...assignment, assignee: value })
           }
           value={assignee}
         >
