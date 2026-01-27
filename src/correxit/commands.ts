@@ -140,9 +140,10 @@ export function addCommands(
         }
 
         const payload = [await security.digest(expected)];
+        const points = 1;
         const reference = null;
         const shared = false;
-        await add(workbook, { id, is, payload, reference, shared });
+        await add(workbook, { id, is, payload, points, reference, shared });
         return;
       }
       if (is !== 'comparable' && is !== 'correctable') {
@@ -166,8 +167,9 @@ export function addCommands(
       }
 
       const payload = null;
+      const points = 1;
       const shared = false;
-      await add(workbook, { id, is, payload, reference, shared });
+      await add(workbook, { id, is, payload, points, reference, shared });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.assign, {
@@ -176,21 +178,21 @@ export function addCommands(
     isVisible: () => commands.isEnabled(CommandIDs.assign),
     label: trans.__('Assign workbook...'),
     execute: async (args: Partial<Credentials & Assignment>) => {
-      const { handle, rubric, workbook } = await reify(args);
+      const { rubric, workbook } = await reify(args);
       if (!workbook || !rubric) {
         return;
       }
 
       const assignment: Partial<Assignment> = {
-        assignee: args.assignee || '',
+        assignee: args.assignee || undefined,
         roster: args.roster || []
       };
       const different = (a: Partial<Assignment>, b: Assignment) =>
-        JSON.stringify({ x: a.assignee, y: a.roster }) !==
-        JSON.stringify({ x: b.assignee, y: b.roster });
+        // Normalize assignee here to ignore `undefined` mismatches.
+        JSON.stringify({ x: a.assignee || '', y: a.roster }) !==
+        JSON.stringify({ x: b.assignee || '', y: b.roster });
       if (different(assignment, rubric.assignment)) {
         await assign(workbook, assignment);
-        await commands.execute(CommandIDs.save, handle || {});
       }
     }
   }));
@@ -218,7 +220,6 @@ export function addCommands(
       });
       if (passphrase) {
         await convert(workbook, passphrase, unlocker);
-        await commands.execute(CommandIDs.save, args);
       }
     }
   }));
@@ -247,12 +248,12 @@ export function addCommands(
     execute: async (args: Partial<Cell & Credentials & CellToolbar>) => {
       const { workbook } = await reify(args);
       if (!workbook) {
-        return { score: Rubric.UNSCORED, spec: null };
+        return { score: Rubric.Score.UNSCORED, spec: null };
       }
 
       const id = state.cell(args);
       if (args[Rubric.Cell.TOOLBAR] && !id) {
-        return { score: Rubric.UNSCORED, spec: null };
+        return { score: Rubric.Score.UNSCORED, spec: null };
       }
 
       const result = await correct(workbook, id);
@@ -260,8 +261,8 @@ export function addCommands(
         return result;
       }
 
-      const unscored = result.score === Rubric.UNSCORED;
-      const [x, y] = result.score;
+      const unscored = result.score.status === 'unscored';
+      const [x, y] = [result.score.points, result.score.possible];
       void showDialog({
         title: trans.__('Computed score'),
         body: unscored ? trans.__('Unscored') : trans.__('%1 of %2', x, y)
@@ -470,21 +471,18 @@ The command execute args type is \`Partial<Workbook.Credentials>\`
 
 If no passphrase or key is provided, the command invokes a user prompt dialog.
 The returned promise never rejects. The command invokes an error message dialog
-if unlock fails.
+if unlock fails. It returns a promise that resolves to either null or if
+successful, an unlocked rubric.
     `,
     execute: async (args: Partial<Credentials>):
       Promise<Rubric.Unlocked | null> => {
       const { handle, rubric, workbook } = await reify(args);
-
       if (!workbook) {
         return null;
       }
-
       try {
         const key = handle?.key || rubric?.key || null;
-        const unlocked = unlocker.unlock(workbook, rubric, key);
-        await commands.execute(CommandIDs.save, { ...args, undo: false });
-        return unlocked;
+        return unlocker.unlock(workbook, rubric, key);
       } catch (error) {
         const file = PathExt.basename(workbook.context.path);
         void showErrorMessage(

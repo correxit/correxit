@@ -13,7 +13,7 @@
 }
 
 .correxit-add {
-  background-color: var(--jp-layout-color3);
+  background-color: var(--jp-inverse-layout-color3);
   border-radius: 0;
   display: inline-block;
   width: 32px;
@@ -23,7 +23,7 @@
   text-align: center;
 
   &.lm-mod-toggled {
-    background-color: var(--jp-brand-color0);
+    background-color: var(--md-blue-400);
     box-shadow: none;
   }
 }
