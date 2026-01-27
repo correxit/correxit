@@ -180,7 +180,7 @@
   }
 }
 
-.correxit-assignment-toggle.jp-mod-minimal {
+.correxit-toggle.jp-mod-minimal {
   margin-right: 3px;
   min-height: 20px;
   min-width: 20px;
@@ -188,7 +188,7 @@
   padding: 3px 0;
 }
 
-.correxit-assignment-toggle.jp-mod-minimal > span {
+.correxit-toggle.jp-mod-minimal > span {
   align-self: flex-start;
   padding-top: 3px;
 }

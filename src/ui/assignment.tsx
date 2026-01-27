@@ -1,14 +1,11 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
-import {
-  Button,
-  LabIcon,
-  ToolbarButtonComponent
-} from '@jupyterlab/ui-components';
+import { ToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
 import { Correxit, Rubric } from '..';
 import { useCommand } from '../correxit/use-command';
+import { Toggle } from './toggle';
 
 type Assignment = Rubric.Assignment;
 type TranslationBundle = IRenderMime.TranslationBundle;
@@ -204,19 +201,3 @@ const Message: React.FC<{ message: string }> = React.memo(({ message }) => (
     <br />
   </span>
 ));
-
-export const Toggle: React.FC<{
-  disabled?: boolean;
-  icon: LabIcon;
-  title: string;
-  toggle?: () => void;
-}> = ({ disabled, icon, title, toggle }) => (
-  <Button
-    className="jp-mod-minimal correxit-assignment-toggle"
-    disabled={disabled || false}
-    onClick={toggle ? event => (event.preventDefault(), toggle()) : void 0}
-    title={title}
-  >
-    <icon.react title={title} tag="span" />
-  </Button>
-);

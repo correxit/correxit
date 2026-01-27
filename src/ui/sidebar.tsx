@@ -4,7 +4,8 @@ import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import { Assignment, Toggle } from './assignment';
+import { Assignment } from './assignment';
+import { Toggle } from './toggle';
 import { SidebarWidget } from './widget';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
