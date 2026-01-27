@@ -40,7 +40,7 @@ export function useCommand<T>(
           setList(prev => [...prev, ...chunk]);
         }
       };
-      const throttler = new Throttler(flush, { limit: 16, edge: 'trailing' });
+      const throttler = new Throttler(flush, { limit: 16 });
       setList([]);
       setIdle(false);
       for await (const item of await (stream || [])) {
