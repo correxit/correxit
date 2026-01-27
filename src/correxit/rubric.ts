@@ -15,6 +15,7 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 export namespace Rubric {
   export type Assignment = Readonly<{
     assignee: string;
+    report: Assignment.Report;
     roster: string[];
     signature: string;
   }>;
@@ -30,12 +31,14 @@ export namespace Rubric {
     id: string;
     is: 'answerable';
     payload: string[];
+    points: number;
     reference: null;
     shared: boolean;
   }> | Readonly<{
     id: string;
     is: 'comparable' | 'correctable';
     payload: null;
+    points: number;
     reference: string[];
     shared: boolean;
   }>;
@@ -59,15 +62,15 @@ export namespace Rubric {
     export async function answer(
       [expected]: string[],
       given: Output[]
-    ): Promise<[Score, Score.Message]> {
+    ): Promise<Score> {
       if (!expected) {
-        return [UNSCORED, 'empty-expected'];
+        return { ...Score.UNSCORED, code: 'empty-expected' };
       }
       if (!given.length) {
-        return [INCORRECT, 'empty-given'];
+        return { ...Score.INCORRECT, code: 'empty-given' };
       }
       if (find(given, ({ header }) => header.msg_type === 'error')) {
-        return [INCORRECT, 'error-given'];
+        return { ...Score.INCORRECT, code: 'error-given' };
       }
       if (find(given, ({ header }) => header.msg_type === 'stream')) {
         const name = (content: Cell.Output['content']) =>
@@ -83,23 +86,24 @@ export namespace Rubric {
         ).join('').trim();
         if (stdout) {
           const digest = await security.digest(stdout);
-          const score = digest === expected ? CORRECT : INCORRECT;
-          return [score, score === INCORRECT ? 'mismatch-digest' : 'success'];
+          const score = digest === expected ? Score.CORRECT : Score.INCORRECT;
+          const code = score === Score.INCORRECT ? 'mismatch-digest' : '';
+          return { ...score, code };
         }
-        return [INCORRECT, 'missing-stdout'];
+        return { ...Score.INCORRECT, code: 'missing-stdout' };
       }
-      return [UNSCORED, 'mismatch-message'];
+      return { ...Score.UNSCORED, code: 'mismatch-message' };
     }
 
     export async function compare(
       expected: Output[],
       given: Output[]
-    ): Promise<[Score, Score.Message]> {
+    ): Promise<Score> {
       if (!expected.length) {
-        return [UNSCORED, 'empty-expected'];
+        return { ...Score.UNSCORED, code: 'empty-expected' };
       }
       if (!given.length) {
-        return [INCORRECT, 'empty-given'];
+        return { ...Score.INCORRECT, code: 'empty-given' };
       }
 
       const keys = (content: Output['content']) =>
@@ -107,25 +111,25 @@ export namespace Rubric {
       const x = given.slice(-1)[0].content;
       const y = expected.slice(-1)[0].content;
       if (keys(x) !== keys(y)) {
-        return [INCORRECT, 'mismatch-congruence'];
+        return { ...Score.INCORRECT, code: 'mismatch-congruence' };
       }
       if ('data' in x && 'data' in y) {
         const equal = JSON.stringify(x.data) === JSON.stringify(y.data);
-        return equal ? [CORRECT, 'success'] : [INCORRECT, 'mismatch-data'];
+        const error: Score = { ...Score.INCORRECT, code: 'mismatch-data' };
+        return equal ? Score.CORRECT : error;
       }
       if ('name' in x && 'name' in y) {
-        return x.name === y.name && x.text === y.text
-          ? [CORRECT, 'success']
-          : [INCORRECT, 'mismatch-name-text'];
+        const error: Score = { ...Score.INCORRECT, code: 'mismatch-name-text' };
+        return x.name === y.name && x.text === y.text ? Score.CORRECT : error;
       }
-      return [UNSCORED, 'error-compare'];
+      return { ...Score.UNSCORED, code: 'error-compare' };
     };
 
     export async function correct(
       expected: Output[]
-    ): Promise<[Score, Score.Message]> {
+    ): Promise<Score> {
       return expected.some(message => message.header.msg_type === 'error') ?
-        [INCORRECT, 'error-correct'] : [CORRECT, 'success'];
+        Score.INCORRECT : Score.CORRECT;
     }
 
     /**
@@ -159,6 +163,49 @@ export namespace Rubric {
       await future.done;
       return outputs;
     }
+
+    /**
+     * Get the score for a single cell.
+     *
+     * @param rubric - the rubric that defines the cell being scored.
+     * @param id - the id of the cell to score.
+     * @param outputs - the outputs of all the executed workbook cells.
+     *
+     * @returns A promise that resolves to the score for this cell.
+     */
+    export async function score(
+      rubric: Rubric,
+      id: string,
+      outputs: Outputs
+    ): Promise<Score> {
+      const cell = get(rubric, id);
+      const given = outputs[id];
+      const reference = cell?.reference?.[0] ?? '';
+      if (!cell || !given) {
+        reports[id] = { ...Score.UNSCORED, code: 'missing-cell-given' };
+      } else if (cell.is === 'answerable') {
+        reports[id] = await answer(cell.payload, given);
+      } else if (!outputs[reference]) {
+        reports[id] = { ...Score.UNSCORED, code: 'missing-reference' };
+      } else if (cell.is === 'comparable') {
+        reports[id] = await compare(outputs[reference], given);
+      } else if (cell.is === 'correctable') {
+        reports[id] = await correct(outputs[reference]);
+      } else {
+        reports[id] = { ...Score.UNSCORED, code: 'error-is-unknown' };
+      }
+      return reports[id];
+    }
+
+    /**
+     * @returns the score report for a graded cell.
+     *
+     * @param rubric - the rubric that defines the graded cell.
+     * @param id - the id of the graded cell.
+     */
+    export function report({ assignment }: Rubric, id: string): Score | null {
+      return assignment.report[id] || reports[id] || null;
+    }
   }
 
   export type Locked = Base &
@@ -166,7 +213,13 @@ export namespace Rubric {
 
   export type Outputs = { [id: string]: Cell.Output[]; }
 
-  export type Score = Readonly<[numerator: number, denominator: number]>;
+  export type Score = Readonly<{
+    code: Score.Code;
+    comment: string;
+    points: number;
+    possible: number;
+    status: Score.Status;
+  }>;
 
   export type Section = Readonly<{
     cells: Readonly<{ [id: string]: Cell; }>;
@@ -176,17 +229,73 @@ export namespace Rubric {
     Readonly<{ key: string; locked: false; secret: Section; }>;
 
   export namespace Assignment {
+    export type Report = Readonly<{ [cell: string]: Score; }>;
+
     export const EMPTY: Assignment = {
       assignee: '',
+      report: {},
       roster: [],
       signature: ''
     };
 
+    /**
+     * @param id - if the cell is not specified, all cells are scored.
+     * @returns an amended copy of the assignment report with new scores added.
+     *
+     * #### Notes
+     * Because the outputs are provided by the client, instead of scoring every
+     * cell contained in the rubric, every cell that exists in the outputs is
+     * scored if it exists in the rubric.
+     * All scores that already exist from previous scoring remain untouched as
+     * long as they exist in the rubric and have not been rescored.
+     */
+    export async function score(
+      rubric: Rubric,
+      outputs: Outputs,
+      id?: string
+    ): Promise<Assignment.Report> {
+      const { assignment } = rubric;
+      const keys = Object.keys(outputs);
+      const cells = id ? [id] : keys.filter(id => has(rubric, id));
+      const scores = cells.map(id => Cell.score(rubric, id, outputs));
+      const report = Object.keys(assignment.report)
+        .filter(id => has(rubric, id))
+        .reduce(
+          (report, id) => ({ ...report, [id]: { ...assignment.report[id] } }),
+          {} as { [cell: string]: Score }
+        );
+      return (await Promise.all(scores)).reduce(
+        (report, score, index) => ({ ...report, [cells[index]]: score }),
+        { ...report } as { [cell: string]: Score }
+      );
+    }
+
     export async function sign(
-      { assignee, roster }: Pick<Assignment, 'assignee' | 'roster'>,
+      assignment: Pick<Assignment, 'assignee' | 'report' | 'roster'>,
       key: string
     ): Promise<string> {
-      return security.digest(`${assignee}:${key}${roster.join('|')}`);
+      const { assignee, report, roster } = assignment;
+      return security.digest(JSON.stringify({ assignee, key, report, roster }));
+    }
+
+    export function summary(report: Report): Score {
+      const sum = (a: Score, b: Score): Score => {
+        if (a.status === 'unscored') {
+          return b;
+        }
+        if (b.status === 'unscored') {
+          return a;
+        }
+        return {
+          code: '',
+          comment: '',
+          points: a.points + b.points,
+          possible: a.possible + b.possible,
+          status: 'summary'
+        };
+      };
+      const scores = Object.keys(report);
+      return scores.map(cell => report[cell]).reduce(sum, Score.UNSCORED);
     }
 
     export async function validate(
@@ -209,11 +318,11 @@ export namespace Rubric {
   }
 
   export namespace Score {
-    export type Message =
-      | 'empty-given'
+    export type Code =
       | 'empty-expected'
+      | 'empty-given'
       | 'error-compare'
-      | 'error-correct'
+      | 'error-execute'
       | 'error-given'
       | 'error-is-unknown'
       | 'mismatch-congruence'
@@ -224,20 +333,41 @@ export namespace Rubric {
       | 'mismatch-name-text'
       | 'missing-cell-given'
       | 'missing-reference'
+      | 'missing-rubric'
       | 'missing-stdout'
-      | 'success';
+      | 'override'
+      | '';
 
-    export type Report = [Score, Message[]];
+    export type Status =
+      | 'correct'
+      | 'incorrect'
+      | 'summary'
+      | 'unscored';
+
+    export const CORRECT: Score = Object.freeze({
+      code: '',
+      comment: '',
+      points: 1,
+      possible: 1,
+      status: 'correct'
+    });
+
+    export const INCORRECT: Score = Object.freeze({
+      code: '',
+      comment: '',
+      points: 0,
+      possible: 1,
+      status: 'incorrect'
+    });
+
+    export const UNSCORED: Score = Object.freeze({
+      code: '',
+      comment: '',
+      points: -1,
+      possible: -1,
+      status: 'unscored'
+    });
   }
-
-  export const CORRECT: Score = Object.freeze([1, 1]);
-
-  export const INCORRECT: Score = Object.freeze([0, 1]);
-
-  export const UNSCORED: Score = Object.freeze([
-    Number.NEGATIVE_INFINITY,
-    Number.POSITIVE_INFINITY
-  ]);
 
   export function add(rubric: Unlocked, cell: Cell): Unlocked {
     if (has(rubric, cell.id, true)) {
@@ -260,13 +390,9 @@ export namespace Rubric {
     assignee = '',
     roster: string[] = []
   ): Promise<Unlocked> {
-    const unique = (list: string[]): string[] =>
-      list.reduce<[string[], { [key: string]: true }]>(
-        ([unique, keys], key) => (
-          [keys[key] ? unique : [...unique, key], { ...keys, [key]: true }]
-        ), [[], {}])[0];
-    const assignment = { assignee, roster: unique(roster), signature: '' };
-    assignment.signature = await Assignment.sign(assignment, key);
+    const unsigned = { assignee, report: {}, roster: unique(roster) };
+    const signature = await Assignment.sign(unsigned, key);
+    const assignment = { ...unsigned, signature };
     await Assignment.validate({ assignment, key });
     return { ...rubric, accessed: Date.now(), assignment, key };
   }
@@ -320,9 +446,9 @@ export namespace Rubric {
 
     const locked = true;
     const { id, key, shared } = rubric;
-    const { assignee, roster, signature } = rubric.assignment;
+    const { assignee, report, roster, signature } = rubric.assignment;
     const encrypted = await security.encrypt(JSON.stringify(roster), key);
-    const assignment = { assignee, roster: [encrypted], signature };
+    const assignment = { assignee, report, roster: [encrypted], signature };
     const secret = await security.encrypt(JSON.stringify(rubric.secret), key);
     const accessed = Date.now();
     await Assignment.validate(rubric);
@@ -334,12 +460,9 @@ export namespace Rubric {
    */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
     const { accessed, id, key, locked, secret, shared } = rubric;
-    let { assignment } = rubric;
+    const assignment = rubric.assignment || { ...Assignment.EMPTY };
     if (!accessed) {
       throw new Error('invalid rubric, missing accessed');
-    }
-    if (!assignment) {
-      assignment = { ...Assignment.EMPTY };
     }
     if (typeof id !== 'string' || !id) {
       throw new Error('invalid rubric, missing id');
@@ -377,7 +500,28 @@ export namespace Rubric {
     }
     const secret = cell.shared ? rubric.secret : drop(rubric.secret, cell);
     const shared = cell.shared ? drop(rubric.shared, cell) : rubric.shared;
-    return { ...rubric, accessed: Date.now(), secret, shared } as Rubric;
+    const { assignment: { assignee, report } } = rubric;
+    const filtered = Object.entries(report).filter(([key]) => key !== id);
+    const assignment: Assignment = {
+      ...rubric.assignment, assignee,
+      report: filtered.reduce(
+        (report, [cell, score]) => ({ ...report, [cell]: score }), {}
+      )
+    };
+    const accessed = Date.now();
+    return { ...rubric, accessed, assignment, secret, shared } as Rubric;
+  }
+
+  export async function sign(
+    rubric: Rubric.Unlocked,
+    report: Assignment.Report
+  ): Promise<Rubric.Unlocked> {
+    const { key } = rubric;
+    const { assignee, roster } = rubric.assignment;
+    const signature = await Assignment.sign({ assignee, report, roster }, key);
+    const assignment = { assignee, report, roster, signature };
+    const accessed = Date.now();
+    return { ...rubric, accessed, assignment };
   }
 
   /**
@@ -389,57 +533,6 @@ export namespace Rubric {
       Object.keys(shared.cells).length :
       Object.keys(secret.cells).length + Object.keys(shared.cells).length;
   }
-
-  /**
-   * Get the score for a single cell.
-   *
-   * @param rubric - the rubric that defines the cell being scored.
-   * @param id - the id of the cell to score.
-   * @param outputs - the outputs of all the executed workbook cells.
-   *
-   * @returns A tuple with the score for this cell and any log messages.
-   *
-   * #### Notes
-   * Currently the score is only 0/1 or 1/1 whether it is correct or not.
-   */
-  export async function score(
-    rubric: Rubric,
-    id: string,
-    outputs: Outputs
-  ): Promise<[Score, Score.Message]> {
-    const cell = get(rubric, id);
-    const given = outputs[id];
-    const reference = cell?.reference?.[0] ?? '';
-    if (!cell || !given) {
-      return [UNSCORED, 'missing-cell-given'];
-    }
-    if (cell.is === 'answerable') {
-      return Cell.answer(cell.payload, given);
-    }
-    if (!outputs[reference]) {
-      return [UNSCORED, 'missing-reference'];
-    }
-    if (cell.is === 'comparable') {
-      return Cell.compare(outputs[reference], given);
-    }
-    if (cell.is === 'correctable') {
-      return Cell.correct(outputs[reference]);
-    }
-    return [UNSCORED, 'error-is-unknown'];
-  }
-
-  /**
-   * @returns the sum of two scores.
-   */
-  export function sum(a: Score, b: Score): Score {
-    if (a === UNSCORED) {
-      return b;
-    }
-    if (b === UNSCORED) {
-      return a;
-    }
-    return Object.freeze([a[0] + b[0], a[1] + b[1]]);
-  };
 
   /**
    * @returns a rubric where given cell is toggled between `secret` or `shared`.
@@ -466,8 +559,8 @@ export namespace Rubric {
    */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
     const locked = false;
-    const { assignment: { roster: [ raw ] }, id } = rubric;
-    const roster = raw ? JSON.parse(await security.decrypt(raw, key)) : [];
+    const { id, assignment: { roster: [block]} } = rubric;
+    const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
     const secret = JSON.parse(await security.decrypt(rubric.secret, key));
     const shared = { ...rubric.shared };
     const assignment = { ...rubric.assignment, roster };
@@ -476,3 +569,14 @@ export namespace Rubric {
     return { accessed, assignment, id, key, locked, secret, shared };
   }
 }
+
+const reports: { [key: string]: Rubric.Score }  = {};
+
+/**
+  * @returns a list of strings with no duplicate values.
+  */
+const unique = (list: string[]): string[] =>
+  list.reduce<[string[], { [key: string]: true }]>(
+    ([unique, keys], key) => (
+      [keys[key] ? unique : [...unique, key], { ...keys, [key]: true }]
+    ), [[], {}])[0];

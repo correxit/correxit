@@ -1,4 +1,9 @@
-import * as pgp from 'openpgp';
+import {
+  createMessage,
+  decrypt as _decrypt,
+  encrypt as _encrypt,
+  readMessage
+} from 'openpgp';
 
 // Equivalent to: await digest('correxit:salt');
 const SALT =
@@ -10,11 +15,11 @@ const PEPPER =
 export async function decrypt(text: string, password: string): Promise<string> {
   let message;
   try {
-    message = await pgp.readMessage({ armoredMessage: text });
+    message = await readMessage({ armoredMessage: text });
   } catch (_) {
     return text;
   }
-  return (await pgp.decrypt({ message, passwords: [password] })).data;
+  return (await _decrypt({ message, passwords: [password] })).data;
 }
 
 export async function digest(text: string): Promise<string> {
@@ -25,8 +30,8 @@ export async function digest(text: string): Promise<string> {
 }
 
 export async function encrypt(text: string, password: string): Promise<string> {
-  const message = await pgp.createMessage({ text });
-  return pgp.encrypt({ message, passwords: [password] });
+  const message = await createMessage({ text });
+  return _encrypt({ message, passwords: [password] }) as Promise<string>;
 }
 
 export async function keygen(

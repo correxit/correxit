@@ -2303,7 +2303,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jupyterlab/coreutils@npm:^6.4.3, @jupyterlab/coreutils@npm:^6.4.9, @jupyterlab/coreutils@npm:~6.4.9":
+"@jupyterlab/coreutils@npm:^6.0.0, @jupyterlab/coreutils@npm:^6.4.3, @jupyterlab/coreutils@npm:^6.4.9, @jupyterlab/coreutils@npm:~6.4.9":
   version: 6.4.9
   resolution: "@jupyterlab/coreutils@npm:6.4.9"
   dependencies:
@@ -2695,7 +2695,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jupyterlab/statedb@npm:^4.4.9, @jupyterlab/statedb@npm:~4.4.9":
+"@jupyterlab/statedb@npm:^4.0.0, @jupyterlab/statedb@npm:^4.4.9, @jupyterlab/statedb@npm:~4.4.9":
   version: 4.4.9
   resolution: "@jupyterlab/statedb@npm:4.4.9"
   dependencies:
@@ -2984,7 +2984,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/algorithm@npm:^2.0.3":
+"@lumino/algorithm@npm:^2.0.0, @lumino/algorithm@npm:^2.0.3":
   version: 2.0.3
   resolution: "@lumino/algorithm@npm:2.0.3"
   checksum: 03932cdc39d612a00579ee40bafb0b1d8bf5f8a12449f777a1ae7201843ddefb557bc3f9260aa6b9441d87bfc43e53cced854e71c4737de59e32cd00d4ac1394
@@ -3026,7 +3026,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/coreutils@npm:^1.11.0 || ^2.0.0, @lumino/coreutils@npm:^1.11.0 || ^2.2.1, @lumino/coreutils@npm:^2.2.1":
+"@lumino/coreutils@npm:^1.11.0 || ^2.0.0, @lumino/coreutils@npm:^1.11.0 || ^2.2.1, @lumino/coreutils@npm:^2.1.2, @lumino/coreutils@npm:^2.2.1":
   version: 2.2.1
   resolution: "@lumino/coreutils@npm:2.2.1"
   dependencies:
@@ -3113,7 +3113,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/signaling@npm:^1.10.0 || ^2.0.0, @lumino/signaling@npm:^2.1.4":
+"@lumino/signaling@npm:^1.10.0 || ^2.0.0, @lumino/signaling@npm:^2.1.2, @lumino/signaling@npm:^2.1.4":
   version: 2.1.4
   resolution: "@lumino/signaling@npm:2.1.4"
   dependencies:
@@ -3155,13 +3155,6 @@ __metadata:
   version: 1.0.2
   resolution: "@marijn/find-cluster-break@npm:1.0.2"
   checksum: 0d836de25e04d58325813401ef3c2d34caf040da985a5935fcbc9d84e7b47a21bdb15f57d70c2bf0960bd29ed3dbbb1afd00cdd0fc4fafbee7fd0ffe7d508ae1
-  languageName: node
-  linkType: hard
-
-"@mattiasbuelens/web-streams-adapter@npm:~0.1.0":
-  version: 0.1.0
-  resolution: "@mattiasbuelens/web-streams-adapter@npm:0.1.0"
-  checksum: c5aeb378043a47aede08fa3623e385ac64b67e2583016c57b5fca8e71f1776c0d1cf33a149d683d6bf2bef6d401f4baf71c1c4be58d2059d769a246092654583
   languageName: node
   linkType: hard
 
@@ -3246,16 +3239,6 @@ __metadata:
   dependencies:
     semver: ^7.3.5
   checksum: 68951c589e9a4328698a35fd82fe71909a257d6f2ede0434d236fa55634f0fbcad9bb8755553ce5849bd25ee6f019f4d435921ac715c853582c4a7f5983c8d4a
-  languageName: node
-  linkType: hard
-
-"@openpgp/web-stream-tools@npm:0.0.11-patch-1":
-  version: 0.0.11-patch-1
-  resolution: "@openpgp/web-stream-tools@npm:0.0.11-patch-1"
-  dependencies:
-    "@mattiasbuelens/web-streams-adapter": ~0.1.0
-    web-streams-polyfill: ~3.0.3
-  checksum: 270bababde83d86fa2d7563a083573bb16d53874601c2a804d9192e26b82de93b518b31eb07b5ab6443fb4af97401f5559f0f27112bf12462f123e0039b8fc4a
   languageName: node
   linkType: hard
 
@@ -4583,18 +4566,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"asn1.js@npm:^5.0.0":
-  version: 5.4.1
-  resolution: "asn1.js@npm:5.4.1"
-  dependencies:
-    bn.js: ^4.0.0
-    inherits: ^2.0.1
-    minimalistic-assert: ^1.0.0
-    safer-buffer: ^2.1.0
-  checksum: 3786a101ac6f304bd4e9a7df79549a7561950a13d4bcaec0c7790d44c80d147c1a94ba3d4e663673406064642a40b23fcd6c82a9952468e386c1a1376d747f9a
-  languageName: node
-  linkType: hard
-
 "astral-regex@npm:^2.0.0":
   version: 2.0.0
   resolution: "astral-regex@npm:2.0.0"
@@ -4765,13 +4736,6 @@ __metadata:
   version: 5.2.2
   resolution: "big.js@npm:5.2.2"
   checksum: b89b6e8419b097a8fb4ed2399a1931a68c612bce3cfd5ca8c214b2d017531191070f990598de2fc6f3f993d91c0f08aa82697717f6b3b8732c9731866d233c9e
-  languageName: node
-  linkType: hard
-
-"bn.js@npm:^4.0.0":
-  version: 4.12.2
-  resolution: "bn.js@npm:4.12.2"
-  checksum: dd224afda6f5a7d15f2fe5154e1a1c245576a725584ea1852c8c42f9748dfe847bc63a48b2885360023389a24cfebb3653ca97f4c69742f3c22bc63da6565030
   languageName: node
   linkType: hard
 
@@ -5170,7 +5134,6 @@ __metadata:
     "@lumino/polling": ^2.1.4
     "@lumino/signaling": ^2.1.4
     "@lumino/widgets": ^2.7.0
-    "@openpgp/web-stream-tools": 0.0.11-patch-1
     "@types/jest": ^29.2.0
     "@types/json-schema": ^7.0.11
     "@types/node": ^22.15.21
@@ -5183,9 +5146,10 @@ __metadata:
     eslint-config-prettier: ^8.8.0
     eslint-plugin-prettier: ^5.0.0
     jest: ^29.2.0
+    jupyter-secrets-manager: ^0.4.1
     mkdirp: ^1.0.3
     npm-run-all2: ^7.0.1
-    openpgp: ^5.11.3
+    openpgp: ^6.0.0
     prettier: ^3.0.0
     react: ^18.2.0
     rimraf: ^5.0.1
@@ -6892,7 +6856,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"inherits@npm:2, inherits@npm:^2.0.1, inherits@npm:~2.0.3":
+"inherits@npm:2, inherits@npm:~2.0.3":
   version: 2.0.4
   resolution: "inherits@npm:2.0.4"
   checksum: 4a48a733847879d6cf6691860a6b1e3f0f4754176e4d71494c41f3475553768b10f84b5ce1d40fbd0e34e6bfbb864ee35858ad4dd2cf31e02fc4a154b724d7f1
@@ -7803,6 +7767,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jupyter-secrets-manager@npm:^0.4.1":
+  version: 0.4.1
+  resolution: "jupyter-secrets-manager@npm:0.4.1"
+  dependencies:
+    "@jupyterlab/application": ^4.0.0
+    "@jupyterlab/coreutils": ^6.0.0
+    "@jupyterlab/settingregistry": ^4.0.0
+    "@jupyterlab/statedb": ^4.0.0
+    "@lumino/algorithm": ^2.0.0
+    "@lumino/coreutils": ^2.1.2
+    "@lumino/signaling": ^2.1.2
+  checksum: 00062a86f6d5a0c98d9e2d0cda68888af0734bf9957a6f30c7f913a67f0bf5f72598c96071f318520805a936d5b99487dd67c920c5ec1decd2be142ab7fcfaf7
+  languageName: node
+  linkType: hard
+
 "keyv@npm:^4.5.3":
   version: 4.5.4
   resolution: "keyv@npm:4.5.4"
@@ -8194,13 +8173,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimalistic-assert@npm:^1.0.0":
-  version: 1.0.1
-  resolution: "minimalistic-assert@npm:1.0.1"
-  checksum: cc7974a9268fbf130fb055aff76700d7e2d8be5f761fb5c60318d0ed010d839ab3661a533ad29a5d37653133385204c503bfac995aaa4236f4e847461ea32ba7
-  languageName: node
-  linkType: hard
-
 "minimatch@npm:9.0.3":
   version: 9.0.3
   resolution: "minimatch@npm:9.0.3"
@@ -8522,12 +8494,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"openpgp@npm:^5.11.3":
-  version: 5.11.3
-  resolution: "openpgp@npm:5.11.3"
-  dependencies:
-    asn1.js: ^5.0.0
-  checksum: 65d004fb8e19f653ba55f9b8ee2e57c125cd672d53b0b657d8d59b84acec22b06e25011433c75aa1045b322acdb4eb86b4808158471985067e56359fce72ea6f
+"openpgp@npm:^6.0.0":
+  version: 6.3.0
+  resolution: "openpgp@npm:6.3.0"
+  checksum: d0d082dc2b08cc1e4284e770f34ec3df3431155f77abad1acadf08f3d957bf790de494b360427067c96a40acfcab9b0bdabb30ad378f269c8e05383afc0c11ed
   languageName: node
   linkType: hard
 
@@ -9328,7 +9298,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"safer-buffer@npm:>= 2.1.2 < 3.0.0, safer-buffer@npm:^2.1.0":
+"safer-buffer@npm:>= 2.1.2 < 3.0.0":
   version: 2.1.2
   resolution: "safer-buffer@npm:2.1.2"
   checksum: cab8f25ae6f1434abee8d80023d7e72b598cf1327164ddab31003c51215526801e40b66c5e65d658a0af1e9d6478cadcb4c745f4bd6751f97d8644786c0978b0
@@ -10962,13 +10932,6 @@ __metadata:
     glob-to-regexp: ^0.4.1
     graceful-fs: ^4.1.2
   checksum: 469514a04bcdd7ea77d4b3c62d1f087eafbce64cbc728c89355d5710ee01311533456122da7c585d3654d5bfcf09e6085db1a6eb274c4762a18e370526d17561
-  languageName: node
-  linkType: hard
-
-"web-streams-polyfill@npm:~3.0.3":
-  version: 3.0.3
-  resolution: "web-streams-polyfill@npm:3.0.3"
-  checksum: 14299a9cbbca1bf0ffc16c7844990fc85eb0921ba7ff84efbad964738f0ff8e6d2bc3b2617a8728415843be7f40236992c136ff2c89cde3a153636e824b3e712
   languageName: node
   linkType: hard
 

@@ -79,14 +79,14 @@
         "@lumino/polling": "^2.1.4",
         "@lumino/signaling": "^2.1.4",
         "@lumino/widgets": "^2.7.0",
-        "openpgp": "^5.11.3",
+        "jupyter-secrets-manager": "^0.4.1",
+        "openpgp": "^6.0.0",
         "react": "^18.2.0"
     },
     "devDependencies": {
         "@jupyterlab/builder": "^4.0.0",
         "@jupyterlab/galata": "^5.4.9",
         "@jupyterlab/testutils": "^4.0.0",
-        "@openpgp/web-stream-tools": "0.0.11-patch-1",
         "@types/jest": "^29.2.0",
         "@types/json-schema": "^7.0.11",
         "@types/node": "^22.15.21",

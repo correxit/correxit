@@ -47,18 +47,17 @@ export function addCommands(
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
         args: Partial<Credentials>
-      ): AsyncGenerator<[Grade, Headless]> =>
+      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> =>
         (async function* (handle) {
           const { correct } = Workbook;
-          const workbooks = await commands.execute(scan, handle);
+          const credentials = handle.key ? handle : { ...handle, unlock: true };
+          const workbooks = await commands.execute(scan, credentials);
           for await (const workbook of workbooks as AsyncGenerator<Headless>) {
-            yield [
-              { ...(await correct(workbook)), path: workbook.context.path },
-              workbook
-            ];
-            workbook.context.dispose();
+            const { path } = workbook.context;
+            const grade = { ...(await correct(workbook)), path };
+            yield [path, { grade, workbook }];
           }
-        })(normalize(args) || {})
+        })(normalize(args) || ({} as Partial<Workbook.Credentials>))
     })
   );
   disposables.push(
@@ -94,7 +93,11 @@ export function addCommands(
       execute: ({ path }: { path?: string }) => {
         if (!widget || widget.isDisposed) {
           path ||= browser?.model.path || '.';
-          widget = new Corrector.Widget({ commands, path, trans });
+          widget = new Corrector.Widget({
+            commands,
+            path,
+            trans
+          });
           widget.id = 'correxit-corrector-widget';
           widget.title.label = trans.__('Correxit Corrector');
           widget.title.closable = true;

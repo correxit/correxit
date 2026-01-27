@@ -5,6 +5,10 @@ import { Poll } from '@lumino/polling';
 import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
 
+/**
+ * Kicks off a propagator loop.
+ * @returns a message emitter for tracking loop progress.
+ */
 export function invoke({ consumer, workbook }: {
   consumer: Correxit.Consumer;
   workbook: Workbook;
@@ -98,11 +102,13 @@ async function reassign({ assignee, key, notebook, roster }: {
   notebook: INotebookContent;
   roster: string[];
 }) {
-  const metadata = notebook.metadata['correxit'] as Rubric.Locked;
-  const signature = await Rubric.Assignment.sign({ assignee, roster }, key);
+  const { sign } = Rubric.Assignment;
+  const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked;
+  const { report, roster: encrypted } = metadata.assignment;
+  const signature = await sign({ assignee, report, roster }, key);
   (metadata as Rubric.Locked & { accessed: number }).accessed = Date.now();
-  (metadata.assignment.assignee as string) = assignee;
-  (metadata.assignment.signature as string) = signature;
+  (metadata as Rubric.Locked & { assignment: Rubric.Assignment }).assignment =
+    { assignee, report, roster: encrypted, signature };
 }
 
 async function template(

@@ -33,18 +33,18 @@ export namespace Workbook {
   }
 
   export type Credentials = |
-    { path: string; passphrase: null; key: null; } |
-    { path: string; passphrase: null; key: string; } |
-    { path: string; passphrase: string; key: null; };
+    { path: string; unlock: null; key: null; } |
+    { path: string; unlock: null; key: string; } |
+    { path: string; unlock: boolean; key: null; };
 
   export namespace Credentials {
     export function normalize (credentials: Partial<Credentials> | null) {
-      const { key, passphrase, path } = credentials || {};
-      if (key && passphrase || !path) {
+      const { key, unlock, path } = credentials || {};
+      if (key && unlock || !path) {
         return null;
       }
       return {
-        key: key || null, passphrase: passphrase || null, path
+        key: key || null, unlock: unlock || null, path
       } as Credentials;
     }
   }
@@ -98,7 +98,6 @@ export namespace Workbook {
         sharedModel.insertCell(index, code);
       }, false);
       if (workbook.content) {
-        NotebookActions.clearAllOutputs(workbook.content);
         NotebookActions.deselectAll(workbook.content);
       }
     }
@@ -134,7 +133,6 @@ export namespace Workbook {
         sharedModel.insertCell(index, raw);
       }, false);
       if (workbook.content) {
-        NotebookActions.clearAllOutputs(workbook.content);
         NotebookActions.deselectAll(workbook.content);
       }
     }
@@ -147,6 +145,11 @@ export namespace Workbook {
       pool.set(workbook, rubric).has(workbook);
     return [get, set];
   })(new WeakMap<Workbook, Rubric | null>());
+  const metadata = (workbook: Workbook, metadata: any) => {
+    if (get(workbook)?.locked === false) {
+      workbook.context.model.sharedModel.setMetadata('correxit', metadata);
+    }
+  };
 
   /**
    * Add a cell to a workbook's rubric.
@@ -170,7 +173,7 @@ export namespace Workbook {
     if (!rubric || rubric.locked) {
       throw new Error('assign error');
     }
-    const assigned = await Rubric.assign(rubric, assignee || '', roster || []);
+    const assigned = await Rubric.assign(rubric, assignee, roster || []);
     return update(workbook, assigned);
   }
 
@@ -221,7 +224,8 @@ export namespace Workbook {
    */
   export async function convert(
     workbook: Workbook,
-    passphrase: string
+    passphrase: string,
+    unlocker: Correxit.IUnlocker
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
@@ -232,6 +236,7 @@ export namespace Workbook {
       if (error === Correxit.NO_CORREXIT_METADATA) {
         const created = Rubric.create();
         const key = await security.keygen(passphrase, created.id);
+        unlocker.storeKey(created.id, key);
         return update(workbook, { ...created, key });
       }
       throw error;
@@ -252,26 +257,47 @@ export namespace Workbook {
     workbook: Workbook,
     id?:string
   ): Promise<Omit<Grade, 'path'>> {
-    const { sum, UNSCORED } = Rubric;
     const rubric = open(workbook, quiet);
     if (!rubric) {
-      return { spec: null, score: UNSCORED};
+      const code: Rubric.Score.Code = 'missing-rubric';
+      return { spec: null, score: { ...Rubric.Score.UNSCORED, code }};
     }
 
     const result = await execute(workbook, rubric, id);
     if (!result) {
-      return { spec: null, score: UNSCORED};
+      const code: Rubric.Score.Code = 'error-execute';
+      return { spec: null, score: { ...Rubric.Score.UNSCORED, code }};
     }
 
     const { spec, outputs } = result;
-    if (id) {
-      return { spec, score: (await Rubric.score(rubric, id, outputs))[0] };
+    const report = await Rubric.Assignment.score(rubric, outputs, id);
+    if (!rubric.locked) {
+      await update(workbook, await Rubric.sign(rubric, report));
     }
+    return { spec, score: id ? report[id] : Rubric.Assignment.summary(report) };
+  }
 
-    const initial = Promise.resolve([0, 0] as Rubric.Score);
-    const score =  await Object.keys(outputs).reduce(async (total, id) =>
-      sum(await total, (await Rubric.score(rubric, id, outputs))[0]), initial);
-    return { spec, score };
+   /**
+   * Adds a comment to a cell in the assignment score report.
+   *
+   * @param workbook - the workbook to modify the report for.
+   * @param id - the id of the cell to add comment for.
+   *
+   * @returns a promise that resolves when the workbook has been updated.
+   */
+  export async function comment(
+    workbook: Workbook,
+    id: string,
+    comment: string
+  ) {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked) {
+      return null;
+    }
+    return update(workbook, await Rubric.sign(rubric, {
+      ...rubric.assignment.report,
+      [id]: { ...rubric.assignment.report[id], comment }
+    }));
   }
 
   /**
@@ -519,7 +545,7 @@ export namespace Workbook {
       throw new Error(`update error: ${audited.error}`);
     }
     set(workbook, audited.rubric);
-    sharedModel.setMetadata('correxit', await Rubric.lock(audited.rubric));
+    metadata(workbook, await Rubric.lock(audited.rubric));
     return audited.rubric;
   }
 }

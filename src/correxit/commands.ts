@@ -37,7 +37,7 @@ type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
 const {
-  add, assign, convert, correct, lock, remove, reset, toggle, unlock
+  add, assign, convert, correct, lock, remove, reset, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -48,14 +48,15 @@ export function addCommands(
     schedule: (workbook: Workbook | null) => void;
     source: Correxit.Source;
     trans: IRenderMime.TranslationBundle;
+    unlocker: Correxit.IUnlocker;
   }
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
-  const { consumer, schedule, source, trans } = dependencies;
+  const { consumer, schedule, source, trans, unlocker } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
-  const fetch = (handle: Credentials) => io.request(handle, factory, manager);
+  const fetch = (handle: Credentials) => io.request(handle, factory, manager, unlocker);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
   const reify = async (args: Partial<Credentials>): Promise<{
     handle: Credentials | null;
@@ -139,9 +140,10 @@ export function addCommands(
         }
 
         const payload = [await security.digest(expected)];
+        const points = 1;
         const reference = null;
         const shared = false;
-        await add(workbook, { id, is, payload, reference, shared });
+        await add(workbook, { id, is, payload, points, reference, shared });
         return;
       }
       if (is !== 'comparable' && is !== 'correctable') {
@@ -165,8 +167,9 @@ export function addCommands(
       }
 
       const payload = null;
+      const points = 1;
       const shared = false;
-      await add(workbook, { id, is, payload, reference, shared });
+      await add(workbook, { id, is, payload, points, reference, shared });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.assign, {
@@ -175,21 +178,21 @@ export function addCommands(
     isVisible: () => commands.isEnabled(CommandIDs.assign),
     label: trans.__('Assign workbook...'),
     execute: async (args: Partial<Credentials & Assignment>) => {
-      const { handle, rubric, workbook } = await reify(args);
+      const { rubric, workbook } = await reify(args);
       if (!workbook || !rubric) {
         return;
       }
 
       const assignment: Partial<Assignment> = {
-        assignee: args.assignee || '',
+        assignee: args.assignee || undefined,
         roster: args.roster || []
       };
       const different = (a: Partial<Assignment>, b: Assignment) =>
-        JSON.stringify({ x: a.assignee, y: a.roster }) !==
-        JSON.stringify({ x: b.assignee, y: b.roster });
+        // Normalize assignee here to ignore `undefined` mismatches.
+        JSON.stringify({ x: a.assignee || '', y: a.roster }) !==
+        JSON.stringify({ x: b.assignee || '', y: b.roster });
       if (different(assignment, rubric.assignment)) {
         await assign(workbook, assignment);
-        await commands.execute(CommandIDs.save, handle || {});
       }
     }
   }));
@@ -216,8 +219,7 @@ export function addCommands(
         label: trans.__('Enter a passphrase for this workbook')
       });
       if (passphrase) {
-        await convert(workbook, passphrase);
-        await commands.execute(CommandIDs.save, args);
+        await convert(workbook, passphrase, unlocker);
       }
     }
   }));
@@ -246,12 +248,12 @@ export function addCommands(
     execute: async (args: Partial<Cell & Credentials & CellToolbar>) => {
       const { workbook } = await reify(args);
       if (!workbook) {
-        return { score: Rubric.UNSCORED, spec: null };
+        return { score: Rubric.Score.UNSCORED, spec: null };
       }
 
       const id = state.cell(args);
       if (args[Rubric.Cell.TOOLBAR] && !id) {
-        return { score: Rubric.UNSCORED, spec: null };
+        return { score: Rubric.Score.UNSCORED, spec: null };
       }
 
       const result = await correct(workbook, id);
@@ -259,8 +261,8 @@ export function addCommands(
         return result;
       }
 
-      const unscored = result.score === Rubric.UNSCORED;
-      const [x, y] = result.score;
+      const unscored = result.score.status === 'unscored';
+      const [x, y] = [result.score.points, result.score.possible];
       void showDialog({
         title: trans.__('Computed score'),
         body: unscored ? trans.__('Unscored') : trans.__('%1 of %2', x, y)
@@ -469,7 +471,8 @@ The command execute args type is \`Partial<Workbook.Credentials>\`
 
 If no passphrase or key is provided, the command invokes a user prompt dialog.
 The returned promise never rejects. The command invokes an error message dialog
-if unlock fails.
+if unlock fails. It returns a promise that resolves to either null or if
+successful, an unlocked rubric.
     `,
     execute: async (args: Partial<Credentials>):
       Promise<Rubric.Unlocked | null> => {
@@ -478,22 +481,8 @@ if unlock fails.
         return null;
       }
       try {
-        let key = handle?.key || rubric?.key || null;
-        let passphrase: string | null = null;
-        if (!key) {
-          passphrase = handle?.passphrase || await input.text({
-            title: trans.__('Enter a passphrase to unlock'),
-            label: trans.__('Enter a passphrase to unlock this workbook')
-          }) || null;
-        }
-
-        if (!rubric || !rubric.locked || !(key || passphrase)) {
-          return null;
-        }
-        key ||= await security.keygen(passphrase!, rubric.id);
-        const unlocked = await unlock(workbook, key);
-        await commands.execute(CommandIDs.save, { ...args, undo: false });
-        return unlocked;
+        const key = handle?.key || rubric?.key || null;
+        return unlocker.unlock(workbook, rubric, key);
       } catch (error) {
         const file = PathExt.basename(workbook.context.path);
         void showErrorMessage(

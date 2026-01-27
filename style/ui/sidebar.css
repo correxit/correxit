@@ -12,12 +12,38 @@
   font-size: var(--jp-ui-font-size1);
 }
 
+.correxit-sidebar h5 {
+  margin: 0;
+  font-weight: 300 !important;
+  font-size: var(--jp-ui-font-size1);
+}
+
+.correxit-sidebar-cell-report {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin: 2px 20px 8px;
+}
+
 .correxit-sidebar > section {
   padding: 5px;
 }
 
 .correxit-sidebar > section.correxit-sidebar-body {
   flex: 1;
+}
+
+.correxit-sidebar-body > textarea {
+  display: block;
+  justify-content: center;
+  height: 35px;
+  overflow-y: auto;
+  width: 85%;
+  margin: 0 auto 10px;
+  font-size: var(--jp-ui-font-size1);
+  color: var(--jp-ui-font-color2);
+  background-color: var(--jp-layout-color2);
 }
 
 .correxit-sidebar .correxit-monospace {
@@ -38,7 +64,7 @@
   color: var(--jp-ui-font-color3);
 
   .correxit-add {
-    margin: 0;
+    margin: 0 1px;
     min-width: 30%;
     padding: 0 1px;
     width: auto;
@@ -86,6 +112,10 @@
   font-size: var(--jp-ui-font-size1);
   margin: 25px 10px 5px;
   padding: 8px;
+}
+
+.correxit-sidebar-header p {
+  margin: 5px 6px 0;
 }
 
 .correxit-sidebar-additional-operations {
@@ -174,7 +204,7 @@
   top: 5px;
   right: 5px;
   z-index: 10;
-  background-color: var(--jp-brand-color0);
+  background-color: var(--md-blue-400);
   box-shadow: none;
   width: var(--cxt-annotate-size);
   height: var(--cxt-annotate-size);
@@ -194,4 +224,18 @@
 
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
   background-image: url('../source/icons/correctable.svg');
+}
+
+.jp-Notebook
+  .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correct
+  .jp-InputArea-editor {
+  border: 1px solid var(--md-green-300);
+  border-radius: 6px;
+}
+
+.jp-Notebook
+  .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-incorrect
+  .jp-InputArea-editor {
+  border: 1px solid var(--md-red-300);
+  border-radius: 6px;
 }

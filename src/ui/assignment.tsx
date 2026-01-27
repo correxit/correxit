@@ -75,7 +75,10 @@ const Assignee: React.FC<{
         <select
           name="correxit-assignment-assignee"
           onChange={({ target: { value } }) =>
-            toggle('assignee', { ...assignment, assignee: value })
+            toggle('assignee', {
+              ...assignment,
+              assignee: value
+            })
           }
           value={assignee}
         >
@@ -104,9 +107,9 @@ const Roster: React.FC<{
   const roster = value.split('\n').filter(value => !!value);
   useEffect(
     () =>
-      setAssignment(({ assignee, signature }) => {
+      setAssignment(({ assignee, report, signature }) => {
         assignee = find(roster, record => record === assignee) ? assignee : '';
-        return { assignee, roster, signature };
+        return { assignee, report, roster, signature };
       }),
     [roster]
   );
@@ -205,7 +208,7 @@ const Message: React.FC<{ message: string }> = React.memo(({ message }) => (
   </span>
 ));
 
-const Toggle: React.FC<{
+export const Toggle: React.FC<{
   disabled?: boolean;
   icon: LabIcon;
   title: string;
