@@ -40,12 +40,10 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
 
       const report = Rubric.Cell.report(rubric, cell.id);
       const [correct, incorrect] = status;
-      if (report) {
-        if (report.status === 'correct') {
-          node.classList.add(correct);
-        } else if (report.status === 'incorrect') {
-          node.classList.add(incorrect);
-        }
+      if (report?.status === 'correct') {
+        node.classList.add(correct);
+      } else if (report?.status === 'incorrect') {
+        node.classList.add(incorrect);
       }
       if (--remaining === 0) {
         break;
