@@ -33,24 +33,27 @@ export function useCommand<T>(
       const buffer: T[] = [];
       const flush = () => {
         if (buffer.length) {
-          const chunk = [...buffer];
+          setList(accumulated => [...accumulated, ...buffer]);
           buffer.length = 0;
-          setList(prev => [...prev, ...chunk]);
         }
       };
       const throttler = new Throttler(flush, { limit: 16 });
       setList([]);
       setIdle(false);
-      for await (const item of await (stream || [])) {
-        if (interrupted) {
-          return void throttler.dispose();
+      try {
+        for await (const item of await (stream || [])) {
+          if (interrupted) {
+            return void throttler.dispose();
+          }
+          buffer.push(item);
+          void throttler.invoke();
         }
-        buffer.push(item);
-        void throttler.invoke();
+        flush();
+      } finally {
+        throttler.dispose();
+        setIdle(true);
       }
-      throttler.dispose();
-      flush();
-      setIdle(true);
+
     })(commands.hasCommand(id) ? commands.execute(id, args) : void 0);
     return () => void (interrupted = true);
   }, [id, JSON.stringify(args)]);
