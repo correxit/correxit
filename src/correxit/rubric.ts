@@ -181,20 +181,23 @@ export namespace Rubric {
       const cell = get(rubric, id);
       const given = outputs[id];
       const reference = cell?.reference?.[0] ?? '';
+      const expected = outputs[reference];
       if (!cell || !given) {
-        reports[id] = { ...Score.UNSCORED, code: 'missing-cell-given' };
-      } else if (cell.is === 'answerable') {
-        reports[id] = await answer(cell.payload, given);
-      } else if (!outputs[reference]) {
-        reports[id] = { ...Score.UNSCORED, code: 'missing-reference' };
-      } else if (cell.is === 'comparable') {
-        reports[id] = await compare(outputs[reference], given);
-      } else if (cell.is === 'correctable') {
-        reports[id] = await correct(outputs[reference]);
-      } else {
-        reports[id] = { ...Score.UNSCORED, code: 'error-is-unknown' };
+        return { ...Score.UNSCORED, code: 'missing-cell-given' };
       }
-      return reports[id];
+      if (cell.is === 'answerable') {
+        return answer(cell.payload, given);
+      }
+      if (!expected) {
+        return { ...Score.UNSCORED, code: 'missing-reference' };
+      }
+      if (cell.is === 'comparable') {
+        return compare(expected, given);
+      }
+      if (cell.is === 'correctable') {
+        return correct(expected);
+      }
+      return { ...Score.UNSCORED, code: 'error-is-unknown' };
     }
 
     /**
@@ -204,7 +207,7 @@ export namespace Rubric {
      * @param id - the id of the graded cell.
      */
     export function report({ assignment }: Rubric, id: string): Score | null {
-      return assignment.report[id] || reports[id] || null;
+      return assignment.report[id] || null;
     }
   }
 
@@ -569,8 +572,6 @@ export namespace Rubric {
     return { accessed, assignment, id, key, locked, secret, shared };
   }
 }
-
-const reports: { [key: string]: Rubric.Score }  = {};
 
 /**
   * @returns a list of strings with no duplicate values.
