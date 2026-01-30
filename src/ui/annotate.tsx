@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Rubric, Workbook } from '..';
+import * as state from '../correxit/state';
 
 /**
  * A side-effect component that synchronizes rubric state with the notebook UI.
@@ -38,7 +39,7 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
       }
       node.classList.add(`cxt-mod-${cell.is}`);
 
-      const report = Rubric.Cell.report(rubric, cell.id);
+      const report = state.report(workbook, cell.id);
       const [correct, incorrect] = status;
       if (report?.status === 'correct') {
         node.classList.add(correct);

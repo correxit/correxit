@@ -1,11 +1,42 @@
 import { Correxit, Rubric, Workbook } from '.';
 
-const current: { workbook: Workbook | null } = { workbook: null };
+const state: {
+  report: { [cached: string]: Rubric.Score };
+  workbook: Workbook | null;
+} = {
+  report: Object.create(null),
+  workbook: null
+};
 
-export function workbook(update?: Workbook | null) {
-  return current.workbook = update ?? current.workbook;
+/**
+ * @returns the cached score for a cell or the persisted score when uncached.
+ */
+export function report(
+  workbook: Workbook,
+  id: string,
+  score: Rubric.Score | null = null
+): Rubric.Score | null {
+  const rubric = Workbook.open(workbook, true);
+  if (!rubric) {
+    return null;
+  }
+
+  const cached = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
+  return score
+    ? state.report[cached] = score
+    : state.report[cached] || rubric.assignment.report[id] || null;
 }
 
+/**
+ * @returns the active workbook and updates cache if given a workbook.
+ */
+export function workbook(update?: Workbook | null): Workbook | null {
+  return state.workbook = update ?? state.workbook;
+}
+
+/**
+ * @returns the resolved cell id from command arguments.
+ */
 export function cell(args: Partial<
   Rubric.Cell & Rubric.Cell.Toolbar
 >): Rubric.Cell['id'] {
@@ -14,6 +45,9 @@ export function cell(args: Partial<
   return args.id || toolbar && notebook?.activeCell?.model.id || '';
 }
 
+/**
+ * Subscribes to workbook emissions from a Correxit source.
+ */
 export async function subscribe(source: Correxit.Source) {
   for await (const { payload } of source) {
     workbook(payload);

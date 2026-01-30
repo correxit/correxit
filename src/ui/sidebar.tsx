@@ -4,6 +4,7 @@ import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
+import * as state from '../correxit/state';
 import { Annotate } from './annotate';
 import { Assignment } from './assignment';
 import { Toggle } from './toggle';
@@ -88,39 +89,41 @@ const Header: React.FC<{
 };
 
 const CellReport: React.FC<{
-  rubric: Rubric;
-  workbook: Workbook;
+  commands: CommandRegistry;
   id: string;
-}> = ({ rubric, workbook, id }) => {
-  const report = rubric ? Rubric.Cell.report(rubric, id) : null;
-  const [comment, setComment] = useState<string>('');
-  const [open, setOpen] = useState<boolean>(false);
+  rubric: Rubric;
+  trans: TranslationBundle;
+  workbook: Workbook;
+}> = ({ rubric, trans, workbook, id }) => {
+  const report = state.report(workbook, id);
+  const [comment, setComment] = useState('');
+  const [opened, setOpened] = useState(false);
+  const ref = useRef(`correxit-sidebar-cell-report-${id}${Date.now()}`);
   useEffect(() => {
     setComment(report?.comment ?? '');
-    setOpen(false);
+    setOpened(false);
   }, [report]);
-  const ref = useRef(`correxit-assignee-comment-${id}${Date.now()}`);
+  if (!report || !rubric.assignment.assignee) {
+    return <></>;
+  }
 
-  return report && rubric.assignment.assignee ? (
+  const icon = Correxit.Icons.comment;
+  const { points, possible } = report;
+  const heading = trans.__('Cell Score %1 out of %2', points, possible);
+  const title = trans.__('Cell Report');
+  const toggle = () => setOpened(prev => !prev);
+  return (
     <>
       <div className="correxit-sidebar-cell-report">
-        <h5>
-          Cell Grade {report.points} out of {report.possible}
-        </h5>
-        <Toggle
-          {...{
-            icon: Correxit.Icons.comment,
-            title: 'Cell Report',
-            toggle: () => setOpen(!open)
-          }}
-        />
+        <h5>{heading}</h5>
+        <Toggle {...{ icon, title, toggle }} />
       </div>
-      {open && (
+      {opened && (
         <textarea
           key={ref.current}
           data-lm-suppress-shortcuts="true"
           rows={8}
-          name="correxit-assignment-report-comment"
+          name="correxit-sidebar-cell-report-comment"
           value={comment}
           readOnly={rubric.locked}
           placeholder="Cell report..."
@@ -133,7 +136,7 @@ const CellReport: React.FC<{
         />
       )}
     </>
-  ) : null;
+  );
 };
 
 const Body: React.FC<{
@@ -175,7 +178,13 @@ const Body: React.FC<{
   const hint = get(rubric, id)?.is || (has(rubric, id, true) && 'reference');
   return (
     <section className="correxit-sidebar-body">
-      <CellReport rubric={rubric} workbook={workbook} id={id} />
+      <CellReport
+        commands={commands}
+        id={id}
+        rubric={rubric}
+        trans={trans}
+        workbook={workbook}
+      />
       <div className="correxit-sidebar-cell-config">
         {configuration.map((props, index) => (
           <CommandToolbarButtonComponent key={index} {...props} />

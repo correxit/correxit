@@ -199,16 +199,6 @@ export namespace Rubric {
       }
       return { ...Score.UNSCORED, code: 'error-is-unknown' };
     }
-
-    /**
-     * @returns the score report for a graded cell.
-     *
-     * @param rubric - the rubric that defines the graded cell.
-     * @param id - the id of the graded cell.
-     */
-    export function report({ assignment }: Rubric, id: string): Score | null {
-      return assignment.report[id] || null;
-    }
   }
 
   export type Locked = Base &
