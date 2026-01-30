@@ -16,6 +16,7 @@ const baseConfig = jestJupyterLab(__dirname);
 
 module.exports = {
   ...baseConfig,
+  setupFiles: ['<rootDir>/jest.setup.js'],
   automock: false,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
@@ -24,5 +25,6 @@ module.exports = {
   ],
   coverageReporters: ['lcov', 'text'],
   testRegex: 'src/.*/.*.spec.ts[x]?$',
-  transformIgnorePatterns: [`/node_modules/(?!${esModules}).+`]
+  transformIgnorePatterns: [`/node_modules/(?!${esModules}).+`],
+  modulePathIgnorePatterns: ['<rootDir>/lib/']
 };
