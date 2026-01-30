@@ -513,7 +513,7 @@ async function* translate(
       'progress': trans.__('%1 of %2', ...slots),
       'saved': trans.__('Saved %1', ...slots),
       'separator': '------------',
-      'success': trans.__('Finished! (roster: %1}', ...slots)
+      'success': trans.__('Finished! (roster: %1)', ...slots)
     })[type] || '';
   };
   for await (const { payload } of emitter) {
