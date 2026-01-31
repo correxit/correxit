@@ -1,6 +1,6 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
-import { filter, find, reduce } from '@lumino/algorithm';
+import { filter, find, map, reduce } from '@lumino/algorithm';
 import * as security from './security';
 
 /**
@@ -179,9 +179,9 @@ export namespace Rubric {
       outputs: Outputs
     ): Promise<Score> {
       const cell = get(rubric, id);
-      const given = outputs[id];
+      const given = outputs.get(id);
       const reference = cell?.reference?.[0] ?? '';
-      const expected = outputs[reference];
+      const expected = outputs.get(reference);
       if (!cell || !given) {
         return { ...Score.UNSCORED, code: 'missing-cell-given', id };
       }
@@ -204,7 +204,7 @@ export namespace Rubric {
   export type Locked = Base &
     Readonly<{ key: null; locked: true; secret: string; }>;
 
-  export type Outputs = { [id: string]: Cell.Output[]; }
+  export type Outputs = Map<string, Cell.Output[]>;
 
   export type Score = Readonly<{
     code: Score.Code;
@@ -249,19 +249,17 @@ export namespace Rubric {
       id?: string
     ): Promise<Assignment.Report> {
       const { assignment } = rubric;
-      const keys = Object.keys(outputs);
-      const cells = id ? [id] : keys.filter(id => has(rubric, id));
-      const scores = cells.map(id => Cell.score(rubric, id, outputs));
+      const cells = id ? [id] : filter(outputs.keys(), id => has(rubric, id));
+      const pending = map(cells, id => Cell.score(rubric, id, outputs));
+      const scores = await Promise.all(pending);
       const report = Object.keys(assignment.report)
         .filter(id => has(rubric, id))
         .reduce(
           (acc, id) => ({ ...acc, [id]: { ...assignment.report[id], id } }),
           {} as { [cell: string]: Score }
         );
-      return (await Promise.all(scores)).reduce(
-        (report, score, index) => ({ ...report, [cells[index]]: score }),
-        { ...report } as { [cell: string]: Score }
-      );
+      scores.forEach(score => void (report[score.id] = score));
+      return report;
     }
 
     export async function sign(

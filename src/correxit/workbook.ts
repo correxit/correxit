@@ -269,12 +269,13 @@ export namespace Workbook {
       return { spec: null, score: { ...Rubric.Score.UNSCORED, code }};
     }
 
+    const { score, summary } = Rubric.Assignment;
     const { spec, outputs } = result;
-    const report = await Rubric.Assignment.score(rubric, outputs, id);
+    const report = await score(rubric, outputs, id);
     if (!rubric.locked) {
       await update(workbook, await Rubric.sign(rubric, report));
     }
-    return { spec, score: id ? report[id] : Rubric.Assignment.summary(report) };
+    return { spec, score: id ? report[id] : summary(report) };
   }
 
    /**
@@ -361,7 +362,7 @@ export namespace Workbook {
       );
     }
 
-    const outputs: Rubric.Outputs = {};
+    const outputs: Rubric.Outputs = new Map();
     const leased = await kernels.lease(workbook);
     if (!leased) {
       return null;
@@ -373,7 +374,7 @@ export namespace Workbook {
       if (cell.type === 'code') {
         try {
           const { execute } = Rubric.Cell;
-          outputs[cell.id] = await execute(cell as ICodeCellModel, kernel);
+          outputs.set(cell.id, await execute(cell as ICodeCellModel, kernel));
         } catch (error) {
           console.warn('cell execute error', cell, error);
         }

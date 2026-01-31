@@ -153,7 +153,7 @@ describe('Rubric', () => {
       it('scores correct output', async () => {
         const id = 'q1';
         const rubric = populate(id, '42');
-        const outputs = { [id]: [output('42')] };
+        const outputs = new Map([[id, [output('42')]]]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.status).toBe('correct');
       });
@@ -161,7 +161,7 @@ describe('Rubric', () => {
       it('scores incorrect output', async () => {
         const id = 'q1';
         const rubric = populate(id, '42');
-        const outputs = { [id]: [output('99')] };
+        const outputs = new Map([[id, [output('99')]]]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.status).toBe('incorrect');
         expect(score.code).toBe('mismatch-digest');
@@ -170,7 +170,7 @@ describe('Rubric', () => {
       it('handles empty given', async () => {
         const id = 'q1';
         const rubric = populate(id, '42');
-        const outputs = { [id]: [] };
+        const outputs = new Map([[id, []]]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.status).toBe('incorrect');
         expect(score.code).toBe('empty-given');
@@ -179,7 +179,7 @@ describe('Rubric', () => {
       it('returns score with correct id', async () => {
         const id = 'q1';
         const rubric = populate(id, '42');
-        const outputs = { [id]: [output('42')] };
+        const outputs = new Map([[id, [output('42')]]]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.id).toBe(id);
       });
@@ -202,10 +202,10 @@ describe('Rubric', () => {
         const id = 'student';
         const ref = 'teacher';
         const rubric = populate(id, ref);
-        const outputs = {
-          [id]: [data({ foo: 1 })],
-          [ref]: [data({ foo: 1 })]
-        };
+        const outputs = new Map([
+          [id, [data({ foo: 1 })]],
+          [ref, [data({ foo: 1 })]]
+        ]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.status).toBe('correct');
       });
@@ -214,10 +214,10 @@ describe('Rubric', () => {
         const id = 'student';
         const ref = 'teacher';
         const rubric = populate(id, ref);
-        const outputs = {
-          [id]: [data({ foo: 2 })],
-          [ref]: [data({ foo: 1 })]
-        };
+        const outputs = new Map([
+          [id, [data({ foo: 2 })]],
+          [ref, [data({ foo: 1 })]]
+        ]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.status).toBe('incorrect');
         expect(score.code).toBe('mismatch-data');
@@ -227,7 +227,10 @@ describe('Rubric', () => {
         const id = 's';
         const ref = 't';
         const rubric = populate(id, ref);
-        const outputs = { [id]: [output('foo')], [ref]: [data({})] };
+        const outputs = new Map([
+          [id, [output('foo')]],
+          [ref, [data({})]]
+        ]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.code).toBe('mismatch-congruence');
       });
@@ -236,7 +239,7 @@ describe('Rubric', () => {
         const id = 's';
         const ref = 't';
         const rubric = populate(id, ref);
-        const outputs = { [id]: [data({})] }; // ref is missing from outputs
+        const outputs = new Map([[id, [data({})]]]); // ref is missing from outputs
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.code).toBe('missing-reference');
       });
@@ -259,7 +262,10 @@ describe('Rubric', () => {
         const id = 's';
         const ref = 't';
         const rubric = populate(id, ref);
-        const outputs = { [id]: [], [ref]: [output('Test Passed')] };
+        const outputs = new Map([
+          [id, []],
+          [ref, [output('Test Passed')]]
+        ]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.status).toBe('correct');
       });
@@ -268,7 +274,10 @@ describe('Rubric', () => {
         const id = 's';
         const ref = 't';
         const rubric = populate(id, ref);
-        const outputs = { [id]: [], [ref]: [error('AssertionError')] };
+        const outputs = new Map([
+          [id, []],
+          [ref, [error('AssertionError')]]
+        ]);
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.status).toBe('incorrect');
       });
@@ -295,10 +304,10 @@ describe('Rubric', () => {
         payload: ['DIGEST<B>']
       });
 
-      const outputs = {
-        c1: [output('A')],
-        c2: [output('B')]
-      };
+      const outputs = new Map([
+        ['c1', [output('A')]],
+        ['c2', [output('B')]]
+      ]);
       const report = await Rubric.Assignment.score(rubric, outputs);
       expect(report['c1'].status).toBe('correct');
       expect(report['c2'].status).toBe('correct');
