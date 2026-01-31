@@ -111,7 +111,7 @@ const Roster: React.FC<{
     return <></>;
   }
 
-  const ref = useRef(`correxit-assignee-select-${Date.now()}`);
+  const id = 'correxit-assignment-roster';
   return (
     <div className="correxit-assignment-roster">
       <Toggle
@@ -122,11 +122,11 @@ const Roster: React.FC<{
         }}
       />
       <div>
-        <label htmlFor={ref.current}>
+        <label htmlFor={id}>
           {trans.__('Assignment roster (line-separated)')}
         </label>
         <textarea
-          id={ref.current}
+          id={id}
           data-lm-suppress-shortcuts="true"
           rows={8}
           name="correxit-assignment-roster"
