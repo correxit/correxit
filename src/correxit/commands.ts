@@ -16,6 +16,7 @@ import * as state from './state';
 export namespace CommandIDs {
   export const add = 'correxit:add';
   export const assign = 'correxit:assign';
+  export const comment = 'correxit:comment';
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const emit = 'correxit:emit';
@@ -37,7 +38,7 @@ type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
 const {
-  add, assign, convert, correct, lock, remove, reset, toggle
+  add, assign, comment, convert, correct, lock, remove, reset, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -193,6 +194,16 @@ export function addCommands(
         JSON.stringify({ x: b.assignee || '', y: b.roster });
       if (different(assignment, rubric.assignment)) {
         await assign(workbook, assignment);
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.comment, {
+    label: trans.__('Comment on cell'),
+    execute: async (args: Partial<Cell> & { comment?: string; }) => {
+      const workbook = state.workbook();
+      const id = state.cell(args);
+      if (workbook && id) {
+        await comment(workbook, id, args.comment || '');
       }
     }
   }));
