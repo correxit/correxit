@@ -183,21 +183,21 @@ export namespace Rubric {
       const reference = cell?.reference?.[0] ?? '';
       const expected = outputs[reference];
       if (!cell || !given) {
-        return { ...Score.UNSCORED, code: 'missing-cell-given' };
+        return { ...Score.UNSCORED, code: 'missing-cell-given', id };
       }
       if (cell.is === 'answerable') {
-        return answer(cell.payload, given);
+        return { ...await answer(cell.payload, given), id };
       }
       if (!expected) {
-        return { ...Score.UNSCORED, code: 'missing-reference' };
+        return { ...Score.UNSCORED, code: 'missing-reference', id };
       }
       if (cell.is === 'comparable') {
-        return compare(expected, given);
+        return { ...await compare(expected, given), id };
       }
       if (cell.is === 'correctable') {
-        return correct(expected);
+        return { ...await correct(expected), id };
       }
-      return { ...Score.UNSCORED, code: 'error-is-unknown' };
+      return { ...Score.UNSCORED, code: 'error-is-unknown', id };
     }
   }
 
@@ -209,6 +209,7 @@ export namespace Rubric {
   export type Score = Readonly<{
     code: Score.Code;
     comment: string;
+    id: string;
     points: number;
     possible: number;
     status: Score.Status;
@@ -254,7 +255,7 @@ export namespace Rubric {
       const report = Object.keys(assignment.report)
         .filter(id => has(rubric, id))
         .reduce(
-          (report, id) => ({ ...report, [id]: { ...assignment.report[id] } }),
+          (acc, id) => ({ ...acc, [id]: { ...assignment.report[id], id } }),
           {} as { [cell: string]: Score }
         );
       return (await Promise.all(scores)).reduce(
@@ -282,6 +283,7 @@ export namespace Rubric {
         return {
           code: '',
           comment: '',
+          id: '',
           points: a.points + b.points,
           possible: a.possible + b.possible,
           status: 'summary'
@@ -340,6 +342,7 @@ export namespace Rubric {
     export const CORRECT: Score = Object.freeze({
       code: '',
       comment: '',
+      id: '',
       points: 1,
       possible: 1,
       status: 'correct'
@@ -348,6 +351,7 @@ export namespace Rubric {
     export const INCORRECT: Score = Object.freeze({
       code: '',
       comment: '',
+      id: '',
       points: 0,
       possible: 1,
       status: 'incorrect'
@@ -356,6 +360,7 @@ export namespace Rubric {
     export const UNSCORED: Score = Object.freeze({
       code: '',
       comment: '',
+      id: '',
       points: -1,
       possible: -1,
       status: 'unscored'

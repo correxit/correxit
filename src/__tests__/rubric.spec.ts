@@ -175,6 +175,14 @@ describe('Rubric', () => {
         expect(score.status).toBe('incorrect');
         expect(score.code).toBe('empty-given');
       });
+
+      it('returns score with correct id', async () => {
+        const id = 'q1';
+        const rubric = populate(id, '42');
+        const outputs = { [id]: [output('42')] };
+        const score = await Rubric.Cell.score(rubric, id, outputs);
+        expect(score.id).toBe(id);
+      });
     });
 
     describe('Comparable (Exact Match)', () => {
