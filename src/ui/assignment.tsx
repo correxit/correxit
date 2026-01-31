@@ -1,5 +1,5 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { ToolbarButtonComponent } from '@jupyterlab/ui-components';
+import { checkIcon, ToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
@@ -116,7 +116,7 @@ const Roster: React.FC<{
     <div className="correxit-assignment-roster">
       <Toggle
         {...{
-          icon: Correxit.Icons.assignee,
+          icon: checkIcon,
           title: trans.__('Assignee view'),
           toggle: () => toggle('assignee', assignment)
         }}

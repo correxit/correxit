@@ -1,8 +1,11 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
+import {
+  checkIcon,
+  CommandToolbarButtonComponent
+} from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { Annotate } from './annotate';
@@ -13,7 +16,7 @@ import { SidebarWidget } from './widget';
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const { get, has } = Rubric;
-const { add, convert, correct, lock, remove, reset, toggle, unlock } =
+const { add, comment, convert, correct, lock, remove, reset, toggle, unlock } =
   Correxit.CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
@@ -94,45 +97,47 @@ const CellReport: React.FC<{
   rubric: Rubric;
   trans: TranslationBundle;
   workbook: Workbook;
-}> = ({ rubric, trans, workbook, id }) => {
+}> = ({ commands, rubric, trans, workbook, id }) => {
   const report = state.report(workbook, id);
-  const [comment, setComment] = useState('');
-  const [opened, setOpened] = useState(false);
-  const ref = useRef(`correxit-sidebar-cell-report-${id}${Date.now()}`);
+  const [value, setValue] = useState(report?.comment || '');
+  const [editable, setEditable] = useState(false);
+
   useEffect(() => {
-    setComment(report?.comment ?? '');
-    setOpened(false);
+    setValue(report?.comment ?? '');
+    setEditable(false);
   }, [report]);
-  if (!report || !rubric.assignment.assignee) {
+
+  if (!report) {
     return <></>;
   }
 
-  const icon = Correxit.Icons.comment;
+  const icon = editable ? checkIcon : Correxit.Icons.comment;
   const { points, possible } = report;
   const heading = trans.__('Cell Score %1 out of %2', points, possible);
   const title = trans.__('Cell Report');
-  const toggle = () => setOpened(prev => !prev);
+  const placeholder = trans.__('Cell report...');
+  const toggle = () => {
+    if (editable) {
+      void commands.execute(comment, { id, comment: value });
+    }
+    setEditable(prev => !prev);
+  };
   return (
     <>
       <div className="correxit-sidebar-cell-report">
         <h5>{heading}</h5>
         <Toggle {...{ icon, title, toggle }} />
       </div>
-      {opened && (
+      {editable && (
         <textarea
-          key={ref.current}
           data-lm-suppress-shortcuts="true"
-          rows={8}
+          key={id}
           name="correxit-sidebar-cell-report-comment"
-          value={comment}
+          onChange={({ target: { value } }) => setValue(value)}
+          placeholder={placeholder}
           readOnly={rubric.locked}
-          placeholder="Cell report..."
-          onChange={({ target: { value } }) => {
-            setComment(value);
-          }}
-          onBlur={({ target: { value } }) => {
-            Workbook.comment(workbook, id, value);
-          }}
+          rows={8}
+          value={value}
         />
       )}
     </>
