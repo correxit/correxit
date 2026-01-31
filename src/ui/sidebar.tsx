@@ -167,12 +167,8 @@ const Body: React.FC<{
   ];
   const hints = {
     answerable: trans.__('Expected output has been set.'),
-    comparable: trans.__(
-      'Cell has been selected, its output will be used for comparison.'
-    ),
-    correctable: trans.__(
-      'Reference cell has been selected, its code will be used for correcting.'
-    ),
+    comparable: trans.__('Cell output is compared against a reference.'),
+    correctable: trans.__('Cell is corrected by a reference cell.'),
     reference: trans.__('Selected cell is a reference cell.')
   };
   const hint = get(rubric, id)?.is || (has(rubric, id, true) && 'reference');
