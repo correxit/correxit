@@ -33,8 +33,9 @@ export function useCommand<T>(
       const buffer: T[] = [];
       const flush = () => {
         if (buffer.length) {
-          setList(accumulated => [...accumulated, ...buffer]);
+          const chunk = buffer.slice();
           buffer.length = 0;
+          setList(accumulated => [...accumulated, ...chunk]);
         }
       };
       const throttler = new Throttler(flush, { limit: 16 });
