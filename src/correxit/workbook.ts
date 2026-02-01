@@ -191,10 +191,9 @@ export namespace Workbook {
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
     const { locked, secret, shared } = rubric;
     const known = reduce(workbook.context.model.sharedModel.cells,
-      (accumulator, { id, cell_type }) => ({
-        ...accumulator,
-        [id]: cell_type === 'code' || cell_type === 'raw'
-      }), Object.create(null) as { [id: string]: boolean; }
+      (acc, { id, cell_type }) =>
+        ({ ...acc, [id]: cell_type === 'code' || cell_type === 'raw' }),
+      Object.create(null) as { [id: string]: boolean; }
     );
     for (const { cells } of locked ? [shared] : [secret, shared]) {
       for (const id in cells) {

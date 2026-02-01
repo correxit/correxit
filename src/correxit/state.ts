@@ -12,7 +12,7 @@ const state: {
  * @returns the cached score for a cell or the persisted score when uncached.
  */
 export function report(
-  workbook: Workbook,
+  workbook: Workbook | null,
   id: string,
   score: Rubric.Score | null = null
 ): Rubric.Score | null {
