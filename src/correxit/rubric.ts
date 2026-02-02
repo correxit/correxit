@@ -245,7 +245,7 @@ export namespace Rubric {
      * scored if it exists in the rubric.
      * All scores that already exist from previous scoring remain untouched as
      * long as they exist in the rubric and have not been rescored.
-     * The `order` of keys in the outputs (`outputs.key()`) is preserved.
+     * The `order` of keys in the outputs (`outputs.keys()`) is preserved.
      */
     export async function score(
       rubric: Rubric,
