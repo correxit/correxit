@@ -1,14 +1,11 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
-import {
-  Button,
-  LabIcon,
-  ToolbarButtonComponent
-} from '@jupyterlab/ui-components';
+import { checkIcon, ToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
 import { Correxit, Rubric } from '..';
 import { useCommand } from '../correxit/use-command';
+import { Toggle } from './toggle';
 
 type Assignment = Rubric.Assignment;
 type TranslationBundle = IRenderMime.TranslationBundle;
@@ -75,10 +72,7 @@ const Assignee: React.FC<{
         <select
           name="correxit-assignment-assignee"
           onChange={({ target: { value } }) =>
-            toggle('assignee', {
-              ...assignment,
-              assignee: value
-            })
+            toggle('assignee', { ...assignment, assignee: value })
           }
           value={assignee}
         >
@@ -117,22 +111,22 @@ const Roster: React.FC<{
     return <></>;
   }
 
-  const ref = useRef(`correxit-assignee-select-${Date.now()}`);
+  const id = 'correxit-assignment-roster';
   return (
     <div className="correxit-assignment-roster">
       <Toggle
         {...{
-          icon: Correxit.Icons.assignee,
+          icon: checkIcon,
           title: trans.__('Assignee view'),
           toggle: () => toggle('assignee', assignment)
         }}
       />
       <div>
-        <label htmlFor={ref.current}>
+        <label htmlFor={id}>
           {trans.__('Assignment roster (line-separated)')}
         </label>
         <textarea
-          id={ref.current}
+          id={id}
           data-lm-suppress-shortcuts="true"
           rows={8}
           name="correxit-assignment-roster"
@@ -207,19 +201,3 @@ const Message: React.FC<{ message: string }> = React.memo(({ message }) => (
     <br />
   </span>
 ));
-
-export const Toggle: React.FC<{
-  disabled?: boolean;
-  icon: LabIcon;
-  title: string;
-  toggle?: () => void;
-}> = ({ disabled, icon, title, toggle }) => (
-  <Button
-    className="jp-mod-minimal correxit-assignment-toggle"
-    disabled={disabled || false}
-    onClick={toggle ? event => (event.preventDefault(), toggle()) : void 0}
-    title={title}
-  >
-    <icon.react title={title} tag="span" />
-  </Button>
-);

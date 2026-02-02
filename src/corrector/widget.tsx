@@ -9,10 +9,10 @@ import {
   ToolbarButtonComponent
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
+import { ISignal, Signal } from '@lumino/signaling';
 import React, { useEffect, useState } from 'react';
 import { Correxit } from '..';
 import { Corrector } from '.';
-import { ISignal, Signal } from '@lumino/signaling';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
   constructor({ commands, path, trans }: CorrectorWidget.IOptions) {

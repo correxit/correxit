@@ -148,33 +148,35 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
         factory: async () => null
       });
+      const { CommandIDs } = Correxit;
+      const { open } = Workbook;
       const quiet = true;
-      let current: Workbook | null = null;
-      const handler = () => {
+      const notify = () => {
         // The sidebar can rely on metadata changes, but the native toolbar
         // buttons only change when their respective command has changed.
-        commands.notifyCommandChanged(Correxit.CommandIDs.add);
-        commands.notifyCommandChanged(Correxit.CommandIDs.convert);
-        commands.notifyCommandChanged(Correxit.CommandIDs.correct);
-        commands.notifyCommandChanged(Correxit.CommandIDs.lock);
-        commands.notifyCommandChanged(Correxit.CommandIDs.toggle);
-        commands.notifyCommandChanged(Correxit.CommandIDs.unlock);
-      };
-      const subscribe = (prev: Workbook | null, next: Workbook | null) => {
-        prev?.context.fileChanged.disconnect(handler);
-        prev?.context.model.sharedModel.metadataChanged.disconnect(handler);
-        next?.context.fileChanged.connect(handler);
-        next?.context.model.sharedModel.metadataChanged.connect(handler);
-        handler();
-      };
-      const schedule = (workbook: Workbook | null) => {
-        if (workbook !== source.state.payload) {
-          Workbook.open(workbook, quiet);
-          subscribe(current, workbook);
-          current = workbook;
-          void source.schedule({ payload: workbook });
+        const { add, convert, correct, lock, toggle, unlock } = CommandIDs;
+        const buttons = [add, convert, correct, lock, toggle, unlock];
+        for (const command of buttons) {
+          commands.notifyCommandChanged(command);
         }
       };
+      const subscribe = (prev: Workbook | null, next: Workbook | null) => {
+        prev?.context.fileChanged.disconnect(notify);
+        prev?.context.model.sharedModel.metadataChanged.disconnect(notify);
+        next?.context.fileChanged.connect(notify);
+        next?.context.model.sharedModel.metadataChanged.connect(notify);
+      };
+      const schedule: (workbook: Workbook | null) => void = (
+        previous => workbook => {
+          if (workbook !== source.state.payload) {
+            void open(workbook, quiet);
+            subscribe(previous, workbook);
+            previous = workbook;
+            void source.schedule({ payload: workbook });
+            notify();
+          }
+        }
+      )(null as Workbook | null);
       const trans = (translator || nullTranslator).load('correxit');
       const dependencies = { consumer, schedule, source, trans, unlocker };
       const added = addCommands(app, dependencies);

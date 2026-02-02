@@ -1,6 +1,6 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
-import { filter, find, reduce } from '@lumino/algorithm';
+import { filter, find, map, reduce } from '@lumino/algorithm';
 import * as security from './security';
 
 /**
@@ -179,43 +179,37 @@ export namespace Rubric {
       outputs: Outputs
     ): Promise<Score> {
       const cell = get(rubric, id);
-      const given = outputs[id];
+      const given = outputs.get(id);
       const reference = cell?.reference?.[0] ?? '';
+      const expected = outputs.get(reference);
       if (!cell || !given) {
-        reports[id] = { ...Score.UNSCORED, code: 'missing-cell-given' };
-      } else if (cell.is === 'answerable') {
-        reports[id] = await answer(cell.payload, given);
-      } else if (!outputs[reference]) {
-        reports[id] = { ...Score.UNSCORED, code: 'missing-reference' };
-      } else if (cell.is === 'comparable') {
-        reports[id] = await compare(outputs[reference], given);
-      } else if (cell.is === 'correctable') {
-        reports[id] = await correct(outputs[reference]);
-      } else {
-        reports[id] = { ...Score.UNSCORED, code: 'error-is-unknown' };
+        return { ...Score.UNSCORED, code: 'missing-cell-given', id };
       }
-      return reports[id];
-    }
-
-    /**
-     * @returns the score report for a graded cell.
-     *
-     * @param rubric - the rubric that defines the graded cell.
-     * @param id - the id of the graded cell.
-     */
-    export function report({ assignment }: Rubric, id: string): Score | null {
-      return assignment.report[id] || reports[id] || null;
+      if (cell.is === 'answerable') {
+        return { ...await answer(cell.payload, given), id };
+      }
+      if (!expected) {
+        return { ...Score.UNSCORED, code: 'missing-reference', id };
+      }
+      if (cell.is === 'comparable') {
+        return { ...await compare(expected, given), id };
+      }
+      if (cell.is === 'correctable') {
+        return { ...await correct(expected), id };
+      }
+      return { ...Score.UNSCORED, code: 'error-is-unknown', id };
     }
   }
 
   export type Locked = Base &
     Readonly<{ key: null; locked: true; secret: string; }>;
 
-  export type Outputs = { [id: string]: Cell.Output[]; }
+  export type Outputs = Map<string, Cell.Output[]>;
 
   export type Score = Readonly<{
     code: Score.Code;
     comment: string;
+    id: string;
     points: number;
     possible: number;
     status: Score.Status;
@@ -229,11 +223,14 @@ export namespace Rubric {
     Readonly<{ key: string; locked: false; secret: Section; }>;
 
   export namespace Assignment {
-    export type Report = Readonly<{ [cell: string]: Score; }>;
+    export type Report = Readonly<{
+      order: string[];
+      scores: { [id: string]: Score };
+    }>;
 
     export const EMPTY: Assignment = {
       assignee: '',
-      report: {},
+      report: { order: [], scores: {} },
       roster: [],
       signature: ''
     };
@@ -248,26 +245,30 @@ export namespace Rubric {
      * scored if it exists in the rubric.
      * All scores that already exist from previous scoring remain untouched as
      * long as they exist in the rubric and have not been rescored.
+     * The `order` of keys in the outputs (`outputs.keys()`) is preserved.
      */
     export async function score(
       rubric: Rubric,
       outputs: Outputs,
       id?: string
     ): Promise<Assignment.Report> {
-      const { assignment } = rubric;
-      const keys = Object.keys(outputs);
-      const cells = id ? [id] : keys.filter(id => has(rubric, id));
-      const scores = cells.map(id => Cell.score(rubric, id, outputs));
-      const report = Object.keys(assignment.report)
-        .filter(id => has(rubric, id))
-        .reduce(
-          (report, id) => ({ ...report, [id]: { ...assignment.report[id] } }),
-          {} as { [cell: string]: Score }
-        );
-      return (await Promise.all(scores)).reduce(
-        (report, score, index) => ({ ...report, [cells[index]]: score }),
-        { ...report } as { [cell: string]: Score }
-      );
+      const { assignment: { report } } = rubric;
+      const valid = (id: string) => has(rubric, id);
+      const subset = (id ? [id] : Array.from(outputs.keys())).filter(valid);
+      if (!subset.length) {
+        return report;
+      }
+
+      const pending = map(subset, id => Cell.score(rubric, id, outputs));
+      const scored = await Promise.all(pending);
+      const scores = {
+        ...Object.keys(report.scores).filter(valid)
+          .reduce((acc, key) => ({ ...acc, [key]: report.scores[key] }), {}),
+        ...scored.reduce((acc, score) => ({ ...acc, [score.id]: score }), {})
+      };
+      const existing = report.order.filter(valid);
+      const order = unique(id ? [...existing, id] : [...subset, ...existing]);
+      return { order, scores };
     }
 
     export async function sign(
@@ -279,6 +280,7 @@ export namespace Rubric {
     }
 
     export function summary(report: Report): Score {
+      const { order, scores } = report;
       const sum = (a: Score, b: Score): Score => {
         if (a.status === 'unscored') {
           return b;
@@ -288,14 +290,17 @@ export namespace Rubric {
         }
         return {
           code: '',
-          comment: '',
+          comment: [a.comment, b.comment].join('\n'),
+          id: '',
           points: a.points + b.points,
           possible: a.possible + b.possible,
           status: 'summary'
         };
       };
-      const scores = Object.keys(report);
-      return scores.map(cell => report[cell]).reduce(sum, Score.UNSCORED);
+      return order
+        .map(id => scores[id])
+        .filter(score => !!score)
+        .reduce(sum, Score.UNSCORED);
     }
 
     export async function validate(
@@ -347,6 +352,7 @@ export namespace Rubric {
     export const CORRECT: Score = Object.freeze({
       code: '',
       comment: '',
+      id: '',
       points: 1,
       possible: 1,
       status: 'correct'
@@ -355,6 +361,7 @@ export namespace Rubric {
     export const INCORRECT: Score = Object.freeze({
       code: '',
       comment: '',
+      id: '',
       points: 0,
       possible: 1,
       status: 'incorrect'
@@ -363,6 +370,7 @@ export namespace Rubric {
     export const UNSCORED: Score = Object.freeze({
       code: '',
       comment: '',
+      id: '',
       points: -1,
       possible: -1,
       status: 'unscored'
@@ -390,7 +398,7 @@ export namespace Rubric {
     assignee = '',
     roster: string[] = []
   ): Promise<Unlocked> {
-    const unsigned = { assignee, report: {}, roster: unique(roster) };
+    const unsigned = { ...Assignment.EMPTY, assignee, roster: unique(roster) };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = { ...unsigned, signature };
     await Assignment.validate({ assignment, key });
@@ -482,15 +490,9 @@ export namespace Rubric {
     return { accessed, assignment, id, key, locked, secret, shared };
   }
 
-  export function remove(rubric: Unlocked, id: string): Unlocked;
-  export function remove(rubric: Locked, id: string): Locked;
-  export function remove(rubric: Rubric, id: string): Rubric;
-  export function remove(rubric: Rubric, id: string): Rubric {
+  export function remove(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
-    const drop = (section: Section | string, cell: Cell): Section | string => {
-      if (typeof section === 'string') {
-        return section;
-      }
+    const drop = (section: Section, cell: Cell): Section => {
       const { [cell.id]: _, ...rest } = section.cells;
       void _; // This is the removed cell.
       return { cells: rest };
@@ -501,15 +503,16 @@ export namespace Rubric {
     const secret = cell.shared ? rubric.secret : drop(rubric.secret, cell);
     const shared = cell.shared ? drop(rubric.shared, cell) : rubric.shared;
     const { assignment: { assignee, report } } = rubric;
-    const filtered = Object.entries(report).filter(([key]) => key !== id);
+    const scores = Object.entries(report.scores)
+      .filter(([key]) => key !== id)
+      .reduce((acc, [key, score]) => ({ ...acc, [key]: score }), {});
+    const order = report.order.filter(key => key !== id);
     const assignment: Assignment = {
       ...rubric.assignment, assignee,
-      report: filtered.reduce(
-        (report, [cell, score]) => ({ ...report, [cell]: score }), {}
-      )
+      report: { order, scores }
     };
     const accessed = Date.now();
-    return { ...rubric, accessed, assignment, secret, shared } as Rubric;
+    return { ...rubric, accessed, assignment, secret, shared };
   }
 
   export async function sign(
@@ -540,23 +543,17 @@ export namespace Rubric {
   export function toggle(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
     if (!cell) {
-      throw new Error('cannot toggle cell unknown in rubric');
+      throw new Error(`toggle: cell ${id} not found in rubric`);
     }
-    let secret: Section;
-    let shared: Section;
-    if (cell.shared) {
-      const { [id]: referent, ...rest } = rubric.shared.cells;
-      secret = {
-        cells: {...rubric.secret.cells, [id]: { ...referent, shared: false }}
-      };
-      shared = { cells: {...rest} };
-    } else {
-      const { [id]: referent, ...rest } = rubric.secret.cells;
-      secret = { cells: { ...rest } };
-      shared = {
-        cells: { ...rubric.shared.cells, [id]: { ...referent, shared: true } }
-      };
-    }
+
+    const section = cell.shared ? rubric.shared : rubric.secret;
+    const { [id]: swap, ...rest } = section.cells;
+    const secret: Section = cell.shared
+      ? { cells: { ...rubric.secret.cells, [id]: { ...swap, shared: false } } }
+      : { cells: { ...rest } };
+    const shared: Section = cell.shared
+      ? { cells: { ...rest } }
+      : { cells: { ...rubric.shared.cells, [id]: { ...swap, shared: true } } };
     return { ...rubric, accessed: Date.now(), secret, shared };
   }
 
@@ -576,13 +573,7 @@ export namespace Rubric {
   }
 }
 
-const reports: { [key: string]: Rubric.Score }  = {};
-
 /**
   * @returns a list of strings with no duplicate values.
   */
-const unique = (list: string[]): string[] =>
-  list.reduce<[string[], { [key: string]: true }]>(
-    ([unique, keys], key) => (
-      [keys[key] ? unique : [...unique, key], { ...keys, [key]: true }]
-    ), [[], {}])[0];
+const unique = (list: string[]): string[] => Array.from(new Set(list));

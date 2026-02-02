@@ -1,10 +1,10 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ReactWidget } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit, Workbook } from '..';
 import { Sidebar } from '.';
-import { ISettingRegistry } from '@jupyterlab/settingregistry';
 
 export class SidebarWidget extends ReactWidget {
   constructor({ commands, settings, source, trans }: SidebarWidget.IOptions) {

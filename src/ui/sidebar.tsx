@@ -1,16 +1,22 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
+import {
+  checkIcon,
+  CommandToolbarButtonComponent
+} from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import { Assignment, Toggle } from './assignment';
+import * as state from '../correxit/state';
+import { Annotate } from './annotate';
+import { Assignment } from './assignment';
+import { Toggle } from './toggle';
 import { SidebarWidget } from './widget';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const { get, has } = Rubric;
-const { add, convert, correct, lock, remove, reset, toggle, unlock } =
+const { add, comment, convert, correct, lock, remove, reset, toggle, unlock } =
   Correxit.CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
@@ -42,49 +48,6 @@ export namespace Sidebar {
   export type Widget = SidebarWidget;
   export const Widget = SidebarWidget;
 }
-
-const Annotate: React.FC<{ workbook: Workbook | null }> = ({ workbook }) => {
-  const notebook = workbook?.content;
-  const rubric = open(workbook);
-  const classes = Rubric.Cell.types.map(type => `cxt-mod-${type}`);
-  const selector = Rubric.Cell.types.map(type => `.cxt-mod-${type}`).join(', ');
-  useEffect(() => {
-    const status = ['cxt-mod-correct', 'cxt-mod-incorrect'];
-    const reset = (node: Element) => {
-      node.classList.remove(...classes);
-      node.classList.remove(...status);
-    };
-    const clear = () =>
-      void notebook?.node.querySelectorAll(selector).forEach(reset);
-    if (!notebook || notebook.isDisposed || !rubric) {
-      return clear;
-    }
-
-    let remaining = Rubric.size(rubric);
-    for (const { node, model } of notebook.widgets) {
-      const cell = Rubric.get(rubric, model.id);
-      if (!cell) {
-        continue;
-      }
-      node.classList.add(`cxt-mod-${cell.is}`);
-
-      const report = Rubric.Cell.report(rubric, cell.id);
-      const [correct, incorrect] = status;
-      if (report) {
-        if (report.status === 'correct') {
-          node.classList.add(correct);
-        } else if (report.status === 'incorrect') {
-          node.classList.add(incorrect);
-        }
-      }
-      if (--remaining === 0) {
-        break;
-      }
-    }
-    return clear;
-  }, [notebook, rubric]);
-  return null;
-};
 
 const Header: React.FC<{
   commands: CommandRegistry;
@@ -129,52 +92,56 @@ const Header: React.FC<{
 };
 
 const CellReport: React.FC<{
-  rubric: Rubric;
-  workbook: Workbook;
+  commands: CommandRegistry;
   id: string;
-}> = ({ rubric, workbook, id }) => {
-  const report = rubric ? Rubric.Cell.report(rubric, id) : null;
-  const [comment, setComment] = useState<string>('');
-  const [open, setOpen] = useState<boolean>(false);
-  useEffect(() => {
-    setComment(report?.comment ?? '');
-    setOpen(false);
-  }, [report]);
-  const ref = useRef(`correxit-assignee-comment-${id}${Date.now()}`);
+  rubric: Rubric;
+  trans: TranslationBundle;
+  workbook: Workbook;
+}> = ({ commands, rubric, trans, workbook, id }) => {
+  const report = state.report(workbook, id);
+  const [value, setValue] = useState(report?.comment || '');
+  const [editable, setEditable] = useState(false);
 
-  return report && rubric.assignment.assignee ? (
+  useEffect(() => {
+    setValue(report?.comment ?? '');
+    setEditable(false);
+  }, [report]);
+
+  if (!report) {
+    return <></>;
+  }
+
+  const icon = editable ? checkIcon : Correxit.Icons.comment;
+  const { points, possible } = report;
+  const heading = trans.__('Cell Score %1 out of %2', points, possible);
+  const title = trans.__('Cell Report');
+  const placeholder = trans.__('Cell report...');
+  const toggle = () => {
+    if (editable) {
+      void commands.execute(comment, { id, comment: value });
+    }
+    setEditable(prev => !prev);
+  };
+  return (
     <>
       <div className="correxit-sidebar-cell-report">
-        <h5>
-          Cell Grade {report.points} out of {report.possible}
-        </h5>
-        <Toggle
-          {...{
-            icon: Correxit.Icons.comment,
-            title: 'Cell Report',
-            toggle: () => setOpen(!open)
-          }}
-        />
+        <h5>{heading}</h5>
+        <Toggle {...{ icon, title, toggle }} />
       </div>
-      {open && (
+      {editable && (
         <textarea
-          key={ref.current}
           data-lm-suppress-shortcuts="true"
-          rows={8}
-          name="correxit-assignment-report-comment"
-          value={comment}
+          key={id}
+          name="correxit-sidebar-cell-report-comment"
+          onChange={({ target: { value } }) => setValue(value)}
+          placeholder={placeholder}
           readOnly={rubric.locked}
-          placeholder="Cell report..."
-          onChange={({ target: { value } }) => {
-            setComment(value);
-          }}
-          onBlur={({ target: { value } }) => {
-            Workbook.comment(workbook, id, value);
-          }}
+          rows={8}
+          value={value}
         />
       )}
     </>
-  ) : null;
+  );
 };
 
 const Body: React.FC<{
@@ -205,18 +172,20 @@ const Body: React.FC<{
   ];
   const hints = {
     answerable: trans.__('Expected output has been set.'),
-    comparable: trans.__(
-      'Cell has been selected, its output will be used for comparison.'
-    ),
-    correctable: trans.__(
-      'Reference cell has been selected, its code will be used for correcting.'
-    ),
+    comparable: trans.__('Cell output is compared against a reference.'),
+    correctable: trans.__('Cell is corrected by a reference cell.'),
     reference: trans.__('Selected cell is a reference cell.')
   };
   const hint = get(rubric, id)?.is || (has(rubric, id, true) && 'reference');
   return (
     <section className="correxit-sidebar-body">
-      <CellReport rubric={rubric} workbook={workbook} id={id} />
+      <CellReport
+        commands={commands}
+        id={id}
+        rubric={rubric}
+        trans={trans}
+        workbook={workbook}
+      />
       <div className="correxit-sidebar-cell-config">
         {configuration.map((props, index) => (
           <CommandToolbarButtonComponent key={index} {...props} />
