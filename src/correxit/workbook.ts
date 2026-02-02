@@ -187,6 +187,9 @@ export namespace Workbook {
     if (!rubric) {
       return { ok: false, error: 'null rubric', rubric };
     }
+    if (rubric.locked) {
+        return { ok: true, pruned: [], rubric };
+    }
 
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
     const { locked, secret, shared } = rubric;
@@ -274,7 +277,7 @@ export namespace Workbook {
     if (!rubric.locked) {
       await update(workbook, await Rubric.sign(rubric, report));
     }
-    return { spec, score: id ? report[id] : summary(report) };
+    return { spec, score: id ? report.scores[id] : summary(report) };
   }
 
    /**
@@ -294,10 +297,12 @@ export namespace Workbook {
     if (!rubric || rubric.locked) {
       return null;
     }
-    return update(workbook, await Rubric.sign(rubric, {
-      ...rubric.assignment.report,
-      [id]: { ...rubric.assignment.report[id], comment }
-    }));
+    const { report } = rubric.assignment;
+    const scores = {
+      ...report.scores,
+      [id]: { ...report.scores[id], comment }
+    };
+    return update(workbook, await Rubric.sign(rubric, { ...report, scores }));
   }
 
   /**

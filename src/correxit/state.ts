@@ -24,7 +24,7 @@ export function report(
   const cached = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
   return score
     ? state.report[cached] = score
-    : state.report[cached] || rubric.assignment.report[id] || null;
+    : state.report[cached] || rubric.assignment.report.scores[id] || null;
 }
 
 /**

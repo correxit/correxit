@@ -223,11 +223,14 @@ export namespace Rubric {
     Readonly<{ key: string; locked: false; secret: Section; }>;
 
   export namespace Assignment {
-    export type Report = Readonly<{ [cell: string]: Score; }>;
+    export type Report = Readonly<{
+      order: string[];
+      scores: { [id: string]: Score };
+    }>;
 
     export const EMPTY: Assignment = {
       assignee: '',
-      report: {},
+      report: { order: [], scores: {} },
       roster: [],
       signature: ''
     };
@@ -242,24 +245,29 @@ export namespace Rubric {
      * scored if it exists in the rubric.
      * All scores that already exist from previous scoring remain untouched as
      * long as they exist in the rubric and have not been rescored.
+     * The `order` of keys in the outputs (`outputs.key()`) is preserved.
      */
     export async function score(
       rubric: Rubric,
       outputs: Outputs,
       id?: string
     ): Promise<Assignment.Report> {
-      const { assignment } = rubric;
-      const cells = id ? [id] : filter(outputs.keys(), id => has(rubric, id));
-      const pending = map(cells, id => Cell.score(rubric, id, outputs));
-      const scores = await Promise.all(pending);
-      const report = Object.keys(assignment.report)
-        .filter(id => has(rubric, id))
-        .reduce(
-          (acc, id) => ({ ...acc, [id]: { ...assignment.report[id], id } }),
-          {} as { [cell: string]: Score }
-        );
-      scores.forEach(score => void (report[score.id] = score));
-      return report;
+      const { assignment: { report } } = rubric;
+      const valid = (id: string) => has(rubric, id);
+      const subset = id ? [id] : filter(outputs.keys(), valid);
+      const pending = map(subset, id => Cell.score(rubric, id, outputs));
+      const scored = await Promise.all(pending);
+      const scores = {
+        ...Object.keys(report.scores).filter(valid)
+          .reduce((acc, key) => ({ ...acc, [key]: report.scores[key] }), {}),
+        ...scored.reduce((acc, score) => ({ ...acc, [score.id]: score }), {})
+      };
+      const added = [...filter(outputs.keys(), valid)];
+      const existing = report.order.filter(valid);
+      const order = id
+        ? unique([...existing, id])
+        : unique([...added, ...existing]);
+      return { order, scores };
     }
 
     export async function sign(
@@ -271,6 +279,7 @@ export namespace Rubric {
     }
 
     export function summary(report: Report): Score {
+      const { order, scores } = report;
       const sum = (a: Score, b: Score): Score => {
         if (a.status === 'unscored') {
           return b;
@@ -280,15 +289,17 @@ export namespace Rubric {
         }
         return {
           code: '',
-          comment: '',
+          comment: [a.comment, b.comment].join('\n'),
           id: '',
           points: a.points + b.points,
           possible: a.possible + b.possible,
           status: 'summary'
         };
       };
-      const scores = Object.keys(report);
-      return scores.map(cell => report[cell]).reduce(sum, Score.UNSCORED);
+      return order
+        .map(id => scores[id])
+        .filter(score => !!score)
+        .reduce(sum, Score.UNSCORED);
     }
 
     export async function validate(
@@ -386,7 +397,7 @@ export namespace Rubric {
     assignee = '',
     roster: string[] = []
   ): Promise<Unlocked> {
-    const unsigned = { assignee, report: {}, roster: unique(roster) };
+    const unsigned = { ...Assignment.EMPTY, assignee, roster: unique(roster) };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = { ...unsigned, signature };
     await Assignment.validate({ assignment, key });
@@ -478,15 +489,9 @@ export namespace Rubric {
     return { accessed, assignment, id, key, locked, secret, shared };
   }
 
-  export function remove(rubric: Unlocked, id: string): Unlocked;
-  export function remove(rubric: Locked, id: string): Locked;
-  export function remove(rubric: Rubric, id: string): Rubric;
-  export function remove(rubric: Rubric, id: string): Rubric {
+  export function remove(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
-    const drop = (section: Section | string, cell: Cell): Section | string => {
-      if (typeof section === 'string') {
-        return section;
-      }
+    const drop = (section: Section, cell: Cell): Section => {
       const { [cell.id]: _, ...rest } = section.cells;
       void _; // This is the removed cell.
       return { cells: rest };
@@ -497,15 +502,16 @@ export namespace Rubric {
     const secret = cell.shared ? rubric.secret : drop(rubric.secret, cell);
     const shared = cell.shared ? drop(rubric.shared, cell) : rubric.shared;
     const { assignment: { assignee, report } } = rubric;
-    const filtered = Object.entries(report).filter(([key]) => key !== id);
+    const scores = Object.entries(report.scores)
+      .filter(([key]) => key !== id)
+      .reduce((acc, [key, score]) => ({ ...acc, [key]: score }), {});
+    const order = report.order.filter(key => key !== id);
     const assignment: Assignment = {
       ...rubric.assignment, assignee,
-      report: filtered.reduce(
-        (report, [cell, score]) => ({ ...report, [cell]: score }), {}
-      )
+      report: { order, scores }
     };
     const accessed = Date.now();
-    return { ...rubric, accessed, assignment, secret, shared } as Rubric;
+    return { ...rubric, accessed, assignment, secret, shared };
   }
 
   export async function sign(

@@ -72,12 +72,15 @@ describe('Rubric', () => {
         shared: false,
         payload: []
       });
-      const report: Rubric.Assignment.Report = { [id]: Rubric.Score.CORRECT };
+      const report: Rubric.Assignment.Report = {
+        order: [id],
+        scores: { [id]: Rubric.Score.CORRECT }
+      };
       const signed = await Rubric.sign(rubric, report);
       const removed = Rubric.remove(rubric, id);
-      expect(signed.assignment.report[id]).toBeDefined();
+      expect(signed.assignment.report.scores[id]).toBeDefined();
       expect(Rubric.has(removed, id)).toBe(false);
-      expect(removed.assignment.report[id]).toBeUndefined();
+      expect(removed.assignment.report.scores[id]).toBeUndefined();
     });
 
     it('calculates size correctly', () => {
@@ -309,14 +312,124 @@ describe('Rubric', () => {
         ['c2', [output('B')]]
       ]);
       const report = await Rubric.Assignment.score(rubric, outputs);
-      expect(report['c1'].status).toBe('correct');
-      expect(report['c2'].status).toBe('correct');
+      expect(report.scores['c1'].status).toBe('correct');
+      expect(report.scores['c2'].status).toBe('correct');
+      expect(report.order).toEqual(['c1', 'c2']);
+    });
+
+    it('preserves order from notebook execution', async () => {
+      let rubric = create();
+      rubric = Rubric.add(rubric, {
+        id: 'c3',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+      rubric = Rubric.add(rubric, {
+        id: 'c2',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+      rubric = Rubric.add(rubric, {
+        id: 'c1',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+      const outputs = new Map([
+        ['c1', [output('1')]],
+        ['c3', [output('3')]],
+        ['c2', [output('2')]]
+      ]);
+      const report = await Rubric.Assignment.score(rubric, outputs);
+      expect(report.order).toEqual(['c1', 'c3', 'c2']);
+    });
+
+    it('updates order when cells are moved and re-scored', async () => {
+      let rubric = create();
+      rubric = Rubric.add(rubric, {
+        id: 'c1',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+      rubric = Rubric.add(rubric, {
+        id: 'c2',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+      rubric = Rubric.add(rubric, {
+        id: 'c3',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+      let outputs = new Map([
+        ['c1', [output('1')]],
+        ['c2', [output('2')]],
+        ['c3', [output('3')]]
+      ]);
+      rubric = {
+        ...rubric,
+        assignment: {
+          ...rubric.assignment,
+          report: await Rubric.Assignment.score(rubric, outputs)
+        }
+      };
+      expect(rubric.assignment.report.order).toEqual(['c1', 'c2', 'c3']);
+      // New execution order 3 -> 1 -> 2
+      outputs = new Map([
+        ['c3', [output('3')]],
+        ['c1', [output('1')]],
+        ['c2', [output('2')]]
+      ]);
+      const report = await Rubric.Assignment.score(rubric, outputs);
+      expect(report.order).toEqual(['c3', 'c1', 'c2']);
+    });
+
+    it('cleans up order when removing a cell', () => {
+      let rubric = create();
+      rubric = Rubric.add(rubric, {
+        id: 'c1',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+
+      const report: Rubric.Assignment.Report = {
+        order: ['c1'],
+        scores: { c1: Rubric.Score.CORRECT }
+      };
+      rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
+
+      const removed = Rubric.remove(rubric, 'c1');
+      expect(removed.assignment.report.order).toEqual([]);
+      expect(removed.assignment.report.scores.c1).toBeUndefined();
     });
 
     it('summarizes a report correctly', () => {
       const report: Rubric.Assignment.Report = {
-        c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
-        c2: { ...Rubric.Score.INCORRECT, points: 0, possible: 10 }
+        order: ['c1', 'c2'],
+        scores: {
+          c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
+          c2: { ...Rubric.Score.INCORRECT, points: 0, possible: 10 }
+        }
       };
       const summary = Rubric.Assignment.summary(report);
       expect(summary.points).toBe(5);
