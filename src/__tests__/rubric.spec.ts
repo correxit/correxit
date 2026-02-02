@@ -401,6 +401,38 @@ describe('Rubric', () => {
       expect(report.order).toEqual(['c3', 'c1', 'c2']);
     });
 
+    it('preserves order when updating a single cell score', async () => {
+      let rubric = create();
+      rubric = Rubric.add(rubric, {
+        id: 'c1',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+      rubric = Rubric.add(rubric, {
+        id: 'c2',
+        is: 'answerable',
+        points: 1,
+        reference: null,
+        shared: false,
+        payload: []
+      });
+
+      const outputs = new Map([
+        ['c1', [output('1')]],
+        ['c2', [output('2')]]
+      ]);
+      let report = await Rubric.Assignment.score(rubric, outputs);
+      rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
+      expect(report.order).toEqual(['c1', 'c2']);
+
+      const updates: Rubric.Outputs = new Map([['c2', [output('2-new')]]]);
+      report = await Rubric.Assignment.score(rubric, updates, 'c2');
+      expect(report.order).toEqual(['c1', 'c2']);
+    });
+
     it('cleans up order when removing a cell', () => {
       let rubric = create();
       rubric = Rubric.add(rubric, {

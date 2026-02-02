@@ -254,7 +254,11 @@ export namespace Rubric {
     ): Promise<Assignment.Report> {
       const { assignment: { report } } = rubric;
       const valid = (id: string) => has(rubric, id);
-      const subset = id ? [id] : filter(outputs.keys(), valid);
+      const subset = (id ? [id] : Array.from(outputs.keys())).filter(valid);
+      if (!subset.length) {
+        return report;
+      }
+
       const pending = map(subset, id => Cell.score(rubric, id, outputs));
       const scored = await Promise.all(pending);
       const scores = {
@@ -262,11 +266,8 @@ export namespace Rubric {
           .reduce((acc, key) => ({ ...acc, [key]: report.scores[key] }), {}),
         ...scored.reduce((acc, score) => ({ ...acc, [score.id]: score }), {})
       };
-      const added = [...filter(outputs.keys(), valid)];
       const existing = report.order.filter(valid);
-      const order = id
-        ? unique([...existing, id])
-        : unique([...added, ...existing]);
+      const order = unique(id ? [...existing, id] : [...subset, ...existing]);
       return { order, scores };
     }
 
