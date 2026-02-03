@@ -40,15 +40,15 @@ export namespace Workbook {
 
   export namespace Credentials {
     export function normalize (credentials: Partial<Credentials> | null) {
-      const { key, unlock, path, passphrase } = credentials || {};
-      if ((key && unlock) || !path) {
+      const { key, unlock, passphrase, path } = credentials || {};
+      if (key && unlock || !path) {
         return null;
       }
       return {
+        ...credentials,
         key: key || null,
-        passphrase: key ? null : (passphrase || null),
-        unlock: unlock || null,
-        path
+        passphrase: key ? null : passphrase || null,
+        unlock: unlock || null
       } as Credentials;
     }
   }
