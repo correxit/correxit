@@ -66,19 +66,18 @@ export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
     description: 'Centralized unlock service for Correxit workbooks',
     autoStart: true,
     provides: Correxit.Unlocker,
-    optional: [ISecretsManager],
+    requires: [ISecretsManager],
     ...((deactivator?: () => void) => ({
-      activate: (_, manager: ISecretsManager | null): Correxit.Unlocker => {
+      activate: (_, manager: ISecretsManager): Correxit.Unlocker => {
         const passphrases = new Set<string>();
         const remember = (value: string) => {
           passphrases.add(value);
         };
-        const options = { manager, passphrases, remember, token };
+        const secrets = { manager, passphrases, remember, token };
         return {
           unlock: async (workbook: Workbook, key: string | null) =>
-            Unlocker.unlock(workbook, key, options),
-          store: (id: string, key: string) =>
-            Unlocker.store(id, key, { manager, token })
+            Unlocker.unlock(workbook, key, secrets),
+          store: (id: string, key: string) => Unlocker.store(id, key, secrets)
         };
       },
       deactivate: () => deactivator?.()

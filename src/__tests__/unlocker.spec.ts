@@ -10,7 +10,7 @@ jest.mock('../correxit/workbook', () => ({
 
 import { ISecretsManager } from 'jupyter-secrets-manager';
 import { Correxit } from '../correxit';
-import { text as mockTextDialog } from '../correxit/input';
+import * as input from '../correxit/input';
 import { Rubric } from '../correxit/rubric';
 import { keygen } from '../correxit/security';
 import { Unlocker } from '../correxit/unlocker';
@@ -132,7 +132,7 @@ describe('Unlocker', () => {
 
     it('prompts user if no key or cache available', async () => {
       mockSecretsManager.get.mockResolvedValue(undefined);
-      (mockTextDialog as jest.Mock).mockResolvedValue('my-passphrase');
+      (input.text as jest.Mock).mockResolvedValue('my-passphrase');
 
       const expectedKey = `KEY<my-passphrase:${rubricId}>`;
 
@@ -143,7 +143,7 @@ describe('Unlocker', () => {
 
       const result = await callUnlock();
 
-      expect(mockTextDialog).toHaveBeenCalled();
+      expect(input.text).toHaveBeenCalled();
       expect(keygen).toHaveBeenCalledWith('my-passphrase', rubricId);
       expect(Workbook.unlock).toHaveBeenCalledWith(mockWorkbook, expectedKey);
       expect(result).toBe(mockRubricUnlocked);
@@ -151,7 +151,7 @@ describe('Unlocker', () => {
 
     it('updates cache and stores key in SecretsManager after successful prompt', async () => {
       mockSecretsManager.get.mockResolvedValue(undefined);
-      (mockTextDialog as jest.Mock).mockResolvedValue('user-pass');
+      (input.text as jest.Mock).mockResolvedValue('user-pass');
       const remember = jest.fn();
 
       (Workbook.unlock as jest.Mock).mockResolvedValue(mockRubricUnlocked);
@@ -170,13 +170,10 @@ describe('Unlocker', () => {
     });
 
     it('retries with prompt if provided argument key is incorrect', async () => {
-      // 1. Initial Call with bad key
       const badKey = 'wrong-key';
+      (input.text as jest.Mock).mockResolvedValue('user-pass');
 
-      // 2. Mock User Input for second try
-      (mockTextDialog as jest.Mock).mockResolvedValue('user-pass');
       const expectedRecoveryKey = `KEY<user-pass:${rubricId}>`;
-
       (Workbook.unlock as jest.Mock).mockImplementation(async (wb, key) => {
         if (key === badKey) throw new Error('Bad key');
         if (key === expectedRecoveryKey) return mockRubricUnlocked;
@@ -184,7 +181,6 @@ describe('Unlocker', () => {
       });
 
       const result = await callUnlock(badKey);
-
       expect(Workbook.unlock).toHaveBeenCalledTimes(2);
       expect(Workbook.unlock).toHaveBeenNthCalledWith(1, mockWorkbook, badKey);
       expect(Workbook.unlock).toHaveBeenNthCalledWith(

@@ -18,9 +18,9 @@ export namespace Unlocker {
   export async function store(
     id: string,
     key: string,
-    options: { manager: ISecretsManager | null; token?: symbol; }
+    secrets: { manager: ISecretsManager | null; token: symbol; }
   ) {
-    const { manager, token } = options;
+    const { manager, token } = secrets;
     if (manager && token) {
       const secret = { namespace: Correxit.UNLOCKER, id, value: key };
       await manager.set(token, Correxit.UNLOCKER, id, secret);
@@ -37,19 +37,19 @@ export namespace Unlocker {
   export async function unlock(
     workbook: Workbook,
     key: string | null,
-    options: {
+    secrets: {
       manager: ISecretsManager | null;
-      passphrases?: Set<string>;
-      remember?: (value: string) => void | Promise<void>;
-      token?: symbol;
-    } = { manager: null }
+      passphrases: Set<string>;
+      remember: (value: string) => void | Promise<void>;
+      token: symbol;
+    }
   ): Promise<Rubric.Unlocked | null> {
     const rubric = Workbook.open(workbook, true);
     if (!rubric?.locked) {
       return rubric;
     }
 
-    const { manager, passphrases, remember, token } = options;
+    const { manager, passphrases, remember, token } = secrets;
     const { id } = rubric;
 
     if (!key && manager && token) {
@@ -59,7 +59,7 @@ export namespace Unlocker {
     if (key) {
       const unlocked = await attempt(workbook, key);
       if (unlocked) {
-        await store(id, key, options);
+        await store(id, key, secrets);
         return unlocked;
       }
     }
@@ -67,7 +67,7 @@ export namespace Unlocker {
       const key = await security.keygen(passphrase, id);
       const unlocked = await attempt(workbook, key);
       if (unlocked) {
-        await store(id, key, options);
+        await store(id, key, secrets);
         return unlocked;
       }
     }
@@ -81,7 +81,7 @@ export namespace Unlocker {
     const unlocked = await attempt(workbook, key);
     if (unlocked) {
       await remember?.(input);
-      await store(id, key, options);
+      await store(id, key, secrets);
     }
     return unlocked;
   }
