@@ -1,3 +1,4 @@
+import { IRenderMime } from '@jupyterlab/rendermime';
 import { ISecretsManager } from 'jupyter-secrets-manager';
 import { Correxit, Rubric, Workbook } from '.';
 import * as input from './input';
@@ -28,7 +29,7 @@ export namespace Unlocker {
   }
 
   /**
-   * Unlock a workbook using:
+   * Unlock a workbook trying, in order:
    * - the key, if provided as an argument
    * - the secrets manager if available and if key exists
    * - a cached passphrase if available
@@ -42,7 +43,8 @@ export namespace Unlocker {
       passphrases: Set<string>;
       remember: (value: string) => void | Promise<void>;
       token: symbol;
-    }
+    },
+    trans: IRenderMime.TranslationBundle
   ): Promise<Rubric.Unlocked | null> {
     const rubric = Workbook.open(workbook, true);
     if (!rubric?.locked) {
@@ -51,10 +53,8 @@ export namespace Unlocker {
 
     const { manager, passphrases, remember, token } = secrets;
     const { id } = rubric;
-
     if (!key && manager && token) {
-      const secret = await manager.get(token, Correxit.UNLOCKER, id);
-      key = secret?.value ?? null;
+      key = (await manager.get(token, Correxit.UNLOCKER, id))?.value ?? null;
     }
     if (key) {
       const unlocked = await attempt(workbook, key);
@@ -63,7 +63,7 @@ export namespace Unlocker {
         return unlocked;
       }
     }
-    for (const passphrase of passphrases || []) {
+    for (const passphrase of passphrases) {
       const key = await security.keygen(passphrase, id);
       const unlocked = await attempt(workbook, key);
       if (unlocked) {
@@ -72,7 +72,7 @@ export namespace Unlocker {
       }
     }
 
-    const input = await prompt(workbook);
+    const input = await prompt(workbook, trans);
     if (!input) {
       return null;
     }
@@ -87,11 +87,14 @@ export namespace Unlocker {
   }
 }
 
-async function prompt(workbook: Workbook): Promise<string | null> {
+async function prompt(
+  workbook: Workbook,
+  trans: IRenderMime.TranslationBundle
+): Promise<string | null> {
   const { path } = workbook.context;
   return input.text({
-    title: 'Enter passphrase to unlock',
-    label: `Enter passphrase for ${path}`
+    title: trans.__('Enter passphrase to unlock'),
+    label: trans.__('Enter passphrase for %1', path)
   });
 }
 

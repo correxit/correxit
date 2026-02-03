@@ -15,6 +15,7 @@ import { Rubric } from '../correxit/rubric';
 import { keygen } from '../correxit/security';
 import { Unlocker } from '../correxit/unlocker';
 import { Workbook } from '../correxit/workbook';
+import { nullTranslator } from '@jupyterlab/translation';
 
 describe('Unlocker', () => {
   const id = 'rubric-123';
@@ -24,7 +25,6 @@ describe('Unlocker', () => {
   let locked: Rubric.Locked;
   let unlocked: Rubric.Unlocked;
   let manager: jest.Mocked<ISecretsManager>;
-
   beforeEach(() => {
     jest.clearAllMocks();
     workbook = { context: { path } };
@@ -49,17 +49,18 @@ describe('Unlocker', () => {
     });
   });
 
+  const trans = nullTranslator.load('correxit');
   const unlock = (
     key: string | null = null,
     passphrases = new Set<string>(),
     remember = jest.fn()
   ) =>
-    Unlocker.unlock(workbook, key, {
-      manager: manager,
-      passphrases,
-      remember,
-      token
-    });
+    Unlocker.unlock(
+      workbook,
+      key,
+      { manager, passphrases, remember, token },
+      trans
+    );
 
   describe('unlock()', () => {
     it('returns immediately if rubric is already unlocked', async () => {
