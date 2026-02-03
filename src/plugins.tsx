@@ -60,16 +60,26 @@ export const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
   }))()
 };
 
-export const unlocker: JupyterFrontEndPlugin<Correxit.IUnlocker> =
-  SecretsManager.sign(Correxit.UNLOCK, token => ({
-    id: Correxit.UNLOCK,
+export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
+  SecretsManager.sign(Correxit.UNLOCKER, token => ({
+    id: Correxit.UNLOCKER,
     description: 'Centralized unlock service for Correxit workbooks',
     autoStart: true,
-    provides: Correxit.IUnlocker,
+    provides: Correxit.Unlocker,
     optional: [ISecretsManager],
     ...((deactivator?: () => void) => ({
-      activate: (app, secretsManager: ISecretsManager): Correxit.IUnlocker => {
-        return new Unlocker({ token, secretsManager });
+      activate: (_, manager: ISecretsManager | null): Correxit.Unlocker => {
+        const passphrases = new Set<string>();
+        const remember = (value: string) => {
+          passphrases.add(value);
+        };
+        const options = { manager, passphrases, remember, token };
+        return {
+          unlock: async (workbook: Workbook, key: string | null) =>
+            Unlocker.unlock(workbook, key, options),
+          store: (id: string, key: string) =>
+            Unlocker.store(id, key, { manager, token })
+        };
       },
       deactivate: () => deactivator?.()
     }))()
@@ -130,14 +140,14 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
-  requires: [Correxit.Consumer, Correxit.IUnlocker, INotebookTracker],
+  requires: [Correxit.Consumer, Correxit.Unlocker, INotebookTracker],
   optional: [ITranslator],
   provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
       app,
       consumer: Correxit.Consumer,
-      unlocker: Correxit.IUnlocker,
+      unlocker: Correxit.Unlocker,
       tracker: INotebookTracker,
       translator: ITranslator | null
     ): Correxit.Source => {

@@ -33,18 +33,22 @@ export namespace Workbook {
   }
 
   export type Credentials = |
-    { path: string; unlock: null; key: null; } |
-    { path: string; unlock: null; key: string; } |
-    { path: string; unlock: boolean; key: null; };
+    { path: string; unlock: null; key: null; passphrase: null; } |
+    { path: string; unlock: null; key: string; passphrase: null; } |
+    { path: string; unlock: null; key: null; passphrase: string; } |
+    { path: string; unlock: boolean; key: null; passphrase: null; };
 
   export namespace Credentials {
     export function normalize (credentials: Partial<Credentials> | null) {
-      const { key, unlock, path } = credentials || {};
-      if (key && unlock || !path) {
+      const { key, unlock, path, passphrase } = credentials || {};
+      if ((key && unlock) || !path) {
         return null;
       }
       return {
-        key: key || null, unlock: unlock || null, path
+        key: key || null,
+        passphrase: key ? null : (passphrase || null),
+        unlock: unlock || null,
+        path
       } as Credentials;
     }
   }
@@ -227,7 +231,7 @@ export namespace Workbook {
   export async function convert(
     workbook: Workbook,
     passphrase: string,
-    unlocker: Correxit.IUnlocker
+    unlocker: Correxit.Unlocker
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
@@ -238,7 +242,7 @@ export namespace Workbook {
       if (error === Correxit.NO_CORREXIT_METADATA) {
         const created = Rubric.create();
         const key = await security.keygen(passphrase, created.id);
-        unlocker.storeKey(created.id, key);
+        unlocker.store(created.id, key);
         return update(workbook, { ...created, key });
       }
       throw error;

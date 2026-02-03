@@ -49,12 +49,12 @@ export function addCommands(
     schedule: (workbook: Workbook | null) => void;
     source: Correxit.Source;
     trans: IRenderMime.TranslationBundle;
-    unlocker: Correxit.IUnlocker;
+    unlocker: Correxit.Unlocker;
   }
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
-  const { consumer, schedule, source, trans, unlocker } = dependencies;
+  const { consumer, schedule, trans, unlocker } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) => io.request(handle, factory, manager, unlocker);
@@ -70,7 +70,6 @@ export function addCommands(
     return { handle, rubric, workbook };
   };
   const disposables = [];
-  void state.subscribe(source);
   disposables.push(commands.addCommand(CommandIDs.add, {
     className: 'correxit-add',
     icon: ({ is }: Partial<Cell>) =>
@@ -493,7 +492,7 @@ successful, an unlocked rubric.
       }
       try {
         const key = handle?.key || rubric?.key || null;
-        return unlocker.unlock(workbook, rubric, key);
+        return unlocker.unlock(workbook, key);
       } catch (error) {
         const file = PathExt.basename(workbook.context.path);
         void showErrorMessage(

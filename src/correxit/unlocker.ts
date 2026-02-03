@@ -1,156 +1,97 @@
 import { ISecretsManager } from 'jupyter-secrets-manager';
 import { Correxit, Rubric, Workbook } from '.';
-import { text as textDialog } from './input';
-import { keygen } from './security';
+import * as input from './input';
+import * as security from './security';
 
 export namespace Unlocker {
-  export interface IOptions {
-    token: symbol;
-    secretsManager?: ISecretsManager;
+  export async function attempt(
+    workbook: Workbook,
+    key: string
+  ): Promise<Rubric.Unlocked | null> {
+    try {
+      return await Workbook.unlock(workbook, key);
+    } catch {
+      return null;
+    }
   }
-}
 
-export class Unlocker implements Correxit.IUnlocker {
-  constructor(options: Unlocker.IOptions) {
-    Private.setToken(options.token);
-    this._secretsManager = options.secretsManager;
+  export async function store(
+    id: string,
+    key: string,
+    options: { manager: ISecretsManager | null; token?: symbol; }
+  ) {
+    const { manager, token } = options;
+    if (manager && token) {
+      const secret = { namespace: Correxit.UNLOCKER, id, value: key };
+      await manager.set(token, Correxit.UNLOCKER, id, secret);
+    }
   }
 
   /**
    * Unlock a workbook using:
-   * - the key, if provided as argument
-   * - the secrets manager, if available and key exist
-   * - the stored passphrase, if exist
-   * - prompting for a passphrase
+   * - the key, if provided as an argument
+   * - the secrets manager if available and if key exists
+   * - a cached passphrase if available
+   * - a user prompt to provide a passphrase
    */
-  async unlock(
+  export async function unlock(
     workbook: Workbook,
-    rubric: Rubric | null,
-    key: string | null
+    key: string | null,
+    options: {
+      manager: ISecretsManager | null;
+      passphrases?: Set<string>;
+      remember?: (value: string) => void | Promise<void>;
+      token?: symbol;
+    } = { manager: null }
   ): Promise<Rubric.Unlocked | null> {
-    rubric = rubric ?? Workbook.open(workbook, true);
+    const rubric = Workbook.open(workbook, true);
     if (!rubric?.locked) {
       return rubric;
     }
 
-    // Try to get the stored key from secrets manager if the key is null.
-    if (!key && this._secretsManager) {
-      const secret = await this._secretsManager.get(
-        Private.getToken(),
-        Correxit.UNLOCK,
-        rubric.id
-      );
+    const { manager, passphrases, remember, token } = options;
+    const { id } = rubric;
+
+    if (!key && manager && token) {
+      const secret = await manager.get(token, Correxit.UNLOCKER, id);
       key = secret?.value ?? null;
     }
-
-    // Try to use the stored passphrase if key is null.
-    if (!key) {
-      const passphrase = Private.getPassphrase();
-      key = passphrase ? await keygen(passphrase, rubric.id) : null;
-    }
-
-    return this._unlock(workbook, rubric, key);
-  }
-
-  /**
-   * Store a passphrase in the secrets manager
-   */
-  async storeKey(rubricID: string, key: string): Promise<void> {
-    if (this._secretsManager) {
-      await this._secretsManager.set(
-        Private.getToken(),
-        Correxit.UNLOCK,
-        rubricID,
-        { namespace: Correxit.UNLOCK, id: rubricID, value: key }
-      );
-    }
-  }
-
-  /**
-   * Prompt the user for a passphrase and generate the key.
-   */
-  private async _promptPassphrase(
-    workbook: Workbook,
-    rubric: Rubric,
-  ): Promise<string | null> {
-    const { path } = workbook.context;
-    const passphrase = await textDialog({
-      title: 'Enter passphrase to unlock',
-      label: `Enter passphrase for ${path}`
-    });
-
-    // Cancelled by the user.
-    if (!passphrase) {
-      return null;
-    }
-    // Store the passphrase for future usage if user set one.
-    Private.setPassphrase(passphrase);
-
-    const key = await keygen(passphrase, rubric.id);
-    return key;
-  }
-
-  /**
-   * Unlock the rubric.
-   * It will prompt the user for a passphrase is the key is not provided or incorrect.
-   */
-  private async _unlock(
-    workbook: Workbook,
-    rubric: Rubric,
-    key: string | null,
-  ): Promise<Rubric.Unlocked | null> {
-    const keyProvided = !!key;
-    // If the key is not provided, prompt the user.
-    if (!key) {
-      key = await this._promptPassphrase(workbook, rubric);
-    }
-    // Still no key, the user cancelled the prompt, return.
-    if (!key) {
-      return null;
-    }
-
-    try {
-      const unlocked = await Workbook.unlock(workbook, key);
-      // Store the key if it unlocked the workbook.
-      this.storeKey(rubric.id, key);
-      return unlocked;
-    } catch (error) {
-      // If the key was provided but was wrong, try again to unlock with a passphrase
-      // from the user.
-      if (keyProvided) {
-        return this._unlock(workbook, rubric, null);
+    if (key) {
+      const unlocked = await attempt(workbook, key);
+      if (unlocked) {
+        await store(id, key, options);
+        return unlocked;
       }
-      console.error('Failed to unlock workbook:', error);
+    }
+    for (const passphrase of passphrases || []) {
+      const key = await security.keygen(passphrase, id);
+      const unlocked = await attempt(workbook, key);
+      if (unlocked) {
+        await store(id, key, options);
+        return unlocked;
+      }
+    }
+
+    const input = await prompt(workbook);
+    if (!input) {
       return null;
     }
-  }
+    key = await security.keygen(input, id);
 
-  private _secretsManager?: ISecretsManager;
+    const unlocked = await attempt(workbook, key);
+    if (unlocked) {
+      await remember?.(input);
+      await store(id, key, options);
+    }
+    return unlocked;
+  }
 }
 
-/**
- * A Private namespace to handle the secrets.
- */
-namespace Private {
-  /**
-   * The token to use with the secrets manager, setter and getter.
-   */
-  let secretsToken: symbol;
-  export function setToken(value: symbol): void {
-    secretsToken = value;
-  }
-  export function getToken(): symbol {
-    return secretsToken;
-  }
-
-  /**
-   * The last passphrase used in this context.
-   */
-  let passphrase: string | undefined;
-  export function setPassphrase(value: string | undefined): void {
-    passphrase = value;
-  }
-  export function getPassphrase(): string | undefined {
-    return passphrase;
-  }
+async function prompt(workbook: Workbook): Promise<string | null> {
+  const { path } = workbook.context;
+  return input.text({
+    title: 'Enter passphrase to unlock',
+    label: `Enter passphrase for ${path}`
+  });
 }
+

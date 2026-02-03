@@ -69,26 +69,15 @@ export namespace Correxit {
 
   export const UI = 'correxit:ui';
 
-  export const UNLOCK = 'correxit:unlock';
+  export const UNLOCKER = 'correxit:unlocker';
 
-  export interface IUnlocker {
-    /**
-     * Unlock a workbook using:
-     * - the key, if provided as argument
-     * - the secrets manager, if available and passphrase exist
-     * - or prompting for passphrase
-     */
+  export type Unlocker = {
     unlock(
       workbook: Workbook,
-      rubric: Rubric | null,
       key: string | null
     ): Promise<Rubric.Unlocked | null>;
+    store(id: string, key: string): Promise<void>;
+  };
 
-    /**
-     * Store a key in the secrets manager
-     */
-    storeKey(rubricId: string, key: string): Promise<void>;
-  }
-
-  export const IUnlocker = new Token<IUnlocker>(UNLOCK);
+  export const Unlocker = new Token<Unlocker>(UNLOCKER);
 }

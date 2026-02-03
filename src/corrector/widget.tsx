@@ -10,7 +10,7 @@ import {
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { ISignal, Signal } from '@lumino/signaling';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Correxit } from '..';
 import { Corrector } from '.';
 
@@ -60,23 +60,15 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
       noFocusOnClick: true,
       onClick: () => content.set({ correct: true })
     });
-    const toggleUnlock = (unlock: boolean) =>
-      content.set({ correct: false, unlock });
-    const passphrase = ReactWidget.create(
-      <Unlock
-        {...{
-          trans,
-          toggleUnlock,
-          lockedChanged: this.content.lockedChanged
-        }}
-      />
-    );
     const refresh = new CommandToolbarButton({
       args: { hard: true },
       commands,
       id: Corrector.CommandIDs.refresh,
       noFocusOnClick: true
     });
+    const toggle = (unlock: boolean) => content.set({ correct: false, unlock });
+    const passphrase = new UnlockButton({ toggle, trans });
+    content.lockedChanged.connect((_, locked) => passphrase.set(locked));
     toolbar.addItem('cd', cd);
     toolbar.addItem('refresh', refresh);
     toolbar.addItem('passphrase', passphrase);
@@ -125,7 +117,6 @@ class Content extends ReactWidget {
   get lockedChanged(): ISignal<Content, boolean> {
     return this._lockedChanged;
   }
-
   set(updates: Partial<Corrector.Props>) {
     // Set the content as locked before locking/unlocking.
     if (updates.unlock !== undefined) {
@@ -147,32 +138,44 @@ class Content extends ReactWidget {
   private _lockedChanged = new Signal<Content, boolean>(this);
 }
 
+class UnlockButton extends ReactWidget {
+  constructor(options: {
+    toggle: (unlock: boolean) => void;
+    trans: IRenderMime.TranslationBundle;
+  }) {
+    super();
+    this.toggle = options.toggle;
+    this.trans = options.trans;
+  }
+
+  render() {
+    const { locked, toggle, trans } = this;
+    return <Unlock locked={locked} toggle={toggle} trans={trans} />;
+  }
+
+  set(locked: boolean) {
+    if (locked !== this.locked) {
+      this.locked = locked;
+      this.update();
+    }
+  }
+
+  protected locked = true;
+  protected toggle: (unlock: boolean) => void;
+  protected trans: IRenderMime.TranslationBundle;
+}
+
 const Unlock: React.FC<{
-  toggleUnlock: (unlock: boolean) => void;
+  locked: boolean;
+  toggle: (unlock: boolean) => void;
   trans: IRenderMime.TranslationBundle;
-  lockedChanged: ISignal<Content, boolean>;
-}> = props => {
-  const { trans } = props;
-  const [locked, setLocked] = useState(true);
-  const unlockIcon = Correxit.Icons.key;
-  const lockIcon = Correxit.Icons.locked;
-
-  useEffect(() => {
-    props.lockedChanged.connect((_, value) => {
-      setLocked(value);
-    });
-  }, [props.lockedChanged]);
-
-  return (
-    <ToolbarButtonComponent
-      className="jp-Button jp-mod-minimal"
-      onClick={() => {
-        props.toggleUnlock(locked);
-      }}
-      icon={locked ? unlockIcon : lockIcon}
-      iconLabel={
-        locked ? trans.__('Unlock workbooks') : trans.__('Lock workbooks')
-      }
-    />
-  );
-};
+}> = ({ locked, toggle, trans }) => (
+  <ToolbarButtonComponent
+    className="jp-Button jp-mod-minimal"
+    onClick={() => toggle(locked)}
+    icon={locked ? Correxit.Icons.key : Correxit.Icons.locked}
+    iconLabel={
+      locked ? trans.__('Unlock workbooks') : trans.__('Lock workbooks')
+    }
+  />
+);
