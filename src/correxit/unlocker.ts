@@ -80,7 +80,7 @@ export namespace Unlocker {
 
     const unlocked = await attempt(workbook, key);
     if (unlocked) {
-      await remember?.(input);
+      await remember(input);
       await store(id, key, secrets);
     }
     return unlocked;
