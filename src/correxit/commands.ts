@@ -47,7 +47,6 @@ export function addCommands(
   dependencies: {
     consumer: Correxit.Consumer;
     schedule: (workbook: Workbook | null) => void;
-    source: Correxit.Source;
     trans: IRenderMime.TranslationBundle;
     unlocker: Correxit.Unlocker;
   }
@@ -57,7 +56,8 @@ export function addCommands(
   const { consumer, schedule, trans, unlocker } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
-  const fetch = (handle: Credentials) => io.request(handle, factory, manager, unlocker);
+  const fetch = (handle: Credentials) =>
+    io.request(handle, factory, manager, unlocker);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
   const reify = async (args: Partial<Credentials>): Promise<{
     handle: Credentials | null;
