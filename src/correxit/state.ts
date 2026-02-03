@@ -1,4 +1,4 @@
-import { Correxit, Rubric, Workbook } from '.';
+import { Rubric, Workbook } from '.';
 
 const state: {
   report: { [cached: string]: Rubric.Score };
@@ -43,13 +43,4 @@ export function cell(args: Partial<
   const notebook = workbook()?.content;
   const toolbar = args[Rubric.Cell.TOOLBAR];
   return args.id || toolbar && notebook?.activeCell?.model.id || '';
-}
-
-/**
- * Subscribes to workbook emissions from a Correxit source.
- */
-export async function subscribe(source: Correxit.Source) {
-  for await (const { payload } of source) {
-    workbook(payload);
-  }
 }

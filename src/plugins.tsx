@@ -20,6 +20,7 @@ import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
 import { addCommands, Correxit, Unlocker, Workbook } from './correxit';
 import * as io from './correxit/io';
+import * as state from './correxit/state';
 import { Sidebar } from './ui';
 
 export const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
@@ -66,9 +67,9 @@ export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
     description: 'Centralized unlock service for Correxit workbooks',
     autoStart: true,
     provides: Correxit.Unlocker,
-    requires: [ISecretsManager],
+    optional: [ISecretsManager],
     ...((deactivator?: () => void) => ({
-      activate: (_, manager: ISecretsManager): Correxit.Unlocker => {
+      activate: (_: JupyterFrontEnd, manager: ISecretsManager | null) => {
         const passphrases = new Set<string>();
         const remember = (value: string) => {
           passphrases.add(value);
@@ -78,7 +79,7 @@ export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
           unlock: async (workbook: Workbook, key: string | null) =>
             Unlocker.unlock(workbook, key, secrets),
           store: (id: string, key: string) => Unlocker.store(id, key, secrets)
-        };
+        } as Correxit.Unlocker;
       },
       deactivate: () => deactivator?.()
     }))()
@@ -180,6 +181,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
           if (workbook !== source.state.payload) {
             void open(workbook, quiet);
             subscribe(previous, workbook);
+            state.workbook(workbook);
             previous = workbook;
             void source.schedule({ payload: workbook });
             notify();
