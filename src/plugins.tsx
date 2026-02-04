@@ -209,8 +209,10 @@ export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
         };
         const secrets = { manager, passphrases, remember, token };
         return {
-          unlock: async (workbook: Workbook, key: string | null) =>
-            Unlocker.unlock(workbook, key, secrets, trans),
+          unlock: async (
+            workbook: Workbook,
+            credentials: Partial<Workbook.Credentials> | null
+          ) => Unlocker.unlock(workbook, credentials, secrets, trans),
           store: (id: string, key: string) => Unlocker.store(id, key, secrets)
         } as Correxit.Unlocker;
       },

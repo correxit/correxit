@@ -97,8 +97,7 @@ export async function request(
     return workbook;
   }
   try {
-    const key = handle.key || rubric.key;
-    await unlocker.unlock(workbook, key);
+    await unlocker.unlock(workbook, handle);
   } catch (error) {
     console.warn(`access error, ${path}`, error);
   }

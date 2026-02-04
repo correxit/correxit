@@ -74,7 +74,7 @@ export namespace Correxit {
   export type Unlocker = {
     unlock(
       workbook: Workbook,
-      key: string | null
+      credentials: Partial<Workbook.Credentials> | null
     ): Promise<Rubric.Unlocked | null>;
     store(id: string, key: string): Promise<void>;
   };
