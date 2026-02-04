@@ -486,13 +486,12 @@ successful, an unlocked rubric.
     `,
     execute: async (args: Partial<Credentials>):
       Promise<Rubric.Unlocked | null> => {
-      const { handle, rubric, workbook } = await reify(args);
+      const { handle, workbook } = await reify(args);
       if (!workbook) {
         return null;
       }
       try {
-        const key = handle?.key || rubric?.key || null;
-        return unlocker.unlock(workbook, key);
+        return unlocker.unlock(workbook, handle);
       } catch (error) {
         const file = PathExt.basename(workbook.context.path);
         void showErrorMessage(

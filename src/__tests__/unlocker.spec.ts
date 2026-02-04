@@ -5,7 +5,29 @@ jest.mock('../correxit/icons', () => ({ Icons: {} }));
 jest.mock('../correxit/input', () => ({ text: jest.fn() }));
 jest.mock('../correxit/security', () => require('./mocks/security'));
 jest.mock('../correxit/workbook', () => ({
-  Workbook: { open: jest.fn(), unlock: jest.fn() }
+  Workbook: {
+    Credentials: {
+      normalize: (credentials: Partial<Workbook.Credentials> | null) => {
+        if (!credentials) {
+          return null;
+        }
+        const {
+          key = null,
+          unlock = null,
+          passphrase = null,
+          path = 'mock'
+        } = credentials;
+        return {
+          path,
+          key,
+          passphrase: key ? null : passphrase,
+          unlock
+        } as Workbook.Credentials;
+      }
+    },
+    open: jest.fn(),
+    unlock: jest.fn()
+  }
 }));
 
 import { ISecretsManager } from 'jupyter-secrets-manager';
@@ -51,13 +73,13 @@ describe('Unlocker', () => {
 
   const trans = nullTranslator.load('correxit');
   const unlock = (
-    key: string | null = null,
+    credentials: Partial<Workbook.Credentials> | null = null,
     passphrases = new Set<string>(),
     remember = jest.fn()
   ) =>
     Unlocker.unlock(
       workbook,
-      key,
+      credentials,
       { manager, passphrases, remember, token },
       trans
     );
@@ -67,13 +89,28 @@ describe('Unlocker', () => {
       (Workbook.open as jest.Mock).mockReturnValue(unlocked);
       const result = await unlock();
       expect(result).toBe(unlocked);
-      expect(Workbook.unlock).not.toHaveBeenCalled();
+      expect(Workbook.unlock).toHaveBeenCalledWith(workbook, unlocked.key);
     });
 
     it('uses the provided key first and skips secrets manager', async () => {
-      const result = await unlock('correct-key');
+      const result = await unlock({ key: 'correct-key' });
       expect(Workbook.unlock).toHaveBeenCalledWith(workbook, 'correct-key');
       expect(manager.get).not.toHaveBeenCalled();
+      expect(result).toBe(unlocked);
+    });
+
+    it('unlocks when a passphrase is provided', async () => {
+      const passphrase = 'direct-pass';
+      const expected = `KEY<${passphrase}:${id}>`;
+      (Workbook.unlock as jest.Mock).mockImplementation(async (_wb, key) => {
+        if (key === expected) return unlocked;
+        throw new Error('Invalid key');
+      });
+
+      const result = await unlock({ passphrase });
+      expect(manager.get).toHaveBeenCalledWith(token, Correxit.UNLOCKER, id);
+      expect(keygen).toHaveBeenCalledWith(passphrase, id);
+      expect(Workbook.unlock).toHaveBeenCalledWith(workbook, expected);
       expect(result).toBe(unlocked);
     });
 
@@ -149,7 +186,7 @@ describe('Unlocker', () => {
         throw new Error('Unknown');
       });
 
-      const result = await unlock(wrong);
+      const result = await unlock({ key: wrong });
       expect(Workbook.unlock).toHaveBeenCalledTimes(2);
       expect(Workbook.unlock).toHaveBeenNthCalledWith(1, workbook, wrong);
       expect(Workbook.unlock).toHaveBeenNthCalledWith(2, workbook, expected);

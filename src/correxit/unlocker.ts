@@ -32,12 +32,13 @@ export namespace Unlocker {
    * Unlock a workbook trying, in order:
    * - the key, if provided as an argument
    * - the secrets manager if available and if key exists
+   * - the given passphrase if available
    * - a cached passphrase if available
    * - a user prompt to provide a passphrase
    */
   export async function unlock(
     workbook: Workbook,
-    key: string | null,
+    credentials: Partial<Workbook.Credentials> | null,
     secrets: {
       manager: ISecretsManager | null;
       passphrases: Set<string>;
@@ -47,16 +48,25 @@ export namespace Unlocker {
     trans: IRenderMime.TranslationBundle
   ): Promise<Rubric.Unlocked | null> {
     const rubric = Workbook.open(workbook, true);
-    if (!rubric?.locked) {
-      return rubric;
+    if (!rubric) {
+      return null;
+    }
+    if (!rubric.locked) {
+      const unlocked = await attempt(workbook, rubric.key);
+      await store(rubric.id, rubric.key, secrets);
+      return unlocked;
     }
 
-    const { manager, passphrases, remember, token } = secrets;
     const { id } = rubric;
-    if (!key && manager && token) {
+    const { manager, passphrases, remember, token } = secrets;
+    const handle = Workbook.Credentials.normalize(credentials);
+    let key: string | null = handle?.key || null;
+    if (manager && token && !key) {
       key = (await manager.get(token, Correxit.UNLOCKER, id))?.value ?? null;
     }
-    if (key) {
+    if (key || handle?.passphrase) {
+      key ||= await security.keygen(handle!.passphrase!, id);
+
       const unlocked = await attempt(workbook, key);
       if (unlocked) {
         await store(id, key, secrets);

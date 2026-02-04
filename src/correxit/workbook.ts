@@ -45,7 +45,7 @@ export namespace Workbook {
         return null;
       }
       return {
-        ...credentials,
+        path,
         key: key || null,
         passphrase: key ? null : passphrase || null,
         unlock: unlock || null
