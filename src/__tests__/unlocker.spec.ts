@@ -192,5 +192,14 @@ describe('Unlocker', () => {
       expect(Workbook.unlock).toHaveBeenNthCalledWith(2, workbook, expected);
       expect(result).toBe(unlocked);
     });
+
+    it('returns null if user cancels the passphrase prompt', async () => {
+      manager.get.mockResolvedValue(undefined);
+      (input.text as jest.Mock).mockResolvedValue(null);
+
+      const result = await unlock();
+      expect(result).toBeNull();
+      expect(Workbook.unlock).not.toHaveBeenCalled();
+    });
   });
 });
