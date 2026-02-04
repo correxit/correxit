@@ -114,7 +114,6 @@ describe('Unlocker', () => {
       expect(result).toBe(unlocked);
     });
 
-
     it('returns null if user cancels the passphrase prompt', async () => {
       manager.get.mockResolvedValue(undefined);
       (input.text as jest.Mock).mockResolvedValue(null);

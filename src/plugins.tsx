@@ -157,7 +157,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
           if (workbook !== source.state.payload) {
             void open(workbook, quiet);
             subscribe(previous, workbook);
-            state.workbook(workbook);
+            void state.workbook(workbook);
             previous = workbook;
             void source.schedule({ payload: workbook });
             notify();
@@ -192,7 +192,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
 export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
   SecretsManager.sign(Correxit.UNLOCKER, token => ({
     id: Correxit.UNLOCKER,
-    description: 'Centralized unlock service for Correxit workbooks',
+    description: 'A plugin for unlocking rubrics and securely storing keys',
     autoStart: true,
     provides: Correxit.Unlocker,
     optional: [ISecretsManager, ITranslator],
@@ -204,9 +204,7 @@ export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
       ) => {
         const trans = (translator || nullTranslator).load('correxit');
         const passphrases = new Set<string>();
-        const remember = (value: string) => {
-          passphrases.add(value);
-        };
+        const remember = (value: string) => void passphrases.add(value);
         const secrets = { manager, passphrases, remember, token };
         return {
           unlock: async (

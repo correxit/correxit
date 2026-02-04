@@ -68,7 +68,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     });
     const toggle = (unlock: boolean) => content.set({ correct: false, unlock });
     const passphrase = new UnlockButton({ toggle, trans });
-    content.lockedChanged.connect((_, locked) => passphrase.set(locked));
+    content.toggled.connect((_, locked) => passphrase.set(locked));
     toolbar.addItem('cd', cd);
     toolbar.addItem('refresh', refresh);
     toolbar.addItem('passphrase', passphrase);
@@ -94,8 +94,7 @@ class Content extends ReactWidget {
       ...props,
       correct: false,
       notify: () => {},
-      unlock: false,
-      updateLocked: this.updateLocked
+      unlock: false
     };
     this.addClass('correxit-corrector-widget-content');
   }
@@ -104,29 +103,19 @@ class Content extends ReactWidget {
     return this.props.path || '';
   }
 
-  /**
-   * Trigger the change of lock state.
-   */
-  updateLocked = (value: boolean) => {
-    this._lockedChanged.emit(value);
-  };
-
-  /**
-   * A signal emitting when the locked state changed.
-   */
-  get lockedChanged(): ISignal<Content, boolean> {
-    return this._lockedChanged;
+  get toggled(): ISignal<Content, boolean> {
+    return this._toggled;
   }
+
   set(updates: Partial<Corrector.Props>) {
-    // Set the content as locked before locking/unlocking.
-    if (updates.unlock !== undefined) {
-      this.updateLocked(true);
-    }
-    // Prevent triggering the unlock when changing directory.
     if (updates.path !== undefined) {
-      this.props.unlock = false;
+      updates.unlock = false;
+      (updates as any).key = `${Date.now()}`;
     }
-    this.props = { ...this.props, ...updates, key: `${Date.now()}` };
+    this.props = { ...this.props, ...updates };
+    if (updates.unlock !== undefined) {
+      this._toggled.emit(!updates.unlock);
+    }
     this.update();
   }
 
@@ -135,7 +124,7 @@ class Content extends ReactWidget {
   }
 
   protected props: Corrector.Props & { key?: string };
-  private _lockedChanged = new Signal<Content, boolean>(this);
+  private _toggled = new Signal<Content, boolean>(this);
 }
 
 class UnlockButton extends ReactWidget {
@@ -150,7 +139,16 @@ class UnlockButton extends ReactWidget {
 
   render() {
     const { locked, toggle, trans } = this;
-    return <Unlock locked={locked} toggle={toggle} trans={trans} />;
+    return (
+      <ToolbarButtonComponent
+        className="jp-Button jp-mod-minimal"
+        onClick={() => toggle(locked)}
+        icon={locked ? Correxit.Icons.key : Correxit.Icons.locked}
+        iconLabel={
+          locked ? trans.__('Unlock workbooks') : trans.__('Lock workbooks')
+        }
+      />
+    );
   }
 
   set(locked: boolean) {
@@ -164,18 +162,3 @@ class UnlockButton extends ReactWidget {
   protected toggle: (unlock: boolean) => void;
   protected trans: IRenderMime.TranslationBundle;
 }
-
-const Unlock: React.FC<{
-  locked: boolean;
-  toggle: (unlock: boolean) => void;
-  trans: IRenderMime.TranslationBundle;
-}> = ({ locked, toggle, trans }) => (
-  <ToolbarButtonComponent
-    className="jp-Button jp-mod-minimal"
-    onClick={() => toggle(locked)}
-    icon={locked ? Correxit.Icons.key : Correxit.Icons.locked}
-    iconLabel={
-      locked ? trans.__('Unlock workbooks') : trans.__('Lock workbooks')
-    }
-  />
-);
