@@ -350,24 +350,16 @@ export namespace Workbook {
     spec: KernelSpec.ISpecModel | null;
     outputs: Rubric.Outputs;
   } | null> {
-    if (!rubric) {
-      throw new Error('execute error');
-    }
-
-    const { context } = workbook;
-    const { model: { cells } } = context;
-    let stop = cells.length;
-    if (id) {
-      const cell = Rubric.get(rubric, id);
-      if (!cell) {
-        return null;
-      }
-      stop = Math.max(
-        1 + findIndex(cells, ({ id }) => id === cell.id),
-        cell.is === 'correctable' || cell.is === 'comparable' ?
-          1 + findIndex(cells, ({ id }) => id === cell.reference?.[0]) :
-          Number.NEGATIVE_INFINITY
-      );
+    const { model: { cells } } = workbook.context;
+    const position = (target: string) =>
+      1 + findIndex(cells, ({ id }) => id === target);
+    const scan = (cell: Rubric.Cell) =>
+      cell.is === 'correctable' || cell.is === 'comparable'
+        ? Math.max(position(cell.id), position(cell.reference[0]))
+        : position(cell.id);
+    const cell = id && Rubric.get(rubric, id);
+    if (id && !cell) {
+      return null;
     }
 
     const outputs: Rubric.Outputs = new Map();
@@ -376,12 +368,12 @@ export namespace Workbook {
       return null;
     }
 
+    const { execute } = Rubric.Cell;
     const [kernel, release] = leased;
-    for (const index of range(stop)) {
+    for (const index of range(cell ? scan(cell) : cells.length)) {
       const cell = cells.get(index);
       if (cell.type === 'code') {
         try {
-          const { execute } = Rubric.Cell;
           outputs.set(cell.id, await execute(cell as ICodeCellModel, kernel));
         } catch (error) {
           console.warn('cell execute error', cell, error);

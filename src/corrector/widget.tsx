@@ -107,10 +107,9 @@ class Content extends ReactWidget {
     return this._toggled;
   }
 
-  set(updates: Partial<Corrector.Props>) {
+  set(updates: Partial<Corrector.Props & { key?: string }>) {
     if (updates.path !== undefined) {
-      updates.unlock = false;
-      (updates as any).key = `${Date.now()}`;
+      updates = { ...updates, unlock: false, key: `${Date.now()}` };
     }
     this.props = { ...this.props, ...updates };
     if (updates.unlock !== undefined) {

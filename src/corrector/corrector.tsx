@@ -85,11 +85,11 @@ export function Corrector(props: Corrector.Props) {
   const merged = merge(workbooks, collated);
   const [selection, setSelection] = useState('');
   const [workbook, setWorkbook] = useState(() => match(merged, selection));
+  useEffect(() => emit(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => () => dispose(workbooks), [scanned]);
   useEffect(() => () => dispose(grades.map(([__, _]) => _.workbook)), [graded]);
   useEffect(() => setWorkbook(match(merged, selection)), [merged, selection]);
-  useEffect(() => emit(commands, workbook), [workbook]);
   return (
     <table className="correxit-corrector">
       {merged.map(workbook => {

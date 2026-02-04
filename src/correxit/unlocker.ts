@@ -42,7 +42,6 @@ export namespace Unlocker {
     secrets: {
       manager: ISecretsManager | null;
       passphrases: Set<string>;
-      remember: (value: string) => void | Promise<void>;
       token: symbol;
     },
     trans: IRenderMime.TranslationBundle
@@ -51,46 +50,45 @@ export namespace Unlocker {
     if (!rubric) {
       return null;
     }
-    if (!rubric.locked) {
-      const unlocked = await attempt(workbook, rubric.key);
+    if (rubric.key) {
       await store(rubric.id, rubric.key, secrets);
-      return unlocked;
+      return attempt(workbook, rubric.key);
     }
 
     const { id } = rubric;
-    const { manager, passphrases, remember, token } = secrets;
+    const { manager, passphrases, token } = secrets;
     const handle = Workbook.Credentials.normalize(credentials);
     let key: string | null = handle?.key || null;
+    let unlocked: Rubric.Unlocked | null = null;
     if (manager && token && !key) {
       key = (await manager.get(token, Correxit.UNLOCKER, id))?.value ?? null;
     }
-    if (key || handle?.passphrase) {
-      key ||= await security.keygen(handle!.passphrase!, id);
-
-      const unlocked = await attempt(workbook, key);
-      if (unlocked) {
+    if (key && (unlocked = await attempt(workbook, key))) {
+      await store(id, key, secrets);
+      return unlocked;
+    }
+    if (handle?.passphrase) {
+      key = await security.keygen(handle.passphrase, id);
+      if ((unlocked = await attempt(workbook, key))) {
         await store(id, key, secrets);
         return unlocked;
       }
     }
     for (const passphrase of passphrases) {
-      const key = await security.keygen(passphrase, id);
-      const unlocked = await attempt(workbook, key);
-      if (unlocked) {
+      key = await security.keygen(passphrase, id);
+      if ((unlocked = await attempt(workbook, key))) {
         await store(id, key, secrets);
         return unlocked;
       }
     }
 
-    const input = await prompt(workbook, trans);
-    if (!input) {
+    const passphrase = await prompt(workbook, trans);
+    if (!passphrase) {
       return null;
     }
-    key = await security.keygen(input, id);
-
-    const unlocked = await attempt(workbook, key);
-    if (unlocked) {
-      await remember(input);
+    key = await security.keygen(passphrase, id);
+    if ((unlocked = await attempt(workbook, key))) {
+      passphrases.add(passphrase);
       await store(id, key, secrets);
     }
     return unlocked;

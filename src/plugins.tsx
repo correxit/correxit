@@ -203,9 +203,7 @@ export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
         translator: ITranslator | null
       ) => {
         const trans = (translator || nullTranslator).load('correxit');
-        const passphrases = new Set<string>();
-        const remember = (value: string) => void passphrases.add(value);
-        const secrets = { manager, passphrases, remember, token };
+        const secrets = { manager, passphrases: new Set<string>(), token };
         return {
           unlock: async (
             workbook: Workbook,

@@ -74,13 +74,12 @@ describe('Unlocker', () => {
   const trans = nullTranslator.load('correxit');
   const unlock = (
     credentials: Partial<Workbook.Credentials> | null = null,
-    passphrases = new Set<string>(),
-    remember = jest.fn()
+    passphrases = new Set<string>()
   ) =>
     Unlocker.unlock(
       workbook,
       credentials,
-      { manager, passphrases, remember, token },
+      { manager, passphrases, token },
       trans
     );
 
@@ -170,10 +169,10 @@ describe('Unlocker', () => {
     it('caches and stores key in secrets manager after prompt', async () => {
       manager.get.mockResolvedValue(undefined);
       (input.text as jest.Mock).mockResolvedValue('user-pass');
-      const remember = jest.fn();
       (Workbook.unlock as jest.Mock).mockResolvedValue(unlocked);
-      await unlock(null, new Set(), remember);
-      expect(remember).toHaveBeenCalledWith('user-pass');
+      const passphrases = new Set<string>();
+      await unlock(null, passphrases);
+      expect(passphrases.has('user-pass')).toBe(true);
       expect(manager.set).toHaveBeenCalledWith(
         token,
         Correxit.UNLOCKER,
