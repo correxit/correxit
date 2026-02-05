@@ -40,7 +40,7 @@ export namespace Workbook {
 
   export namespace Credentials {
     export function normalize (credentials: Partial<Credentials> | null) {
-      const { key, unlock, passphrase, path } = credentials || {};
+      const { key, passphrase, path, unlock } = credentials || {};
       if (key && unlock || !path) {
         return null;
       }
