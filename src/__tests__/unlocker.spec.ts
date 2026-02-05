@@ -34,7 +34,7 @@ import { ISecretsManager } from 'jupyter-secrets-manager';
 import { Correxit } from '../correxit';
 import * as input from '../correxit/input';
 import { Rubric } from '../correxit/rubric';
-import { keygen } from '../correxit/security';
+import * as security from '../correxit/security';
 import { Unlocker } from '../correxit/unlocker';
 import { Workbook } from '../correxit/workbook';
 import { nullTranslator } from '@jupyterlab/translation';
@@ -108,7 +108,7 @@ describe('Unlocker', () => {
 
       const result = await unlock({ passphrase });
       expect(manager.get).toHaveBeenCalledWith(token, Correxit.UNLOCKER, id);
-      expect(keygen).toHaveBeenCalledWith(passphrase, id);
+      expect(security.keygen).toHaveBeenCalledWith(passphrase, id);
       expect(Workbook.unlock).toHaveBeenCalledWith(workbook, expected);
       expect(result).toBe(unlocked);
     });
@@ -144,7 +144,7 @@ describe('Unlocker', () => {
       });
 
       const result = await unlock(null, new Set([cached]));
-      expect(keygen).toHaveBeenCalledWith(cached, id);
+      expect(security.keygen).toHaveBeenCalledWith(cached, id);
       expect(Workbook.unlock).toHaveBeenCalledWith(workbook, expected);
       expect(result).toBe(unlocked);
     });
@@ -161,7 +161,7 @@ describe('Unlocker', () => {
 
       const result = await unlock();
       expect(input.text).toHaveBeenCalled();
-      expect(keygen).toHaveBeenCalledWith('my-passphrase', id);
+      expect(security.keygen).toHaveBeenCalledWith('my-passphrase', id);
       expect(Workbook.unlock).toHaveBeenCalledWith(workbook, expected);
       expect(result).toBe(unlocked);
     });
