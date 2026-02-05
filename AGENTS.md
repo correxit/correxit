@@ -42,7 +42,7 @@ Correxit is a **serverless** JupyterLab extension for grading. All logic happens
 
 - **Immutability**: When modifying rules/rubrics, always return a new object. See `Rubric` namespace.
 - **Namespaces over Classes**: Eschew classes in favor of namespaces and functions whenever it is sensible (except for React Components and Jupyter Widgets).
-- **Module Imports**: Always import `input`, `io`, `kernels`, `security`, and `state` modules as namespaces (e.g., `import * as security from './security'`).
+- **Module Imports**: Always import internal utility modules (e.g. `description`, `input`, `io`, `kernels`, `propagator`, `security`, `state`) as namespaces (e.g., `import * as security from './security'`).
 - **Security**:
   - Use `openpgp` for encryption.
   - Use `window.crypto` (via `crypto.subtle`) for signing/hashing.

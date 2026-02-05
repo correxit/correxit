@@ -366,7 +366,7 @@ export function addCommands(
     ): Promise<AsyncIterable<[string, Correxit.Emitter.Emission]>> => {
       const { rubric, workbook } = await reify(args);
       if (!workbook || !rubric || rubric.locked) {
-        return (async function*() {})();
+        return (async function* empty() {})();
       }
 
       try {
@@ -375,7 +375,7 @@ export function addCommands(
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
-      return (async function*() {})();
+      return (async function* empty() {})();
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
