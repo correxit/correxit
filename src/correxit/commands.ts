@@ -47,17 +47,17 @@ export function addCommands(
   dependencies: {
     consumer: Correxit.Consumer;
     schedule: (workbook: Workbook | null) => void;
-    source: Correxit.Source;
     trans: IRenderMime.TranslationBundle;
-    unlocker: Correxit.IUnlocker;
+    unlocker: Correxit.Unlocker;
   }
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
-  const { consumer, schedule, source, trans, unlocker } = dependencies;
+  const { consumer, schedule, trans, unlocker } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
-  const fetch = (handle: Credentials) => io.request(handle, factory, manager, unlocker);
+  const fetch = (handle: Credentials) =>
+    io.request(handle, factory, manager, unlocker);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
   const reify = async (args: Partial<Credentials>): Promise<{
     handle: Credentials | null;
@@ -70,7 +70,6 @@ export function addCommands(
     return { handle, rubric, workbook };
   };
   const disposables = [];
-  void state.subscribe(source);
   disposables.push(commands.addCommand(CommandIDs.add, {
     className: 'correxit-add',
     icon: ({ is }: Partial<Cell>) =>
@@ -367,7 +366,7 @@ export function addCommands(
     ): Promise<AsyncIterable<[string, Correxit.Emitter.Emission]>> => {
       const { rubric, workbook } = await reify(args);
       if (!workbook || !rubric || rubric.locked) {
-        return (async function*() {})();
+        return (async function* empty() {})();
       }
 
       try {
@@ -376,7 +375,7 @@ export function addCommands(
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
-      return (async function*() {})();
+      return (async function* empty() {})();
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
@@ -487,13 +486,12 @@ successful, an unlocked rubric.
     `,
     execute: async (args: Partial<Credentials>):
       Promise<Rubric.Unlocked | null> => {
-      const { handle, rubric, workbook } = await reify(args);
+      const { handle, workbook } = await reify(args);
       if (!workbook) {
         return null;
       }
       try {
-        const key = handle?.key || rubric?.key || null;
-        return unlocker.unlock(workbook, rubric, key);
+        return unlocker.unlock(workbook, handle);
       } catch (error) {
         const file = PathExt.basename(workbook.context.path);
         void showErrorMessage(

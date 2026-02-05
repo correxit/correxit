@@ -74,8 +74,7 @@ const merge = (workbooks: Headless[], grades: Collated) =>
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Corrector(props: Corrector.Props) {
-  const { commands, correct, notify, path, trans, unlock, updateLocked } =
-    props;
+  const { commands, correct, notify, path, trans, unlock } = props;
   const grade = correct ? Corrector.CommandIDs.batch : '';
   const scan = Corrector.CommandIDs.scan;
   const handle = correct ? { path } : { unlock, path };
@@ -86,15 +85,11 @@ export function Corrector(props: Corrector.Props) {
   const merged = merge(workbooks, collated);
   const [selection, setSelection] = useState('');
   const [workbook, setWorkbook] = useState(() => match(merged, selection));
+  useEffect(() => emit(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => () => dispose(workbooks), [scanned]);
   useEffect(() => () => dispose(grades.map(([__, _]) => _.workbook)), [graded]);
   useEffect(() => setWorkbook(match(merged, selection)), [merged, selection]);
-  useEffect(() => emit(commands, workbook), [workbook]);
-  useEffect(() =>
-    updateLocked(merged.every(workbook => open(workbook)?.locked ?? true))
-  );
-
   return (
     <table className="correxit-corrector">
       {merged.map(workbook => {
@@ -118,7 +113,6 @@ export namespace Corrector {
     unlock: boolean;
     path: string;
     trans: TranslationBundle;
-    updateLocked: (locked: boolean) => void;
   };
   export type Widget = CorrectorWidget;
   export const addCommands = ADD_COMMANDS;

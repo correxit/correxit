@@ -20,7 +20,7 @@ export function invoke({ consumer, workbook }: {
     return emitter;
   }
   propagate({ consumer, log, rubric, workbook })
-    .catch(error => void log({ type: 'error', slots: [`${error}`] }))
+    .catch(error => log({ type: 'error', slots: [`${error}`] }))
     .finally(end);
   return emitter;
 };

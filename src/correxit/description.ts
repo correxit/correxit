@@ -4,4 +4,6 @@ export const CORRECTOR = 'Correxit Corrector user interface for batch grading wo
 
 export const SOURCE = 'Correxit workbook emissions source';
 
-export const UI = 'Correxit notebook annotations, sidebar, and toolbar buttons';
+export const UI = 'Correxit workbook annotations, sidebar, and toolbar buttons';
+
+export const UNLOCKER = 'Correxit workbook key management';

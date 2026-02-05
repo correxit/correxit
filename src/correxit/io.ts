@@ -80,7 +80,7 @@ export async function request(
   handle: Workbook.Credentials,
   factory: NotebookModelFactory,
   manager: ServiceManager.IManager,
-  unlocker: Correxit.IUnlocker
+  unlocker: Correxit.Unlocker
 ): Promise<Workbook.Headless | null> {
   const { path } = handle;
   const context = new Context({ manager, factory, path });
@@ -97,8 +97,7 @@ export async function request(
     return workbook;
   }
   try {
-    const key = handle.key || rubric.key;
-    await unlocker.unlock(workbook, rubric, key);
+    await unlocker.unlock(workbook, handle);
   } catch (error) {
     console.warn(`access error, ${path}`, error);
   }

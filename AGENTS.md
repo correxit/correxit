@@ -42,6 +42,7 @@ Correxit is a **serverless** JupyterLab extension for grading. All logic happens
 
 - **Immutability**: When modifying rules/rubrics, always return a new object. See `Rubric` namespace.
 - **Namespaces over Classes**: Eschew classes in favor of namespaces and functions whenever it is sensible (except for React Components and Jupyter Widgets).
+- **Module Imports**: Always import internal utility modules (e.g. `description`, `input`, `io`, `kernels`, `propagator`, `security`, `state`) as namespaces (e.g., `import * as security from './security'`).
 - **Security**:
   - Use `openpgp` for encryption.
   - Use `window.crypto` (via `crypto.subtle`) for signing/hashing.
@@ -50,7 +51,9 @@ Correxit is a **serverless** JupyterLab extension for grading. All logic happens
 
 ## Code Style Preferences
 
-- **Idiomatic English**: For constant, variable, function, and method names always prefer single English words that convey the concept semantically.
+- **Idiomatic English**: Require single English words for all voluntary named tokens (e.g. use `stop` not `stopIndex`). Avoid compound words.
+- **Const Grouping**: `const` declarations must be contiguous. A block of declarations must be preceded by a blank line or the top of a scope.
+- **Helper Functions**: Extract small, scoped helper functions (e.g. `scan`, `position`) to enable single-word naming and avoid complex inline logic.
 - **Functional Style**:
   - Avoid loops in favor of array methods (`map`, `filter`, `reduce`) whenever possible.
   - Exceptions: Async iterators (e.g. `propagator.ts`, `use-command.ts`) require `for await...of`.

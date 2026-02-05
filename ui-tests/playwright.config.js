@@ -5,6 +5,7 @@ const baseConfig = require('@jupyterlab/galata/lib/playwright-config');
 
 module.exports = {
   ...baseConfig,
+  reporter: [['list'], ['html', { open: 'never' }]],
   webServer: {
     command: 'jlpm start',
     url: 'http://localhost:8888/lab',

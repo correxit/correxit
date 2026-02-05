@@ -33,18 +33,22 @@ export namespace Workbook {
   }
 
   export type Credentials = |
-    { path: string; unlock: null; key: null; } |
-    { path: string; unlock: null; key: string; } |
-    { path: string; unlock: boolean; key: null; };
+    { path: string; unlock: null; key: null; passphrase: null; } |
+    { path: string; unlock: null; key: string; passphrase: null; } |
+    { path: string; unlock: null; key: null; passphrase: string; } |
+    { path: string; unlock: boolean; key: null; passphrase: null; };
 
   export namespace Credentials {
     export function normalize (credentials: Partial<Credentials> | null) {
-      const { key, unlock, path } = credentials || {};
+      const { key, passphrase, path, unlock } = credentials || {};
       if (key && unlock || !path) {
         return null;
       }
       return {
-        key: key || null, unlock: unlock || null, path
+        path,
+        key: key || null,
+        passphrase: key ? null : passphrase || null,
+        unlock: unlock || null
       } as Credentials;
     }
   }
@@ -227,7 +231,7 @@ export namespace Workbook {
   export async function convert(
     workbook: Workbook,
     passphrase: string,
-    unlocker: Correxit.IUnlocker
+    unlocker: Correxit.Unlocker
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
@@ -238,7 +242,7 @@ export namespace Workbook {
       if (error === Correxit.NO_CORREXIT_METADATA) {
         const created = Rubric.create();
         const key = await security.keygen(passphrase, created.id);
-        unlocker.storeKey(created.id, key);
+        unlocker.store(created.id, key);
         return update(workbook, { ...created, key });
       }
       throw error;
@@ -346,24 +350,16 @@ export namespace Workbook {
     spec: KernelSpec.ISpecModel | null;
     outputs: Rubric.Outputs;
   } | null> {
-    if (!rubric) {
-      throw new Error('execute error');
-    }
-
-    const { context } = workbook;
-    const { model: { cells } } = context;
-    let stop = cells.length;
-    if (id) {
-      const cell = Rubric.get(rubric, id);
-      if (!cell) {
-        return null;
-      }
-      stop = Math.max(
-        1 + findIndex(cells, ({ id }) => id === cell.id),
-        cell.is === 'correctable' || cell.is === 'comparable' ?
-          1 + findIndex(cells, ({ id }) => id === cell.reference?.[0]) :
-          Number.NEGATIVE_INFINITY
-      );
+    const { model: { cells } } = workbook.context;
+    const position = (target: string) =>
+      1 + findIndex(cells, ({ id }) => id === target);
+    const scan = (cell: Rubric.Cell) =>
+      cell.is === 'correctable' || cell.is === 'comparable'
+        ? Math.max(position(cell.id), position(cell.reference[0]))
+        : position(cell.id);
+    const cell = id && Rubric.get(rubric, id);
+    if (id && !cell) {
+      return null;
     }
 
     const outputs: Rubric.Outputs = new Map();
@@ -372,12 +368,12 @@ export namespace Workbook {
       return null;
     }
 
+    const { execute } = Rubric.Cell;
     const [kernel, release] = leased;
-    for (const index of range(stop)) {
+    for (const index of range(cell ? scan(cell) : cells.length)) {
       const cell = cells.get(index);
       if (cell.type === 'code') {
         try {
-          const { execute } = Rubric.Cell;
           outputs.set(cell.id, await execute(cell as ICodeCellModel, kernel));
         } catch (error) {
           console.warn('cell execute error', cell, error);

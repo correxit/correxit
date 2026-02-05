@@ -20,6 +20,7 @@ import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
 import { addCommands, Correxit, Unlocker, Workbook } from './correxit';
 import * as io from './correxit/io';
+import * as state from './correxit/state';
 import { Sidebar } from './ui';
 
 export const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
@@ -59,21 +60,6 @@ export const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
     deactivate: () => deactivator?.()
   }))()
 };
-
-export const unlocker: JupyterFrontEndPlugin<Correxit.IUnlocker> =
-  SecretsManager.sign(Correxit.UNLOCK, token => ({
-    id: Correxit.UNLOCK,
-    description: 'Centralized unlock service for Correxit workbooks',
-    autoStart: true,
-    provides: Correxit.IUnlocker,
-    optional: [ISecretsManager],
-    ...((deactivator?: () => void) => ({
-      activate: (app, secretsManager: ISecretsManager): Correxit.IUnlocker => {
-        return new Unlocker({ token, secretsManager });
-      },
-      deactivate: () => deactivator?.()
-    }))()
-  }));
 
 export const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
@@ -130,14 +116,14 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
-  requires: [Correxit.Consumer, Correxit.IUnlocker, INotebookTracker],
+  requires: [Correxit.Consumer, Correxit.Unlocker, INotebookTracker],
   optional: [ITranslator],
   provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
       app,
       consumer: Correxit.Consumer,
-      unlocker: Correxit.IUnlocker,
+      unlocker: Correxit.Unlocker,
       tracker: INotebookTracker,
       translator: ITranslator | null
     ): Correxit.Source => {
@@ -171,6 +157,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
           if (workbook !== source.state.payload) {
             void open(workbook, quiet);
             subscribe(previous, workbook);
+            void state.workbook(workbook);
             previous = workbook;
             void source.schedule({ payload: workbook });
             notify();
@@ -178,7 +165,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
         }
       )(null as Workbook | null);
       const trans = (translator || nullTranslator).load('correxit');
-      const dependencies = { consumer, schedule, source, trans, unlocker };
+      const dependencies = { consumer, schedule, trans, unlocker };
       const added = addCommands(app, dependencies);
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>
@@ -201,6 +188,31 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
     deactivate: () => deactivator?.()
   }))()
 };
+
+export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
+  SecretsManager.sign(Correxit.UNLOCKER, token => ({
+    id: Correxit.UNLOCKER,
+    description: Correxit.DESCRIPTION.UNLOCKER,
+    autoStart: true,
+    provides: Correxit.Unlocker,
+    optional: [ISecretsManager, ITranslator],
+    ...((deactivator?: () => void) => ({
+      activate: (
+        _: JupyterFrontEnd,
+        manager: ISecretsManager | null,
+        translator: ITranslator | null
+      ) => {
+        const trans = (translator || nullTranslator).load('correxit');
+        const secrets = { manager, passphrases: new Set<string>(), token };
+        return {
+          store: (id: string, key: string) => Unlocker.store(id, key, secrets),
+          unlock: async (workbook, credentials) =>
+            Unlocker.unlock(workbook, credentials, secrets, trans)
+        } as Correxit.Unlocker;
+      },
+      deactivate: () => deactivator?.()
+    }))()
+  }));
 
 export const ui: JupyterFrontEndPlugin<void> = {
   id: Correxit.UI,

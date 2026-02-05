@@ -42,6 +42,21 @@ export namespace Correxit {
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
 
+  export type Unlocker = {
+    /**
+     * Store the key for a given rubric id.
+     */
+    store(id: string, key: string): Promise<void>;
+
+    /**
+     * Unlock a given workbook with the given credentials.
+     */
+    unlock(
+      workbook: Workbook,
+      credentials: Partial<Workbook.Credentials & { silent: boolean }> | null
+    ): Promise<Rubric.Unlocked | null>;
+  };
+
   export const CommandIDs = COMMAND_IDS;
 
   export const CONSUMER = 'correxit:consumer';
@@ -54,7 +69,8 @@ export namespace Correxit {
     CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
     SOURCE: description.SOURCE,
-    UI: description.UI
+    UI: description.UI,
+    UNLOCKER: description.UNLOCKER
   };
 
   export const Icons = ICONS;
@@ -69,26 +85,7 @@ export namespace Correxit {
 
   export const UI = 'correxit:ui';
 
-  export const UNLOCK = 'correxit:unlock';
+  export const UNLOCKER = 'correxit:unlocker';
 
-  export interface IUnlocker {
-    /**
-     * Unlock a workbook using:
-     * - the key, if provided as argument
-     * - the secrets manager, if available and passphrase exist
-     * - or prompting for passphrase
-     */
-    unlock(
-      workbook: Workbook,
-      rubric: Rubric | null,
-      key: string | null
-    ): Promise<Rubric.Unlocked | null>;
-
-    /**
-     * Store a key in the secrets manager
-     */
-    storeKey(rubricId: string, key: string): Promise<void>;
-  }
-
-  export const IUnlocker = new Token<IUnlocker>(UNLOCK);
+  export const Unlocker = new Token<Unlocker>(UNLOCKER);
 }
