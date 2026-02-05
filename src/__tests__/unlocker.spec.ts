@@ -73,7 +73,9 @@ describe('Unlocker', () => {
 
   const trans = nullTranslator.load('correxit');
   const unlock = (
-    credentials: Partial<Workbook.Credentials> | null = null,
+    credentials: Partial<
+      Workbook.Credentials & { silent: boolean }
+    > | null = null,
     passphrases = new Set<string>()
   ) =>
     Unlocker.unlock(
@@ -111,6 +113,15 @@ describe('Unlocker', () => {
       expect(security.keygen).toHaveBeenCalledWith(passphrase, id);
       expect(Workbook.unlock).toHaveBeenCalledWith(workbook, expected);
       expect(result).toBe(unlocked);
+    });
+
+    it('returns null without prompting if silent is true', async () => {
+      manager.get.mockResolvedValue(undefined);
+
+      const result = await unlock({ silent: true });
+      expect(result).toBeNull();
+      expect(input.text).not.toHaveBeenCalled();
+      expect(manager.get).toHaveBeenCalled();
     });
 
     it('returns null if user cancels the passphrase prompt', async () => {

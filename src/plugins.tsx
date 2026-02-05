@@ -192,7 +192,7 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
 export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
   SecretsManager.sign(Correxit.UNLOCKER, token => ({
     id: Correxit.UNLOCKER,
-    description: 'A plugin for unlocking rubrics and securely storing keys',
+    description: Correxit.DESCRIPTION.UNLOCKER,
     autoStart: true,
     provides: Correxit.Unlocker,
     optional: [ISecretsManager, ITranslator],
@@ -205,11 +205,9 @@ export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
         const trans = (translator || nullTranslator).load('correxit');
         const secrets = { manager, passphrases: new Set<string>(), token };
         return {
-          unlock: async (
-            workbook: Workbook,
-            credentials: Partial<Workbook.Credentials> | null
-          ) => Unlocker.unlock(workbook, credentials, secrets, trans),
-          store: (id: string, key: string) => Unlocker.store(id, key, secrets)
+          store: (id: string, key: string) => Unlocker.store(id, key, secrets),
+          unlock: async (workbook, credentials) =>
+            Unlocker.unlock(workbook, credentials, secrets, trans)
         } as Correxit.Unlocker;
       },
       deactivate: () => deactivator?.()

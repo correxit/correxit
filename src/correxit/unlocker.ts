@@ -5,17 +5,6 @@ import * as input from './input';
 import * as security from './security';
 
 export namespace Unlocker {
-  export async function attempt(
-    workbook: Workbook,
-    key: string
-  ): Promise<Rubric.Unlocked | null> {
-    try {
-      return await Workbook.unlock(workbook, key);
-    } catch {
-      return null;
-    }
-  }
-
   export async function store(
     id: string,
     key: string,
@@ -38,7 +27,7 @@ export namespace Unlocker {
    */
   export async function unlock(
     workbook: Workbook,
-    credentials: Partial<Workbook.Credentials> | null,
+    credentials: Partial<Workbook.Credentials & { silent: boolean }> | null,
     secrets: {
       manager: ISecretsManager | null;
       passphrases: Set<string>;
@@ -81,6 +70,9 @@ export namespace Unlocker {
         return unlocked;
       }
     }
+    if (credentials?.silent) {
+      return null;
+    }
 
     const passphrase = await prompt(workbook, trans);
     if (!passphrase) {
@@ -92,6 +84,17 @@ export namespace Unlocker {
       await store(id, key, secrets);
     }
     return unlocked;
+  }
+}
+
+async function attempt(
+  workbook: Workbook,
+  key: string
+): Promise<Rubric.Unlocked | null> {
+  try {
+    return await Workbook.unlock(workbook, key);
+  } catch {
+    return null;
   }
 }
 
