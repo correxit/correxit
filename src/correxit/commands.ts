@@ -388,7 +388,11 @@ export function addCommands(
       }
 
       const { workbook } = await reify(args);
-      return workbook && registrar(workbook);
+      const warn = (error: any) => {
+        console.warn('registrar failed for workbook', workbook, error);
+        return [];
+      };
+      return workbook && await registrar(workbook).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {

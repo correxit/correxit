@@ -20,7 +20,7 @@ export namespace Correxit {
 
   export namespace Emitter {
     /**
-     * An notification/message emission with slots to populate interpolations.
+     * A notification/message emission with slots to populate interpolations.
      */
     export type Emission = { slots: (string | number)[]; type: string; };
 
