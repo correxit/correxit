@@ -1,6 +1,6 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookContent } from '@jupyterlab/nbformat';
-import { filter, findIndex } from '@lumino/algorithm';
+import { findIndex } from '@lumino/algorithm';
 import { Poll } from '@lumino/polling';
 import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
@@ -117,13 +117,16 @@ async function template(
   log: (payload: Correxit.Emitter.Emission) => Promise<void>
 ): Promise<INotebookContent> {
   const encrypted: INotebookContent = JSON.parse(JSON.stringify(decrypted));
-  const cells = rubric.secret.cells;
-  const referrable =
-    ({ is }: Rubric.Cell) => is === 'comparable' || is === 'correctable';
-  for (const id of filter(Object.keys(cells), id => referrable(cells[id]))) {
-    const [reference] = cells[id].reference!;
-    await encrypt(encrypted, reference, rubric.key);
-    await log({ type: 'encrypted', slots: [reference] });
+  for (const id in rubric.cells) {
+    const cell = rubric.cells[id];
+    if (cell.shared) {
+      continue;
+    }
+    if (cell.is === 'comparable' || cell.is === 'correctable') {
+      const [reference] = cell.reference;
+      await encrypt(encrypted, reference, rubric.key);
+      await log({ type: 'encrypted', slots: [reference] });
+    }
   }
   await log({ type: 'separator', slots: [] });
   return encrypted;

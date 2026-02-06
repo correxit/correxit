@@ -39,7 +39,6 @@ describe('Rubric', () => {
       const unlocked = await Rubric.unlock(locked, key);
       expect(locked.locked).toBe(true);
       expect(locked.key).toBeNull();
-      expect(locked.secret).toContain(`ENC[${key}]:`);
       expect(unlocked.locked).toBe(false);
       expect(Rubric.get(unlocked, id)!.payload).toEqual(['42']);
     });
@@ -55,11 +54,10 @@ describe('Rubric', () => {
         payload: []
       });
       const toggled = Rubric.toggle(untoggled, id);
-      expect(untoggled.secret.cells[id]).toBeDefined();
-      expect(untoggled.shared.cells[id]).toBeUndefined();
-      expect(toggled.secret.cells[id]).toBeUndefined();
-      expect(toggled.shared.cells[id]).toBeDefined();
-      expect(toggled.shared.cells[id].shared).toBe(true);
+      expect(untoggled.cells[id]).toBeDefined();
+      expect(untoggled.cells[id].shared).toBe(false);
+      expect(toggled.cells[id]).toBeDefined();
+      expect(toggled.cells[id].shared).toBe(true);
     });
 
     it('removes a cell from the rubric and report', async () => {
