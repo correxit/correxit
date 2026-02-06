@@ -6,7 +6,7 @@ import {
   NotebookActions
 } from '@jupyterlab/notebook';
 import { KernelSpec } from '@jupyterlab/services';
-import { findIndex, range, reduce } from '@lumino/algorithm';
+import { findIndex, range } from '@lumino/algorithm';
 import { Correxit, Rubric } from '.';
 import * as kernels from './kernels';
 import * as security from './security';
@@ -196,10 +196,10 @@ export namespace Workbook {
     }
 
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
-    const known = reduce(workbook.context.model.sharedModel.cells,
-      (acc, { id, cell_type }) =>
-        ({ ...acc, [id]: cell_type === 'code' || cell_type === 'raw' }),
-      Object.create(null) as { [id: string]: boolean; }
+    const known = Object.fromEntries(
+      workbook.context.model.sharedModel.cells.map(cell =>
+        [cell.id, cell.cell_type === 'code' || cell.cell_type === 'raw']
+      )
     );
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
@@ -478,7 +478,7 @@ export namespace Workbook {
   }
 
   /**
-   * Toggle a workbook cell between `secret` and `shared` sections of rubric.
+   * Toggle a workbook cell's `shared` flag.
    */
   export async function toggle(
     workbook: Workbook, id: string

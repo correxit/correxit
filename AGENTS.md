@@ -7,8 +7,10 @@ Correxit is a **serverless** JupyterLab extension for grading. All logic happens
 - **Frontend-First**: The core logic resides in `src/` (TypeScript). The Python package (`correxit/`) is primarily for packaging and distribution.
 - **Data Model**:
   - **Rubric**: The core data structure stored in notebook metadata (`rubric.ts`). It is **immutable** and versioned by `accessed` timestamps.
+    - **Structure**: Single `cells: { [id: string]: Cell }` object. Cell visibility controlled by `cell.shared` boolean flag.
+    - **Encryption**: Only `assignment.roster` is encrypted when locked. Cell configurations contain hashes (not secrets) and remain unencrypted.
   - **Workbook**: A stateful abstraction for Jupyter notebooks that have an associated rubric. `Headless` workbooks only have document context whereas `Headed` workbooks also have a live Notebook widget.
-  - **State**: A `Rubric` is either `Locked` (encrypted secret, for distribution) or `Unlocked` (decrypted secret, for editing).
+  - **State**: A `Rubric` is either `Locked` (encrypted roster, for distribution) or `Unlocked` (decrypted roster, for editing and grading).
 - **Controller**: Use the **Command Pattern**. All user actions go through `src/correxit/commands.ts` or `src/corrector/commands.ts`. Avoid direct state mutation from UI components.
 
 ## Critical Workflows
@@ -47,6 +49,7 @@ Correxit is a **serverless** JupyterLab extension for grading. All logic happens
   - Use `openpgp` for encryption.
   - Use `window.crypto` (via `crypto.subtle`) for signing/hashing.
   - **No Backend**: Never implement server-side handlers for grading logic. Everything stays in the `.ipynb` file metadata.
+  - **Selective Encryption**: Only the roster is encrypted when a rubric is locked. Cell configurations (which contain cryptographic hashes, not plaintext) remain unencrypted.
   - Isolate all cryptographic functions in one module (security.ts)
 
 ## Code Style Preferences
@@ -56,7 +59,7 @@ Correxit is a **serverless** JupyterLab extension for grading. All logic happens
 - **Helper Functions**: Extract small, scoped helper functions (e.g. `scan`, `position`) to enable single-word naming and avoid complex inline logic.
 - **Functional Style**:
   - Avoid loops in favor of array methods (`map`, `filter`, `reduce`) whenever possible.
-  - Exceptions: Async iterators (e.g. `propagator.ts`, `use-command.ts`) require `for await...of`.
+  - Exceptions: Async iterators (e.g. `propagator.ts`, `use-command.ts`) and simple cell iteration (`for (const id in cells)`) are acceptable.
   - Avoid `if` statements except for early returns.
   - Avoid negative sets (`!`) when positive checks are possible.
   - Avoid extraneous variables; prefer direct returns.
@@ -64,5 +67,6 @@ Correxit is a **serverless** JupyterLab extension for grading. All logic happens
 
 ## Common Pitfalls
 
+- **Cell Visibility**: Use the `cell.shared` boolean flag to determine whether cells should be encrypted/decrypted.
 - **Async Operations**: Grading and propagation are async. Ensure UI provides feedback via the command pattern or `useCommand` hook.
 - **Metadata Integrity**: Grading data is stored in the notebook (.ipynb file) metadata, under the key `correxit`. Ensure updates to metadata are atomic/transactional where possible via `Workbook.update`.

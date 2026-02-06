@@ -1,12 +1,12 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
-import { filter, find, map, reduce } from '@lumino/algorithm';
+import { filter, find, map } from '@lumino/algorithm';
 import * as security from './security';
 
 /**
  * A rubric is the specification that describes how to augment a Jupyter
- * notebook with the functionality of a Correxit workbook, including shared and
- * secret cell correction configuration, assignment metadata, etc.
+ * notebook with the functionality of a Correxit workbook, including cell
+ * correction configuration, assignment metadata, etc.
  *
  * Rubrics are immutable.
  */
@@ -77,13 +77,11 @@ export namespace Rubric {
           (content as KernelMessage.IStreamMsg['content']).name;
         const text = (content: Cell.Output['content']) =>
           (content as KernelMessage.IStreamMsg['content']).text;
-        const stdout = reduce(
-          filter(given, ({ content, header }) =>
-            header.msg_type === 'stream' && name(content) === 'stdout'
-          ),
-          (stdout, { content }) => [...stdout, text(content)],
-          [] as string[]
-        ).join('').trim();
+        const stream = filter(given, ({ content, header }) =>
+          header.msg_type === 'stream' && name(content) === 'stdout'
+        );
+        const stdout = Array.from(stream, ({ content }) => text(content))
+          .join('').trim();
         if (stdout) {
           const digest = await security.digest(stdout);
           const score = digest === expected ? Score.CORRECT : Score.INCORRECT;
