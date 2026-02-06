@@ -136,16 +136,21 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
-  requires: [Correxit.Consumer, Correxit.Unlocker, INotebookTracker],
-  optional: [Correxit.Registrar, ITranslator],
+  requires: [
+    Correxit.Consumer,
+    Correxit.Registrar,
+    Correxit.Unlocker,
+    INotebookTracker
+  ],
+  optional: [ITranslator],
   provides: Correxit.Source,
   ...((deactivator?: () => void) => ({
     activate: (
       app,
       consumer: Correxit.Consumer,
+      registrar: Correxit.Registrar,
       unlocker: Correxit.Unlocker,
       tracker: INotebookTracker,
-      registrar: Correxit.Registrar | null,
       translator: ITranslator | null
     ): Correxit.Source => {
       console.log('JupyterLab extension correxit is activated!');

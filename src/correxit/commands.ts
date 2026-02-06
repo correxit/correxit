@@ -47,7 +47,7 @@ export function addCommands(
   app: JupyterFrontEnd,
   dependencies: {
     consumer: Correxit.Consumer;
-    registrar: Correxit.Registrar | null;
+    registrar: Correxit.Registrar;
     schedule: (workbook: Workbook | null) => void;
     trans: IRenderMime.TranslationBundle;
     unlocker: Correxit.Unlocker;
