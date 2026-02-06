@@ -28,7 +28,8 @@ export const Assignment: React.FC<{
   const reassign = async (assignment: Assignment, locked: boolean) =>
     void (!locked && commands.execute(assign, assignment).catch(_ => {}));
   const request = async () => setRegistered(await commands.execute(registrar));
-  const freeze = (roster: string[]) => setAssignment({ ...assignment, roster });
+  const freeze = (roster: string[]) =>
+    setAssignment(prev => ({ ...prev, roster }));
   useEffect(() => void request(), [rubric]);
   useEffect(() => void (registered && freeze(registered)), [registered]);
   useEffect(() => setAssignment(rubric.assignment), [rubric]);
