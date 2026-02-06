@@ -20,7 +20,7 @@ export namespace Correxit {
 
   export namespace Emitter {
     /**
-     * An notification/message emission with slots to populate interpolations.
+     * A notification/message emission with slots to populate interpolations.
      */
     export type Emission = { slots: (string | number)[]; type: string; };
 
@@ -36,6 +36,11 @@ export namespace Correxit {
   export namespace Propagator {
     export type Notebook = { notebook: INotebookContent; path: string; };
   }
+
+  /**
+   * A registrar that provides an immutable roster for a workbook.
+   */
+  export type Registrar = (workbook: Workbook) => Promise<string[] | null>;
 
   /**
    * The core Correxit plugin registers commands and returns a workbook source.
@@ -68,6 +73,7 @@ export namespace Correxit {
   export const DESCRIPTION = {
     CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
+    REGISTRAR: description.REGISTRAR,
     SOURCE: description.SOURCE,
     UI: description.UI,
     UNLOCKER: description.UNLOCKER
@@ -76,6 +82,10 @@ export namespace Correxit {
   export const Icons = ICONS;
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
+
+  export const REGISTRAR = 'correxit:registrar';
+
+  export const Registrar = new Token<Registrar>(REGISTRAR);
 
   export const SOURCE = 'correxit:source';
 
