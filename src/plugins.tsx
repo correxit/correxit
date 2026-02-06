@@ -23,7 +23,10 @@ import * as io from './correxit/io';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
 
-export const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
+/**
+ * The default (file-based) Correxit assignment propagation consumer.
+ */
+const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
   id: Correxit.CONSUMER,
   description: Correxit.DESCRIPTION.CONSUMER,
   provides: Correxit.Consumer,
@@ -61,7 +64,10 @@ export const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
   }))()
 };
 
-export const corrector: JupyterFrontEndPlugin<void> = {
+/**
+ * The Correxit Corrector UI.
+ */
+const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
   description: Correxit.DESCRIPTION.CORRECTOR,
   requires: [IDocumentManager],
@@ -109,10 +115,24 @@ export const corrector: JupyterFrontEndPlugin<void> = {
 };
 
 /**
+ * The default Correxit roster registrar.
+ */
+const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
+  id: Correxit.REGISTRAR,
+  description: Correxit.DESCRIPTION.REGISTRAR,
+  autoStart: true,
+  ...((deactivator?: () => void) => ({
+    provides: Correxit.Registrar,
+    activate: (): Correxit.Registrar => async _ => null,
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/**
  * The Correxit source plugin loads settings, adds commands, and provides an
  * async iterable workbook source that emits when the user changes tabs.
  */
-export const source: JupyterFrontEndPlugin<Correxit.Source> = {
+const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
@@ -190,8 +210,9 @@ export const source: JupyterFrontEndPlugin<Correxit.Source> = {
   }))()
 };
 
-export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
-  SecretsManager.sign(Correxit.UNLOCKER, token => ({
+const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
+  Correxit.UNLOCKER,
+  token => ({
     id: Correxit.UNLOCKER,
     description: Correxit.DESCRIPTION.UNLOCKER,
     autoStart: true,
@@ -213,9 +234,10 @@ export const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> =
       },
       deactivate: () => deactivator?.()
     }))()
-  }));
+  })
+);
 
-export const ui: JupyterFrontEndPlugin<void> = {
+const ui: JupyterFrontEndPlugin<void> = {
   id: Correxit.UI,
   description: Correxit.DESCRIPTION.UI,
   autoStart: true,
@@ -244,3 +266,5 @@ export const ui: JupyterFrontEndPlugin<void> = {
     deactivate: () => deactivator?.()
   }))()
 };
+
+export const plugins = [consumer, corrector, registrar, source, ui, unlocker];

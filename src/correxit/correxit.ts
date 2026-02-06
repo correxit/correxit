@@ -73,6 +73,7 @@ export namespace Correxit {
   export const DESCRIPTION = {
     CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
+    REGISTRAR: description.REGISTRAR,
     SOURCE: description.SOURCE,
     UI: description.UI,
     UNLOCKER: description.UNLOCKER

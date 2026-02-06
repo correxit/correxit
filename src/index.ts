@@ -1,7 +1,6 @@
-import { consumer, corrector, source, ui, unlocker } from './plugins';
 import { Correxit, Rubric, Workbook } from './correxit';
+export { plugins as default } from './plugins';
 export { Correxit, Rubric, Workbook };
-export default [consumer, corrector, source, ui, unlocker];
 
 if (typeof window !== 'undefined' && !!(window as any).galata) {
   Object.defineProperty(window as any, '__correxit__', {
