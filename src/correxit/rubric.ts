@@ -465,7 +465,7 @@ export namespace Rubric {
     if (locked !== true) {
       throw new Error('invalid rubric, must be locked');
     }
-    if (!cells) {
+    if (!cells || typeof cells !== 'object' || Array.isArray(cells)) {
       throw new Error('invalid rubric, missing cells');
     }
     return { accessed, assignment, cells, id, key, locked };
