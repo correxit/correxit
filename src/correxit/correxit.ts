@@ -38,6 +38,11 @@ export namespace Correxit {
   }
 
   /**
+   * A registrar that provides an immutable roster for a workbook.
+   */
+  export type Registrar = (workbook: Workbook) => Promise<string[] | null>;
+
+  /**
    * The core Correxit plugin registers commands and returns a workbook source.
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
@@ -76,6 +81,10 @@ export namespace Correxit {
   export const Icons = ICONS;
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
+
+  export const REGISTRAR = 'correxit:registrar';
+
+  export const Registrar = new Token<Registrar>(REGISTRAR);
 
   export const SOURCE = 'correxit:source';
 

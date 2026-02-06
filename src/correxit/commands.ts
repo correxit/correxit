@@ -23,6 +23,7 @@ export namespace CommandIDs {
   export const fetch = 'correxit:fetch';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
+  export const registrar = 'correxit:registrar';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
   export const save = 'correxit:save';
@@ -46,6 +47,7 @@ export function addCommands(
   app: JupyterFrontEnd,
   dependencies: {
     consumer: Correxit.Consumer;
+    registrar: Correxit.Registrar | null;
     schedule: (workbook: Workbook | null) => void;
     trans: IRenderMime.TranslationBundle;
     unlocker: Correxit.Unlocker;
@@ -53,7 +55,7 @@ export function addCommands(
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
-  const { consumer, schedule, trans, unlocker } = dependencies;
+  const { consumer, registrar, schedule, trans, unlocker } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
@@ -183,9 +185,10 @@ export function addCommands(
         return;
       }
 
+      const registered = registrar && await registrar(workbook);
       const assignment: Partial<Assignment> = {
         assignee: args.assignee || undefined,
-        roster: args.roster || []
+        roster: registered || args.roster || []
       };
       const different = (a: Partial<Assignment>, b: Assignment) =>
         // Normalize assignee here to ignore `undefined` mismatches.
@@ -376,6 +379,16 @@ export function addCommands(
         console.warn(CommandIDs.propagate, error);
       }
       return (async function* empty() {})();
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.registrar, {
+    execute: async (args: Partial<Credentials>): Promise<string[] | null> => {
+      if (!registrar) {
+        return null;
+      }
+
+      const { workbook } = await reify(args);
+      return workbook && registrar(workbook);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {

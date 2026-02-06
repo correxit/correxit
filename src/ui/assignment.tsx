@@ -10,7 +10,7 @@ import { Toggle } from './toggle';
 type Assignment = Rubric.Assignment;
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const { assign } = Correxit.CommandIDs;
+const { assign, registrar } = Correxit.CommandIDs;
 
 export const Assignment: React.FC<{
   commands: CommandRegistry;
@@ -19,6 +19,7 @@ export const Assignment: React.FC<{
 }> = ({ commands, rubric, trans }) => {
   const { accessed, locked } = rubric;
   const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
+  const [registered, setRegistered] = useState<string[] | null>(null);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
   const toggle = (to: 'assignee' | 'roster', updated: Assignment) => {
     setAssignment(updated);
@@ -26,6 +27,10 @@ export const Assignment: React.FC<{
   };
   const reassign = async (assignment: Assignment, locked: boolean) =>
     void (!locked && commands.execute(assign, assignment).catch(_ => {}));
+  const request = async () => setRegistered(await commands.execute(registrar));
+  const freeze = (roster: string[]) => setAssignment({ ...assignment, roster });
+  useEffect(() => void request(), []);
+  useEffect(() => void (registered && freeze(registered)), [registered]);
   useEffect(() => setAssignment(rubric.assignment), [rubric]);
   useEffect(() => void reassign(assignment, locked), [assignment]);
   return (
@@ -33,7 +38,7 @@ export const Assignment: React.FC<{
       {view === 'assignee' ? (
         <Assignee {...{ assignment, locked, toggle, trans }} />
       ) : (
-        <Roster {...{ assignment, locked, toggle, trans }} />
+        <Roster {...{ assignment, locked, registered, toggle, trans }} />
       )}
       {!locked && <Propagate {...{ accessed, commands, trans }} />}
     </div>
@@ -93,12 +98,15 @@ const Assignee: React.FC<{
 const Roster: React.FC<{
   assignment: Assignment;
   locked: boolean;
+  registered: string[] | null;
   toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
   trans: TranslationBundle;
-}> = ({ locked, toggle, trans, ...props }) => {
+}> = ({ locked, registered, toggle, trans, ...props }) => {
   const [assignment, setAssignment] = useState<Assignment>(props.assignment);
   const [value, setValue] = useState<string>(assignment.roster.join('\n'));
   const roster = value.split('\n').filter(value => !!value);
+  const freeze = (roster: string[]) => setValue(roster.join('\n'));
+  useEffect(() => void (registered && freeze(registered)), [registered]);
   useEffect(
     () =>
       setAssignment(({ assignee, report, signature }) => {
@@ -127,6 +135,7 @@ const Roster: React.FC<{
         </label>
         <textarea
           id={id}
+          disabled={!!registered}
           data-lm-suppress-shortcuts="true"
           rows={8}
           name="correxit-assignment-roster"
