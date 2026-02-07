@@ -153,7 +153,6 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       tracker: INotebookTracker,
       translator: ITranslator | null
     ): Correxit.Source => {
-      console.log('JupyterLab extension correxit is activated!');
       const { commands, shell } = app;
       const source = new Poll<Workbook | null>({
         auto: false,
