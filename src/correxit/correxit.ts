@@ -40,7 +40,9 @@ export namespace Correxit {
   /**
    * A registrar that provides an immutable roster for a workbook.
    */
-  export type Registrar = (workbook: Workbook) => Promise<string[] | null>;
+  export type Registrar = {
+    roster: (workbook: Workbook) => Promise<string[] | null>;
+  };
 
   /**
    * The core Correxit plugin registers commands and returns a workbook source.

@@ -59,7 +59,7 @@ export namespace Rubric {
 
       export const stdout = (output: Output) =>
         stream(output) &&
-        (output as KernelMessage.IStreamMsg).content.name  === 'stdout';
+        (output as KernelMessage.IStreamMsg).content.name === 'stdout';
 
       export const stream = ({ header }: Output) =>
         header.msg_type === 'stream';

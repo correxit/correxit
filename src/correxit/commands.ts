@@ -185,7 +185,7 @@ export function addCommands(
         return;
       }
 
-      const registered = registrar && await registrar(workbook);
+      const registered = registrar && await registrar.roster(workbook);
       const assignment: Partial<Assignment> = {
         assignee: args.assignee || undefined,
         roster: registered || args.roster || []
@@ -392,7 +392,7 @@ export function addCommands(
         console.warn('registrar failed for workbook', workbook, error);
         return [];
       };
-      return workbook && await registrar(workbook).catch(warn);
+      return workbook && await registrar.roster(workbook).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
