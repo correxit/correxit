@@ -1,6 +1,6 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
-import { filter, find, map } from '@lumino/algorithm';
+import { find, map } from '@lumino/algorithm';
 import * as security from './security';
 
 /**
@@ -53,6 +53,21 @@ export namespace Rubric {
       | KernelMessage.IIOPubMessage<'stream'>
       | KernelMessage.IIOPubMessage<'error'>;
 
+    namespace Output {
+      export const error = ({ header }: Output) =>
+        header.msg_type === 'error';
+
+      export const stdout = (output: Output) =>
+        stream(output) &&
+        (output as KernelMessage.IStreamMsg).content.name  === 'stdout';
+
+      export const stream = ({ header }: Output) =>
+        header.msg_type === 'stream';
+
+      export const text = (output: Output) =>
+        (output as KernelMessage.IStreamMsg).content.text;
+    }
+
     export type Toolbar = { [TOOLBAR]?: boolean; };
 
     export const TOOLBAR = 'correxit:cell-toolbar';
@@ -63,27 +78,20 @@ export namespace Rubric {
       [expected]: string[],
       given: Output[]
     ): Promise<Score> {
+      const { error, stdout, stream, text } = Output;
       if (!expected) {
         return { ...Score.UNSCORED, code: 'empty-expected' };
       }
       if (!given.length) {
         return { ...Score.INCORRECT, code: 'empty-given' };
       }
-      if (find(given, ({ header }) => header.msg_type === 'error')) {
+      if (find(given, error)) {
         return { ...Score.INCORRECT, code: 'error-given' };
       }
-      if (find(given, ({ header }) => header.msg_type === 'stream')) {
-        const name = (content: Cell.Output['content']) =>
-          (content as KernelMessage.IStreamMsg['content']).name;
-        const text = (content: Cell.Output['content']) =>
-          (content as KernelMessage.IStreamMsg['content']).text;
-        const stream = filter(given, ({ content, header }) =>
-          header.msg_type === 'stream' && name(content) === 'stdout'
-        );
-        const stdout = Array.from(stream, ({ content }) => text(content))
-          .join('').trim();
-        if (stdout) {
-          const digest = await security.digest(stdout);
+      if (find(given, stream)) {
+        const answered = given.filter(stdout).map(text).join('').trim();
+        if (answered) {
+          const digest = await security.digest(answered);
           const score = digest === expected ? Score.CORRECT : Score.INCORRECT;
           const code = score === Score.INCORRECT ? 'mismatch-digest' : '';
           return { ...score, code };
@@ -104,11 +112,11 @@ export namespace Rubric {
         return { ...Score.INCORRECT, code: 'empty-given' };
       }
 
-      const keys = (content: Output['content']) =>
+      const shape = (content: Output['content']) =>
         Object.keys(content).sort().join('');
-      const x = given.slice(-1)[0].content;
-      const y = expected.slice(-1)[0].content;
-      if (keys(x) !== keys(y)) {
+      const [{ content: x }] = expected.slice(-1);
+      const [{ content: y }] = given.slice(-1);
+      if (shape(x) !== shape(y)) {
         return { ...Score.INCORRECT, code: 'mismatch-congruence' };
       }
       if ('data' in x && 'data' in y) {
@@ -126,8 +134,7 @@ export namespace Rubric {
     export async function correct(
       expected: Output[]
     ): Promise<Score> {
-      return expected.some(message => message.header.msg_type === 'error') ?
-        Score.INCORRECT : Score.CORRECT;
+      return expected.some(Output.error) ? Score.INCORRECT : Score.CORRECT;
     }
 
     /**
