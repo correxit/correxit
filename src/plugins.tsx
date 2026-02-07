@@ -123,7 +123,7 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
   autoStart: true,
   ...((deactivator?: () => void) => ({
     provides: Correxit.Registrar,
-    activate: (): Correxit.Registrar => ({ roster: async _ => null }),
+    activate: (): Correxit.Registrar => async _ => null,
     deactivate: () => deactivator?.()
   }))()
 };
