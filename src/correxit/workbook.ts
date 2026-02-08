@@ -6,7 +6,7 @@ import {
   NotebookActions
 } from '@jupyterlab/notebook';
 import { KernelSpec } from '@jupyterlab/services';
-import { findIndex, range, reduce } from '@lumino/algorithm';
+import { findIndex, range } from '@lumino/algorithm';
 import { Correxit, Rubric } from '.';
 import * as kernels from './kernels';
 import * as security from './security';
@@ -192,34 +192,31 @@ export namespace Workbook {
       return { ok: false, error: 'null rubric', rubric };
     }
     if (rubric.locked) {
-        return { ok: true, pruned: [], rubric };
+      return { ok: true, pruned: [], rubric };
     }
 
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
-    const { locked, secret, shared } = rubric;
-    const known = reduce(workbook.context.model.sharedModel.cells,
-      (acc, { id, cell_type }) =>
-        ({ ...acc, [id]: cell_type === 'code' || cell_type === 'raw' }),
-      Object.create(null) as { [id: string]: boolean; }
+    const known = Object.fromEntries(
+      workbook.context.model.sharedModel.cells.map(cell =>
+        [cell.id, cell.cell_type === 'code' || cell.cell_type === 'raw']
+      )
     );
-    for (const { cells } of locked ? [shared] : [secret, shared]) {
-      for (const id in cells) {
-        const { is, payload } = cells[id];
-        const reference = cells[id].reference?.[0] ?? '';
-        const valid = is === 'answerable' ? !!payload.length : known[reference];
-        if (known[id] && valid) {
-          continue;
-        }
-        pruned.push({
-          cell: { ...cells[id] },
-          reason: known[id] ? 'invalid cell' : 'unknown cell'
-        });
+    for (const id in rubric.cells) {
+      const cell = rubric.cells[id];
+      const { is, payload } = cell;
+      const reference = cell.reference?.[0] ?? '';
+      const valid = is === 'answerable' ? !!payload.length : known[reference];
+      if (known[id] && valid) {
+        continue;
       }
-    };
+
+      const reason = known[id] ? 'invalid cell' : 'unknown cell';
+      pruned.push({ cell: { ...cell }, reason });
+    }
     if (pruned.length) {
       console.warn('audit pruned these rubric cells', pruned);
-      const modified: Rubric = pruned.reduce((rubric, { cell }) =>
-        Rubric.remove(rubric, cell.id), rubric);
+      const modified: Rubric = pruned.reduce((rubric, { cell: { id } }) =>
+        Rubric.remove(rubric, id), rubric);
       return { ok: true, pruned, rubric: modified };
     }
     return { ok: true, pruned: [], rubric };
@@ -317,10 +314,15 @@ export namespace Workbook {
     if (!audit.ok) {
       throw new Error(`decrypt error: ${audit.error}`);
     }
-    const { key, secret: { cells } } = audit.rubric as Rubric.Unlocked;
+
+    const { key, cells } = audit.rubric as Rubric.Unlocked;
     for (const id in cells) {
-      const reference = cells[id].reference?.[0] ?? '';
-      if (cells[id].is === 'comparable' || cells[id].is === 'correctable') {
+      const cell = cells[id];
+      if (cell.shared) {
+        continue;
+      }
+      if (cell.is === 'comparable' || cell.is === 'correctable') {
+        const [reference] = cell.reference;
         await Cell.decrypt(workbook, reference, key);
       }
     };
@@ -392,10 +394,13 @@ export namespace Workbook {
     if (!rubric || rubric.locked) {
       return;
     }
-    for (const id in rubric.secret.cells) {
-      const { is } = rubric.secret.cells[id];
-      const reference = rubric.secret.cells[id].reference?.[0] ?? '';
-      if (is === 'comparable' || is === 'correctable') {
+    for (const id in rubric.cells) {
+      const cell = rubric.cells[id];
+      if (cell.shared) {
+        continue;
+      }
+      if (cell.is === 'comparable' || cell.is === 'correctable') {
+        const [reference] = cell.reference;
         await Cell.encrypt(workbook, reference, rubric.key);
       }
     };
@@ -473,7 +478,7 @@ export namespace Workbook {
   }
 
   /**
-   * Toggle a workbook cell between `secret` and `shared` sections of rubric.
+   * Toggle a workbook cell's `shared` flag.
    */
   export async function toggle(
     workbook: Workbook, id: string

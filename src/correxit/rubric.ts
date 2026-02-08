@@ -1,12 +1,12 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
-import { filter, find, map, reduce } from '@lumino/algorithm';
+import { find, map } from '@lumino/algorithm';
 import * as security from './security';
 
 /**
  * A rubric is the specification that describes how to augment a Jupyter
- * notebook with the functionality of a Correxit workbook, including shared and
- * secret cell correction configuration, assignment metadata, etc.
+ * notebook with the functionality of a Correxit workbook, including cell
+ * correction configuration, assignment metadata, etc.
  *
  * Rubrics are immutable.
  */
@@ -23,8 +23,8 @@ export namespace Rubric {
   type Base = Readonly<{
     accessed: number;
     assignment: Assignment;
+    cells: Readonly<{ [id: string]: Cell }>;
     id: string;
-    shared: Section;
   }>;
 
   export type Cell = Readonly<{
@@ -53,6 +53,21 @@ export namespace Rubric {
       | KernelMessage.IIOPubMessage<'stream'>
       | KernelMessage.IIOPubMessage<'error'>;
 
+    namespace Output {
+      export const error = ({ header }: Output) =>
+        header.msg_type === 'error';
+
+      export const stdout = (output: Output) =>
+        stream(output) &&
+        (output as KernelMessage.IStreamMsg).content.name === 'stdout';
+
+      export const stream = ({ header }: Output) =>
+        header.msg_type === 'stream';
+
+      export const text = (output: Output) =>
+        (output as KernelMessage.IStreamMsg).content.text;
+    }
+
     export type Toolbar = { [TOOLBAR]?: boolean; };
 
     export const TOOLBAR = 'correxit:cell-toolbar';
@@ -63,29 +78,20 @@ export namespace Rubric {
       [expected]: string[],
       given: Output[]
     ): Promise<Score> {
+      const { error, stdout, stream, text } = Output;
       if (!expected) {
         return { ...Score.UNSCORED, code: 'empty-expected' };
       }
       if (!given.length) {
         return { ...Score.INCORRECT, code: 'empty-given' };
       }
-      if (find(given, ({ header }) => header.msg_type === 'error')) {
+      if (find(given, error)) {
         return { ...Score.INCORRECT, code: 'error-given' };
       }
-      if (find(given, ({ header }) => header.msg_type === 'stream')) {
-        const name = (content: Cell.Output['content']) =>
-          (content as KernelMessage.IStreamMsg['content']).name;
-        const text = (content: Cell.Output['content']) =>
-          (content as KernelMessage.IStreamMsg['content']).text;
-        const stdout = reduce(
-          filter(given, ({ content, header }) =>
-            header.msg_type === 'stream' && name(content) === 'stdout'
-          ),
-          (stdout, { content }) => [...stdout, text(content)],
-          [] as string[]
-        ).join('').trim();
-        if (stdout) {
-          const digest = await security.digest(stdout);
+      if (find(given, stream)) {
+        const answered = given.filter(stdout).map(text).join('').trim();
+        if (answered) {
+          const digest = await security.digest(answered);
           const score = digest === expected ? Score.CORRECT : Score.INCORRECT;
           const code = score === Score.INCORRECT ? 'mismatch-digest' : '';
           return { ...score, code };
@@ -106,11 +112,11 @@ export namespace Rubric {
         return { ...Score.INCORRECT, code: 'empty-given' };
       }
 
-      const keys = (content: Output['content']) =>
+      const shape = (content: Output['content']) =>
         Object.keys(content).sort().join('');
-      const x = given.slice(-1)[0].content;
-      const y = expected.slice(-1)[0].content;
-      if (keys(x) !== keys(y)) {
+      const [{ content: x }] = expected.slice(-1);
+      const [{ content: y }] = given.slice(-1);
+      if (shape(x) !== shape(y)) {
         return { ...Score.INCORRECT, code: 'mismatch-congruence' };
       }
       if ('data' in x && 'data' in y) {
@@ -128,8 +134,7 @@ export namespace Rubric {
     export async function correct(
       expected: Output[]
     ): Promise<Score> {
-      return expected.some(message => message.header.msg_type === 'error') ?
-        Score.INCORRECT : Score.CORRECT;
+      return expected.some(Output.error) ? Score.INCORRECT : Score.CORRECT;
     }
 
     /**
@@ -201,8 +206,7 @@ export namespace Rubric {
     }
   }
 
-  export type Locked = Base &
-    Readonly<{ key: null; locked: true; secret: string; }>;
+  export type Locked = Base & Readonly<{ key: null; locked: true; }>;
 
   export type Outputs = Map<string, Cell.Output[]>;
 
@@ -215,12 +219,7 @@ export namespace Rubric {
     status: Score.Status;
   }>;
 
-  export type Section = Readonly<{
-    cells: Readonly<{ [id: string]: Cell; }>;
-  }>;
-
-  export type Unlocked = Base &
-    Readonly<{ key: string; locked: false; secret: Section; }>;
+  export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
   export namespace Assignment {
     export type Report = Readonly<{
@@ -384,12 +383,7 @@ export namespace Rubric {
     return {
       ...rubric,
       accessed: Date.now(),
-      secret: cell.shared
-        ? { cells: { ...rubric.secret.cells } }
-        : { cells: { ...rubric.secret.cells, [cell.id]: cell  } },
-      shared: cell.shared
-        ? { cells: { ...rubric.shared.cells, [cell.id]: cell } }
-        : { cells: { ...rubric.shared.cells } }
+      cells: { ...rubric.cells, [cell.id]: cell }
     };
   }
 
@@ -414,20 +408,14 @@ export namespace Rubric {
     const assignment = { ...Assignment.EMPTY };
     const encoded = accessed.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
-    const secret: Section = { cells: {} };
-    const shared: Section = { cells: {} };
-    return { accessed, assignment, id, locked: false, secret, shared };
+    return { accessed, assignment, cells: {}, id, locked: false };
   }
 
   /**
    * @returns the rubric cell referenced by the `id` if found, otherwise `null`.
    */
   export function get(rubric: Rubric, id: string): Cell | null {
-    if (has(rubric, id)) {
-      const { locked, secret, shared } = rubric;
-      return locked ? shared.cells[id] : secret.cells[id] || shared.cells[id];
-    }
-    return null;
+    return rubric.cells[id] || null;
   }
 
   /**
@@ -435,13 +423,15 @@ export namespace Rubric {
    * @returns whether a rubric has or references a given id.
    */
   export function has(rubric: Rubric, id: string, deep = false): boolean {
-    const references = ({ cells }: Section, reference: string) =>
-      find(Object.keys(cells), key => cells[key].reference?.[0] === reference);
-    const { locked, secret, shared } = rubric;
-    return locked ?
-      !!(shared.cells[id] || (deep && references(shared, id))) :
-      !!(secret.cells[id] || (deep && references(secret, id))) ||
-      !!(shared.cells[id] || (deep && references(shared, id)));
+    if (get(rubric, id)) {
+      return true;
+    }
+    if (deep) {
+      const reference = id;
+      const all = Object.keys(rubric.cells);
+      return !!find(all, id => rubric.cells[id].reference?.[0] === reference);
+    }
+    return false;
   }
 
   /**
@@ -453,21 +443,20 @@ export namespace Rubric {
     }
 
     const locked = true;
-    const { id, key, shared } = rubric;
+    const { cells, id, key } = rubric;
     const { assignee, report, roster, signature } = rubric.assignment;
     const encrypted = await security.encrypt(JSON.stringify(roster), key);
     const assignment = { assignee, report, roster: [encrypted], signature };
-    const secret = await security.encrypt(JSON.stringify(rubric.secret), key);
     const accessed = Date.now();
     await Assignment.validate(rubric);
-    return { accessed, assignment, id, key: null, locked, secret, shared };
+    return { accessed, assignment, cells, id, key: null, locked };
   }
 
   /**
    * @returns a normalized locked rubric or throws an error.
    */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
-    const { accessed, id, key, locked, secret, shared } = rubric;
+    const { accessed, cells, id, key, locked } = rubric;
     const assignment = rubric.assignment || { ...Assignment.EMPTY };
     if (!accessed) {
       throw new Error('invalid rubric, missing accessed');
@@ -481,27 +470,19 @@ export namespace Rubric {
     if (locked !== true) {
       throw new Error('invalid rubric, must be locked');
     }
-    if (typeof secret !== 'string' || secret.length === 0) {
-      throw new Error('invalid rubric, missing secret section');
+    if (!cells || typeof cells !== 'object' || Array.isArray(cells)) {
+      throw new Error('invalid rubric, missing cells');
     }
-    if (!(shared && shared.cells)) {
-      throw new Error('invalid rubric, invalid shared section');
-    }
-    return { accessed, assignment, id, key, locked, secret, shared };
+    return { accessed, assignment, cells, id, key, locked };
   }
 
   export function remove(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
-    const drop = (section: Section, cell: Cell): Section => {
-      const { [cell.id]: _, ...rest } = section.cells;
-      void _; // This is the removed cell.
-      return { cells: rest };
-    };
     if (!cell){
       return rubric;
     }
-    const secret = cell.shared ? rubric.secret : drop(rubric.secret, cell);
-    const shared = cell.shared ? drop(rubric.shared, cell) : rubric.shared;
+    const { [id]: _, ...cells } = rubric.cells;
+    void _; // This is the removed cell.
     const { assignment: { assignee, report } } = rubric;
     const scores = Object.entries(report.scores)
       .filter(([key]) => key !== id)
@@ -512,7 +493,7 @@ export namespace Rubric {
       report: { order, scores }
     };
     const accessed = Date.now();
-    return { ...rubric, accessed, assignment, secret, shared };
+    return { ...rubric, accessed, assignment, cells };
   }
 
   export async function sign(
@@ -531,14 +512,11 @@ export namespace Rubric {
    * @returns the number of cells configured in a rubric.
    */
   export function size(rubric: Rubric): number {
-    const { locked, secret, shared } = rubric;
-    return locked ?
-      Object.keys(shared.cells).length :
-      Object.keys(secret.cells).length + Object.keys(shared.cells).length;
+    return Object.keys(rubric.cells).length;
   }
 
   /**
-   * @returns a rubric where given cell is toggled between `secret` or `shared`.
+   * @returns a rubric where given cell's shared flag is toggled.
    */
   export function toggle(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
@@ -546,30 +524,21 @@ export namespace Rubric {
       throw new Error(`toggle: cell ${id} not found in rubric`);
     }
 
-    const section = cell.shared ? rubric.shared : rubric.secret;
-    const { [id]: swap, ...rest } = section.cells;
-    const secret: Section = cell.shared
-      ? { cells: { ...rubric.secret.cells, [id]: { ...swap, shared: false } } }
-      : { cells: { ...rest } };
-    const shared: Section = cell.shared
-      ? { cells: { ...rest } }
-      : { cells: { ...rubric.shared.cells, [id]: { ...swap, shared: true } } };
-    return { ...rubric, accessed: Date.now(), secret, shared };
+    const cells = { ...rubric.cells, [id]: { ...cell, shared: !cell.shared } };
+    return { ...rubric, accessed: Date.now(), cells };
   }
 
   /**
-   * @returns an unlocked rubric after decrypting secret cells with given key.
+   * @returns an unlocked rubric after decrypting the roster.
    */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
     const locked = false;
-    const { id, assignment: { roster: [block]} } = rubric;
+    const { cells, id, assignment: { roster: [block]} } = rubric;
     const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
-    const secret = JSON.parse(await security.decrypt(rubric.secret, key));
-    const shared = { ...rubric.shared };
     const assignment = { ...rubric.assignment, roster };
     const accessed = Date.now();
     await Assignment.validate({ assignment, key });
-    return { accessed, assignment, id, key, locked, secret, shared };
+    return { accessed, assignment, cells, id, key, locked };
   }
 }
 
