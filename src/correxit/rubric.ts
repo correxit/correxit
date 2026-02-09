@@ -1,6 +1,6 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage } from '@jupyterlab/services';
-import { find, map } from '@lumino/algorithm';
+import { find } from '@lumino/algorithm';
 import * as security from './security';
 
 /**
@@ -258,12 +258,12 @@ export namespace Rubric {
         return report;
       }
 
-      const pending = map(subset, id => Cell.score(rubric, id, outputs));
+      const current = Object.entries(report.scores).filter(([id]) => valid(id));
+      const pending = subset.map(id => Cell.score(rubric, id, outputs));
       const scored = await Promise.all(pending);
       const scores = {
-        ...Object.keys(report.scores).filter(valid)
-          .reduce((acc, key) => ({ ...acc, [key]: report.scores[key] }), {}),
-        ...scored.reduce((acc, score) => ({ ...acc, [score.id]: score }), {})
+        ...Object.fromEntries(current),
+        ...Object.fromEntries(scored.map(score => [score.id, score]))
       };
       const existing = report.order.filter(valid);
       const order = unique(id ? [...existing, id] : [...subset, ...existing]);
@@ -441,6 +441,7 @@ export namespace Rubric {
     if (rubric.locked) {
       return rubric;
     }
+    await Assignment.validate(rubric);
 
     const locked = true;
     const { cells, id, key } = rubric;
@@ -448,7 +449,6 @@ export namespace Rubric {
     const encrypted = await security.encrypt(JSON.stringify(roster), key);
     const assignment = { assignee, report, roster: [encrypted], signature };
     const accessed = Date.now();
-    await Assignment.validate(rubric);
     return { accessed, assignment, cells, id, key: null, locked };
   }
 
@@ -477,17 +477,16 @@ export namespace Rubric {
   }
 
   export function remove(rubric: Unlocked, id: string): Unlocked {
-    const cell = get(rubric, id);
-    if (!cell){
+    if (!get(rubric, id)){
       return rubric;
     }
+
     const { [id]: _, ...cells } = rubric.cells;
     void _; // This is the removed cell.
     const { assignment: { assignee, report } } = rubric;
-    const scores = Object.entries(report.scores)
-      .filter(([key]) => key !== id)
-      .reduce((acc, [key, score]) => ({ ...acc, [key]: score }), {});
     const order = report.order.filter(key => key !== id);
+    const removed = Object.entries(report.scores).filter(([key]) => key !== id);
+    const scores = Object.fromEntries(removed);
     const assignment: Assignment = {
       ...rubric.assignment, assignee,
       report: { order, scores }

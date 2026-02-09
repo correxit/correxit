@@ -431,6 +431,73 @@ describe('Rubric', () => {
       expect(report.order).toEqual(['c1', 'c2']);
     });
 
+    it('merges new scores with existing valid scores', async () => {
+      let rubric = create();
+      const add = (id: string, text: string) =>
+        (rubric = Rubric.add(rubric, {
+          id,
+          is: 'answerable',
+          points: 1,
+          reference: null,
+          shared: false,
+          payload: [`DIGEST<${text}>`]
+        }));
+      add('c1', 'A');
+      add('c2', 'B');
+      add('c3', 'C');
+
+      const outputs1 = new Map([
+        ['c1', [output('A')]],
+        ['c2', [output('Wrong')]]
+      ]);
+      const report1 = await Rubric.Assignment.score(rubric, outputs1);
+      rubric = {
+        ...rubric,
+        assignment: { ...rubric.assignment, report: report1 }
+      };
+
+      const outputs2 = new Map([
+        ['c2', [output('B')]],
+        ['c3', [output('C')]]
+      ]);
+      const report2 = await Rubric.Assignment.score(rubric, outputs2);
+      expect(report2.scores['c1'].status).toBe('correct');
+      expect(report2.scores['c2'].status).toBe('correct');
+      expect(report2.scores['c3'].status).toBe('correct');
+      expect(Object.keys(report2.scores).length).toBe(3);
+    });
+
+    it('prunes orphaned scores during scoring', async () => {
+      let rubric = create();
+      const add = (id: string) =>
+        (rubric = Rubric.add(rubric, {
+          id,
+          is: 'answerable',
+          points: 1,
+          reference: null,
+          shared: false,
+          payload: []
+        }));
+      add('c1');
+      add('c2');
+
+      const report: Rubric.Assignment.Report = {
+        order: ['c1', 'c2', 'ghost'],
+        scores: {
+          c1: Rubric.Score.CORRECT,
+          c2: Rubric.Score.CORRECT,
+          ghost: Rubric.Score.CORRECT
+        }
+      };
+      rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
+
+      const outputs = new Map([['c2', [output('X')]]]);
+      const report2 = await Rubric.Assignment.score(rubric, outputs, 'c2');
+      expect(report2.scores.c1).toBeDefined();
+      expect(report2.scores.c2).toBeDefined();
+      expect(report2.scores.ghost).toBeUndefined();
+    });
+
     it('cleans up order when removing a cell', () => {
       let rubric = create();
       rubric = Rubric.add(rubric, {
