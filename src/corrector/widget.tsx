@@ -90,12 +90,7 @@ export namespace CorrectorWidget {
 class Content extends ReactWidget {
   constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
     super();
-    this.props = {
-      ...props,
-      correct: false,
-      notify: () => {},
-      unlock: false
-    };
+    this.props = { ...props, correct: false, notify: () => {}, unlock: false };
     this.addClass('correxit-corrector-widget-content');
   }
 

@@ -1,72 +1,62 @@
-# Correxit AI Instructions
+# Correxit AI Developer Instructions
 
-## Architecture & "Big Picture"
+You are an expert developer working on **Correxit**, a serverless, frontend-only JupyterLab extension. Your goal is to write code that adheres strictly to the project's architectural invariants and functional style.
 
-Correxit is a **serverless** JupyterLab extension for grading. All logic happens in the frontend.
+## 1. Core Architecture
 
-- **Frontend-First**: The core logic resides in `src/` (TypeScript). The Python package (`correxit/`) is primarily for packaging and distribution.
-- **Data Model**:
-  - **Rubric**: The core data structure stored in notebook metadata (`rubric.ts`). It is **immutable** and versioned by `accessed` timestamps.
-    - **Structure**: Single `cells: { [id: string]: Cell }` object. Cell visibility controlled by `cell.shared` boolean flag.
-    - **Encryption**: Only `assignment.roster` is encrypted when locked. Cell configurations contain hashes (not secrets) and remain unencrypted.
-  - **Workbook**: A stateful abstraction for Jupyter notebooks that have an associated rubric. `Headless` workbooks only have document context whereas `Headed` workbooks also have a live Notebook widget.
-  - **State**: A `Rubric` is either `Locked` (encrypted roster, for distribution) or `Unlocked` (decrypted roster, for editing and grading).
-- **Controller**: Use the **Command Pattern**. All user actions go through `src/correxit/commands.ts` or `src/corrector/commands.ts`. Avoid direct state mutation from UI components.
+- **No Backend**: Logic exists solely in the browser. Correxit is purely client-side.
+- **MVC Pattern**:
+  - **Model**: `rubric.ts` (immutable data), `workbook.ts` (notebook state).
+  - **Controller**: `commands.ts` (orchestrates all mutations).
+  - **View**: `ui/` (React components).
+- **Command-Driven**: **Never** mutate state directly from UI components. UI triggers Commands; Commands call Model functions.
 
-## Critical Workflows
+## 2. Critical Technical Invariants
 
-- **Environment**: Check if user uses a relevant mamba/conda env (e.g. `mamba activate correxit`) or ask if it is ambiguous.
-- **Package Manager**: Use `jlpm` (JupyterLab's pinned yarn) for all node scripts.
-- **Build & Watch**:
-  - **One-time build**: `jlpm build`
-  - **Development**: Run `jlpm watch` in one terminal and `jupyter lab` in another.
-- **Testing**:
-  - Unit tests: `jlpm test` (Jest). maintain high coverage for core logic (`rubric.ts`, `security.ts`).
-  - UI tests: `ui-tests/` directory (Playwright).
+### Data Integrity & Security
 
-## Architecture Layers
+- **Explicit Nulls**: Use `field: Type | null` instead of optional `field?: Type`.
+  - _Reason_: Stable JSON serialization is required for cryptographic signatures.
+- **Validate-Before-Encrypt**: Always validate rubric/assignment data _before_ encryption.
+  - _Wrong_: Encrypt -> Validate.
+  - _Right_: Validate -> Encrypt.
+- **Immutability**: `Rubric` is an immutable data structure. Mutations return new instances (e.g., `Rubric.add()`).
 
-1.  **Model**:
-    - `src/correxit/rubric.ts`: Pure functions, immutable data structures.
-    - `src/correxit/workbook.ts`: Functional interface for the stateful Jupyter notebook model. Handles side effects (metadata updates, content mutation).
-2.  **Controller (`src/correxit/commands.ts`)**:
-    - Registers commands in `CommandIDs`.
-    - Orchestrates side effects (I/O, Model updates).
-3.  **View (`src/ui/`)**:
-    - React components.
-    - Declarative, driven by props/state.
-    - Avoids internal business logic.
-4.  **Distribution (`src/correxit/propagator.ts`)**:
-    - Handles the "Propagator Pattern" for distributing assignments to students without a backend server.
-    - This is an extension point for connecting to other systems that may or may not have a backend server.
+### State Management
 
-## Coding Conventions
+- **Workbook Abstraction**: Use `Workbook` functions (e.g., `Workbook.update`) to modify notebook metadata. Do not touch `notebook.model.metadata` directly.
+- **WeakMap Caching**: `Workbook.open()` uses a WeakMap cache to avoid expensive decryption/parsing.
 
-- **Immutability**: When modifying rules/rubrics, always return a new object. See `Rubric` namespace.
-- **Namespaces over Classes**: Eschew classes in favor of namespaces and functions whenever it is sensible (except for React Components and Jupyter Widgets).
-- **Module Imports**: Always import internal utility modules (e.g. `description`, `input`, `io`, `kernels`, `propagator`, `security`, `state`) as namespaces (e.g., `import * as security from './security'`).
-- **Security**:
-  - Use `openpgp` for encryption.
-  - Use `window.crypto` (via `crypto.subtle`) for signing/hashing.
-  - **No Backend**: Never implement server-side handlers for grading logic. Everything stays in the `.ipynb` file metadata.
-  - **Selective Encryption**: Only the roster is encrypted when a rubric is locked. Cell configurations (which contain cryptographic hashes, not plaintext) remain unencrypted.
-  - Isolate all cryptographic functions in one module (security.ts)
+## 3. Asynchronous Patterns
 
-## Code Style Preferences
+- **Streaming / Async Generators**: Long-running ops (grading, distributing) must implement the `async generator` pattern yielding updates.
+- **UI Consumption**: Use the custom `useCommand` hook to consume these generators.
+  - _Pattern_: `const [messages, idle] = useCommand(commands, 'command:id', args);`
+  - This hook throttles updates ~60fps and handles cleanup.
 
-- **Idiomatic English**: Require single English words for all voluntary named tokens (e.g. use `stop` not `stopIndex`). Avoid compound words.
-- **Const Grouping**: `const` declarations must be contiguous. A block of declarations must be preceded by a blank line or the top of a scope.
-- **Helper Functions**: Extract small, scoped helper functions (e.g. `scan`, `position`) to enable single-word naming and avoid complex inline logic.
-- **Functional Style**:
-  - Avoid loops in favor of array methods (`map`, `filter`, `reduce`) whenever possible.
-  - Exceptions: Async iterators (e.g. `propagator.ts`, `use-command.ts`) and simple cell iteration (`for (const id in cells)`) are acceptable.
-  - Avoid `if` statements except for early returns.
-  - Avoid negative sets (`!`) when positive checks are possible.
-  - Avoid extraneous variables; prefer direct returns.
-- **Beauty**: Bias toward beauty and readability, textbook quality code.
+## 4. Coding Style & Conventions
 
-## Common Pitfalls
+- **Functional over OOP**: Use `namespace` and pure functions. Avoid `class` except where required by Jupyter APIs.
+- **Array Methods**: logic should be expression-oriented (`map`, `filter`, `find`) rather than statement-oriented loops.
+- **Object Construction**:
+  - **Preferred**: `Object.fromEntries(items.map(...))`
+  - **Discouraged**: `items.reduce({...acc}, ...)` (Spread in reduce is a performance/complexity anti-pattern).
+  - **Allowed**: `reduce` is fine for aggregation (sums, counts).
+- **Naming**: Prefer single, distinct English words (e.g., `report` vs `scoreReport`).
 
-- **Cell Visibility**: Use the `cell.shared` boolean flag to determine whether cells should be encrypted/decrypted.
-- **Async Operations**: Grading and propagation are async. Ensure UI provides feedback via the command pattern or `useCommand` hook.
-- **Metadata Integrity**: Grading data is stored in the notebook (.ipynb file) metadata, under the key `correxit`. Ensure updates to metadata are atomic/transactional where possible via `Workbook.update`.
+## 5. Common Pitfalls (Quick Check)
+
+| Antipattern                             | Correction                                   |
+| --------------------------------------- | -------------------------------------------- |
+| Mutating `rubric` object                | Return new `rubric` via `Rubric.*` functions |
+| Accessing `notebook.model` in UI        | Execute a Command instead                    |
+| `interface Config { key?: string }`     | `interface Config { key: string \mid null }` |
+| `reduce((acc, x) => ({...acc, x}), {})` | `Object.fromEntries(arr.map(x => [k, v]))`   |
+
+## 6. Key Module Map
+
+- `rubric.ts`: Core immutable data model & scoring logic.
+- `workbook.ts`: Stateful notebook wrapper & metadata I/O.
+- `security.ts`: `openpgp` & `window.crypto` wrappers.
+- `commands.ts`: The central controller registry.
+- `propagator.ts`: Async generator for logical distribution.
