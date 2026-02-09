@@ -498,28 +498,6 @@ describe('Rubric', () => {
       expect(report2.scores.ghost).toBeUndefined();
     });
 
-    it('cleans up order when removing a cell', () => {
-      let rubric = create();
-      rubric = Rubric.add(rubric, {
-        id: 'c1',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-
-      const report: Rubric.Assignment.Report = {
-        order: ['c1'],
-        scores: { c1: Rubric.Score.CORRECT }
-      };
-      rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
-
-      const removed = Rubric.remove(rubric, 'c1');
-      expect(removed.assignment.report.order).toEqual([]);
-      expect(removed.assignment.report.scores.c1).toBeUndefined();
-    });
-
     it('summarizes a report correctly', () => {
       const report: Rubric.Assignment.Report = {
         order: ['c1', 'c2'],

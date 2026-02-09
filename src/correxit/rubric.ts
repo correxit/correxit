@@ -15,9 +15,11 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 export namespace Rubric {
   export type Assignment = Readonly<{
     assignee: string;
+    expiration: number | null;
     report: Assignment.Report;
     roster: string[];
     signature: string;
+    submission: number | null;
   }>;
 
   type Base = Readonly<{
@@ -229,9 +231,11 @@ export namespace Rubric {
 
     export const EMPTY: Assignment = {
       assignee: '',
+      expiration: null,
       report: { order: [], scores: {} },
       roster: [],
-      signature: ''
+      signature: '',
+      submission: null
     };
 
     /**
@@ -268,11 +272,12 @@ export namespace Rubric {
     }
 
     export async function sign(
-      assignment: Pick<Assignment, 'assignee' | 'report' | 'roster'>,
+      assignment: Omit<Assignment, 'signature'>,
       key: string
     ): Promise<string> {
-      const { assignee, report, roster } = assignment;
-      return security.digest(JSON.stringify({ assignee, key, report, roster }));
+      const { assignee, expiration, report, roster, submission } = assignment;
+      const unsigned = { assignee, expiration, report, roster, submission };
+      return security.digest(JSON.stringify(unsigned).concat(key));
     }
 
     export function summary(report: Report): Score {
@@ -437,9 +442,9 @@ export namespace Rubric {
 
     const locked = true;
     const { cells, id, key } = rubric;
-    const { assignee, report, roster, signature } = rubric.assignment;
-    const encrypted = await security.encrypt(JSON.stringify(roster), key);
-    const assignment = { assignee, report, roster: [encrypted], signature };
+    const serialized = JSON.stringify(rubric.assignment.roster);
+    const roster = [await security.encrypt(serialized, key)];
+    const assignment = { ...rubric.assignment, roster };
     const accessed = Date.now();
     return { accessed, assignment, cells, id, key: null, locked };
   }
@@ -475,26 +480,16 @@ export namespace Rubric {
 
     const { [id]: _, ...cells } = rubric.cells;
     void _; // This is the removed cell.
-    const { assignment: { assignee, report } } = rubric;
-    const order = report.order.filter(key => key !== id);
-    const removed = Object.entries(report.scores).filter(([key]) => key !== id);
-    const scores = Object.fromEntries(removed);
-    const assignment: Assignment = {
-      ...rubric.assignment, assignee,
-      report: { order, scores }
-    };
-    const accessed = Date.now();
-    return { ...rubric, accessed, assignment, cells };
+    return { ...rubric, accessed: Date.now(), cells };
   }
 
   export async function sign(
     rubric: Rubric.Unlocked,
     report: Assignment.Report
   ): Promise<Rubric.Unlocked> {
-    const { key } = rubric;
-    const { assignee, roster } = rubric.assignment;
-    const signature = await Assignment.sign({ assignee, report, roster }, key);
-    const assignment = { assignee, report, roster, signature };
+    const unsigned = { ...rubric.assignment, report };
+    const signature = await Assignment.sign(unsigned, rubric.key);
+    const assignment = { ...unsigned, signature };
     const accessed = Date.now();
     return { ...rubric, accessed, assignment };
   }
