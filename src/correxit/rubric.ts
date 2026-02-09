@@ -260,13 +260,10 @@ export namespace Rubric {
 
       const current = Object.entries(report.scores).filter(([id]) => valid(id));
       const pending = subset.map(id => Cell.score(rubric, id, outputs));
-      const scored = await Promise.all(pending);
-      const scores = {
-        ...Object.fromEntries(current),
-        ...Object.fromEntries(scored.map(score => [score.id, score]))
-      };
-      const existing = report.order.filter(valid);
-      const order = unique(id ? [...existing, id] : [...subset, ...existing]);
+      const done = (await Promise.all(pending)).map(score => [score.id, score]);
+      const scores = Object.fromEntries([...current, ...done]);
+      const filtered = report.order.filter(valid);
+      const order = unique(id ? [...filtered, id] : [...subset, ...filtered]);
       return { order, scores };
     }
 
