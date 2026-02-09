@@ -469,7 +469,7 @@ export namespace Rubric {
   }
 
   export function remove(rubric: Unlocked, id: string): Unlocked {
-    if (!get(rubric, id)){
+    if (!get(rubric, id)) {
       return rubric;
     }
 
