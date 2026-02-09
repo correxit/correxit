@@ -287,19 +287,14 @@ export namespace Rubric {
         if (b.status === 'unscored') {
           return a;
         }
-        return {
-          code: '',
-          comment: [a.comment, b.comment].join('\n'),
-          id: '',
-          points: a.points + b.points,
-          possible: a.possible + b.possible,
-          status: 'summary'
-        };
+
+        const points = a.points + b.points;
+        const possible = a.possible + b.possible;
+        const status = 'summary';
+        return { code: '', comment: '', id: '', points, possible, status };
       };
-      return order
-        .map(id => scores[id])
-        .filter(score => !!score)
-        .reduce(sum, Score.UNSCORED);
+      const ordered = order.map(id => scores[id]).filter(Boolean);
+      return ordered.reduce(sum, Score.UNSCORED);
     }
 
     export async function validate(
