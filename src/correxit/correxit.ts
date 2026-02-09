@@ -34,7 +34,27 @@ export namespace Correxit {
     Promise<AsyncIterable<Propagator.Notebook>>;
 
   export namespace Propagator {
-    export type Notebook = { notebook: INotebookContent; path: string; };
+    export type Notebook = {
+      /**
+       * The assignee (typically an email address).
+       */
+      assignee: string;
+
+      /**
+       * The assignment id, i.e. the rubric id of the workbook.
+       */
+      assignment: string;
+
+      /**
+       * The raw notebook content JSON.
+       */
+      notebook: INotebookContent;
+
+      /**
+       * The suggested file path a local consumer should write the content to.
+       */
+      path: string;
+    };
   }
 
   /**
