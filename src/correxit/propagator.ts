@@ -6,7 +6,7 @@ import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
 
 /**
- * Kicks off a propagator loop.
+ * Kicks off a propagator loop, which in turn invokes the given consumer.
  * @returns a message emitter for tracking loop progress.
  */
 export function invoke({ consumer, workbook }: {
@@ -96,6 +96,13 @@ async function propagate({ consumer, log, rubric, workbook }: {
   await consumer({ log, path, rubric, stream });
 }
 
+/**
+ * Reassigns a serialized workbook to an assignee using a given unlocked rubric.
+ *
+ * #### Notes
+ * This function explicitly mutates the serialized rubric in the given workbook
+ * to overwrite its assignee and signature.
+ */
 async function reassign({ assignee, key, notebook, roster }: {
   assignee: string;
   key: string;

@@ -225,6 +225,7 @@ export namespace Rubric {
 
   export namespace Assignment {
     export type Report = Readonly<{
+      date: number | null;
       order: string[];
       scores: { [id: string]: Score };
     }>;
@@ -232,7 +233,7 @@ export namespace Rubric {
     export const EMPTY: Assignment = {
       assignee: '',
       expiration: null,
-      report: { order: [], scores: {} },
+      report: { date: null, order: [], scores: {} },
       roster: [],
       signature: '',
       submission: null
@@ -268,7 +269,7 @@ export namespace Rubric {
       const scores = Object.fromEntries([...current, ...done]);
       const filtered = report.order.filter(valid);
       const order = unique(id ? [...filtered, id] : [...subset, ...filtered]);
-      return { order, scores };
+      return { date: Date.now(), order, scores };
     }
 
     export async function sign(
