@@ -15,6 +15,7 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 export namespace Rubric {
   export type Assignment = Readonly<{
     assignee: string;
+    confirmation: string | null;
     expiration: number | null;
     report: Assignment.Report;
     roster: string[];
@@ -232,6 +233,7 @@ export namespace Rubric {
 
     export const EMPTY: Assignment = {
       assignee: '',
+      confirmation: null,
       expiration: null,
       report: { date: null, order: [], scores: {} },
       roster: [],
@@ -273,7 +275,7 @@ export namespace Rubric {
     }
 
     export async function sign(
-      assignment: Omit<Assignment, 'signature' | 'submission'>,
+      assignment: Omit<Assignment, 'confirmation' | 'signature' | 'submission'>,
       key: string
     ): Promise<string> {
       const { assignee, expiration, report, roster } = assignment;
@@ -395,6 +397,7 @@ export namespace Rubric {
     { key, ...rubric }: Unlocked,
     {
       assignee = rubric.assignment.assignee,
+      confirmation = rubric.assignment.confirmation,
       expiration = rubric.assignment.expiration,
       roster = rubric.assignment.roster,
       submission = rubric.assignment.submission
@@ -403,9 +406,11 @@ export namespace Rubric {
     roster = unique(roster);
 
     const { report } = rubric.assignment;
-    const unsigned = { assignee, expiration, report, roster, submission };
+    const unsigned = { assignee, expiration, report, roster };
     const signature = await Assignment.sign(unsigned, key);
-    const assignment = { ...unsigned, signature };
+    const assignment = {
+      ...unsigned, confirmation, signature, submission
+    };
     await Assignment.validate({ assignment, key });
     return { ...rubric, assignment, key };
   }
@@ -420,6 +425,13 @@ export namespace Rubric {
     const encoded = accessed.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
     return { accessed, assignment, cells: {}, id, locked: false };
+  }
+
+  export function draft(rubric: Locked): Locked {
+    const assignment = {
+      ...rubric.assignment, confirmation: null, submission: null
+    };
+    return { ...rubric, assignment };
   }
 
   /**
@@ -512,6 +524,14 @@ export namespace Rubric {
    */
   export function size(rubric: Rubric): number {
     return Object.keys(rubric.cells).length;
+  }
+
+  export function submit(
+    rubric: Locked, confirmation: string | null = null
+  ): Locked {
+    const submission = Date.now();
+    const assignment = { ...rubric.assignment, confirmation, submission };
+    return { ...rubric, accessed: submission, assignment };
   }
 
   /**

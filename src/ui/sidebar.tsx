@@ -16,8 +16,19 @@ import { SidebarWidget } from './widget';
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const { get, has } = Rubric;
-const { add, comment, convert, correct, lock, remove, reset, toggle, unlock } =
-  Correxit.CommandIDs;
+const {
+  add,
+  comment,
+  convert,
+  correct,
+  draft,
+  lock,
+  remove,
+  reset,
+  submit,
+  toggle,
+  unlock
+} = Correxit.CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Sidebar(props: Sidebar.Props) {
@@ -86,6 +97,16 @@ const Header: React.FC<{
       {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <CommandToolbarButtonComponent commands={commands} id={correct} />
+      <CommandToolbarButtonComponent commands={commands} id={submit} />
+      <CommandToolbarButtonComponent commands={commands} id={draft} />
+      {!!rubric?.locked && !!rubric.assignment.submission && (
+        <p>
+          {trans.__(
+            'Submitted %1',
+            new Date(rubric.assignment.submission).toLocaleString()
+          )}
+        </p>
+      )}
       <p>{subheading}</p>
     </section>
   );

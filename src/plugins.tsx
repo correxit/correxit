@@ -129,6 +129,20 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
 };
 
 /**
+ * The default Correxit assignment submitter.
+ */
+const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
+  id: Correxit.SUBMITTER,
+  description: Correxit.DESCRIPTION.SUBMITTER,
+  autoStart: true,
+  ...((deactivator?: () => void) => ({
+    provides: Correxit.Submitter,
+    activate: (): Correxit.Submitter => async _ => null,
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/**
  * The Correxit source plugin loads settings, adds commands, and provides an
  * async iterable workbook source that emits when the user changes tabs.
  */
@@ -139,6 +153,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
   requires: [
     Correxit.Consumer,
     Correxit.Registrar,
+    Correxit.Submitter,
     Correxit.Unlocker,
     INotebookTracker
   ],
@@ -149,6 +164,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       app,
       consumer: Correxit.Consumer,
       registrar: Correxit.Registrar,
+      submitter: Correxit.Submitter,
       unlocker: Correxit.Unlocker,
       tracker: INotebookTracker,
       translator: ITranslator | null
@@ -165,8 +181,18 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       const notify = () => {
         // The sidebar can rely on metadata changes, but the native toolbar
         // buttons only change when their respective command has changed.
-        const { add, convert, correct, lock, toggle, unlock } = CommandIDs;
-        const buttons = [add, convert, correct, lock, toggle, unlock];
+        const { add, convert, correct, draft, lock, submit, toggle, unlock } =
+          CommandIDs;
+        const buttons = [
+          add,
+          convert,
+          correct,
+          draft,
+          lock,
+          submit,
+          toggle,
+          unlock
+        ];
         for (const command of buttons) {
           commands.notifyCommandChanged(command);
         }
@@ -190,7 +216,14 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
         }
       )(null as Workbook | null);
       const trans = (translator || nullTranslator).load('correxit');
-      const dependencies = { consumer, registrar, schedule, trans, unlocker };
+      const dependencies = {
+        consumer,
+        registrar,
+        schedule,
+        submitter,
+        trans,
+        unlocker
+      };
       const added = addCommands(app, dependencies);
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>
@@ -271,4 +304,12 @@ const ui: JupyterFrontEndPlugin<void> = {
   }))()
 };
 
-export const plugins = [consumer, corrector, registrar, source, ui, unlocker];
+export const plugins = [
+  consumer,
+  corrector,
+  registrar,
+  source,
+  submitter,
+  ui,
+  unlocker
+];

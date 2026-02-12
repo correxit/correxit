@@ -352,6 +352,62 @@ describe('Rubric', () => {
       });
       expect(expired(rubric.assignment)).toBe(false);
     });
+
+    it('submits a locked rubric with confirmation', async () => {
+      const unlocked = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: Date.now() + 86400000,
+        submission: null
+      });
+      const locked = await Rubric.lock(unlocked);
+      const receipt = 'abc-123';
+      const submitted = Rubric.submit(locked, receipt);
+      expect(submitted.assignment.submission).toBeGreaterThan(0);
+      expect(submitted.assignment.confirmation).toBe(receipt);
+      expect(submitted.locked).toBe(true);
+    });
+
+    it('submits a locked rubric without confirmation', async () => {
+      const unlocked = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null,
+        submission: null
+      });
+      const locked = await Rubric.lock(unlocked);
+      const submitted = Rubric.submit(locked);
+      expect(submitted.assignment.submission).toBeGreaterThan(0);
+      expect(submitted.assignment.confirmation).toBeNull();
+    });
+
+    it('drafts a submitted rubric', async () => {
+      const unlocked = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null,
+        submission: null
+      });
+      const locked = await Rubric.lock(unlocked);
+      const submitted = Rubric.submit(locked, 'receipt');
+      const drafted = Rubric.draft(submitted);
+      expect(drafted.assignment.submission).toBeNull();
+      expect(drafted.assignment.confirmation).toBeNull();
+      expect(drafted.locked).toBe(true);
+    });
+
+    it('excludes confirmation from signature', async () => {
+      const unlocked = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null,
+        submission: null
+      });
+      const locked = await Rubric.lock(unlocked);
+      const first = Rubric.submit(locked, 'receipt-a');
+      const second = Rubric.submit(locked, 'receipt-b');
+      expect(first.assignment.signature).toBe(second.assignment.signature);
+    });
   });
 
   describe('Rubric.Cell.score', () => {

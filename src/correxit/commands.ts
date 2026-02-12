@@ -19,6 +19,7 @@ export namespace CommandIDs {
   export const comment = 'correxit:comment';
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
+  export const draft = 'correxit:draft';
   export const emit = 'correxit:emit';
   export const fetch = 'correxit:fetch';
   export const lock = 'correxit:lock';
@@ -40,23 +41,24 @@ type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
 const {
-  add, assign, comment, convert, correct, lock, remove, reset, submit, toggle
+  add, assign, comment, convert, correct, draft, lock, remove, reset, submit,
+  toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  dependencies: {
+  { consumer, registrar, schedule, submitter, trans, unlocker }: {
     consumer: Correxit.Consumer;
     registrar: Correxit.Registrar;
     schedule: (workbook: Workbook | null) => void;
+    submitter: Correxit.Submitter;
     trans: IRenderMime.TranslationBundle;
     unlocker: Correxit.Unlocker;
   }
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
-  const { consumer, registrar, schedule, trans, unlocker } = dependencies;
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
@@ -276,6 +278,41 @@ export function addCommands(
       }
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.draft, {
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!rubric?.locked && !!rubric.assignment.submission;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.draft),
+    label: trans.__('Revert to draft...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { workbook } = await reify(args);
+      if (!workbook) {
+        return;
+      }
+      const title = trans.__('Revert to draft');
+      const body = trans.__(
+        'Revert your submission to a draft? The notebook will become editable.'
+      );
+      const { button } = await showDialog({
+        title,
+        body,
+        buttons: [
+          Dialog.cancelButton({ label: trans.__('Cancel') }),
+          Dialog.okButton({ label: trans.__('Revert') })
+        ]
+      });
+      if (!button.accept) {
+        return;
+      }
+      try {
+        await draft(workbook);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        void showErrorMessage(trans.__('Could not revert'), error as Error);
+      }
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.emit, {
     label: trans.__('Schedule one Correxit source emission'),
     execute: () => (fired => {
@@ -439,14 +476,35 @@ export function addCommands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.submit, {
-    label: trans.__('Submit assignment'),
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!rubric?.locked && !rubric.assignment.submission;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.submit),
+    label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { workbook } = await reify(args);
       if (!workbook) {
         return;
       }
+      const title = trans.__('Submit assignment');
+      const body = trans.__(
+        'Submit your assignment? The notebook will become read-only.'
+      );
+      const { button } = await showDialog({
+        title,
+        body,
+        buttons: [
+          Dialog.cancelButton({ label: trans.__('Cancel') }),
+          Dialog.okButton({ label: trans.__('Submit') })
+        ]
+      });
+      if (!button.accept) {
+        return;
+      }
       try {
-        await submit(workbook);
+        const confirmation = await submitter(workbook);
+        await submit(workbook, confirmation);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);

@@ -354,6 +354,27 @@ export namespace Workbook {
   }
 
   /**
+   * Revert a submission to draft, restoring cell editability.
+   */
+  export async function draft(workbook: Workbook): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked || !rubric.assignment.submission) {
+      throw new Error('draft error');
+    }
+    const notebook = workbook.context.model.sharedModel;
+    for (const cell of notebook.cells) {
+      const jupyter = cell.getMetadata('jupyter') as any;
+      if (jupyter?.source_hidden) {
+        continue;
+      }
+      cell.transact(() => {
+        cell.deleteMetadata('editable');
+      });
+    }
+    return update(workbook, Rubric.draft(rubric));
+  }
+
+  /**
    * Executes the code cells of a workbook.
    *
    * @param workbook - the workbook to run.
@@ -504,22 +525,23 @@ export namespace Workbook {
 
 
   /**
-   * Submit an assignment by stamping the submission timestamp.
+   * Submit an assignment, locking all cells to read-only.
    */
-  export async function submit(workbook: Workbook): Promise<Rubric> {
+  export async function submit(
+    workbook: Workbook,
+    confirmation: string | null = null
+  ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
-    if (!rubric) {
+    if (!rubric?.locked) {
       throw new Error('submit error');
     }
-    if (Rubric.Assignment.expired(rubric.assignment)) {
-      throw new Error('assignment expired');
+    const notebook = workbook.context.model.sharedModel;
+    for (const cell of notebook.cells) {
+      cell.transact(() => {
+        cell.setMetadata('editable', false);
+      });
     }
-
-    const submission = Date.now();
-    const assignment = { ...rubric.assignment, submission };
-    return rubric.locked
-      ? update(workbook, { ...rubric, assignment })
-      : assign(workbook, assignment);
+    return update(workbook, Rubric.submit(rubric, confirmation));
   }
 
   /**

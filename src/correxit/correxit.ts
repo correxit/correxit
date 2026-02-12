@@ -67,6 +67,8 @@ export namespace Correxit {
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
 
+  export type Submitter = (workbook: Workbook) => Promise<string | null>;
+
   export type Unlocker = {
     /**
      * Store the key for a given rubric id.
@@ -95,6 +97,7 @@ export namespace Correxit {
     CORRECTOR: description.CORRECTOR,
     REGISTRAR: description.REGISTRAR,
     SOURCE: description.SOURCE,
+    SUBMITTER: description.SUBMITTER,
     UI: description.UI,
     UNLOCKER: description.UNLOCKER
   };
@@ -110,6 +113,10 @@ export namespace Correxit {
   export const SOURCE = 'correxit:source';
 
   export const Source = new Token<Source>(SOURCE);
+
+  export const SUBMITTER = 'correxit:submitter';
+
+  export const Submitter = new Token<Correxit.Submitter>(SUBMITTER);
 
   export const TOOLBARS = 'correxit:toolbars';
 
