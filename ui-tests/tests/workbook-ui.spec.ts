@@ -171,3 +171,100 @@ test('assigns workbook and updates metadata', async ({ page }) => {
 
   await dispose();
 });
+
+test('assign short-circuits when no fields changed', async ({ page }) => {
+  const { dispose } = await setup(page, []);
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const initial = { ...Rubric.create(), key: 'secret' };
+    await Workbook.update(workbook, initial);
+
+    const assigned = await Workbook.assign(workbook, {
+      assignee: 'test@example.com',
+      roster: ['test@example.com']
+    });
+    const signature = assigned.assignment.signature;
+    const unchanged = await Workbook.assign(workbook, {});
+    return {
+      same: unchanged.assignment.signature === signature,
+      assignee: unchanged.assignment.assignee
+    };
+  });
+
+  expect(result.same).toBe(true);
+  expect(result.assignee).toBe('test@example.com');
+  await dispose();
+});
+
+test('submits a workbook and sets cells to read-only', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'a', source: 'x = 1' },
+    { id: 'b', source: 'y = 2' }
+  ]);
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const rubric = { ...Rubric.create(), key: 'secret' } as any;
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+
+    const submitted = await Workbook.submit(workbook, 'receipt-123');
+    const notebook = panel.context.model.sharedModel;
+    const metadata = notebook.getMetadata('correxit');
+    return {
+      locked: submitted.locked,
+      submission: submitted.assignment.submission,
+      confirmation: submitted.assignment.confirmation,
+      stored: metadata?.assignment?.submission ?? null,
+      editable: notebook.cells.map((c: any) => c.getMetadata('editable'))
+    };
+  });
+
+  expect(result.locked).toBe(true);
+  expect(result.submission).toBeGreaterThan(0);
+  expect(result.confirmation).toBe('receipt-123');
+  expect(result.stored).toBeGreaterThan(0);
+  expect(result.editable).toEqual([false, false]);
+  await dispose();
+});
+
+test('drafts a submitted workbook, restores editability', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'a', source: 'x = 1' },
+    { id: 'b', source: 'y = 2' }
+  ]);
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const rubric = { ...Rubric.create(), key: 'secret' } as any;
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+    await Workbook.submit(workbook, 'receipt');
+
+    // Mark one cell as source_hidden to simulate an encrypted cell.
+    const notebook = panel.context.model.sharedModel;
+    notebook.cells[1].setMetadata('jupyter', { source_hidden: true });
+
+    const drafted = await Workbook.draft(workbook);
+    const metadata = notebook.getMetadata('correxit');
+    return {
+      locked: drafted.locked,
+      submission: drafted.assignment.submission,
+      confirmation: drafted.assignment.confirmation,
+      stored: metadata?.assignment?.submission ?? null,
+      editable: notebook.cells.map((c: any) => c.getMetadata('editable'))
+    };
+  });
+
+  expect(result.locked).toBe(true);
+  expect(result.submission).toBeNull();
+  expect(result.confirmation).toBeNull();
+  expect(result.stored).toBeNull();
+  expect(result.editable[0]).toBeUndefined();
+  expect(result.editable[1]).toBe(false);
+  await dispose();
+});

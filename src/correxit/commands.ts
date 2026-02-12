@@ -41,8 +41,17 @@ type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
 const {
-  add, assign, comment, convert, correct, draft,
-  lock, remove, reset, submit, toggle
+  add,
+  assign,
+  comment,
+  convert,
+  correct,
+  draft,
+  lock,
+  remove,
+  reset,
+  submit,
+  toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 

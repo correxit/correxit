@@ -499,6 +499,9 @@ export namespace Rubric {
     return { accessed, assignment, cells, id, key, locked };
   }
 
+  /**
+   * Remove a cell from a rubric. Report scores are left intact.
+   */
   export function remove(rubric: Unlocked, id: string): Unlocked {
     if (!get(rubric, id)) {
       return rubric;

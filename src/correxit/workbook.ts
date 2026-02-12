@@ -153,17 +153,21 @@ export namespace Workbook {
     assignment: Rubric.Assignment,
     {
       assignee = assignment.assignee,
+      confirmation = assignment.confirmation,
       expiration = assignment.expiration,
       submission = assignment.submission,
-      roster = assignment.roster
+      roster = assignment.roster,
+      signature = assignment.signature
     }: Partial<Rubric.Assignment>
   ): boolean => (
     assignee !== assignment.assignee ||
+    confirmation !== assignment.confirmation ||
     expiration !== assignment.expiration ||
     submission !== assignment.submission ||
     (roster !== assignment.roster &&
       (roster.length !== assignment.roster.length ||
-        roster.some((assignee, i) => assignee !== assignment.roster[i])))
+        roster.some((record, i) => record !== assignment.roster[i]))) ||
+    signature !== assignment.signature
   );
 
   /**
@@ -522,7 +526,6 @@ export namespace Workbook {
     }
     update(workbook, null);
   }
-
 
   /**
    * Submit an assignment, locking all cells to read-only.
