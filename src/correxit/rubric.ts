@@ -148,11 +148,11 @@ export namespace Rubric {
      * @returns an array of of cell outputs.
      */
     export async function execute(
-      { sharedModel }: ICodeCellModel,
+      { sharedModel: cell }: ICodeCellModel,
       kernel: Kernel.IKernelConnection
     ): Promise<Output[]> {
       const outputs: Output[] = [];
-      const code = sharedModel.getSource();
+      const code = cell.getSource();
       if (!code.length) {
         return outputs;
       }

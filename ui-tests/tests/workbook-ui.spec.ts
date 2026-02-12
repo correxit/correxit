@@ -12,12 +12,12 @@ async function setup(page: any, cells: Input[]) {
   await page.evaluate(
     ({ cells }: { cells: Input[] }) => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
-      const { sharedModel } = panel.context.model;
-      while (sharedModel.cells.length) {
-        sharedModel.deleteCell(0);
+      const notebook = panel.context.model.sharedModel;
+      while (notebook.cells.length) {
+        notebook.deleteCell(0);
       }
       cells.forEach((cell, index) => {
-        sharedModel.insertCell(index, {
+        notebook.insertCell(index, {
           cell_type: 'code',
           id: cell.id,
           metadata: {},
@@ -67,7 +67,7 @@ test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
   await dispose();
 });
 
-test('locks open rubric and writes notebook metadata', async ({ page }) => {
+test('locks unlocked rubric and writes notebook metadata', async ({ page }) => {
   const { dispose } = await setup(page, []);
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
@@ -113,8 +113,8 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
 
-    const { sharedModel } = panel.context.model;
-    const cell = sharedModel.cells[0];
+    const notebook = panel.context.model.sharedModel;
+    const cell = notebook.cells[0];
     const locked = {
       type: cell.cell_type,
       jupyter: cell.getMetadata('jupyter'),
@@ -122,7 +122,7 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     };
     await Workbook.unlock(workbook, rubric.key);
 
-    const opened = sharedModel.cells[0];
+    const opened = notebook.cells[0];
     const unlocked = {
       type: opened.cell_type,
       source: opened.getSource(),

@@ -65,7 +65,7 @@ describe('Unlocker', () => {
     } as unknown as Rubric.Unlocked;
     manager = { get: jest.fn(), set: jest.fn() } as any;
     (Workbook.open as jest.Mock).mockReturnValue(locked);
-    (Workbook.unlock as jest.Mock).mockImplementation(async (workbook, key) => {
+    (Workbook.unlock as jest.Mock).mockImplementation(async (_, key) => {
       if (key === 'valid-key') return unlocked;
       throw new Error('invalid');
     });

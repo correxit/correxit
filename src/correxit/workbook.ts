@@ -79,13 +79,13 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<void> {
-      const { model: { sharedModel } } = workbook.context;
-      const index = findIndex(sharedModel.cells, ({ id }) => id === reference);
+      const notebook = workbook.context.model.sharedModel;
+      const index = findIndex(notebook.cells, ({ id }) => id === reference);
       if (!key || index === -1) {
         throw new Error('decrypt error');
       }
 
-      const cell = sharedModel.cells[index];
+      const cell = notebook.cells[index];
       const decrypted = await security.decrypt(cell.getSource(), key);
       cell.transact(() => {
         const jupyter = (cell.getMetadata('jupyter') as any || {});
@@ -97,9 +97,9 @@ export namespace Workbook {
       });
 
       const code = { ...cell.toJSON(), cell_type: 'code' };
-      sharedModel.transact(() => {
-        sharedModel.deleteCell(index);
-        sharedModel.insertCell(index, code);
+      notebook.transact(() => {
+        notebook.deleteCell(index);
+        notebook.insertCell(index, code);
       }, false);
       if (workbook.content) {
         NotebookActions.deselectAll(workbook.content);
@@ -115,13 +115,13 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<void> {
-      const { model: { sharedModel } } = workbook.context;
-      const index = findIndex(sharedModel.cells, ({ id }) => id === reference);
+      const notebook = workbook.context.model.sharedModel;
+      const index = findIndex(notebook.cells, ({ id }) => id === reference);
       if (!key || index === -1) {
         throw new Error('encrypt error');
       }
 
-      const cell = sharedModel.cells[index];
+      const cell = notebook.cells[index];
       const encrypted = await security.encrypt(cell.getSource(), key);
       cell.transact(() => {
         const jupyter = (cell.getMetadata('jupyter') || {}) as any;
@@ -132,9 +132,9 @@ export namespace Workbook {
       });
 
       const raw = { ...cell.toJSON(), cell_type: 'raw' };
-      sharedModel.transact(() => {
-        sharedModel.deleteCell(index);
-        sharedModel.insertCell(index, raw);
+      notebook.transact(() => {
+        notebook.deleteCell(index);
+        notebook.insertCell(index, raw);
       }, false);
       if (workbook.content) {
         NotebookActions.deselectAll(workbook.content);
@@ -220,11 +220,10 @@ export namespace Workbook {
       return { ok: true, pruned: [], rubric };
     }
 
+    const notebook = workbook.context.model.sharedModel;
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
-    const known = Object.fromEntries(
-      workbook.context.model.sharedModel.cells.map(cell =>
-        [cell.id, cell.cell_type === 'code' || cell.cell_type === 'raw']
-      )
+    const known = Object.fromEntries(notebook.cells.map(
+      ({ id, cell_type }) => [id, cell_type === 'code' || cell_type === 'raw'])
     );
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
@@ -460,7 +459,8 @@ export namespace Workbook {
       return get(workbook);
     }
 
-    const metadata = workbook.context.model.sharedModel.getMetadata('correxit');
+    const notebook = workbook.context.model.sharedModel;
+    const metadata = notebook.getMetadata('correxit');
     try {
       if (!metadata) {
         throw Correxit.NO_CORREXIT_METADATA;
@@ -583,20 +583,20 @@ export namespace Workbook {
   export async function update(
     workbook: Workbook,
     rubric: Rubric | null,
-    audited = Workbook.audit(workbook, rubric)
+    audited = audit(workbook, rubric)
   ): Promise<Rubric | null> {
-    const { sharedModel } = workbook.context.model;
+    const notebook = workbook.context.model.sharedModel;
     if (!audited || !rubric) {
       set(workbook, null);
-      sharedModel.deleteMetadata('correxit');
-      sharedModel.clearUndoHistory();
+      notebook.deleteMetadata('correxit');
+      notebook.clearUndoHistory();
       return null;
     }
     if (!audited.ok) {
       throw new Error(`update error: ${audited.error}`);
     }
     set(workbook, audited.rubric);
-    sharedModel.setMetadata('correxit', await Rubric.lock(audited.rubric));
+    notebook.setMetadata('correxit', await Rubric.lock(audited.rubric));
     return audited.rubric;
   }
 }

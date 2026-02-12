@@ -78,9 +78,9 @@ export function addCommands(
     icon: ({ is }: Partial<Cell>) =>
       Rubric.Cell.types.some(type => is === type) ? Icons[is!] : void 0,
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
-      const cells = state.workbook()?.context.model.sharedModel.cells || [];
+      const notebook = state.workbook()?.context.model.sharedModel;
       const id = state.cell(args);
-      const cell = find(cells, cell => cell.id === id);
+      const cell = find(notebook?.cells || [], cell => cell.id === id);
       const reference = args.reference;
       const rubric = open(state.workbook());
       if (!cell || !rubric || rubric.locked || !id || id === reference?.[0]) {
@@ -374,10 +374,6 @@ export function addCommands(
   }));
   disposables.push(commands.addCommand(CommandIDs.registrar, {
     execute: async (args: Partial<Credentials>): Promise<string[] | null> => {
-      if (!registrar) {
-        return null;
-      }
-
       const { workbook } = await reify(args);
       const warn = (error: any) => {
         console.warn('registrar failed for workbook', workbook, error);
@@ -433,7 +429,8 @@ export function addCommands(
         return;
       }
       if (args.undo === false) {
-        workbook.context.model.sharedModel.clearUndoHistory();
+        const notebook = workbook.context.model.sharedModel;
+        notebook.clearUndoHistory();
       }
       await workbook.context.save();
       if (commands.hasCommand(Corrector.CommandIDs.refresh)) {
