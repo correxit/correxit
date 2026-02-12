@@ -301,7 +301,7 @@ export function addCommands(
       }
       const title = trans.__('Revert to draft');
       const body = trans.__(
-        'Revert your submission to a draft? The notebook will become editable.'
+        'Revert your submission to a draft? The workbook will become editable.'
       );
       const { button } = await showDialog({
         title,
