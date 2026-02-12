@@ -81,12 +81,16 @@ const Header: React.FC<{
     : null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   const idle = trans.__('Correxit: idle');
+  const date = (timestamp: number) => new Date(timestamp).toLocaleString();
   const subheading =
     score === null
       ? ''
       : score.status === 'unscored'
         ? trans.__('Unscored')
         : trans.__('Workbook Grade %1 out of %2', score.points, score.possible);
+  const submission = rubric?.assignment.submission
+    ? trans.__('Submitted %1', date(rubric.assignment.submission))
+    : '';
   return (
     <section className="correxit-sidebar-header">
       <div className="correxit-sidebar-inner-header">
@@ -99,15 +103,8 @@ const Header: React.FC<{
       <CommandToolbarButtonComponent commands={commands} id={correct} />
       <CommandToolbarButtonComponent commands={commands} id={submit} />
       <CommandToolbarButtonComponent commands={commands} id={draft} />
-      {!!rubric?.locked && !!rubric.assignment.submission && (
-        <p>
-          {trans.__(
-            'Submitted %1',
-            new Date(rubric.assignment.submission).toLocaleString()
-          )}
-        </p>
-      )}
       <p>{subheading}</p>
+      <p>{submission}</p>
     </section>
   );
 };
@@ -124,10 +121,9 @@ const CellReport: React.FC<{
   const [editable, setEditable] = useState(false);
 
   useEffect(() => {
-    setValue(report?.comment ?? '');
+    setValue(report?.comment || '');
     setEditable(false);
   }, [report]);
-
   if (!report) {
     return <></>;
   }
