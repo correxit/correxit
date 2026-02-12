@@ -16,19 +16,8 @@ import { SidebarWidget } from './widget';
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const { get, has } = Rubric;
-const {
-  add,
-  comment,
-  convert,
-  correct,
-  draft,
-  lock,
-  remove,
-  reset,
-  submit,
-  toggle,
-  unlock
-} = Correxit.CommandIDs;
+const { add, comment, convert, correct, draft, lock } = Correxit.CommandIDs;
+const { remove, reset, submit, toggle, unlock } = Correxit.CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Sidebar(props: Sidebar.Props) {

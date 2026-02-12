@@ -40,19 +40,8 @@ type Headless = Workbook.Headless;
 type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
-const {
-  add,
-  assign,
-  comment,
-  convert,
-  correct,
-  draft,
-  lock,
-  remove,
-  reset,
-  submit,
-  toggle
-} = Workbook;
+const { add, assign, comment, convert, correct, draft } = Workbook;
+const { lock, remove, reset, submit, toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
