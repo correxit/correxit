@@ -149,11 +149,22 @@ export namespace Workbook {
       pool.set(workbook, rubric).has(workbook);
     return [get, set];
   })(new WeakMap<Workbook, Rubric | null>());
-  const metadata = (workbook: Workbook, metadata: any) => {
-    if (get(workbook)?.locked === false) {
-      workbook.context.model.sharedModel.setMetadata('correxit', metadata);
-    }
-  };
+  const stale = (
+    assignment: Rubric.Assignment,
+    {
+      assignee = assignment.assignee,
+      expiration = assignment.expiration,
+      submission = assignment.submission,
+      roster = assignment.roster
+    }: Partial<Rubric.Assignment>
+  ): boolean => (
+    assignee !== assignment.assignee ||
+    expiration !== assignment.expiration ||
+    submission !== assignment.submission ||
+    (roster !== assignment.roster &&
+      (roster.length !== assignment.roster.length ||
+        roster.some((assignee, i) => assignee !== assignment.roster[i])))
+  );
 
   /**
    * Add a cell to a workbook's rubric.
@@ -169,16 +180,30 @@ export namespace Workbook {
     return update(workbook, Rubric.add(rubric, cell));
   }
 
+  /**
+   * Update a workbook's assignment metadata.
+   *
+   * @param workbook - the workbook to update.
+   * @param assignment - the partial assignment data to apply.
+   *
+   * #### Notes
+   * Fields that are `undefined` in the `assignment` argument are ignored, i.e.,
+   * the existing values in the rubric are preserved.
+   *
+   * Fields that are `null` (where allowed, e.g. `expiration`) will explicitly
+   * clear the value in the rubric.
+   */
   export async function assign(
     workbook: Workbook,
-    { assignee, roster }: Partial<Rubric.Assignment> = {}
+    assignment: Partial<Rubric.Assignment> = {}
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
       throw new Error('assign error');
     }
-    const assigned = await Rubric.assign(rubric, assignee, roster || []);
-    return update(workbook, assigned);
+    return stale(rubric.assignment, assignment)
+      ? update(workbook, await Rubric.assign(rubric, assignment))
+      : rubric;
   }
 
   /**
@@ -477,6 +502,26 @@ export namespace Workbook {
     update(workbook, null);
   }
 
+
+  /**
+   * Submit an assignment by stamping the submission timestamp.
+   */
+  export async function submit(workbook: Workbook): Promise<Rubric> {
+    const rubric = open(workbook, quiet);
+    if (!rubric) {
+      throw new Error('submit error');
+    }
+    if (Rubric.Assignment.expired(rubric.assignment)) {
+      throw new Error('assignment expired');
+    }
+
+    const submission = Date.now();
+    const assignment = { ...rubric.assignment, submission };
+    return rubric.locked
+      ? update(workbook, { ...rubric, assignment })
+      : assign(workbook, assignment);
+  }
+
   /**
    * Toggle a workbook cell's `shared` flag.
    */
@@ -541,8 +586,8 @@ export namespace Workbook {
     audited = Workbook.audit(workbook, rubric)
   ): Promise<Rubric | null> {
     const { sharedModel } = workbook.context.model;
-    set(workbook, null);
     if (!audited || !rubric) {
+      set(workbook, null);
       sharedModel.deleteMetadata('correxit');
       sharedModel.clearUndoHistory();
       return null;
@@ -551,7 +596,7 @@ export namespace Workbook {
       throw new Error(`update error: ${audited.error}`);
     }
     set(workbook, audited.rubric);
-    metadata(workbook, await Rubric.lock(audited.rubric));
+    sharedModel.setMetadata('correxit', await Rubric.lock(audited.rubric));
     return audited.rubric;
   }
 }

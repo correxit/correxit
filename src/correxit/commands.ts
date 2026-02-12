@@ -27,6 +27,7 @@ export namespace CommandIDs {
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
   export const save = 'correxit:save';
+  export const submit = 'correxit:submit';
   export const toggle = 'correxit:toggle';
   export const unlock = 'correxit:unlock';
 }
@@ -39,7 +40,7 @@ type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
 const {
-  add, assign, comment, convert, correct, lock, remove, reset, toggle
+  add, assign, comment, convert, correct, lock, remove, reset, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -185,18 +186,8 @@ export function addCommands(
         return;
       }
 
-      const registered = registrar && await registrar(workbook);
-      const assignment: Partial<Assignment> = {
-        assignee: args.assignee || undefined,
-        roster: registered || args.roster || []
-      };
-      const different = (a: Partial<Assignment>, b: Assignment) =>
-        // Normalize assignee here to ignore `undefined` mismatches.
-        JSON.stringify({ x: a.assignee || '', y: a.roster }) !==
-        JSON.stringify({ x: b.assignee || '', y: b.roster });
-      if (different(assignment, rubric.assignment)) {
-        await assign(workbook, assignment);
-      }
+      const roster = await registrar(workbook) || args.roster;
+      await assign(workbook, { ...args, roster });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
@@ -447,6 +438,21 @@ export function addCommands(
       await workbook.context.save();
       if (commands.hasCommand(Corrector.CommandIDs.refresh)) {
         await commands.execute(Corrector.CommandIDs.refresh);
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.submit, {
+    label: trans.__('Submit assignment'),
+    execute: async (args: Partial<Credentials>) => {
+      const { workbook } = await reify(args);
+      if (!workbook) {
+        return;
+      }
+      try {
+        await submit(workbook);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        void showErrorMessage(trans.__('Could not submit'), error as Error);
       }
     }
   }));

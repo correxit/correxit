@@ -1,16 +1,16 @@
 import { expect, test } from '@jupyterlab/galata';
 
-type CellInput = { id: string; source: string };
+type Input = { id: string; source: string };
 
 test.use({ autoGoto: false });
 
-async function setupNotebook(page: any, cells: CellInput[]) {
+async function setup(page: any, cells: Input[]) {
   await page.goto();
 
   const name = await page.notebook.createNew();
   expect(name).toBeTruthy();
   await page.evaluate(
-    ({ cells }: { cells: CellInput[] }) => {
+    ({ cells }: { cells: Input[] }) => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
       const { sharedModel } = panel.context.model;
       while (sharedModel.cells.length) {
@@ -38,7 +38,7 @@ async function setupNotebook(page: any, cells: CellInput[]) {
 }
 
 test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
-  const { dispose } = await setupNotebook(page, [{ id: 'known', source: '' }]);
+  const { dispose } = await setup(page, [{ id: 'known', source: '' }]);
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
@@ -67,17 +67,17 @@ test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
   await dispose();
 });
 
-test('locks unlocked rubric and writes notebook metadata', async ({ page }) => {
-  const { dispose } = await setupNotebook(page, []);
+test('locks open rubric and writes notebook metadata', async ({ page }) => {
+  const { dispose } = await setup(page, []);
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
     const rubric = { ...Rubric.create(), key: 'secret' } as any;
-    const updated = await Workbook.update(workbook, rubric);
+    const written = await Workbook.update(workbook, rubric);
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
     return {
-      locked: updated?.locked ?? null,
+      locked: written?.locked ?? null,
       stored: metadata?.locked ?? null,
       key: metadata?.key ?? null
     };
@@ -90,7 +90,7 @@ test('locks unlocked rubric and writes notebook metadata', async ({ page }) => {
 });
 
 test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
-  const { dispose } = await setupNotebook(page, [
+  const { dispose } = await setup(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
@@ -122,12 +122,12 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     };
     await Workbook.unlock(workbook, rubric.key);
 
-    const decrypted = sharedModel.cells[0];
+    const opened = sharedModel.cells[0];
     const unlocked = {
-      type: decrypted.cell_type,
-      source: decrypted.getSource(),
-      jupyter: decrypted.getMetadata('jupyter'),
-      editable: decrypted.getMetadata('editable')
+      type: opened.cell_type,
+      source: opened.getSource(),
+      jupyter: opened.getMetadata('jupyter'),
+      editable: opened.getMetadata('editable')
     };
     return { locked, unlocked };
   });
@@ -139,5 +139,35 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
   expect(result.unlocked.source).toBe('answer');
   expect(result.unlocked.jupyter.source_hidden).toBeUndefined();
   expect(result.unlocked.editable).toBeUndefined();
+  await dispose();
+});
+
+test('assigns workbook and updates metadata', async ({ page }) => {
+  const { dispose } = await setup(page, []);
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const initial = { ...Rubric.create(), key: 'secret' };
+    await Workbook.update(workbook, initial);
+
+    const changes = {
+      assignee: 'assignee@example.com',
+      roster: ['assignee@example.com']
+    };
+    const final = await Workbook.assign(workbook, changes);
+    const metadata = panel.context.model.sharedModel.getMetadata('correxit');
+
+    return {
+      assignee: final.assignment.assignee,
+      stored: metadata?.assignment?.assignee ?? null,
+      signature: !!final.assignment.signature
+    };
+  });
+
+  expect(result.assignee).toBe('assignee@example.com');
+  expect(result.stored).toBe('assignee@example.com');
+  expect(result.signature).toBe(true);
+
   await dispose();
 });

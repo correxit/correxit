@@ -273,11 +273,11 @@ export namespace Rubric {
     }
 
     export async function sign(
-      assignment: Omit<Assignment, 'signature'>,
+      assignment: Omit<Assignment, 'signature' | 'submission'>,
       key: string
     ): Promise<string> {
-      const { assignee, expiration, report, roster, submission } = assignment;
-      const unsigned = { assignee, expiration, report, roster, submission };
+      const { assignee, expiration, report, roster } = assignment;
+      const unsigned = { assignee, expiration, report, roster };
       return security.digest(JSON.stringify(unsigned).concat(key));
     }
 
@@ -298,6 +298,13 @@ export namespace Rubric {
       };
       const ordered = order.map(id => scores[id]).filter(Boolean);
       return ordered.reduce(sum, Score.UNSCORED);
+    }
+
+    /**
+     * @returns whether the current time is after an assignment's expiration.
+     */
+    export function expired({ expiration }: Pick<Assignment, 'expiration'>) {
+      return expiration ? Date.now() > expiration : false;
     }
 
     export async function validate(
@@ -380,21 +387,27 @@ export namespace Rubric {
     }
     return {
       ...rubric,
-      accessed: Date.now(),
       cells: { ...rubric.cells, [cell.id]: cell }
     };
   }
 
   export async function assign(
     { key, ...rubric }: Unlocked,
-    assignee = '',
-    roster: string[] = []
+    {
+      assignee = rubric.assignment.assignee,
+      expiration = rubric.assignment.expiration,
+      roster = rubric.assignment.roster,
+      submission = rubric.assignment.submission
+    }: Partial<Assignment> = {}
   ): Promise<Unlocked> {
-    const unsigned = { ...Assignment.EMPTY, assignee, roster: unique(roster) };
+    roster = unique(roster);
+
+    const { report } = rubric.assignment;
+    const unsigned = { assignee, expiration, report, roster, submission };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = { ...unsigned, signature };
     await Assignment.validate({ assignment, key });
-    return { ...rubric, accessed: Date.now(), assignment, key };
+    return { ...rubric, assignment, key };
   }
 
   /**
@@ -481,7 +494,7 @@ export namespace Rubric {
 
     const { [id]: _, ...cells } = rubric.cells;
     void _; // This is the removed cell.
-    return { ...rubric, accessed: Date.now(), cells };
+    return { ...rubric, cells };
   }
 
   export async function sign(
@@ -491,8 +504,7 @@ export namespace Rubric {
     const unsigned = { ...rubric.assignment, report };
     const signature = await Assignment.sign(unsigned, rubric.key);
     const assignment = { ...unsigned, signature };
-    const accessed = Date.now();
-    return { ...rubric, accessed, assignment };
+    return { ...rubric, assignment };
   }
 
   /**
@@ -512,7 +524,7 @@ export namespace Rubric {
     }
 
     const cells = { ...rubric.cells, [id]: { ...cell, shared: !cell.shared } };
-    return { ...rubric, accessed: Date.now(), cells };
+    return { ...rubric, cells };
   }
 
   /**
