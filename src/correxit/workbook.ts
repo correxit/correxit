@@ -143,6 +143,22 @@ export namespace Workbook {
   }
 
   const quiet = true;
+  const defrost = (workbook: Workbook) => {
+    const notebook = workbook.context.model.sharedModel;
+    for (const cell of notebook.cells) {
+      const jupyter = cell.getMetadata('jupyter') as any;
+      if (jupyter?.source_hidden) {
+        continue;
+      }
+      cell.transact(() => cell.deleteMetadata('editable'));
+    }
+  };
+  const freeze = (workbook: Workbook) => {
+    const notebook = workbook.context.model.sharedModel;
+    for (const cell of notebook.cells) {
+      cell.transact(() => cell.setMetadata('editable', false));
+    }
+  };
   const [get, set] = (pool => {
     const get = (workbook: Workbook) => pool.get(workbook) || null;
     const set = (workbook: Workbook, rubric: Rubric | null) =>
@@ -365,16 +381,7 @@ export namespace Workbook {
     if (!rubric?.locked || !rubric.assignment.submission) {
       throw new Error('draft error');
     }
-    const notebook = workbook.context.model.sharedModel;
-    for (const cell of notebook.cells) {
-      const jupyter = cell.getMetadata('jupyter') as any;
-      if (jupyter?.source_hidden) {
-        continue;
-      }
-      cell.transact(() => {
-        cell.deleteMetadata('editable');
-      });
-    }
+    defrost(workbook);
     return update(workbook, Rubric.draft(rubric));
   }
 
@@ -538,12 +545,7 @@ export namespace Workbook {
     if (!rubric?.locked) {
       throw new Error('submit error');
     }
-    const notebook = workbook.context.model.sharedModel;
-    for (const cell of notebook.cells) {
-      cell.transact(() => {
-        cell.setMetadata('editable', false);
-      });
-    }
+    freeze(workbook);
     return update(workbook, Rubric.submit(rubric, confirmation));
   }
 

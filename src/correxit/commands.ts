@@ -300,17 +300,12 @@ export function addCommands(
         return;
       }
       const title = trans.__('Revert to draft');
-      const body = trans.__(
-        'Revert your submission to a draft? The workbook will become editable.'
-      );
-      const { button } = await showDialog({
-        title,
-        body,
-        buttons: [
-          Dialog.cancelButton({ label: trans.__('Cancel') }),
-          Dialog.okButton({ label: trans.__('Revert') })
-        ]
-      });
+      const body = trans.__('Revert read-only submission to draft workbook?');
+      const buttons = [
+        Dialog.cancelButton({ label: trans.__('Cancel') }),
+        Dialog.okButton({ label: trans.__('Revert') })
+      ];
+      const { button } = await showDialog({ title, body, buttons });
       if (!button.accept) {
         return;
       }
