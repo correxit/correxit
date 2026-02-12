@@ -170,33 +170,24 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       translator: ITranslator | null
     ): Correxit.Source => {
       const { commands, shell } = app;
-      const source = new Poll<Workbook | null>({
-        auto: false,
-        frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
-        factory: async () => null
-      });
       const { CommandIDs } = Correxit;
-      const { open } = Workbook;
-      const quiet = true;
       const notify = () => {
         // The sidebar can rely on metadata changes, but the native toolbar
         // buttons only change when their respective command has changed.
         const { add, convert, correct, draft, lock, submit, toggle, unlock } =
           CommandIDs;
-        const buttons = [
-          add,
-          convert,
-          correct,
-          draft,
-          lock,
-          submit,
-          toggle,
-          unlock
-        ];
-        for (const command of buttons) {
+        const ui = [add, convert, correct, draft, lock, submit, toggle, unlock];
+        for (const command of ui) {
           commands.notifyCommandChanged(command);
         }
       };
+      const source = new Poll<Workbook | null>({
+        auto: false,
+        frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
+        factory: async () => null
+      });
+      const { open } = Workbook;
+      const quiet = true;
       const subscribe = (prev: Workbook | null, next: Workbook | null) => {
         prev?.context.fileChanged.disconnect(notify);
         prev?.context.model.sharedModel.metadataChanged.disconnect(notify);
