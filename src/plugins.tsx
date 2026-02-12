@@ -129,20 +129,6 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
 };
 
 /**
- * The default Correxit assignment submitter.
- */
-const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
-  id: Correxit.SUBMITTER,
-  description: Correxit.DESCRIPTION.SUBMITTER,
-  autoStart: true,
-  ...((deactivator?: () => void) => ({
-    provides: Correxit.Submitter,
-    activate: (): Correxit.Submitter => async _ => null,
-    deactivate: () => deactivator?.()
-  }))()
-};
-
-/**
  * The Correxit source plugin loads settings, adds commands, and provides an
  * async iterable workbook source that emits when the user changes tabs.
  */
@@ -207,15 +193,14 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
         }
       )(null as Workbook | null);
       const trans = (translator || nullTranslator).load('correxit');
-      const dependencies = {
+      const added = addCommands(app, {
         consumer,
         registrar,
         schedule,
         submitter,
         trans,
         unlocker
-      };
-      const added = addCommands(app, dependencies);
+      });
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>
           schedule(newValue instanceof NotebookPanel ? newValue : null),
@@ -234,6 +219,20 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       };
       return source;
     },
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/**
+ * The default Correxit assignment submitter.
+ */
+const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
+  id: Correxit.SUBMITTER,
+  description: Correxit.DESCRIPTION.SUBMITTER,
+  autoStart: true,
+  ...((deactivator?: () => void) => ({
+    provides: Correxit.Submitter,
+    activate: (): Correxit.Submitter => async _ => null,
     deactivate: () => deactivator?.()
   }))()
 };

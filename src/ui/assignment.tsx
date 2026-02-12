@@ -110,7 +110,7 @@ const Roster: React.FC<{
   useEffect(() => void (registered && freeze(registered)), [registered]);
   useEffect(
     () =>
-      setAssignment(({ assignee }) => {
+      setAssignment(({ assignee, ...assignment }) => {
         assignee = find(roster, record => record === assignee) ? assignee : '';
         return { ...assignment, assignee, roster };
       }),
