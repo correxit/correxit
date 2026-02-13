@@ -346,7 +346,7 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
 test('assigns workbook and updates assignment metadata', async ({ page }) => {
   const { dispose } = await setup(page, []);
   const result = await page.evaluate(async () => {
-    const { Workbook, Rubric } = (window as any).__correxit__;
+    const { Rubric, Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
     await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });

@@ -3,6 +3,7 @@ import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { ITranslator } from '@jupyterlab/translation';
 import { notebookIcon, saveIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '..';
@@ -35,9 +36,9 @@ export namespace CommandIDs {
 
 type Assignment = Rubric.Assignment;
 type Cell = Rubric.Cell;
+type CellToolbar = Rubric.Cell.Toolbar;
 type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
-type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
 const { add, assign, comment, convert, correct, draft } = Workbook;
@@ -46,17 +47,18 @@ const { normalize } = Workbook.Credentials;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  { consumer, registrar, schedule, submitter, trans, unlocker }: {
+  { consumer, registrar, scheduler, submitter, translator, unlocker }: {
     consumer: Correxit.Consumer;
     registrar: Correxit.Registrar;
-    schedule: (workbook: Workbook | null) => void;
+    scheduler: Correxit.Scheduler;
     submitter: Correxit.Submitter;
-    trans: IRenderMime.TranslationBundle;
+    translator: ITranslator;
     unlocker: Correxit.Unlocker;
   }
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
+  const trans = translator.load('correxit');
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
@@ -314,7 +316,7 @@ export function addCommands(
           return;
         }
         fired = true;
-        schedule(emission);
+        scheduler(emission);
       };
     })(false)
   }));
@@ -482,7 +484,7 @@ export function addCommands(
       }
       const title = trans.__('Submit assignment');
       const body = trans.__(
-        'Submit your assignment? The notebook will become read-only.'
+        'Submit assignment? This workbook will be set to read-only.'
       );
       const { button } = await showDialog({
         title,

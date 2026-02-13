@@ -155,6 +155,8 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       tracker: INotebookTracker,
       translator: ITranslator | null
     ): Correxit.Source => {
+      translator ||= nullTranslator;
+
       const { commands, shell } = app;
       const { CommandIDs } = Correxit;
       const notify = () => {
@@ -180,7 +182,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
         next?.context.fileChanged.connect(notify);
         next?.context.model.sharedModel.metadataChanged.connect(notify);
       };
-      const schedule: (workbook: Workbook | null) => void = (
+      const scheduler: (workbook: Workbook | null) => void = (
         previous => workbook => {
           if (workbook !== source.state.payload) {
             void open(workbook, quiet);
@@ -192,20 +194,19 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
           }
         }
       )(null as Workbook | null);
-      const trans = (translator || nullTranslator).load('correxit');
       const added = addCommands(app, {
         consumer,
         registrar,
-        schedule,
+        scheduler,
         submitter,
-        trans,
+        translator,
         unlocker
       });
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>
-          schedule(newValue instanceof NotebookPanel ? newValue : null),
+          scheduler(newValue instanceof NotebookPanel ? newValue : null),
         tracker: (_: unknown, workbook: Workbook.Headed | null) =>
-          schedule(workbook)
+          scheduler(workbook)
       };
       shell.currentChanged?.connect(slots.shell);
       tracker.currentChanged.connect(slots.tracker);

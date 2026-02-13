@@ -62,6 +62,8 @@ export namespace Correxit {
    */
   export type Registrar = (workbook: Workbook) => Promise<string[] | null>;
 
+  export type Scheduler = (workbook: Workbook | null) => void;
+
   /**
    * The core Correxit plugin registers commands and returns a workbook source.
    */
