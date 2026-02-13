@@ -72,14 +72,12 @@ const Header: React.FC<{
   const idle = trans.__('Correxit: idle');
   const date = (timestamp: number) => new Date(timestamp).toLocaleString();
   const subheading =
-    score === null
-      ? ''
-      : score.status === 'unscored'
-        ? trans.__('Unscored')
-        : trans.__('Workbook Grade %1 out of %2', score.points, score.possible);
+    score === null || score.status === 'unscored'
+      ? trans.__('Unscored')
+      : trans.__('Workbook Grade %1 out of %2', score.points, score.possible);
   const submission = rubric?.assignment.submission
     ? trans.__('Submitted %1', date(rubric.assignment.submission))
-    : '';
+    : trans.__('Unsubmitted');
   return (
     <section className="correxit-sidebar-header">
       <div className="correxit-sidebar-inner-header">
@@ -88,12 +86,12 @@ const Header: React.FC<{
         <CommandToolbarButtonComponent commands={commands} id={unlock} />
       </div>
       {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
+      <p>{subheading}</p>
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <CommandToolbarButtonComponent commands={commands} id={correct} />
+      <p>{submission}</p>
       <CommandToolbarButtonComponent commands={commands} id={submit} />
       <CommandToolbarButtonComponent commands={commands} id={draft} />
-      <p>{subheading}</p>
-      <p>{submission}</p>
     </section>
   );
 };

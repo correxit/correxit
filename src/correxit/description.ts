@@ -6,7 +6,7 @@ export const REGISTRAR = 'Correxit registrar to provide rosters for workbooks';
 
 export const SOURCE = 'Correxit workbook emissions source';
 
-export const SUBMITTER = 'Correxit submitter to confirm assignment submissions';
+export const SUBMITTER = 'Correxit submitter to receive workbook submissions';
 
 export const UI = 'Correxit workbook annotations, sidebar, and toolbar buttons';
 

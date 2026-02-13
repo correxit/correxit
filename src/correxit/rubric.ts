@@ -428,10 +428,10 @@ export namespace Rubric {
   }
 
   export function draft(rubric: Locked): Locked {
-    const assignment = {
-      ...rubric.assignment, confirmation: null, submission: null
-    };
-    return { ...rubric, assignment };
+    const confirmation = null;
+    const submission = null;
+    const assignment = { ...rubric.assignment, confirmation, submission };
+    return { ...rubric, accessed: Date.now(), assignment };
   }
 
   /**
