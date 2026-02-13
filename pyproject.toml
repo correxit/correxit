@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "jupyter_server>=2.4.0,<3",
-    "jupyter-secrets-manager>=0.4.1"
+    "jupyter-secrets-manager >=0.5,<0.6"
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 

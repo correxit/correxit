@@ -8,7 +8,7 @@ export namespace Unlocker {
   export async function store(
     id: string,
     key: string,
-    secrets: { manager: ISecretsManager | null; token: symbol; }
+    secrets: { manager: ISecretsManager | null; token: symbol | null; }
   ) {
     const { manager, token } = secrets;
     if (manager && token) {
@@ -31,7 +31,7 @@ export namespace Unlocker {
     secrets: {
       manager: ISecretsManager | null;
       passphrases: Set<string>;
-      token: symbol;
+      token: symbol | null;
     },
     trans: IRenderMime.TranslationBundle
   ): Promise<Rubric.Unlocked | null> {
