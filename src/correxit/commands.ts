@@ -14,21 +14,21 @@ import * as security from './security';
 import * as state from './state';
 
 export namespace CommandIDs {
-  export const add = 'correxit:add';
-  export const assign = 'correxit:assign';
-  export const comment = 'correxit:comment';
-  export const convert = 'correxit:convert';
-  export const correct = 'correxit:correct';
-  export const emit = 'correxit:emit';
-  export const fetch = 'correxit:fetch';
-  export const lock = 'correxit:lock';
-  export const propagate = 'correxit:propagate';
-  export const registrar = 'correxit:registrar';
-  export const remove = 'correxit:remove';
-  export const reset = 'correxit:reset';
-  export const save = 'correxit:save';
-  export const toggle = 'correxit:toggle';
-  export const unlock = 'correxit:unlock';
+  export const add = '@quantstack/correxit:add';
+  export const assign = '@quantstack/correxit:assign';
+  export const comment = '@quantstack/correxit:comment';
+  export const convert = '@quantstack/correxit:convert';
+  export const correct = '@quantstack/correxit:correct';
+  export const emit = '@quantstack/correxit:emit';
+  export const fetch = '@quantstack/correxit:fetch';
+  export const lock = '@quantstack/correxit:lock';
+  export const propagate = '@quantstack/correxit:propagate';
+  export const registrar = '@quantstack/correxit:registrar';
+  export const remove = '@quantstack/correxit:remove';
+  export const reset = '@quantstack/correxit:reset';
+  export const save = '@quantstack/correxit:save';
+  export const toggle = '@quantstack/correxit:toggle';
+  export const unlock = '@quantstack/correxit:unlock';
 }
 
 type Assignment = Rubric.Assignment;

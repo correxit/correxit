@@ -1,5 +1,5 @@
 {
-    "name": "correxit",
+    "name": "@quantstack/correxit",
     "version": "0.1.0",
     "description": "Correxit is a JupyterLab extension and the third-person singular perfect active indicative conjugation of the Latin verb corrigere",
     "keywords": [
@@ -7,9 +7,9 @@
         "jupyterlab",
         "jupyterlab-extension"
     ],
-    "homepage": "https://github.com/notebook-link/correxit",
+    "homepage": "https://github.com/QuantStack/correxit",
     "bugs": {
-        "url": "https://github.com/notebook-link/correxit/issues"
+        "url": "https://github.com/QuantStack/correxit/issues"
     },
     "license": "UNLICENSED",
     "author": {
@@ -27,7 +27,7 @@
     "style": "style/index.css",
     "repository": {
         "type": "git",
-        "url": "https://github.com/notebook-link/correxit.git"
+        "url": "https://github.com/QuantStack/correxit.git"
     },
     "scripts": {
         "build": "jlpm build:lib && jlpm build:labextension:dev",

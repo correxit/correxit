@@ -70,7 +70,7 @@ export namespace Rubric {
 
     export type Toolbar = { [TOOLBAR]?: boolean; };
 
-    export const TOOLBAR = 'correxit:cell-toolbar';
+    export const TOOLBAR = '@quantstack/correxit:cell-toolbar';
 
     export const types = ['answerable', 'comparable', 'correctable'];
 

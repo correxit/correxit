@@ -19,37 +19,37 @@ import UNLOCKED from '../../style/source/icons/unlocked.svg';
 
 export namespace Icons {
   export const answerable =
-    new LabIcon({ name: 'correxit:answerable', svgstr: ANSWERABLE });
+    new LabIcon({ name: '@quantstack/correxit:answerable', svgstr: ANSWERABLE });
   export const assignee =
-    new LabIcon({ name: 'correxit:assignee', svgstr: ASSIGNEE });
+    new LabIcon({ name: '@quantstack/correxit:assignee', svgstr: ASSIGNEE });
   export const assignment =
-    new LabIcon({ name: 'correxit:assignment', svgstr: ASSIGNMENT });
+    new LabIcon({ name: '@quantstack/correxit:assignment', svgstr: ASSIGNMENT });
   export const comment =
-    new LabIcon({ name: 'correxit:comment', svgstr: COMMENT });
+    new LabIcon({ name: '@quantstack/correxit:comment', svgstr: COMMENT });
   export const comparable =
-    new LabIcon({ name: 'correxit:comparable', svgstr: COMPARABLE });
+    new LabIcon({ name: '@quantstack/correxit:comparable', svgstr: COMPARABLE });
   export const convert =
-    new LabIcon({ name: 'correxit:convert', svgstr: CONVERT });
+    new LabIcon({ name: '@quantstack/correxit:convert', svgstr: CONVERT });
   export const correct =
-    new LabIcon({ name: 'correxit:correct', svgstr: CORRECT });
+    new LabIcon({ name: '@quantstack/correxit:correct', svgstr: CORRECT });
   export const correctable =
-    new LabIcon({ name: 'correxit:correctable', svgstr: CORRECTABLE });
+    new LabIcon({ name: '@quantstack/correxit:correctable', svgstr: CORRECTABLE });
   export const kernel =
-    new LabIcon({ name: 'correxit:kernel', svgstr: KERNEL });
+    new LabIcon({ name: '@quantstack/correxit:kernel', svgstr: KERNEL });
   export const key =
-    new LabIcon({ name: 'correxit:key', svgstr: KEY });
+    new LabIcon({ name: '@quantstack/correxit:key', svgstr: KEY });
   export const locked =
-    new LabIcon({ name: 'correxit:locked', svgstr: LOCKED });
+    new LabIcon({ name: '@quantstack/correxit:locked', svgstr: LOCKED });
   export const reset =
-    new LabIcon({ name: 'correxit:reset', svgstr: RESET });
+    new LabIcon({ name: '@quantstack/correxit:reset', svgstr: RESET });
   export const roster =
-    new LabIcon({ name: 'correxit:roster', svgstr: ROSTER });
+    new LabIcon({ name: '@quantstack/correxit:roster', svgstr: ROSTER });
   export const secret =
-    new LabIcon({ name: 'correxit:secret', svgstr: SECRET });
+    new LabIcon({ name: '@quantstack/correxit:secret', svgstr: SECRET });
   export const shared =
-    new LabIcon({ name: 'correxit:shared', svgstr: SHARED });
+    new LabIcon({ name: '@quantstack/correxit:shared', svgstr: SHARED });
   export const template =
-    new LabIcon({ name: 'correxit:template', svgstr: TEMPLATE });
+    new LabIcon({ name: '@quantstack/correxit:template', svgstr: TEMPLATE });
   export const unlocked =
-    new LabIcon({ name: 'correxit:unlocked', svgstr: UNLOCKED });
+    new LabIcon({ name: '@quantstack/correxit:unlocked', svgstr: UNLOCKED });
 }
