@@ -1,46 +1,16 @@
 import { expect, test } from '@jupyterlab/galata';
+import { setup } from './utils';
 
 test.use({ autoGoto: false });
 
-async function setup(page: any, cells: { id: string; source: string }[]) {
-  await page.goto();
-
-  const name = await page.notebook.createNew();
-  expect(name).toBeTruthy();
-  await page.evaluate(
-    ({ cells }: { cells: { id: string; source: string }[] }) => {
-      const panel = (window as any).jupyterapp.shell.currentWidget;
-      const notebook = panel.context.model.sharedModel;
-      while (notebook.cells.length) {
-        notebook.deleteCell(0);
-      }
-      cells.forEach((cell, index) => {
-        notebook.insertCell(index, {
-          cell_type: 'code',
-          id: cell.id,
-          metadata: {},
-          source: cell.source
-        });
-      });
-    },
-    { cells }
-  );
-  return {
-    async dispose() {
-      await page.notebook.close(true);
-      if (name) {
-        await page.contents.deleteFile(name);
-      }
-    }
-  };
-}
-
-test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
+test('audits and prunes invalid rubric cells', async ({ page }) => {
   const { dispose } = await setup(page, [{ id: 'known', source: '' }]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context } as any;
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -52,6 +22,7 @@ test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
         payload: null
       }
     );
+
     const audit = Workbook.audit(workbook, rubric);
     return {
       ok: audit.ok,
@@ -59,6 +30,7 @@ test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
       invalid: audit.ok ? Rubric.has(audit.rubric, 'missing-ref') : null
     };
   });
+
   expect(result.ok).toBe(true);
   expect(result.pruned).toBe(1);
   expect(result.invalid).toBe(false);
@@ -67,10 +39,12 @@ test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
 
 test('locks unlocked rubric and writes notebook metadata', async ({ page }) => {
   const { dispose } = await setup(page, []);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
+
     const rubric = { ...Rubric.create(), key: 'secret' } as any;
     const written = await Workbook.update(workbook, rubric);
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
@@ -97,6 +71,7 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -142,10 +117,12 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
 
 test('assigns workbook and updates metadata', async ({ page }) => {
   const { dispose } = await setup(page, []);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
+
     const initial = { ...Rubric.create(), key: 'secret' };
     await Workbook.update(workbook, initial);
 
@@ -153,9 +130,9 @@ test('assigns workbook and updates metadata', async ({ page }) => {
       assignee: 'assignee@example.com',
       roster: ['assignee@example.com']
     };
+
     const final = await Workbook.assign(workbook, changes);
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
-
     return {
       assignee: final.assignment.assignee,
       stored: metadata?.assignment?.assignee ?? null,
@@ -166,16 +143,17 @@ test('assigns workbook and updates metadata', async ({ page }) => {
   expect(result.assignee).toBe('assignee@example.com');
   expect(result.stored).toBe('assignee@example.com');
   expect(result.signature).toBe(true);
-
   await dispose();
 });
 
 test('assign short-circuits when no fields changed', async ({ page }) => {
   const { dispose } = await setup(page, []);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
+
     const initial = { ...Rubric.create(), key: 'secret' };
     await Workbook.update(workbook, initial);
 
@@ -183,6 +161,7 @@ test('assign short-circuits when no fields changed', async ({ page }) => {
       assignee: 'test@example.com',
       roster: ['test@example.com']
     });
+
     const signature = assigned.assignment.signature;
     const unchanged = await Workbook.assign(workbook, {});
     return {
@@ -201,10 +180,12 @@ test('submits a workbook and sets cells to read-only', async ({ page }) => {
     { id: 'a', source: 'x = 1' },
     { id: 'b', source: 'y = 2' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
+
     const rubric = { ...Rubric.create(), key: 'secret' } as any;
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
@@ -234,10 +215,12 @@ test('drafts a submitted workbook, restores editability', async ({ page }) => {
     { id: 'a', source: 'x = 1' },
     { id: 'b', source: 'y = 2' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
+
     const rubric = { ...Rubric.create(), key: 'secret' } as any;
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);

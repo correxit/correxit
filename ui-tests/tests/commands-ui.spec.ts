@@ -1,42 +1,11 @@
 import { expect, test } from '@jupyterlab/galata';
+import { setup } from './utils';
 
 test.use({ autoGoto: false });
 
-async function setup(page: any, cells: { id: string; source: string }[]) {
-  await page.goto();
-
-  const name = await page.notebook.createNew();
-  expect(name).toBeTruthy();
-  await page.evaluate(
-    ({ cells }: { cells: { id: string; source: string }[] }) => {
-      const panel = (window as any).jupyterapp.shell.currentWidget;
-      const notebook = panel.context.model.sharedModel;
-      while (notebook.cells.length) {
-        notebook.deleteCell(0);
-      }
-      cells.forEach((cell, index) => {
-        notebook.insertCell(index, {
-          cell_type: 'code',
-          id: cell.id,
-          metadata: {},
-          source: cell.source
-        });
-      });
-    },
-    { cells }
-  );
-  return {
-    async dispose() {
-      await page.notebook.close(true);
-      if (name) {
-        await page.contents.deleteFile(name);
-      }
-    }
-  };
-}
-
 test('commands are disabled without a workbook rubric', async ({ page }) => {
   const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
   const result = await page.evaluate(() => {
     const app = (window as any).jupyterapp;
     return {
@@ -68,12 +37,12 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
     await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
-
     await app.commands.execute('correxit:add', {
       id: 'cell',
       is: 'comparable',
@@ -107,12 +76,12 @@ test('adds a correctable cell to the rubric', async ({ page }) => {
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'attempt' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
     await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
-
     await app.commands.execute('correxit:add', {
       id: 'cell',
       is: 'correctable',
@@ -142,10 +111,12 @@ test('removes a cell from the rubric', async ({ page }) => {
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -176,10 +147,12 @@ test('toggles shared flag on a rubric cell', async ({ page }) => {
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -210,10 +183,12 @@ test('sets a comment on a rubric cell', async ({ page }) => {
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -246,10 +221,12 @@ test('locks workbook and encrypts reference cells', async ({ page }) => {
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -287,10 +264,12 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -326,7 +305,6 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
       toggle: app.commands.isEnabled('correxit:toggle', { id: 'cell' }),
       unlock: app.commands.isEnabled('correxit:unlock')
     };
-
     return { unlocked, locked };
   });
 
@@ -345,12 +323,12 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
 
 test('assigns workbook and updates assignment metadata', async ({ page }) => {
   const { dispose } = await setup(page, []);
+
   const result = await page.evaluate(async () => {
     const { Rubric, Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
     await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
-
     await app.commands.execute('correxit:assign', {
       assignee: 'student@example.com',
       roster: ['student@example.com']
