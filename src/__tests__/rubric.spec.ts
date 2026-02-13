@@ -22,21 +22,6 @@ describe('Rubric', () => {
       header: { msg_type: 'execute_result' }
     }) as any;
 
-  const late = (
-    assignment: Rubric.Assignment,
-    timestamp: number | null = null
-  ): boolean => {
-    const { expiration, report } = assignment;
-    if (!expiration) {
-      return false;
-    }
-    const time = timestamp ?? report.date;
-    if (!time) {
-      return false;
-    }
-    return time > expiration;
-  };
-
   describe('Lifecycle & Manipulation', () => {
     it('locks and unlocks data symmetrically', async () => {
       const id = 'test-cell';
@@ -284,41 +269,6 @@ describe('Rubric', () => {
 
       expect(rubric.assignment.expiration).toBe(expiration);
       expect(rubric.assignment.submission).toBe(null);
-    });
-
-    it('detects late submissions via late()', async () => {
-      const expiration = Date.now();
-      const early = expiration - 1000;
-      const overdue = expiration + 1000;
-
-      // No expiration means never late
-      let rubric = await Rubric.assign(create(), {
-        assignee: '',
-        roster: ['assignee@example.com'],
-        expiration: null,
-        submission: null
-      });
-      expect(late(rubric.assignment, overdue)).toBe(false);
-
-      // Before deadline
-      rubric = await Rubric.assign(create(), {
-        assignee: '',
-        roster: ['assignee@example.com'],
-        expiration,
-        submission: null
-      });
-      let report = { ...rubric.assignment.report, date: early };
-      rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
-      expect(late(rubric.assignment)).toBe(false);
-
-      // After deadline (late)
-      report = { ...rubric.assignment.report, date: overdue };
-      rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
-      expect(late(rubric.assignment)).toBe(true);
-
-      // Can check specific timestamp
-      expect(late(rubric.assignment, early)).toBe(false);
-      expect(late(rubric.assignment, overdue)).toBe(true);
     });
 
     it('submits a locked rubric with confirmation', async () => {
