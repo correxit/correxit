@@ -481,8 +481,8 @@ export function addCommands(
     isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
-      const { workbook } = await reify(args);
-      if (!workbook) {
+      const { rubric, workbook } = await reify(args);
+      if (!workbook || !rubric) {
         return;
       }
       const title = trans.__('Submit assignment');
@@ -501,7 +501,8 @@ export function addCommands(
         return;
       }
       try {
-        const confirmation = await submitter(workbook);
+        const identifier = Rubric.Assignment.identifier(rubric);
+        const confirmation = await submitter(workbook, identifier);
         await submit(workbook, confirmation);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {

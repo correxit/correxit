@@ -83,12 +83,13 @@ async function propagate({ consumer, log, rubric, workbook }: {
     const { base, pwd } = location;
     for (const assignee of roster) {
       const notebook: INotebookContent = JSON.parse(JSON.stringify(template));
+      const identifier = { ...Rubric.Assignment.identifier(rubric), assignee};
       const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
       const path = PathExt.join(pwd, file);
       await log({ type: 'separator', slots: [] });
       await reassign({ assignee, key, notebook, roster });
       await log({ type: 'assigned', slots: [assignee] });
-      yield { assignee, assignment: rubric.id, notebook, path };
+      yield { ...identifier, notebook, path };
     }
   }
   const stream = async (location: { base: string; pwd: string }) =>

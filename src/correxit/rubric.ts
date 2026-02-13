@@ -225,6 +225,24 @@ export namespace Rubric {
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
   export namespace Assignment {
+    /**
+     * A type for plugins to identify an assignment/assignee match.
+     */
+    export type Identifier = {
+      /**
+       * The assignee (typically an email address).
+       */
+      assignee: string;
+
+      /**
+       * The workbook/assignment id, i.e. the rubric id of the workbook.
+       */
+      assignment: string;
+    }
+
+    /**
+     * A score report for an assignment.
+     */
     export type Report = Readonly<{
       date: number | null;
       order: string[];
@@ -240,6 +258,11 @@ export namespace Rubric {
       signature: '',
       submission: null
     };
+
+    export function identifier(rubric: Rubric): Identifier {
+      const { assignment: { assignee }, id: assignment } = rubric;
+      return { assignee, assignment };
+    }
 
     /**
      * @param id - if the cell is not specified, all cells are scored.

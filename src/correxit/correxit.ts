@@ -34,17 +34,7 @@ export namespace Correxit {
     Promise<AsyncIterable<Propagator.Notebook>>;
 
   export namespace Propagator {
-    export type Notebook = {
-      /**
-       * The assignee (typically an email address).
-       */
-      assignee: string;
-
-      /**
-       * The assignment id, i.e. the rubric id of the workbook.
-       */
-      assignment: string;
-
+    export type Notebook = Rubric.Assignment.Identifier & {
       /**
        * The raw notebook content JSON.
        */
@@ -69,7 +59,10 @@ export namespace Correxit {
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
 
-  export type Submitter = (workbook: Workbook) => Promise<string | null>;
+  export type Submitter = (
+    workbook: Workbook,
+    identifier: Rubric.Assignment.Identifier
+  ) => Promise<string | null>;
 
   export type Unlocker = {
     /**
