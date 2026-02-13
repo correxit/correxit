@@ -1,16 +1,14 @@
 import { expect, test } from '@jupyterlab/galata';
 
-type Input = { id: string; source: string };
-
 test.use({ autoGoto: false });
 
-async function setup(page: any, cells: Input[]) {
+async function setup(page: any, cells: { id: string; source: string }[]) {
   await page.goto();
 
   const name = await page.notebook.createNew();
   expect(name).toBeTruthy();
   await page.evaluate(
-    ({ cells }: { cells: Input[] }) => {
+    ({ cells }: { cells: { id: string; source: string }[] }) => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
       const notebook = panel.context.model.sharedModel;
       while (notebook.cells.length) {
