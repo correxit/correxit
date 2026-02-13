@@ -473,7 +473,10 @@ export function addCommands(
   disposables.push(commands.addCommand(CommandIDs.submit, {
     isEnabled: () => {
       const rubric = open(state.workbook());
-      return !!rubric?.locked && !rubric.assignment.submission;
+      const locked = !!rubric?.locked;
+      const assigned = !!rubric?.assignment.assignee;
+      const submitted = !!rubric?.assignment.submission;
+      return locked && assigned && !submitted;
     },
     isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),

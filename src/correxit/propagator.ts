@@ -112,7 +112,7 @@ async function reassign({ assignee, key, notebook, roster }: {
   const { sign } = Rubric.Assignment;
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked;
   const { roster: encrypted, ...assignment } = metadata.assignment;
-  const signature = await sign({ ...assignment, roster }, key);
+  const signature = await sign({ ...assignment, assignee, roster }, key);
   (metadata as Rubric.Locked & { accessed: number }).accessed = Date.now();
   (metadata as Rubric.Locked & { assignment: Rubric.Assignment }).assignment =
     { ...assignment, assignee, roster: encrypted, signature };

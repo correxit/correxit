@@ -41,6 +41,7 @@ export const Assignment: React.FC<{
       ) : (
         <Roster {...{ assignment, locked, registered, toggle, trans }} />
       )}
+      <Expiration {...{ assignment, locked, toggle, trans }} />
       {!locked && <Propagate {...{ accessed, commands, trans }} />}
     </div>
   );
@@ -91,6 +92,62 @@ const Assignee: React.FC<{
             <option {...{ key, value }}>{value}</option>
           ))}
         </select>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Converts epoch milliseconds to a `datetime-local` input value.
+ */
+const localize = (epoch: number): string => {
+  const date = new Date(epoch);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d}T${h}:${min}`;
+};
+
+const Expiration: React.FC<{
+  assignment: Assignment;
+  locked: boolean;
+  toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
+  trans: TranslationBundle;
+}> = ({ assignment, locked, toggle, trans }) => {
+  const { expiration } = assignment;
+  const className =
+    expiration !== null && Date.now() > expiration
+      ? 'correxit-assignment-expiration cxt-mod-expired'
+      : 'correxit-assignment-expiration';
+  if (locked) {
+    const label = expiration
+      ? trans.__('Due %1', new Date(expiration).toLocaleString())
+      : trans.__('No deadline');
+    return (
+      <div className={className}>
+        <div className="correxit-monospace">{label}</div>
+      </div>
+    );
+  }
+  const update = (value: string) => {
+    const epoch = value ? new Date(value).getTime() : null;
+    toggle('assignee', { ...assignment, expiration: epoch });
+  };
+  return (
+    <div className={className}>
+      <div>
+        <label htmlFor="correxit-assignment-expiration">
+          {trans.__('Deadline')}
+        </label>
+        <input
+          id="correxit-assignment-expiration"
+          name="correxit-assignment-expiration"
+          onChange={({ target: { value } }) => update(value)}
+          type="datetime-local"
+          value={expiration ? localize(expiration) : ''}
+        />
       </div>
     </div>
   );

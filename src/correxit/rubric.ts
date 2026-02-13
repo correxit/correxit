@@ -275,10 +275,12 @@ export namespace Rubric {
     }
 
     export async function sign(
-      assignment: Omit<Assignment, 'confirmation' | 'signature' | 'submission'>,
+      { assignee, expiration, report: { order, scores }, roster }:
+        Omit<Assignment, 'confirmation' | 'signature' | 'submission'>,
       key: string
     ): Promise<string> {
-      const { assignee, expiration, report, roster } = assignment;
+      const entries = order.map(id => [id, scores[id]]);
+      const report = { order, scores: Object.fromEntries(entries) };
       const unsigned = { assignee, expiration, report, roster };
       return security.digest(JSON.stringify(unsigned).concat(key));
     }
