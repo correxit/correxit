@@ -302,13 +302,6 @@ export namespace Rubric {
       return ordered.reduce(sum, Score.UNSCORED);
     }
 
-    /**
-     * @returns whether the current time is after an assignment's expiration.
-     */
-    export function expired({ expiration }: Pick<Assignment, 'expiration'>) {
-      return expiration ? Date.now() > expiration : false;
-    }
-
     export async function validate(
       { assignment, key }: Pick<Unlocked, 'assignment' | 'key'>
     ) {

@@ -321,38 +321,6 @@ describe('Rubric', () => {
       expect(late(rubric.assignment, overdue)).toBe(true);
     });
 
-    it('detects expiration via expired()', async () => {
-      const { expired } = Rubric.Assignment;
-      const now = Date.now();
-
-      // No expiration means never expired
-      let rubric = await Rubric.assign(create(), {
-        assignee: '',
-        roster: ['assignee@example.com'],
-        expiration: null,
-        submission: null
-      });
-      expect(expired(rubric.assignment)).toBe(false);
-
-      // Set expiration in the past
-      rubric = await Rubric.assign(create(), {
-        assignee: '',
-        roster: ['assignee@example.com'],
-        expiration: now - 1000,
-        submission: null
-      });
-      expect(expired(rubric.assignment)).toBe(true);
-
-      // Set expiration in the future
-      rubric = await Rubric.assign(create(), {
-        assignee: '',
-        roster: ['assignee@example.com'],
-        expiration: now + 10000,
-        submission: null
-      });
-      expect(expired(rubric.assignment)).toBe(false);
-    });
-
     it('submits a locked rubric with confirmation', async () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
