@@ -230,9 +230,9 @@ export namespace Rubric {
      */
     export type Identifier = {
       /**
-       * The assignee (typically an email address).
+       * The assignee (typically an email address) or `null` if unassigned.
        */
-      assignee: string;
+      assignee: string | null;
 
       /**
        * The workbook/assignment id, i.e. the rubric id of the workbook.
@@ -261,7 +261,7 @@ export namespace Rubric {
 
     export function identifier(rubric: Rubric): Identifier {
       const { assignment: { assignee }, id: assignment } = rubric;
-      return { assignee, assignment };
+      return { assignee: assignee || null, assignment };
     }
 
     /**

@@ -188,7 +188,8 @@ export function addCommands(
         return;
       }
 
-      const roster = await registrar(workbook) || args.roster;
+      const identifier = Rubric.Assignment.identifier(rubric);
+      const roster = await registrar(workbook, identifier) || args.roster;
       await assign(workbook, { ...args, roster });
     }
   }));
@@ -406,12 +407,17 @@ export function addCommands(
   }));
   disposables.push(commands.addCommand(CommandIDs.registrar, {
     execute: async (args: Partial<Credentials>): Promise<string[] | null> => {
-      const { workbook } = await reify(args);
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || !workbook) {
+        return null;
+      }
+
       const warn = (error: any) => {
         console.warn('registrar failed for workbook', workbook, error);
         return [];
       };
-      return workbook && await registrar(workbook).catch(warn);
+      const identifier = Rubric.Assignment.identifier(rubric);
+      return workbook && await registrar(workbook, identifier).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {

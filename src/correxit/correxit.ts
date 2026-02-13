@@ -50,7 +50,10 @@ export namespace Correxit {
   /**
    * A registrar that provides an immutable roster for a workbook.
    */
-  export type Registrar = (workbook: Workbook) => Promise<string[] | null>;
+  export type Registrar = (
+    workbook: Workbook,
+    identifier: Rubric.Assignment.Identifier
+  ) => Promise<string[] | null>;
 
   export type Scheduler = (workbook: Workbook | null) => void;
 
