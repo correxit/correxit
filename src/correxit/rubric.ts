@@ -427,6 +427,9 @@ export namespace Rubric {
     return { accessed, assignment, cells: {}, id, locked: false };
   }
 
+  /**
+   * @returns a locked rubric with null assignment submission and confirmation.
+   */
   export function draft(rubric: Locked): Locked {
     const confirmation = null;
     const submission = null;
@@ -451,8 +454,8 @@ export namespace Rubric {
     }
     if (deep) {
       const reference = id;
-      const all = Object.keys(rubric.cells);
-      return !!find(all, id => rubric.cells[id].reference?.[0] === reference);
+      const entries = Object.entries(rubric.cells);
+      return !!find(entries, ([, cell]) => cell.reference?.[0] === reference);
     }
     return false;
   }
