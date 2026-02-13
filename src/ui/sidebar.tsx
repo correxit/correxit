@@ -58,7 +58,7 @@ const Header: React.FC<{
     return (
       <section className="correxit-sidebar-header">
         <div className="correxit-sidebar-inner-header">
-          <h4>{trans.__('@quantstack/correxit: idle')}</h4>
+          <h4>{trans.__('correxit: idle')}</h4>
         </div>
       </section>
     );
@@ -69,7 +69,7 @@ const Header: React.FC<{
     ? Rubric.Assignment.summary(rubric.assignment.report)
     : null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
-  const idle = trans.__('@quantstack/correxit: idle');
+  const idle = trans.__('correxit: idle');
   const subheading =
     score === null
       ? ''
