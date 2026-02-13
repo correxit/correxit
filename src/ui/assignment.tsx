@@ -97,17 +97,14 @@ const Assignee: React.FC<{
   );
 };
 
-/**
- * Converts epoch milliseconds to a `datetime-local` input value.
- */
-const localize = (epoch: number): string => {
-  const date = new Date(epoch);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const h = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${y}-${m}-${d}T${h}:${min}`;
+const format = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 const Expiration: React.FC<{
@@ -132,8 +129,8 @@ const Expiration: React.FC<{
     );
   }
   const update = (value: string) => {
-    const epoch = value ? new Date(value).getTime() : null;
-    toggle('assignee', { ...assignment, expiration: epoch });
+    const expiration = value ? new Date(value).getTime() : null;
+    toggle('assignee', { ...assignment, expiration });
   };
   return (
     <div className={className}>
@@ -146,7 +143,7 @@ const Expiration: React.FC<{
           name="correxit-assignment-expiration"
           onChange={({ target: { value } }) => update(value)}
           type="datetime-local"
-          value={expiration ? localize(expiration) : ''}
+          value={expiration ? format(expiration) : ''}
         />
       </div>
     </div>
