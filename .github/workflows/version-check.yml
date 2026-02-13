@@ -1,0 +1,13 @@
+name: Semantic Release Check
+on:
+  pull_request:
+    branches:
+      - '*'
+permissions: write-all
+jobs:
+  version-check:
+    uses: notebook-link/cluster-app-template/.github/workflows/reusable-version-check.yaml@main
+    with:
+      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_REF: ${{ github.head_ref }}
+    secrets: inherit

@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '*'
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  version-bump-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump-version-check.outputs.version }}
+      success: ${{ steps.bump-version-check.outputs.success }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Bump version
+        id: bump-version-check
+        uses: ./.github/actions/bump-version
+        with:
+          dry_run: 'true'
+          github_token: ${{ secrets.ADMIN_GITHUB_TOKEN }}
+
+  build-package-check:
+    if: github.event_name == 'pull_request' && needs.version-bump-check.outputs.success == 'true'
+    needs: [version-bump-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build package
+        run: |
+          set -eux
+          npm install
+          npm run build:prod
+          npm pack
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          path: 'notebook-link-correxit*.tgz'
+
+  version-bump:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump-version.outputs.version }}
+      success: ${{ steps.bump-version.outputs.success }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Bump version
+        id: bump-version
+        uses: ./.github/actions/bump-version
+        with:
+          github_token: ${{ secrets.ADMIN_GITHUB_TOKEN }}
+
+  publish:
+    needs: [version-bump]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version-bump.outputs.success == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Publish package
+        run: |
+          set -eux
+          npm ci
+          npm run build:prod
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          npm publish --access internal  #  Explicitly set public access.
+
+        env:
+          VERSION: ${{ needs.version-bump.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
