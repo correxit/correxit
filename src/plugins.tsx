@@ -238,33 +238,6 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   }))()
 };
 
-const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
-  Correxit.UNLOCKER,
-  token => ({
-    id: Correxit.UNLOCKER,
-    description: Correxit.DESCRIPTION.UNLOCKER,
-    autoStart: true,
-    provides: Correxit.Unlocker,
-    optional: [ISecretsManager, ITranslator],
-    ...((deactivator?: () => void) => ({
-      activate: (
-        _: JupyterFrontEnd,
-        manager: ISecretsManager | null,
-        translator: ITranslator | null
-      ) => {
-        const trans = (translator || nullTranslator).load('correxit');
-        const secrets = { manager, passphrases: new Set<string>(), token };
-        return {
-          store: (id: string, key: string) => Unlocker.store(id, key, secrets),
-          unlock: async (workbook, credentials) =>
-            Unlocker.unlock(workbook, credentials, secrets, trans)
-        } as Correxit.Unlocker;
-      },
-      deactivate: () => deactivator?.()
-    }))()
-  })
-);
-
 const ui: JupyterFrontEndPlugin<void> = {
   id: Correxit.UI,
   description: Correxit.DESCRIPTION.UI,
@@ -294,6 +267,33 @@ const ui: JupyterFrontEndPlugin<void> = {
     deactivate: () => deactivator?.()
   }))()
 };
+
+const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
+  Correxit.UNLOCKER,
+  token => ({
+    id: Correxit.UNLOCKER,
+    description: Correxit.DESCRIPTION.UNLOCKER,
+    autoStart: true,
+    provides: Correxit.Unlocker,
+    optional: [ISecretsManager, ITranslator],
+    ...((deactivator?: () => void) => ({
+      activate: (
+        _: JupyterFrontEnd,
+        manager: ISecretsManager | null,
+        translator: ITranslator | null
+      ) => {
+        const trans = (translator || nullTranslator).load('correxit');
+        const secrets = { manager, passphrases: new Set<string>(), token };
+        return {
+          store: (id: string, key: string) => Unlocker.store(id, key, secrets),
+          unlock: async (workbook, credentials) =>
+            Unlocker.unlock(workbook, credentials, secrets, trans)
+        } as Correxit.Unlocker;
+      },
+      deactivate: () => deactivator?.()
+    }))()
+  })
+);
 
 export const plugins = [
   consumer,
