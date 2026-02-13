@@ -36,9 +36,7 @@ async function setup(page: any, cells: { id: string; source: string }[]) {
 }
 
 test('commands are disabled without a workbook rubric', async ({ page }) => {
-  const { dispose } = await setup(page, [
-    { id: 'cell', source: 'x = 1' }
-  ]);
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
   const result = await page.evaluate(() => {
     const app = (window as any).jupyterapp;
     return {
