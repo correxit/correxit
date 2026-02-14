@@ -32,14 +32,14 @@ export class SidebarWidget extends ReactWidget {
     }
     this._workbook = workbook;
     if (workbook) {
-      const { model } = workbook.context;
-      model.sharedModel.metadataChanged.connect(this.update, this);
+      const notebook = workbook.context.model.sharedModel;
+      notebook.metadataChanged.connect(this.update, this);
       workbook.context.fileChanged.connect(this.update, this);
       workbook.content?.activeCellChanged.connect(this.update, this);
     }
     if (previous) {
-      const { model } = previous.context;
-      model.sharedModel.metadataChanged.disconnect(this.update, this);
+      const notebook = previous.context.model.sharedModel;
+      notebook.metadataChanged.disconnect(this.update, this);
       previous.context.fileChanged.disconnect(this.update, this);
       previous.content?.activeCellChanged.disconnect(this.update, this);
     }

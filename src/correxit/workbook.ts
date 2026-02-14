@@ -79,13 +79,13 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<void> {
-      const { model: { sharedModel } } = workbook.context;
-      const index = findIndex(sharedModel.cells, ({ id }) => id === reference);
+      const notebook = workbook.context.model.sharedModel;
+      const index = findIndex(notebook.cells, ({ id }) => id === reference);
       if (!key || index === -1) {
         throw new Error('decrypt error');
       }
 
-      const cell = sharedModel.cells[index];
+      const cell = notebook.cells[index];
       const decrypted = await security.decrypt(cell.getSource(), key);
       cell.transact(() => {
         const jupyter = (cell.getMetadata('jupyter') as any || {});
@@ -97,9 +97,9 @@ export namespace Workbook {
       });
 
       const code = { ...cell.toJSON(), cell_type: 'code' };
-      sharedModel.transact(() => {
-        sharedModel.deleteCell(index);
-        sharedModel.insertCell(index, code);
+      notebook.transact(() => {
+        notebook.deleteCell(index);
+        notebook.insertCell(index, code);
       }, false);
       if (workbook.content) {
         NotebookActions.deselectAll(workbook.content);
@@ -115,13 +115,13 @@ export namespace Workbook {
       reference: string,
       key: string
     ): Promise<void> {
-      const { model: { sharedModel } } = workbook.context;
-      const index = findIndex(sharedModel.cells, ({ id }) => id === reference);
+      const notebook = workbook.context.model.sharedModel;
+      const index = findIndex(notebook.cells, ({ id }) => id === reference);
       if (!key || index === -1) {
         throw new Error('encrypt error');
       }
 
-      const cell = sharedModel.cells[index];
+      const cell = notebook.cells[index];
       const encrypted = await security.encrypt(cell.getSource(), key);
       cell.transact(() => {
         const jupyter = (cell.getMetadata('jupyter') || {}) as any;
@@ -132,9 +132,9 @@ export namespace Workbook {
       });
 
       const raw = { ...cell.toJSON(), cell_type: 'raw' };
-      sharedModel.transact(() => {
-        sharedModel.deleteCell(index);
-        sharedModel.insertCell(index, raw);
+      notebook.transact(() => {
+        notebook.deleteCell(index);
+        notebook.insertCell(index, raw);
       }, false);
       if (workbook.content) {
         NotebookActions.deselectAll(workbook.content);
@@ -143,17 +143,48 @@ export namespace Workbook {
   }
 
   const quiet = true;
+  const defrost = (workbook: Workbook) => {
+    const notebook = workbook.context.model.sharedModel;
+    for (const cell of notebook.cells) {
+      const jupyter = cell.getMetadata('jupyter') as any;
+      if (jupyter?.source_hidden) {
+        continue;
+      }
+      cell.transact(() => cell.deleteMetadata('editable'));
+    }
+  };
+  const freeze = (workbook: Workbook) => {
+    const notebook = workbook.context.model.sharedModel;
+    for (const cell of notebook.cells) {
+      cell.transact(() => cell.setMetadata('editable', false));
+    }
+  };
   const [get, set] = (pool => {
     const get = (workbook: Workbook) => pool.get(workbook) || null;
     const set = (workbook: Workbook, rubric: Rubric | null) =>
       pool.set(workbook, rubric).has(workbook);
     return [get, set];
   })(new WeakMap<Workbook, Rubric | null>());
-  const metadata = (workbook: Workbook, metadata: any) => {
-    if (get(workbook)?.locked === false) {
-      workbook.context.model.sharedModel.setMetadata('correxit', metadata);
-    }
-  };
+  const stale = (
+    assignment: Rubric.Assignment,
+    {
+      assignee = assignment.assignee,
+      confirmation = assignment.confirmation,
+      expiration = assignment.expiration,
+      submission = assignment.submission,
+      roster = assignment.roster,
+      signature = assignment.signature
+    }: Partial<Rubric.Assignment>
+  ): boolean => (
+    assignee !== assignment.assignee ||
+    confirmation !== assignment.confirmation ||
+    expiration !== assignment.expiration ||
+    submission !== assignment.submission ||
+    (roster !== assignment.roster &&
+      (roster.length !== assignment.roster.length ||
+        roster.some((record, i) => record !== assignment.roster[i]))) ||
+    signature !== assignment.signature
+  );
 
   /**
    * Add a cell to a workbook's rubric.
@@ -169,16 +200,30 @@ export namespace Workbook {
     return update(workbook, Rubric.add(rubric, cell));
   }
 
+  /**
+   * Update a workbook's assignment metadata.
+   *
+   * @param workbook - the workbook to update.
+   * @param assignment - the partial assignment data to apply.
+   *
+   * #### Notes
+   * Fields that are `undefined` in the `assignment` argument are ignored, i.e.,
+   * the existing values in the rubric are preserved.
+   *
+   * Fields that are `null` (where allowed, e.g. `expiration`) will explicitly
+   * clear the value in the rubric.
+   */
   export async function assign(
     workbook: Workbook,
-    { assignee, roster }: Partial<Rubric.Assignment> = {}
+    assignment: Partial<Rubric.Assignment> = {}
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
       throw new Error('assign error');
     }
-    const assigned = await Rubric.assign(rubric, assignee, roster || []);
-    return update(workbook, assigned);
+    return stale(rubric.assignment, assignment)
+      ? update(workbook, await Rubric.assign(rubric, assignment))
+      : rubric;
   }
 
   /**
@@ -195,11 +240,10 @@ export namespace Workbook {
       return { ok: true, pruned: [], rubric };
     }
 
+    const notebook = workbook.context.model.sharedModel;
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
-    const known = Object.fromEntries(
-      workbook.context.model.sharedModel.cells.map(cell =>
-        [cell.id, cell.cell_type === 'code' || cell.cell_type === 'raw']
-      )
+    const known = Object.fromEntries(notebook.cells.map(
+      ({ id, cell_type }) => [id, cell_type === 'code' || cell_type === 'raw'])
     );
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
@@ -330,6 +374,18 @@ export namespace Workbook {
   }
 
   /**
+   * Revert a submission to draft, restoring cell editability.
+   */
+  export async function draft(workbook: Workbook): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked || !rubric.assignment.submission) {
+      throw new Error('draft error');
+    }
+    defrost(workbook);
+    return update(workbook, Rubric.draft(rubric));
+  }
+
+  /**
    * Executes the code cells of a workbook.
    *
    * @param workbook - the workbook to run.
@@ -435,7 +491,8 @@ export namespace Workbook {
       return get(workbook);
     }
 
-    const metadata = workbook.context.model.sharedModel.getMetadata('correxit');
+    const notebook = workbook.context.model.sharedModel;
+    const metadata = notebook.getMetadata('correxit');
     try {
       if (!metadata) {
         throw Correxit.NO_CORREXIT_METADATA;
@@ -475,6 +532,21 @@ export namespace Workbook {
       throw new Error('reset error');
     }
     update(workbook, null);
+  }
+
+  /**
+   * Submit an assignment, locking all cells to read-only.
+   */
+  export async function submit(
+    workbook: Workbook,
+    confirmation: string | null = null
+  ): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked) {
+      throw new Error('submit error');
+    }
+    freeze(workbook);
+    return update(workbook, Rubric.submit(rubric, confirmation));
   }
 
   /**
@@ -538,20 +610,20 @@ export namespace Workbook {
   export async function update(
     workbook: Workbook,
     rubric: Rubric | null,
-    audited = Workbook.audit(workbook, rubric)
+    audited = audit(workbook, rubric)
   ): Promise<Rubric | null> {
-    const { sharedModel } = workbook.context.model;
-    set(workbook, null);
+    const notebook = workbook.context.model.sharedModel;
     if (!audited || !rubric) {
-      sharedModel.deleteMetadata('correxit');
-      sharedModel.clearUndoHistory();
+      set(workbook, null);
+      notebook.deleteMetadata('correxit');
+      notebook.clearUndoHistory();
       return null;
     }
     if (!audited.ok) {
       throw new Error(`update error: ${audited.error}`);
     }
     set(workbook, audited.rubric);
-    metadata(workbook, await Rubric.lock(audited.rubric));
+    notebook.setMetadata('correxit', await Rubric.lock(audited.rubric));
     return audited.rubric;
   }
 }

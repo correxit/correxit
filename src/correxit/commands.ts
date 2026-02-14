@@ -3,6 +3,7 @@ import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { ITranslator } from '@jupyterlab/translation';
 import { notebookIcon, saveIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '..';
@@ -19,6 +20,7 @@ export namespace CommandIDs {
   export const comment = 'correxit:comment';
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
+  export const draft = 'correxit:draft';
   export const emit = 'correxit:emit';
   export const fetch = 'correxit:fetch';
   export const lock = 'correxit:lock';
@@ -27,35 +29,36 @@ export namespace CommandIDs {
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
   export const save = 'correxit:save';
+  export const submit = 'correxit:submit';
   export const toggle = 'correxit:toggle';
   export const unlock = 'correxit:unlock';
 }
 
 type Assignment = Rubric.Assignment;
 type Cell = Rubric.Cell;
+type CellToolbar = Rubric.Cell.Toolbar;
 type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
-type CellToolbar = Rubric.Cell.Toolbar;
 
 const { get, has, size } = Rubric;
-const {
-  add, assign, comment, convert, correct, lock, remove, reset, toggle
-} = Workbook;
+const { add, assign, comment, convert, correct, draft } = Workbook;
+const { lock, remove, reset, submit, toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  dependencies: {
+  { consumer, registrar, scheduler, submitter, translator, unlocker }: {
     consumer: Correxit.Consumer;
     registrar: Correxit.Registrar;
-    schedule: (workbook: Workbook | null) => void;
-    trans: IRenderMime.TranslationBundle;
+    scheduler: Correxit.Scheduler;
+    submitter: Correxit.Submitter;
+    translator: ITranslator;
     unlocker: Correxit.Unlocker;
   }
 ) {
   const { commands } = app;
   const manager = app.serviceManager;
-  const { consumer, registrar, schedule, trans, unlocker } = dependencies;
+  const trans = translator.load('correxit');
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
@@ -77,9 +80,9 @@ export function addCommands(
     icon: ({ is }: Partial<Cell>) =>
       Rubric.Cell.types.some(type => is === type) ? Icons[is!] : void 0,
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
-      const cells = state.workbook()?.context.model.sharedModel.cells || [];
+      const notebook = state.workbook()?.context.model.sharedModel;
       const id = state.cell(args);
-      const cell = find(cells, cell => cell.id === id);
+      const cell = find(notebook?.cells || [], cell => cell.id === id);
       const reference = args.reference;
       const rubric = open(state.workbook());
       if (!cell || !rubric || rubric.locked || !id || id === reference?.[0]) {
@@ -185,18 +188,9 @@ export function addCommands(
         return;
       }
 
-      const registered = registrar && await registrar(workbook);
-      const assignment: Partial<Assignment> = {
-        assignee: args.assignee || undefined,
-        roster: registered || args.roster || []
-      };
-      const different = (a: Partial<Assignment>, b: Assignment) =>
-        // Normalize assignee here to ignore `undefined` mismatches.
-        JSON.stringify({ x: a.assignee || '', y: a.roster }) !==
-        JSON.stringify({ x: b.assignee || '', y: b.roster });
-      if (different(assignment, rubric.assignment)) {
-        await assign(workbook, assignment);
-      }
+      const identifier = Rubric.Assignment.identifier(rubric);
+      const roster = await registrar(workbook, identifier) || args.roster;
+      await assign(workbook, { ...args, roster });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
@@ -285,6 +279,36 @@ export function addCommands(
       }
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.draft, {
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!rubric?.locked && !!rubric.assignment.submission;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.draft),
+    label: trans.__('Revert to draft...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { workbook } = await reify(args);
+      if (!workbook) {
+        return;
+      }
+      const title = trans.__('Revert to draft');
+      const body = trans.__('Revert read-only submission to draft workbook?');
+      const buttons = [
+        Dialog.cancelButton({ label: trans.__('Cancel') }),
+        Dialog.okButton({ label: trans.__('Revert') })
+      ];
+      const { button } = await showDialog({ title, body, buttons });
+      if (!button.accept) {
+        return;
+      }
+      try {
+        await draft(workbook);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        void showErrorMessage(trans.__('Could not revert'), error as Error);
+      }
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.emit, {
     label: trans.__('Schedule one Correxit source emission'),
     execute: () => (fired => {
@@ -293,7 +317,7 @@ export function addCommands(
           return;
         }
         fired = true;
-        schedule(emission);
+        scheduler(emission);
       };
     })(false)
   }));
@@ -383,16 +407,17 @@ export function addCommands(
   }));
   disposables.push(commands.addCommand(CommandIDs.registrar, {
     execute: async (args: Partial<Credentials>): Promise<string[] | null> => {
-      if (!registrar) {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || !workbook) {
         return null;
       }
 
-      const { workbook } = await reify(args);
       const warn = (error: any) => {
         console.warn('registrar failed for workbook', workbook, error);
         return [];
       };
-      return workbook && await registrar(workbook).catch(warn);
+      const identifier = Rubric.Assignment.identifier(rubric);
+      return workbook && await registrar(workbook, identifier).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
@@ -442,11 +467,52 @@ export function addCommands(
         return;
       }
       if (args.undo === false) {
-        workbook.context.model.sharedModel.clearUndoHistory();
+        const notebook = workbook.context.model.sharedModel;
+        notebook.clearUndoHistory();
       }
       await workbook.context.save();
       if (commands.hasCommand(Corrector.CommandIDs.refresh)) {
         await commands.execute(Corrector.CommandIDs.refresh);
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.submit, {
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      const locked = !!rubric?.locked;
+      const assigned = !!rubric?.assignment.assignee;
+      const submitted = !!rubric?.assignment.submission;
+      return locked && assigned && !submitted;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.submit),
+    label: trans.__('Submit assignment...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!workbook || !rubric) {
+        return;
+      }
+      const title = trans.__('Submit assignment');
+      const body = trans.__(
+        'Submit assignment? This workbook will be set to read-only.'
+      );
+      const { button } = await showDialog({
+        title,
+        body,
+        buttons: [
+          Dialog.cancelButton({ label: trans.__('Cancel') }),
+          Dialog.okButton({ label: trans.__('Submit') })
+        ]
+      });
+      if (!button.accept) {
+        return;
+      }
+      try {
+        const identifier = Rubric.Assignment.identifier(rubric);
+        const confirmation = await submitter(workbook, identifier);
+        await submit(workbook, confirmation);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        void showErrorMessage(trans.__('Could not submit'), error as Error);
       }
     }
   }));

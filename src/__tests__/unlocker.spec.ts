@@ -55,19 +55,19 @@ describe('Unlocker', () => {
       id,
       locked: true,
       key: null,
-      secret: 'ENC[correct-key]:secret-content'
+      secret: 'ENC[valid-key]:secret-content'
     } as unknown as Rubric.Locked;
     unlocked = {
       ...locked,
       locked: false,
-      key: 'correct-key',
+      key: 'valid-key',
       secret: { cells: {} }
     } as unknown as Rubric.Unlocked;
     manager = { get: jest.fn(), set: jest.fn() } as any;
     (Workbook.open as jest.Mock).mockReturnValue(locked);
     (Workbook.unlock as jest.Mock).mockImplementation(async (_, key) => {
-      if (key === 'correct-key') return unlocked;
-      throw new Error('Invalid key');
+      if (key === 'valid-key') return unlocked;
+      throw new Error('invalid');
     });
   });
 
@@ -94,19 +94,21 @@ describe('Unlocker', () => {
     });
 
     it('uses the provided key first and skips secrets manager', async () => {
-      const result = await unlock({ key: 'correct-key' });
-      expect(Workbook.unlock).toHaveBeenCalledWith(workbook, 'correct-key');
+      const result = await unlock({ key: 'valid-key' });
+      expect(Workbook.unlock).toHaveBeenCalledWith(workbook, 'valid-key');
       expect(manager.get).not.toHaveBeenCalled();
       expect(result).toBe(unlocked);
     });
 
     it('unlocks when a passphrase is provided as an argument', async () => {
-      const passphrase = 'direct-pass';
+      const passphrase = 'direct';
       const expected = `KEY<${passphrase}:${id}>`;
-      (Workbook.unlock as jest.Mock).mockImplementation(async (_wb, key) => {
-        if (key === expected) return unlocked;
-        throw new Error('Invalid key');
-      });
+      (Workbook.unlock as jest.Mock).mockImplementation(
+        async (workbook, key) => {
+          if (key === expected) return unlocked;
+          throw new Error('invalid');
+        }
+      );
 
       const result = await unlock({ passphrase });
       expect(manager.get).toHaveBeenCalledWith(token, Correxit.UNLOCKER, id);
@@ -137,73 +139,79 @@ describe('Unlocker', () => {
       manager.get.mockResolvedValue({
         id,
         namespace: Correxit.UNLOCKER,
-        value: 'correct-key'
+        value: 'valid-key'
       });
 
       const result = await unlock();
       expect(manager.get).toHaveBeenCalledWith(token, Correxit.UNLOCKER, id);
-      expect(Workbook.unlock).toHaveBeenCalledWith(workbook, 'correct-key');
+      expect(Workbook.unlock).toHaveBeenCalledWith(workbook, 'valid-key');
       expect(result).toBe(unlocked);
     });
 
     it('uses cached passphrase if available', async () => {
-      const cached = 'cached-pass';
-      const expected = `KEY<cached-pass:${id}>`;
-      (Workbook.unlock as jest.Mock).mockImplementation(async (wb, key) => {
-        if (key === expected) return unlocked;
-        throw new Error('Invalid');
-      });
+      const passphrase = 'cached';
+      const expected = `KEY<${passphrase}:${id}>`;
+      (Workbook.unlock as jest.Mock).mockImplementation(
+        async (workbook, key) => {
+          if (key === expected) return unlocked;
+          throw new Error('invalid');
+        }
+      );
 
-      const result = await unlock(null, new Set([cached]));
-      expect(security.keygen).toHaveBeenCalledWith(cached, id);
+      const result = await unlock(null, new Set([passphrase]));
+      expect(security.keygen).toHaveBeenCalledWith(passphrase, id);
       expect(Workbook.unlock).toHaveBeenCalledWith(workbook, expected);
       expect(result).toBe(unlocked);
     });
 
     it('prompts user if no key or cache is available', async () => {
       manager.get.mockResolvedValue(undefined);
-      (input.text as jest.Mock).mockResolvedValue('my-passphrase');
+      (input.text as jest.Mock).mockResolvedValue('passphrase');
 
-      const expected = `KEY<my-passphrase:${id}>`;
-      (Workbook.unlock as jest.Mock).mockImplementation(async (wb, key) => {
-        if (key === expected) return unlocked;
-        throw new Error('Invalid');
-      });
+      const expected = `KEY<passphrase:${id}>`;
+      (Workbook.unlock as jest.Mock).mockImplementation(
+        async (workbook, key) => {
+          if (key === expected) return unlocked;
+          throw new Error('invalid');
+        }
+      );
 
       const result = await unlock();
       expect(input.text).toHaveBeenCalled();
-      expect(security.keygen).toHaveBeenCalledWith('my-passphrase', id);
+      expect(security.keygen).toHaveBeenCalledWith('passphrase', id);
       expect(Workbook.unlock).toHaveBeenCalledWith(workbook, expected);
       expect(result).toBe(unlocked);
     });
 
     it('caches and stores key in secrets manager after prompt', async () => {
       manager.get.mockResolvedValue(undefined);
-      (input.text as jest.Mock).mockResolvedValue('user-pass');
+      (input.text as jest.Mock).mockResolvedValue('passphrase');
       (Workbook.unlock as jest.Mock).mockResolvedValue(unlocked);
       const passphrases = new Set<string>();
       await unlock(null, passphrases);
-      expect(passphrases.has('user-pass')).toBe(true);
+      expect(passphrases.has('passphrase')).toBe(true);
       expect(manager.set).toHaveBeenCalledWith(
         token,
         Correxit.UNLOCKER,
         id,
         expect.objectContaining({
-          value: expect.stringContaining('KEY<user-pass')
+          value: expect.stringContaining('KEY<passphrase')
         })
       );
     });
 
     it('retries with prompt if provided key is incorrect', async () => {
-      const wrong = 'wrong-key';
-      (input.text as jest.Mock).mockResolvedValue('user-pass');
+      const wrong = 'wrong';
+      (input.text as jest.Mock).mockResolvedValue('passphrase');
 
-      const expected = `KEY<user-pass:${id}>`;
-      (Workbook.unlock as jest.Mock).mockImplementation(async (wb, key) => {
-        if (key === wrong) throw new Error('Bad key');
-        if (key === expected) return unlocked;
-        throw new Error('Unknown');
-      });
+      const expected = `KEY<passphrase:${id}>`;
+      (Workbook.unlock as jest.Mock).mockImplementation(
+        async (workbook, key) => {
+          if (key === wrong) throw new Error('invalid');
+          if (key === expected) return unlocked;
+          throw new Error('unknown');
+        }
+      );
 
       const result = await unlock({ key: wrong });
       expect(Workbook.unlock).toHaveBeenCalledTimes(2);

@@ -18,14 +18,6 @@
   font-size: var(--jp-ui-font-size1);
 }
 
-.correxit-sidebar-cell-report {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  margin: 2px 20px 8px;
-}
-
 .correxit-sidebar > section {
   padding: 5px;
 }
@@ -57,6 +49,14 @@
   white-space: nowrap;
 }
 
+.correxit-sidebar-cell-report {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin: 2px 20px 8px;
+}
+
 .correxit-sidebar-cell-config {
   height: 21px;
   justify-content: center;
@@ -80,12 +80,12 @@
   margin-right: 5px;
 }
 
-.correxit-sidebar .correxit-inner-header .jp-ToolbarButtonComponent svg {
-  transform: scale(1.5);
-}
-
 .correxit-sidebar .jp-ToolbarButtonComponent.lm-mod-hidden {
   display: none;
+}
+
+.correxit-assignment-propagate .jp-ToolbarButtonComponent {
+  margin: 5px 0;
 }
 
 .correxit-sidebar-inner-header {
@@ -93,14 +93,10 @@
   justify-content: space-between;
   margin: 5px 15px;
   align-items: center;
-}
 
-.correxit-assignment-propagate .jp-ToolbarButtonComponent {
-  margin: 5px 0;
-}
-
-.correxit-sidebar-inner-header .jp-ToolbarButtonComponent:hover {
-  background-color: transparent;
+  .jp-ToolbarButtonComponent:hover {
+    background-color: transparent;
+  }
 }
 
 .correxit-sidebar p {
@@ -157,6 +153,26 @@
   select {
     height: 28px;
     margin-top: 3px;
+  }
+}
+
+.correxit-assignment-expiration.cxt-mod-expired {
+  color: var(--jp-warn-color0);
+}
+
+.correxit-assignment-expiration {
+  padding: 2px 0 2px 26px;
+
+  label {
+    display: inline-block;
+    font-size: var(--jp-ui-font-size0);
+    padding: 4px 0 2px;
+  }
+
+  input[type='datetime-local'] {
+    font-size: var(--jp-ui-font-size1);
+    height: 28px;
+    width: 95%;
   }
 }
 

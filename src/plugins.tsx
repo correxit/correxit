@@ -139,6 +139,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
   requires: [
     Correxit.Consumer,
     Correxit.Registrar,
+    Correxit.Submitter,
     Correxit.Unlocker,
     INotebookTracker
   ],
@@ -149,35 +150,39 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       app,
       consumer: Correxit.Consumer,
       registrar: Correxit.Registrar,
+      submitter: Correxit.Submitter,
       unlocker: Correxit.Unlocker,
       tracker: INotebookTracker,
       translator: ITranslator | null
     ): Correxit.Source => {
+      translator ||= nullTranslator;
+
       const { commands, shell } = app;
+      const { CommandIDs } = Correxit;
+      const notify = () => {
+        // The sidebar can rely on metadata changes, but the native toolbar
+        // buttons only change when their respective command has changed.
+        const { add, convert, correct, draft, lock, submit, toggle, unlock } =
+          CommandIDs;
+        const ui = [add, convert, correct, draft, lock, submit, toggle, unlock];
+        for (const command of ui) {
+          commands.notifyCommandChanged(command);
+        }
+      };
       const source = new Poll<Workbook | null>({
         auto: false,
         frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
         factory: async () => null
       });
-      const { CommandIDs } = Correxit;
       const { open } = Workbook;
       const quiet = true;
-      const notify = () => {
-        // The sidebar can rely on metadata changes, but the native toolbar
-        // buttons only change when their respective command has changed.
-        const { add, convert, correct, lock, toggle, unlock } = CommandIDs;
-        const buttons = [add, convert, correct, lock, toggle, unlock];
-        for (const command of buttons) {
-          commands.notifyCommandChanged(command);
-        }
-      };
       const subscribe = (prev: Workbook | null, next: Workbook | null) => {
         prev?.context.fileChanged.disconnect(notify);
         prev?.context.model.sharedModel.metadataChanged.disconnect(notify);
         next?.context.fileChanged.connect(notify);
         next?.context.model.sharedModel.metadataChanged.connect(notify);
       };
-      const schedule: (workbook: Workbook | null) => void = (
+      const scheduler: (workbook: Workbook | null) => void = (
         previous => workbook => {
           if (workbook !== source.state.payload) {
             void open(workbook, quiet);
@@ -189,14 +194,19 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
           }
         }
       )(null as Workbook | null);
-      const trans = (translator || nullTranslator).load('correxit');
-      const dependencies = { consumer, registrar, schedule, trans, unlocker };
-      const added = addCommands(app, dependencies);
+      const added = addCommands(app, {
+        consumer,
+        registrar,
+        scheduler,
+        submitter,
+        translator,
+        unlocker
+      });
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>
-          schedule(newValue instanceof NotebookPanel ? newValue : null),
+          scheduler(newValue instanceof NotebookPanel ? newValue : null),
         tracker: (_: unknown, workbook: Workbook.Headed | null) =>
-          schedule(workbook)
+          scheduler(workbook)
       };
       shell.currentChanged?.connect(slots.shell);
       tracker.currentChanged.connect(slots.tracker);
@@ -209,6 +219,50 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
         tracker.currentChanged.disconnect(slots.tracker);
       };
       return source;
+    },
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/**
+ * The default Correxit assignment submitter.
+ */
+const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
+  id: Correxit.SUBMITTER,
+  description: Correxit.DESCRIPTION.SUBMITTER,
+  autoStart: true,
+  ...((deactivator?: () => void) => ({
+    provides: Correxit.Submitter,
+    activate: (): Correxit.Submitter => async _ => null,
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+const ui: JupyterFrontEndPlugin<void> = {
+  id: Correxit.UI,
+  description: Correxit.DESCRIPTION.UI,
+  autoStart: true,
+  requires: [Correxit.Source],
+  optional: [ITranslator, ILayoutRestorer, ISettingRegistry],
+  ...((deactivator?: () => void) => ({
+    activate: (
+      { commands, shell },
+      source: Correxit.Source,
+      translator: ITranslator | null,
+      restorer: ILayoutRestorer | null,
+      registry: ISettingRegistry
+    ) => {
+      const settings = registry ? registry.load(Correxit.UI) : null;
+      const trans = (translator || nullTranslator).load('correxit');
+      const widget = new Sidebar.Widget({ commands, settings, source, trans });
+      widget.id = 'correxit-sidebar';
+      widget.title.caption = 'Correxit';
+      widget.title.icon = Correxit.Icons.correct;
+      shell.add(widget, 'right', {});
+      if (restorer) {
+        restorer.add(widget, widget.id);
+      }
+      deactivator = () => widget.dispose();
     },
     deactivate: () => deactivator?.()
   }))()
@@ -241,34 +295,12 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
   })
 );
 
-const ui: JupyterFrontEndPlugin<void> = {
-  id: Correxit.UI,
-  description: Correxit.DESCRIPTION.UI,
-  autoStart: true,
-  requires: [Correxit.Source],
-  optional: [ITranslator, ILayoutRestorer, ISettingRegistry],
-  ...((deactivator?: () => void) => ({
-    activate: (
-      { commands, shell },
-      source: Correxit.Source,
-      translator: ITranslator | null,
-      restorer: ILayoutRestorer | null,
-      registry: ISettingRegistry
-    ) => {
-      const settings = registry ? registry.load(Correxit.UI) : null;
-      const trans = (translator || nullTranslator).load('correxit');
-      const widget = new Sidebar.Widget({ commands, settings, source, trans });
-      widget.id = 'correxit-sidebar';
-      widget.title.caption = 'Correxit';
-      widget.title.icon = Correxit.Icons.correct;
-      shell.add(widget, 'right', {});
-      if (restorer) {
-        restorer.add(widget, widget.id);
-      }
-      deactivator = () => widget.dispose();
-    },
-    deactivate: () => deactivator?.()
-  }))()
-};
-
-export const plugins = [consumer, corrector, registrar, source, ui, unlocker];
+export const plugins = [
+  consumer,
+  corrector,
+  registrar,
+  source,
+  submitter,
+  ui,
+  unlocker
+];

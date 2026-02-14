@@ -91,11 +91,7 @@ async function attempt(
   workbook: Workbook,
   key: string
 ): Promise<Rubric.Unlocked | null> {
-  try {
-    return await Workbook.unlock(workbook, key);
-  } catch {
-    return null;
-  }
+  return await Workbook.unlock(workbook, key).catch(_ => null);
 }
 
 async function prompt(

@@ -34,17 +34,7 @@ export namespace Correxit {
     Promise<AsyncIterable<Propagator.Notebook>>;
 
   export namespace Propagator {
-    export type Notebook = {
-      /**
-       * The assignee (typically an email address).
-       */
-      assignee: string;
-
-      /**
-       * The assignment id, i.e. the rubric id of the workbook.
-       */
-      assignment: string;
-
+    export type Notebook = Rubric.Assignment.Identifier & {
       /**
        * The raw notebook content JSON.
        */
@@ -60,12 +50,22 @@ export namespace Correxit {
   /**
    * A registrar that provides an immutable roster for a workbook.
    */
-  export type Registrar = (workbook: Workbook) => Promise<string[] | null>;
+  export type Registrar = (
+    workbook: Workbook,
+    identifier: Rubric.Assignment.Identifier
+  ) => Promise<string[] | null>;
+
+  export type Scheduler = (workbook: Workbook | null) => void;
 
   /**
    * The core Correxit plugin registers commands and returns a workbook source.
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
+
+  export type Submitter = (
+    workbook: Workbook,
+    identifier: Rubric.Assignment.Identifier
+  ) => Promise<string | null>;
 
   export type Unlocker = {
     /**
@@ -95,6 +95,7 @@ export namespace Correxit {
     CORRECTOR: description.CORRECTOR,
     REGISTRAR: description.REGISTRAR,
     SOURCE: description.SOURCE,
+    SUBMITTER: description.SUBMITTER,
     UI: description.UI,
     UNLOCKER: description.UNLOCKER
   };
@@ -110,6 +111,10 @@ export namespace Correxit {
   export const SOURCE = 'correxit:source';
 
   export const Source = new Token<Source>(SOURCE);
+
+  export const SUBMITTER = 'correxit:submitter';
+
+  export const Submitter = new Token<Correxit.Submitter>(SUBMITTER);
 
   export const TOOLBARS = 'correxit:toolbars';
 
