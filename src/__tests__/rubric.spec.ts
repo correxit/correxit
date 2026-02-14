@@ -71,9 +71,9 @@ describe('Rubric', () => {
         payload: []
       });
       const report: Rubric.Assignment.Report = {
-        date: Date.now(),
         order: [id],
-        scores: { [id]: Rubric.Score.CORRECT }
+        scores: { [id]: Rubric.Score.CORRECT },
+        timestamp: Date.now()
       };
       const signed = await Rubric.sign(rubric, report);
       const removed = Rubric.remove(signed, id);
@@ -95,9 +95,9 @@ describe('Rubric', () => {
       });
 
       const report: Rubric.Assignment.Report = {
-        date: Date.now(),
         order: ['c1'],
-        scores: { c1: Rubric.Score.CORRECT }
+        scores: { c1: Rubric.Score.CORRECT },
+        timestamp: Date.now()
       };
       rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
 
@@ -478,7 +478,7 @@ describe('Rubric', () => {
   });
 
   describe('Rubric.Assignment', () => {
-    it('sets report.date when scoring', async () => {
+    it('sets report.timestamp when scoring', async () => {
       const payload = ['DIGEST<42>'];
       const add = (rubric: Rubric.Unlocked) =>
         Rubric.add(rubric, {
@@ -496,9 +496,9 @@ describe('Rubric', () => {
       const report = await Rubric.Assignment.score(rubric, outputs);
       const end = Date.now();
 
-      expect(report.date).not.toBeNull();
-      expect(report.date).toBeGreaterThanOrEqual(start);
-      expect(report.date).toBeLessThanOrEqual(end);
+      expect(report.timestamp).not.toBeNull();
+      expect(report.timestamp).toBeGreaterThanOrEqual(start);
+      expect(report.timestamp).toBeLessThanOrEqual(end);
     });
 
     it('scores multiple cells and generates a report', async () => {
@@ -697,13 +697,13 @@ describe('Rubric', () => {
       add('c2');
 
       const report: Rubric.Assignment.Report = {
-        date: null,
         order: ['c1', 'c2', 'ghost'],
         scores: {
           c1: Rubric.Score.CORRECT,
           c2: Rubric.Score.CORRECT,
           ghost: Rubric.Score.CORRECT
-        }
+        },
+        timestamp: null
       };
       rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
 
@@ -716,12 +716,12 @@ describe('Rubric', () => {
 
     it('summarizes a report correctly', () => {
       const report: Rubric.Assignment.Report = {
-        date: null,
         order: ['c1', 'c2'],
         scores: {
           c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
           c2: { ...Rubric.Score.INCORRECT, points: 0, possible: 10 }
-        }
+        },
+        timestamp: null
       };
       const summary = Rubric.Assignment.summary(report);
       expect(summary.points).toBe(5);
