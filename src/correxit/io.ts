@@ -25,23 +25,23 @@ export async function create(options: {
   const ext = '.ipynb';
   const path = PathExt.dirname(options.path);
   const type = 'notebook';
-try {
-  const untitled = await contents.newUntitled({ ext, path, type });
-  const renamed = await contents.rename(untitled.path, options.path);
-  const context = new Context({ factory, manager, path: renamed.path });
   try {
-    await context.initialize(true);
-    await context.ready;
-    context.model.sharedModel.fromJSON(notebook);
-    await context.save();
-    return true;
-  } finally {
-    context.dispose();
+    const untitled = await contents.newUntitled({ ext, path, type });
+    const renamed = await contents.rename(untitled.path, options.path);
+    const context = new Context({ factory, manager, path: renamed.path });
+    try {
+      await context.initialize(true);
+      await context.ready;
+      context.model.sharedModel.fromJSON(notebook);
+      await context.save();
+      return true;
+    } finally {
+      context.dispose();
+    }
+  } catch (error) {
+    console.warn('create error', error);
+    return false;
   }
-} catch (error) {
-  console.warn('create error', error);
-  return false;
-}
 }
 
 export async function folder(
@@ -82,7 +82,7 @@ export async function request(
   manager: ServiceManager.IManager,
   unlocker: Correxit.Unlocker
 ): Promise<Workbook.Headless | null> {
-  const { path } = handle;
+  const { key, passphrase, path, unlock } = handle;
   const context = new Context({ manager, factory, path });
   const workbook = { content: null, context };
   await context.initialize(false);
@@ -92,7 +92,7 @@ export async function request(
     context.dispose();
     return null;
   }
-  if (!rubric.locked || handle.unlock === false || !(handle.unlock || handle.key)) {
+  if (!rubric.locked || !(key || passphrase || unlock)) {
     await Workbook.lock(workbook);
     return workbook;
   }
