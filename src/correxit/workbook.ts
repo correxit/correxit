@@ -227,6 +227,16 @@ export namespace Workbook {
   }
 
   /**
+   * Certify a workbook: correct, lock, and freeze.
+   */
+  export async function certify(workbook: Workbook): Promise<Grade> {
+    const grade = await correct(workbook);
+    await lock(workbook);
+    freeze(workbook);
+    return { ...grade, path: workbook.context.path };
+  }
+
+  /**
    * Audits a workbook's rubric, prunes unknown or invalid cells. Never throws.
    *
    * #### Notes

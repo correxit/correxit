@@ -7,7 +7,7 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
 import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
-import { Correxit, Workbook } from '..';
+import { Correxit, Rubric, Workbook } from '..';
 import { Corrector } from '.';
 
 export namespace CommandIDs {
@@ -26,6 +26,7 @@ export function addCommands(
   app: JupyterFrontEnd,
   dependencies: {
     browser: IDefaultFileBrowser | null;
+    collector: Correxit.Collector;
     documents: IDocumentManager;
     tracker: WidgetTracker<Corrector.Widget>;
     trans: IRenderMime.TranslationBundle;
@@ -34,9 +35,8 @@ export function addCommands(
 ) {
   const { commands, shell } = app;
   const manager = app.serviceManager;
-  const { browser, tracker, tree } = dependencies;
+  const { browser, collector, tracker, trans, tree } = dependencies;
   const { batch, cd, launch, refresh, scan } = CommandIDs;
-  const { trans } = dependencies;
   const fetch = (handle: Credentials) =>
     commands.execute(Correxit.CommandIDs.fetch, handle);
   const { normalize } = Workbook.Credentials;
@@ -46,18 +46,30 @@ export function addCommands(
     commands.addCommand(batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
-        args: Partial<Credentials>
-      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> =>
-        (async function* (handle) {
-          const { correct } = Workbook;
-          const credentials = handle.key ? handle : { ...handle, unlock: true };
+        args: Partial<Credentials & { certify: boolean }>
+      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
+        const seal = args.certify;
+        const handle = normalize(args) || ({} as Partial<Workbook.Credentials>);
+        const { certify, correct, open } = Workbook;
+        const credentials = handle.key ? handle : { ...handle, unlock: true };
+        const grader = async function* () {
           const workbooks = await commands.execute(scan, credentials);
           for await (const workbook of workbooks as AsyncGenerator<Headless>) {
             const { path } = workbook.context;
-            const grade = { ...(await correct(workbook)), path };
-            yield [path, { grade, workbook }];
+            const grade = seal
+              ? await certify(workbook)
+              : { ...(await correct(workbook)), path };
+            const rubric = open(workbook, true)!;
+            const identifier = Rubric.Assignment.identifier(rubric);
+            yield { grade, identifier, workbook };
           }
-        })(normalize(args) || ({} as Partial<Workbook.Credentials>))
+        };
+        return (async function* (grades) {
+          for await (const { grade, workbook } of grades) {
+            yield [grade.path, { grade, workbook: workbook as Headless }];
+          }
+        })(seal ? collector(grader()) : grader());
+      }
     })
   );
   disposables.push(

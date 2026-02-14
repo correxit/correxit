@@ -6,6 +6,21 @@ import * as description from './description';
 import { Icons as ICONS } from './icons';
 
 export namespace Correxit {
+  /**
+   * A collector of certified workbook grades.
+   */
+  export type Collector = (
+    grades: AsyncIterable<Collector.Certified> | Iterable<Collector.Certified>
+  ) => AsyncGenerator<Collector.Certified>;
+
+  export namespace Collector {
+    export type Certified = {
+      grade: Workbook.Grade;
+      identifier: Rubric.Assignment.Identifier;
+      workbook: Workbook;
+    };
+  }
+
   export type Consumer = (output: {
     log: Emitter.Log;
     path: string;
@@ -37,15 +52,9 @@ export namespace Correxit {
     Promise<AsyncIterable<Propagator.Notebook>>;
 
   export namespace Propagator {
-    export type Notebook = Rubric.Assignment.Identifier & {
-      /**
-       * The raw notebook content JSON.
-       */
+    export type Notebook = {
+      identifier: Rubric.Assignment.Identifier;
       notebook: INotebookContent;
-
-      /**
-       * The suggested file path a local consumer should write the content to.
-       */
       path: string;
     };
   }
@@ -85,6 +94,10 @@ export namespace Correxit {
     ): Promise<Rubric.Unlocked | null>;
   };
 
+  export const COLLECTOR = 'correxit:collector';
+
+  export const Collector = new Token<Collector>(COLLECTOR);
+
   export const CommandIDs = COMMAND_IDS;
 
   export const CONSUMER = 'correxit:consumer';
@@ -94,6 +107,7 @@ export namespace Correxit {
   export const CORRECTOR = 'correxit:corrector';
 
   export const DESCRIPTION = {
+    COLLECTOR: description.COLLECTOR,
     CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
     REGISTRAR: description.REGISTRAR,

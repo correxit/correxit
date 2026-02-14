@@ -17,6 +17,7 @@ import * as state from './state';
 export namespace CommandIDs {
   export const add = 'correxit:add';
   export const assign = 'correxit:assign';
+  export const certify = 'correxit:certify';
   export const comment = 'correxit:comment';
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
@@ -41,13 +42,14 @@ type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
 
 const { get, has, size } = Rubric;
-const { add, assign, comment, convert, correct, draft } = Workbook;
+const { add, assign, certify, comment, convert, correct, draft } = Workbook;
 const { lock, remove, reset, submit, toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  { consumer, registrar, scheduler, submitter, translator, unlocker }: {
+  { collector, consumer, registrar, scheduler, submitter, translator, unlocker }: {
+    collector: Correxit.Collector;
     consumer: Correxit.Consumer;
     registrar: Correxit.Registrar;
     scheduler: Correxit.Scheduler;
@@ -228,6 +230,27 @@ export function addCommands(
       if (passphrase) {
         await convert(workbook, passphrase, unlocker);
       }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.certify, {
+    icon: Icons.correct,
+    isEnabled: () => {
+      const workbook = state.workbook();
+      const rubric = open(workbook);
+      const headed = workbook && workbook.content;
+      return !!rubric && !rubric.locked && !!headed && size(rubric) > 0;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.certify),
+    label: trans.__('Certify workbook...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || !workbook || rubric.locked) {
+        return;
+      }
+
+      const grade = await certify(workbook);
+      const identifier = Rubric.Assignment.identifier(rubric);
+      return collector([{ grade, identifier, workbook }]);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.correct, {

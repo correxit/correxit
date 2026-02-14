@@ -89,7 +89,7 @@ async function propagate({ consumer, log, rubric, workbook }: {
       await log({ type: 'separator', slots: [] });
       await reassign({ assignee, key, notebook, roster });
       await log({ type: 'assigned', slots: [assignee] });
-      yield { ...identifier, notebook, path };
+      yield { identifier, notebook, path };
     }
   }
   const stream = async (location: { base: string; pwd: string }) =>

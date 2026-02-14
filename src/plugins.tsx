@@ -65,12 +65,30 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
 };
 
 /**
+ * The default (pass-through) Correxit grade collector.
+ */
+const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
+  id: Correxit.COLLECTOR,
+  description: Correxit.DESCRIPTION.COLLECTOR,
+  provides: Correxit.Collector,
+  ...((deactivator?: () => void) => ({
+    activate: (): Correxit.Collector =>
+      async function* (grades) {
+        for await (const grade of grades) {
+          yield grade;
+        }
+      },
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/**
  * The Correxit Corrector UI.
  */
 const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
   description: Correxit.DESCRIPTION.CORRECTOR,
-  requires: [IDocumentManager],
+  requires: [Correxit.Collector, IDocumentManager],
   optional: [
     IDefaultFileBrowser,
     ICommandPalette,
@@ -82,6 +100,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
   ...((deactivator?: () => void) => ({
     activate: (
       app: JupyterFrontEnd,
+      collector: Correxit.Collector,
       documents: IDocumentManager,
       browser: IDefaultFileBrowser | null,
       palette: ICommandPalette | null,
@@ -93,7 +112,14 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const { launch } = Corrector.CommandIDs;
-      const dependencies = { browser, documents, tracker, trans, tree };
+      const dependencies = {
+        browser,
+        collector,
+        documents,
+        tracker,
+        trans,
+        tree
+      };
       const added = Corrector.addCommands(app, dependencies);
       if (palette) {
         palette.addItem({ category: 'correxit', command: launch });
@@ -137,6 +163,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
   requires: [
+    Correxit.Collector,
     Correxit.Consumer,
     Correxit.Registrar,
     Correxit.Submitter,
@@ -148,6 +175,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
   ...((deactivator?: () => void) => ({
     activate: (
       app,
+      collector: Correxit.Collector,
       consumer: Correxit.Consumer,
       registrar: Correxit.Registrar,
       submitter: Correxit.Submitter,
@@ -195,6 +223,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
         }
       )(null as Workbook | null);
       const added = addCommands(app, {
+        collector,
         consumer,
         registrar,
         scheduler,
@@ -296,6 +325,7 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
 );
 
 export const plugins = [
+  collector,
   consumer,
   corrector,
   registrar,
