@@ -227,16 +227,6 @@ export namespace Workbook {
   }
 
   /**
-   * Certify a workbook: correct, lock, and freeze.
-   */
-  export async function certify(workbook: Workbook): Promise<Grade> {
-    const grade = await correct(workbook);
-    await lock(workbook);
-    freeze(workbook);
-    return { ...grade, path: workbook.context.path };
-  }
-
-  /**
    * Audits a workbook's rubric, prunes unknown or invalid cells. Never throws.
    *
    * #### Notes
@@ -274,6 +264,16 @@ export namespace Workbook {
       return { ok: true, pruned, rubric: modified };
     }
     return { ok: true, pruned: [], rubric };
+  }
+
+  /**
+   * Certify a workbook: correct, lock, and freeze.
+   */
+  export async function certify(workbook: Workbook): Promise<Grade> {
+    const grade = await correct(workbook);
+    await lock(workbook);
+    freeze(workbook);
+    return { ...grade, path: workbook.context.path };
   }
 
   /**
@@ -352,12 +352,10 @@ export namespace Workbook {
     if (!rubric || rubric.locked) {
       return null;
     }
-    const { report } = rubric.assignment;
-    const scores = {
-      ...report.scores,
-      [id]: { ...report.scores[id], comment }
-    };
-    return update(workbook, await Rubric.sign(rubric, { ...report, scores }));
+
+    const { report: kept } = rubric.assignment;
+    const scores = { ...kept.scores, [id]: { ...kept.scores[id], comment } };
+    return update(workbook, await Rubric.sign(rubric, { ...kept, scores }));
   }
 
   /**
@@ -369,9 +367,8 @@ export namespace Workbook {
       throw new Error(`decrypt error: ${audit.error}`);
     }
 
-    const { key, cells } = audit.rubric as Rubric.Unlocked;
-    for (const id in cells) {
-      const cell = cells[id];
+    const { cells, key } = audit.rubric as Rubric.Unlocked;
+    for (const [, cell] of Object.entries(cells)) {
       if (cell.shared) {
         continue;
       }

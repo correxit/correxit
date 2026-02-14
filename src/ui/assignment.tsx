@@ -213,7 +213,7 @@ const Propagate: React.FC<{
   const [timestamp, setTimestamp] = useState(accessed);
   const [log, done] = useCommand<Message>(commands, command, { timestamp });
   const messages = log
-    .filter(([_, { type }]) => type !== 'progress')
+    .filter(([, { type }]) => type !== 'progress')
     .map(([message]) => message);
   const [value, max]: [number, number] = log.reduce(
     (progress, [_, { type, slots }]) =>
