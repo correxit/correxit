@@ -418,6 +418,7 @@ export namespace Workbook {
     spec: KernelSpec.ISpecModel | null;
     outputs: Rubric.Outputs;
   } | null> {
+    const { execute } = Rubric.Cell;
     const { model: { cells } } = workbook.context;
     const position = (target: string) =>
       1 + findIndex(cells, ({ id }) => id === target);
@@ -436,7 +437,6 @@ export namespace Workbook {
       return null;
     }
 
-    const { execute } = Rubric.Cell;
     const [kernel, release] = leased;
     for (const index of range(cell ? scan(cell) : cells.length)) {
       const cell = cells.get(index);
@@ -449,7 +449,7 @@ export namespace Workbook {
       }
     }
     release();
-    return { spec: await kernel.spec || null, outputs };
+    return { outputs, spec: await kernel.spec || null };
   }
 
   /**

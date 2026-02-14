@@ -45,35 +45,33 @@ export async function create(options: {
 }
 
 export async function folder(
-  manager: ServiceManager.IManager,
+  { contents }: ServiceManager.IManager,
   pwd: string,
   seed: string
 ): Promise<string> {
-  const response = await manager.contents.get(pwd);
+  const response = await contents.get(pwd);
   if (response.type !== 'directory') {
     throw new Error(`not a folder(${pwd}, ${seed})`);
   }
-  const paths = (response.content as Contents.IModel[]).reduce(
-    (paths, { path }) => paths.set(path, null),
-    new Map<string, null>()
-  );
-  let suffix = 0;
-  let folder: string;
-  do {
-    folder = PathExt.join(pwd, `${seed}${suffix ? `-${suffix}` : ''}`);
-    suffix += 1;
-  } while (paths.has(folder));
-  return folder;
+
+  const paths = (response.content as Contents.IModel[]).map(({ path }) => path);
+  const parent = new Set(paths);
+  for (let suffix = 0; ; suffix++) {
+    const name = PathExt.join(pwd, suffix ? `${seed}-${suffix}` : seed);
+    if (parent.has(name)) {
+      continue;
+    }
+    return name;
+  }
 }
 
 export async function mkdir(
-  manager: ServiceManager.IManager,
+  { contents }: ServiceManager.IManager,
   pwd: string,
   path: string
 ) {
-  const type = 'directory';
-  const created = await manager.contents.newUntitled({ path: pwd, type });
-  return await manager.contents.rename(created.path, path);
+  const untitled = await contents.newUntitled({ path: pwd, type: 'directory' });
+  return await contents.rename(untitled.path, path);
 }
 
 export async function request(
