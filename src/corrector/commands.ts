@@ -55,12 +55,10 @@ export function addCommands(
           const workbooks = await commands.execute(scan, credentials);
           for await (const workbook of workbooks as AsyncGenerator<Headless>) {
             const { path } = workbook.context;
-            const grade = seal
-              ? await certify(workbook)
-              : { ...(await correct(workbook)), path };
+            const grade = await (seal ? certify(workbook) : correct(workbook));
             const rubric = open(workbook, true)!;
             const identifier = Rubric.Assignment.identifier(rubric);
-            yield { grade, identifier, workbook };
+            yield { grade: { ...grade, path }, identifier, workbook };
           }
         };
         return (async function* (grades) {

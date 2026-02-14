@@ -238,6 +238,11 @@ export namespace Rubric {
        * The workbook/assignment id, i.e. the rubric id of the workbook.
        */
       assignment: string;
+
+      /**
+       * The workbook/assignment signature as last saved by instructor.
+       */
+      signature: string | null;
     }
 
     /**
@@ -260,8 +265,10 @@ export namespace Rubric {
     };
 
     export function identifier(rubric: Rubric): Identifier {
-      const { assignment: { assignee }, id: assignment } = rubric;
-      return { assignee: assignee || null, assignment };
+      const assignee = rubric.assignment.assignee || null;
+      const assignment = rubric.id;
+      const signature = rubric.assignment.signature || null;
+      return { assignee, assignment, signature };
     }
 
     /**
