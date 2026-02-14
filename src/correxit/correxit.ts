@@ -24,6 +24,9 @@ export namespace Correxit {
      */
     export type Emission = { slots: (string | number)[]; type: string; };
 
+    /**
+     * A logging function wired for UI updates for clients to invoke.
+     */
     export type Log = (payload: Emitter.Emission) => Promise<void>;
   }
 
@@ -58,7 +61,7 @@ export namespace Correxit {
   export type Scheduler = (workbook: Workbook | null) => void;
 
   /**
-   * The core Correxit plugin registers commands and returns a workbook source.
+   * The Correxit source asynchronusly yields the active workbook or null.
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
 
