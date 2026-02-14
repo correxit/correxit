@@ -226,26 +226,6 @@ export namespace Rubric {
 
   export namespace Assignment {
     /**
-     * A type for plugins to identify an assignment/assignee match.
-     */
-    export type Identifier = {
-      /**
-       * The assignee (typically an email address) or `null` if unassigned.
-       */
-      assignee: string | null;
-
-      /**
-       * The workbook/assignment id, i.e. the rubric id of the workbook.
-       */
-      assignment: string;
-
-      /**
-       * The workbook/assignment signature as last saved by instructor.
-       */
-      signature: string | null;
-    }
-
-    /**
      * A score report for an assignment.
      */
     export type Report = Readonly<{
@@ -263,13 +243,6 @@ export namespace Rubric {
       signature: '',
       submission: null
     };
-
-    export function identifier(rubric: Rubric): Identifier {
-      const assignee = rubric.assignment.assignee || null;
-      const assignment = rubric.id;
-      const signature = rubric.assignment.signature || null;
-      return { assignee, assignment, signature };
-    }
 
     /**
      * @param id - if the cell is not specified, all cells are scored.

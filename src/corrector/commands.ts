@@ -7,7 +7,7 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
 import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
-import { Correxit, Rubric, Workbook } from '..';
+import { Correxit, Workbook } from '..';
 import { Corrector } from '.';
 
 export namespace CommandIDs {
@@ -49,15 +49,14 @@ export function addCommands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const seal = args.certify;
         const handle = normalize(args) || ({} as Partial<Workbook.Credentials>);
-        const { certify, correct, open } = Workbook;
+        const { certify, correct } = Workbook;
         const credentials = handle.key ? handle : { ...handle, unlock: true };
         const grader = async function* () {
           const workbooks = await commands.execute(scan, credentials);
           for await (const workbook of workbooks as AsyncGenerator<Headless>) {
             const { path } = workbook.context;
             const grade = await (seal ? certify(workbook) : correct(workbook));
-            const rubric = open(workbook, true)!;
-            const identifier = Rubric.Assignment.identifier(rubric);
+            const identifier = Workbook.identifier(workbook);
             yield { grade: { ...grade, path }, identifier, workbook };
           }
         };

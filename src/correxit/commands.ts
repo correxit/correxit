@@ -191,7 +191,7 @@ export function addCommands(
         return;
       }
 
-      const identifier = Rubric.Assignment.identifier(rubric);
+      const identifier = Workbook.identifier(workbook);
       const roster = await registrar(workbook, identifier) || args.roster;
       await assign(workbook, { ...args, roster });
     }
@@ -250,7 +250,7 @@ export function addCommands(
       }
 
       const grade = await certify(workbook);
-      const identifier = Rubric.Assignment.identifier(rubric);
+      const identifier = Workbook.identifier(workbook);
       return collector([{ grade, identifier, workbook }]);
     }
   }));
@@ -440,8 +440,8 @@ export function addCommands(
         console.warn('registrar failed for workbook', workbook, error);
         return [];
       };
-      const identifier = Rubric.Assignment.identifier(rubric);
-      return workbook && await registrar(workbook, identifier).catch(warn);
+      const identifier = Workbook.identifier(workbook);
+      return await registrar(workbook, identifier).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
@@ -531,7 +531,7 @@ export function addCommands(
         return;
       }
       try {
-        const identifier = Rubric.Assignment.identifier(rubric);
+        const identifier = Workbook.identifier(workbook);
         const confirmation = await submitter(workbook, identifier);
         await submit(workbook, confirmation);
         await commands.execute(CommandIDs.save, { ...args, undo: false });

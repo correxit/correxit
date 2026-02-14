@@ -69,6 +69,26 @@ export namespace Workbook {
     readonly context: DocumentRegistry.IContext<INotebookModel>;
   };
 
+  /**
+   * A type for plugins to identify an workbook/assignment/assignee match.
+   */
+  export type Identifier = {
+    /**
+     * The assignee (typically an email address) or `null` if unassigned.
+     */
+    assignee: string | null;
+
+    /**
+     * The workbook/assignment id, i.e. the rubric id of the workbook.
+     */
+    assignment: string;
+
+    /**
+     * The workbook/assignment signature as last saved by instructor.
+     */
+    signature: string | null;
+  }
+
   export namespace Cell {
     /**
      * Decrypts a workbook cell, modifying its source and changing its cell type
@@ -447,6 +467,17 @@ export namespace Workbook {
     }
     release();
     return { outputs, spec: await kernel.spec || null };
+  }
+
+  export function identifier(workbook: Workbook): Identifier {
+    const rubric = open(workbook, quiet);
+    if (!rubric) {
+      throw new Error('identifier error');
+    }
+    const assignee = rubric.assignment.assignee || null;
+    const assignment = rubric.id;
+    const signature = rubric.assignment.signature || null;
+    return { assignee, assignment, signature };
   }
 
   /**

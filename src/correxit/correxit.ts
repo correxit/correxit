@@ -16,7 +16,7 @@ export namespace Correxit {
   export namespace Collector {
     export type Certified = {
       grade: Workbook.Grade;
-      identifier: Rubric.Assignment.Identifier;
+      identifier: Workbook.Identifier;
       workbook: Workbook;
     };
   }
@@ -53,7 +53,7 @@ export namespace Correxit {
 
   export namespace Propagator {
     export type Notebook = {
-      identifier: Rubric.Assignment.Identifier;
+      identifier: Workbook.Identifier;
       notebook: INotebookContent;
       path: string;
     };
@@ -64,7 +64,7 @@ export namespace Correxit {
    */
   export type Registrar = (
     workbook: Workbook,
-    identifier: Rubric.Assignment.Identifier
+    identifier: Workbook.Identifier
   ) => Promise<string[] | null>;
 
   export type Scheduler = (workbook: Workbook | null) => void;
@@ -76,7 +76,7 @@ export namespace Correxit {
 
   export type Submitter = (
     workbook: Workbook,
-    identifier: Rubric.Assignment.Identifier
+    identifier: Workbook.Identifier
   ) => Promise<string | null>;
 
   export type Unlocker = {
