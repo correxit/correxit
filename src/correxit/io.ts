@@ -1,7 +1,7 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { Context } from '@jupyterlab/docregistry';
 import { INotebookContent } from '@jupyterlab/nbformat';
-import { INotebookModel, NotebookModelFactory } from '@jupyterlab/notebook';
+import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
@@ -21,27 +21,27 @@ export async function create(options: {
   notebook: INotebookContent;
   path: string;
 }): Promise<boolean> {
-  const { notebook, factory, manager } = options;
-  const { contents } = manager;
+  const { notebook, factory, manager, manager: { contents } } = options;
   const ext = '.ipynb';
   const path = PathExt.dirname(options.path);
   const type = 'notebook';
-  let context: Context<INotebookModel> | null = null;
+try {
+  const untitled = await contents.newUntitled({ ext, path, type });
+  const renamed = await contents.rename(untitled.path, options.path);
+  const context = new Context({ factory, manager, path: renamed.path });
   try {
-    const untitled = await contents.newUntitled({ ext, path, type });
-    const renamed = await contents.rename(untitled.path, options.path);
-    context = new Context({ manager, factory, path: renamed.path });
     await context.initialize(true);
     await context.ready;
     context.model.sharedModel.fromJSON(notebook);
     await context.save();
-    context.dispose();
     return true;
-  } catch (error) {
-    console.warn('create error', error);
+  } finally {
+    context.dispose();
   }
-  context?.dispose();
+} catch (error) {
+  console.warn('create error', error);
   return false;
+}
 }
 
 export async function folder(

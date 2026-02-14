@@ -33,8 +33,7 @@ export function addCommands(
     tree: INotebookTree | null;
   }
 ) {
-  const { commands, shell } = app;
-  const manager = app.serviceManager;
+  const { commands, serviceManager: manager, shell } = app;
   const { browser, collector, tracker, trans, tree } = dependencies;
   const { batch, cd, launch, refresh, scan } = CommandIDs;
   const fetch = (handle: Credentials) =>

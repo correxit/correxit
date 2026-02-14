@@ -48,7 +48,7 @@ const { normalize } = Workbook.Credentials;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  { collector, consumer, registrar, scheduler, submitter, translator, unlocker }: {
+  dependencies: {
     collector: Correxit.Collector;
     consumer: Correxit.Consumer;
     registrar: Correxit.Registrar;
@@ -58,8 +58,9 @@ export function addCommands(
     unlocker: Correxit.Unlocker;
   }
 ) {
-  const { commands } = app;
-  const manager = app.serviceManager;
+  const { commands, serviceManager: manager } = app;
+  const { collector, consumer, registrar } = dependencies;
+  const { scheduler, submitter, translator, unlocker } = dependencies;
   const trans = translator.load('correxit');
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
