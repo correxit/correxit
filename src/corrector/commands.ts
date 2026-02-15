@@ -48,7 +48,6 @@ export function addCommands(
       execute: (
         args: Partial<Credentials & { certify: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const seal = args.certify;
         const handle = normalize(args) || ({} as Partial<Workbook.Credentials>);
         const { certify, open } = Workbook;
         const credentials = handle.key ? handle : { ...handle, unlock: true };
@@ -62,14 +61,14 @@ export function addCommands(
         const grader = async function* () {
           const workbooks = await commands.execute(scan, credentials);
           for await (const workbook of workbooks as AsyncGenerator<Headless>) {
-            yield await (seal ? certify(workbook) : correct(workbook));
+            yield await (args.certify ? certify(workbook) : correct(workbook));
           }
         };
         return (async function* (grades) {
           for await (const { grade, workbook } of grades) {
             yield [grade.path, { grade, workbook: workbook as Headless }];
           }
-        })(seal ? collector(grader()) : grader());
+        })(args.certify ? collector(grader()) : grader());
       }
     })
   );
