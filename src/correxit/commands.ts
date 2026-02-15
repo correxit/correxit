@@ -199,15 +199,9 @@ export function addCommands(
   disposables.push(commands.addCommand(CommandIDs.certify, {
     icon: Icons.certify,
     isEnabled: () => {
-      const workbook = state.workbook();
-      const rubric = open(workbook);
-      if (!workbook || !rubric) {
-        return false;
-      }
-
-      const headed = !!workbook.content;
-      const assigned = !!rubric.assignment.assignee;
-      return headed && !rubric.locked && assigned && size(rubric) > 0;
+      const rubric = open(state.workbook());
+      const assigned = !!rubric?.assignment.assignee;
+      return assigned && !rubric.locked;
     },
     isVisible: () => commands.isEnabled(CommandIDs.certify),
     label: trans.__('Certify workbook...'),
