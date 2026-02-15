@@ -112,15 +112,8 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const { launch } = Corrector.CommandIDs;
-      const dependencies = {
-        browser,
-        collector,
-        documents,
-        tracker,
-        trans,
-        tree
-      };
-      const added = Corrector.addCommands(app, dependencies);
+      const utilities = { browser, collector, documents, tracker, trans, tree };
+      const added = Corrector.addCommands(app, utilities);
       if (palette) {
         palette.addItem({ category: 'correxit', command: launch });
       }

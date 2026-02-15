@@ -25,7 +25,7 @@ type Headless = Workbook.Headless;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  dependencies: {
+  utilities: {
     browser: IDefaultFileBrowser | null;
     collector: Correxit.Collector;
     documents: IDocumentManager;
@@ -35,7 +35,7 @@ export function addCommands(
   }
 ) {
   const { commands, serviceManager: manager, shell } = app;
-  const { browser, collector, tracker, trans, tree } = dependencies;
+  const { browser, collector, documents, tracker, trans, tree } = utilities;
   const { batch, cd, launch, refresh, scan } = CommandIDs;
   const fetch = (handle: Credentials) =>
     commands.execute(Correxit.CommandIDs.fetch, handle);
@@ -87,7 +87,7 @@ export function addCommands(
           const label = trans.__('Choose a directory for Correxit Corrector');
           const defaultPath = widget.path;
           const host = widget.node;
-          const manager = dependencies.documents;
+          const manager = documents;
           const options = { defaultPath, host, label, manager, title };
           const pending = await FileDialog.getExistingDirectory(options);
           path = pending.value?.[0].path;
