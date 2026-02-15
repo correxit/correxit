@@ -32,6 +32,13 @@ export namespace Workbook {
     export type Fail = { ok: false; error: string; rubric: Rubric | null; };
   }
 
+  export type Certified = {
+    grade: Workbook.Grade;
+    identifier: Workbook.Identifier;
+    timestamp: number;
+    workbook: Workbook;
+  };
+
   export type Credentials = |
     { path: string; unlock: null; key: null; passphrase: null; } |
     { path: string; unlock: null; key: string; passphrase: null; } |
@@ -289,9 +296,7 @@ export namespace Workbook {
   /**
    * Certify a workbook: correct, lock, and freeze.
    */
-  export async function certify(
-    workbook: Workbook
-  ): Promise<Correxit.Collector.Certified> {
+  export async function certify(workbook: Workbook): Promise<Certified> {
     const rubric = open(workbook, quiet);
     const certified = (workbook: Workbook) =>
       open(workbook)!.assignment.report.timestamp!;

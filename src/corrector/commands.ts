@@ -18,7 +18,7 @@ export namespace CommandIDs {
   export const scan = 'correxit-corrector:scan';
 }
 
-type Certified = Correxit.Collector.Certified;
+type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;

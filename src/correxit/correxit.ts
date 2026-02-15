@@ -10,17 +10,8 @@ export namespace Correxit {
    * A collector of certified workbook grades.
    */
   export type Collector = (
-    grades: AsyncIterable<Collector.Certified> | Iterable<Collector.Certified>
-  ) => AsyncGenerator<Collector.Certified>;
-
-  export namespace Collector {
-    export type Certified = {
-      grade: Workbook.Grade;
-      identifier: Workbook.Identifier;
-      timestamp: number;
-      workbook: Workbook;
-    };
-  }
+    grades: AsyncIterable<Workbook.Certified> | Iterable<Workbook.Certified>
+  ) => AsyncGenerator<Workbook.Certified>;
 
   export type Consumer = (output: {
     log: Emitter.Log;
