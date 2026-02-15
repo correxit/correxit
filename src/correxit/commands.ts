@@ -197,7 +197,7 @@ export function addCommands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.certify, {
-    icon: Icons.correct,
+    icon: Icons.certify,
     isEnabled: () => {
       const workbook = state.workbook();
       const rubric = open(workbook);

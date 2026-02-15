@@ -2,6 +2,7 @@ import { LabIcon } from '@jupyterlab/ui-components';
 import ANSWERABLE from '../../style/source/icons/answerable.svg';
 import ASSIGNEE from '../../style/source/icons/assignee.svg';
 import ASSIGNMENT from '../../style/source/icons/assignment.svg';
+import CERTIFY from '../../style/source/icons/certify.svg';
 import COMMENT from '../../style/source/icons/comment.svg';
 import COMPARABLE from '../../style/source/icons/comparable.svg';
 import CONVERT from '../../style/source/icons/convert.svg';
@@ -24,6 +25,8 @@ export namespace Icons {
     new LabIcon({ name: 'correxit:assignee', svgstr: ASSIGNEE });
   export const assignment =
     new LabIcon({ name: 'correxit:assignment', svgstr: ASSIGNMENT });
+  export const certify =
+    new LabIcon({ name: 'correxit:certify', svgstr: CERTIFY });
   export const comment =
     new LabIcon({ name: 'correxit:comment', svgstr: COMMENT });
   export const comparable =
