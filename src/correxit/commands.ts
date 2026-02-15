@@ -196,6 +196,29 @@ export function addCommands(
       await assign(workbook, { ...args, roster });
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.certify, {
+    icon: Icons.correct,
+    isEnabled: () => {
+      const workbook = state.workbook();
+      const rubric = open(workbook);
+      if (!workbook || !rubric) {
+        return false;
+      }
+
+      const headed = !!workbook.content;
+      const assigned = !!rubric.assignment.assignee;
+      return headed && !rubric.locked && assigned && size(rubric) > 0;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.certify),
+    label: trans.__('Certify workbook...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || !workbook || rubric.locked) {
+        return;
+      }
+      return collector([await certify(workbook)]);
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
     label: trans.__('Comment on cell'),
     execute: async (args: Partial<Cell> & { comment?: string; }) => {
@@ -231,24 +254,6 @@ export function addCommands(
       if (passphrase) {
         await convert(workbook, passphrase, unlocker);
       }
-    }
-  }));
-  disposables.push(commands.addCommand(CommandIDs.certify, {
-    icon: Icons.correct,
-    isEnabled: () => {
-      const workbook = state.workbook();
-      const rubric = open(workbook);
-      const headed = workbook && workbook.content;
-      return !!rubric && !rubric.locked && !!headed && size(rubric) > 0;
-    },
-    isVisible: () => commands.isEnabled(CommandIDs.certify),
-    label: trans.__('Certify workbook...'),
-    execute: async (args: Partial<Credentials>) => {
-      const { rubric, workbook } = await reify(args);
-      if (!rubric || !workbook || rubric.locked) {
-        return;
-      }
-      return collector([await certify(workbook)]);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.correct, {

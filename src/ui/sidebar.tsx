@@ -15,8 +15,9 @@ import { SidebarWidget } from './widget';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
+const { CommandIDs } = Correxit;
 const { get, has } = Rubric;
-const { add, comment, convert, correct, draft, lock } = Correxit.CommandIDs;
+const { add, certify, comment, convert, correct, draft, lock } = CommandIDs;
 const { remove, reset, submit, toggle, unlock } = Correxit.CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
@@ -89,6 +90,7 @@ const Header: React.FC<{
       <p>{subheading}</p>
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <CommandToolbarButtonComponent commands={commands} id={correct} />
+      <CommandToolbarButtonComponent commands={commands} id={certify} />
       <p>{submission}</p>
       <CommandToolbarButtonComponent commands={commands} id={submit} />
       <CommandToolbarButtonComponent commands={commands} id={draft} />
