@@ -4,8 +4,6 @@ import { setup } from './utils';
 test.use({ autoGoto: false });
 
 test('propagates assignment to individual notebooks', async ({ page }) => {
-  test.setTimeout(120000);
-
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'answer = 42' },
     { id: 'target', source: 'print(answer)' }

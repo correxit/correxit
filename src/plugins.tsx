@@ -155,8 +155,7 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
 };
 
 /**
- * The Correxit source plugin loads settings, adds commands, and provides an
- * async iterable workbook source that emits when the user changes tabs.
+ * The Correxit source asynchronously yields the active workbook or null.
  */
 const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,

@@ -86,11 +86,12 @@ export async function request(
   await context.initialize(false);
 
   const rubric = Workbook.open(workbook, true);
+  const unauthenticated = !(key || passphrase || unlock);
   if (!rubric) {
     context.dispose();
     return null;
   }
-  if (!rubric.locked || !(key || passphrase || unlock)) {
+  if (!rubric.locked || unlock === false || unauthenticated) {
     await Workbook.lock(workbook);
     return workbook;
   }

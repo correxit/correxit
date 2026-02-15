@@ -49,13 +49,13 @@ export function addCommands(
         args: Partial<Credentials & { certify: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const handle = normalize(args) || ({} as Partial<Workbook.Credentials>);
-        const { certify, open } = Workbook;
+        const { certify } = Workbook;
         const credentials = handle.key ? handle : { ...handle, unlock: true };
         const correct = async (workbook: Workbook): Promise<Certified> => {
           const corrected = await Workbook.correct(workbook);
           const grade = { ...corrected, path: workbook.context.path };
-          const timestamp = open(workbook)!.assignment.report.timestamp!;
           const identifier = Workbook.identifier(workbook);
+          const timestamp = Workbook.timestamp(workbook);
           return { grade, identifier, timestamp, workbook };
         };
         const grader = async function* () {

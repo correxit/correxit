@@ -210,7 +210,7 @@ export function addCommands(
       if (!rubric || rubric.locked || !rubric.assignment.assignee) {
         return;
       }
-      return collector([await certify(workbook)]);
+      await collector([await certify(workbook)]).next();
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {

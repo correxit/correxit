@@ -77,7 +77,7 @@ export namespace Workbook {
   };
 
   /**
-   * A type for plugins to identify an workbook/assignment/assignee match.
+   * A type for plugins to identify a workbook/assignment/assignee match.
    */
   export type Identifier = {
     /**
@@ -91,7 +91,7 @@ export namespace Workbook {
     assignment: string;
 
     /**
-     * The workbook/assignment signature as last saved by instructor.
+     * The workbook/assignment signature for the assignee/roster/report.
      */
     signature: string | null;
   }
@@ -298,18 +298,17 @@ export namespace Workbook {
    */
   export async function certify(workbook: Workbook): Promise<Certified> {
     const rubric = open(workbook, quiet);
-    const certified = (workbook: Workbook) =>
-      open(workbook)!.assignment.report.timestamp!;
     if (!rubric || rubric.locked) {
       throw new Error('certify error');
     }
 
     const corrected = await correct(workbook);
     const grade = { ...corrected, path: workbook.context.path };
-    const timestamp = certified(workbook);
+    const identifier = Workbook.identifier(workbook);
+    const timestamp = Workbook.timestamp(workbook);
     await lock(workbook);
     freeze(workbook);
-    return { grade, identifier: identifier(workbook), timestamp, workbook };
+    return { grade, identifier, timestamp, workbook };
   }
 
   /**
@@ -602,6 +601,22 @@ export namespace Workbook {
     freeze(workbook);
     return update(workbook, Rubric.submit(rubric, confirmation));
   }
+
+  /**
+   * @returns the timestamp recorded when the assignment was signed.
+   *
+   * #### Notes
+   * This function is only meant for use when a client expects a timestamp to
+   * exist. It will throw an error if it fails to find a timestamp.
+   */
+  export function timestamp(workbook: Workbook): number {
+    const rubric = open(workbook, quiet);
+    const timestamp = rubric?.assignment.report.timestamp;
+    if (!timestamp) {
+      throw new Error('timestamp error');
+    }
+    return timestamp;
+  };
 
   /**
    * Toggle a workbook cell's `shared` flag.

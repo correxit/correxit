@@ -62,7 +62,7 @@ export namespace Correxit {
   export type Scheduler = (workbook: Workbook | null) => void;
 
   /**
-   * The Correxit source asynchronusly yields the active workbook or null.
+   * The Correxit source asynchronously yields the active workbook or null.
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
 
