@@ -73,8 +73,8 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   provides: Correxit.Collector,
   ...((deactivator?: () => void) => ({
     activate: (): Correxit.Collector =>
-      async function* (certified) {
-        for await (const grade of certified) {
+      async function* (grades) {
+        for await (const grade of grades) {
           yield grade;
         }
       },

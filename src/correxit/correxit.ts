@@ -17,6 +17,7 @@ export namespace Correxit {
     export type Certified = {
       grade: Workbook.Grade;
       identifier: Workbook.Identifier;
+      timestamp: number;
       workbook: Workbook;
     };
   }

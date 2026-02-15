@@ -248,10 +248,7 @@ export function addCommands(
       if (!rubric || !workbook || rubric.locked) {
         return;
       }
-
-      const grade = await certify(workbook);
-      const identifier = Workbook.identifier(workbook);
-      return collector([{ grade, identifier, workbook }]);
+      return collector([await certify(workbook)]);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.correct, {

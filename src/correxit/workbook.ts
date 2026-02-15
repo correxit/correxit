@@ -289,11 +289,22 @@ export namespace Workbook {
   /**
    * Certify a workbook: correct, lock, and freeze.
    */
-  export async function certify(workbook: Workbook): Promise<Grade> {
-    const grade = await correct(workbook);
+  export async function certify(
+    workbook: Workbook
+  ): Promise<Correxit.Collector.Certified> {
+    const rubric = open(workbook, quiet);
+    const certified = (workbook: Workbook) =>
+      open(workbook)!.assignment.report.timestamp!;
+    if (!rubric || rubric.locked) {
+      throw new Error('certify error');
+    }
+
+    const corrected = await correct(workbook);
+    const grade = { ...corrected, path: workbook.context.path };
+    const timestamp = certified(workbook);
     await lock(workbook);
     freeze(workbook);
-    return { ...grade, path: workbook.context.path };
+    return { grade, identifier: identifier(workbook), timestamp, workbook };
   }
 
   /**
