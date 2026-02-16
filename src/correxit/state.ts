@@ -8,6 +8,11 @@ const footprint = 1000;
 
 /**
  * Caches a cell score in memory.
+ *
+ * #### Notes
+ * Enables UI components to display correction results (e.g., cell decorations)
+ * across re-renders and tab switches. For locked workbooks, this is the only
+ * storage mechanism since scores cannot be persisted to rubric metadata.
  */
 export function cache(workbook: Workbook, id: string, score: Rubric.Score) {
   const rubric = Workbook.open(workbook, true);
