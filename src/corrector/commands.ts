@@ -18,25 +18,25 @@ export namespace CommandIDs {
   export const scan = 'correxit-corrector:scan';
 }
 
+type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  dependencies: {
+  utilities: {
     browser: IDefaultFileBrowser | null;
+    collector: Correxit.Collector;
     documents: IDocumentManager;
     tracker: WidgetTracker<Corrector.Widget>;
     trans: IRenderMime.TranslationBundle;
     tree: INotebookTree | null;
   }
 ) {
-  const { commands, shell } = app;
-  const manager = app.serviceManager;
-  const { browser, tracker, tree } = dependencies;
+  const { commands, serviceManager: manager, shell } = app;
+  const { browser, collector, documents, tracker, trans, tree } = utilities;
   const { batch, cd, launch, refresh, scan } = CommandIDs;
-  const { trans } = dependencies;
   const fetch = (handle: Credentials) =>
     commands.execute(Correxit.CommandIDs.fetch, handle);
   const { normalize } = Workbook.Credentials;
@@ -46,18 +46,30 @@ export function addCommands(
     commands.addCommand(batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
-        args: Partial<Credentials>
-      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> =>
-        (async function* (handle) {
-          const { correct } = Workbook;
-          const credentials = handle.key ? handle : { ...handle, unlock: true };
+        args: Partial<Credentials & { certify: boolean }>
+      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
+        const handle = normalize(args) || ({} as Partial<Workbook.Credentials>);
+        const { certify } = Workbook;
+        const credentials = handle.key ? handle : { ...handle, unlock: true };
+        const correct = async (workbook: Workbook): Promise<Certified> => {
+          const corrected = await Workbook.correct(workbook);
+          const grade = { ...corrected, path: workbook.context.path };
+          const identifier = Workbook.identifier(workbook);
+          const timestamp = Workbook.timestamp(workbook);
+          return { grade, identifier, timestamp, workbook };
+        };
+        const grader = async function* () {
           const workbooks = await commands.execute(scan, credentials);
           for await (const workbook of workbooks as AsyncGenerator<Headless>) {
-            const { path } = workbook.context;
-            const grade = { ...(await correct(workbook)), path };
-            yield [path, { grade, workbook }];
+            yield await (args.certify ? certify(workbook) : correct(workbook));
           }
-        })(normalize(args) || ({} as Partial<Workbook.Credentials>))
+        };
+        return (async function* (grades) {
+          for await (const { grade, workbook } of grades) {
+            yield [grade.path, { grade, workbook: workbook as Headless }];
+          }
+        })(args.certify ? collector(grader()) : grader());
+      }
     })
   );
   disposables.push(
@@ -75,7 +87,7 @@ export function addCommands(
           const label = trans.__('Choose a directory for Correxit Corrector');
           const defaultPath = widget.path;
           const host = widget.node;
-          const manager = dependencies.documents;
+          const manager = documents;
           const options = { defaultPath, host, label, manager, title };
           const pending = await FileDialog.getExistingDirectory(options);
           path = pending.value?.[0].path;

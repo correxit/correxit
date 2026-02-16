@@ -88,7 +88,7 @@ export function Corrector(props: Corrector.Props) {
   useEffect(() => emit(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => () => dispose(workbooks), [scanned]);
-  useEffect(() => () => dispose(grades.map(([__, _]) => _.workbook)), [graded]);
+  useEffect(() => () => dispose(grades.map(([, _]) => _.workbook)), [graded]);
   useEffect(() => setWorkbook(match(merged, selection)), [merged, selection]);
   return (
     <table className="correxit-corrector">

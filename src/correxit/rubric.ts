@@ -226,43 +226,23 @@ export namespace Rubric {
 
   export namespace Assignment {
     /**
-     * A type for plugins to identify an assignment/assignee match.
-     */
-    export type Identifier = {
-      /**
-       * The assignee (typically an email address) or `null` if unassigned.
-       */
-      assignee: string | null;
-
-      /**
-       * The workbook/assignment id, i.e. the rubric id of the workbook.
-       */
-      assignment: string;
-    }
-
-    /**
      * A score report for an assignment.
      */
     export type Report = Readonly<{
-      date: number | null;
       order: string[];
       scores: { [id: string]: Score };
+      timestamp: number | null;
     }>;
 
     export const EMPTY: Assignment = {
       assignee: '',
       confirmation: null,
       expiration: null,
-      report: { date: null, order: [], scores: {} },
+      report: { order: [], scores: {}, timestamp: null },
       roster: [],
       signature: '',
       submission: null
     };
-
-    export function identifier(rubric: Rubric): Identifier {
-      const { assignment: { assignee }, id: assignment } = rubric;
-      return { assignee: assignee || null, assignment };
-    }
 
     /**
      * @param id - if the cell is not specified, all cells are scored.
@@ -294,7 +274,7 @@ export namespace Rubric {
       const scores = Object.fromEntries([...current, ...done]);
       const filtered = report.order.filter(valid);
       const order = unique(id ? [...filtered, id] : [...subset, ...filtered]);
-      return { date: Date.now(), order, scores };
+      return { order, scores, timestamp: Date.now() };
     }
 
     export async function sign(

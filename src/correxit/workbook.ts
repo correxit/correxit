@@ -32,6 +32,13 @@ export namespace Workbook {
     export type Fail = { ok: false; error: string; rubric: Rubric | null; };
   }
 
+  export type Certified = {
+    grade: Workbook.Grade;
+    identifier: Workbook.Identifier;
+    timestamp: number;
+    workbook: Workbook;
+  };
+
   export type Credentials = |
     { path: string; unlock: null; key: null; passphrase: null; } |
     { path: string; unlock: null; key: string; passphrase: null; } |
@@ -68,6 +75,26 @@ export namespace Workbook {
     readonly content: null;
     readonly context: DocumentRegistry.IContext<INotebookModel>;
   };
+
+  /**
+   * A type for plugins to identify a workbook/assignment/assignee match.
+   */
+  export type Identifier = {
+    /**
+     * The assignee (typically an email address) or `null` if unassigned.
+     */
+    assignee: string | null;
+
+    /**
+     * The workbook/assignment id, i.e. the rubric id of the workbook.
+     */
+    assignment: string;
+
+    /**
+     * The workbook/assignment signature for the assignee/roster/report.
+     */
+    signature: string | null;
+  }
 
   export namespace Cell {
     /**
@@ -267,6 +294,24 @@ export namespace Workbook {
   }
 
   /**
+   * Certify a workbook: correct, lock, and freeze.
+   */
+  export async function certify(workbook: Workbook): Promise<Certified> {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked) {
+      throw new Error('certify error');
+    }
+
+    const corrected = await correct(workbook);
+    const grade = { ...corrected, path: workbook.context.path };
+    const identifier = Workbook.identifier(workbook);
+    const timestamp = Workbook.timestamp(workbook);
+    await lock(workbook);
+    freeze(workbook);
+    return { grade, identifier, timestamp, workbook };
+  }
+
+  /**
    * Convert a plain notebook into a workbook and return its rubric.
    */
   export async function convert(
@@ -342,12 +387,10 @@ export namespace Workbook {
     if (!rubric || rubric.locked) {
       return null;
     }
-    const { report } = rubric.assignment;
-    const scores = {
-      ...report.scores,
-      [id]: { ...report.scores[id], comment }
-    };
-    return update(workbook, await Rubric.sign(rubric, { ...report, scores }));
+
+    const { report: kept } = rubric.assignment;
+    const scores = { ...kept.scores, [id]: { ...kept.scores[id], comment } };
+    return update(workbook, await Rubric.sign(rubric, { ...kept, scores }));
   }
 
   /**
@@ -359,9 +402,8 @@ export namespace Workbook {
       throw new Error(`decrypt error: ${audit.error}`);
     }
 
-    const { key, cells } = audit.rubric as Rubric.Unlocked;
-    for (const id in cells) {
-      const cell = cells[id];
+    const { cells, key } = audit.rubric as Rubric.Unlocked;
+    for (const [, cell] of Object.entries(cells)) {
       if (cell.shared) {
         continue;
       }
@@ -408,6 +450,7 @@ export namespace Workbook {
     spec: KernelSpec.ISpecModel | null;
     outputs: Rubric.Outputs;
   } | null> {
+    const { execute } = Rubric.Cell;
     const { model: { cells } } = workbook.context;
     const position = (target: string) =>
       1 + findIndex(cells, ({ id }) => id === target);
@@ -426,7 +469,6 @@ export namespace Workbook {
       return null;
     }
 
-    const { execute } = Rubric.Cell;
     const [kernel, release] = leased;
     for (const index of range(cell ? scan(cell) : cells.length)) {
       const cell = cells.get(index);
@@ -439,7 +481,18 @@ export namespace Workbook {
       }
     }
     release();
-    return { spec: await kernel.spec || null, outputs };
+    return { outputs, spec: await kernel.spec || null };
+  }
+
+  export function identifier(workbook: Workbook): Identifier {
+    const rubric = open(workbook, quiet);
+    if (!rubric) {
+      throw new Error('identifier error');
+    }
+    const assignee = rubric.assignment.assignee || null;
+    const assignment = rubric.id;
+    const signature = rubric.assignment.signature || null;
+    return { assignee, assignment, signature };
   }
 
   /**
@@ -548,6 +601,22 @@ export namespace Workbook {
     freeze(workbook);
     return update(workbook, Rubric.submit(rubric, confirmation));
   }
+
+  /**
+   * @returns the timestamp recorded when the assignment was signed.
+   *
+   * #### Notes
+   * This function is only meant for use when a client expects a timestamp to
+   * exist. It will throw an error if it fails to find a timestamp.
+   */
+  export function timestamp(workbook: Workbook): number {
+    const rubric = open(workbook, quiet);
+    const timestamp = rubric?.assignment.report.timestamp;
+    if (!timestamp) {
+      throw new Error('timestamp error');
+    }
+    return timestamp;
+  };
 
   /**
    * Toggle a workbook cell's `shared` flag.

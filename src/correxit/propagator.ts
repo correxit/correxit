@@ -83,13 +83,13 @@ async function propagate({ consumer, log, rubric, workbook }: {
     const { base, pwd } = location;
     for (const assignee of roster) {
       const notebook: INotebookContent = JSON.parse(JSON.stringify(template));
-      const identifier = { ...Rubric.Assignment.identifier(rubric), assignee };
       const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
       const path = PathExt.join(pwd, file);
       await log({ type: 'separator', slots: [] });
-      await reassign({ assignee, key, notebook, roster });
+
+      const identifier = await reassign({ assignee, key, notebook, roster });
       await log({ type: 'assigned', slots: [assignee] });
-      yield { ...identifier, notebook, path };
+      yield { identifier, notebook, path };
     }
   }
   const stream = async (location: { base: string; pwd: string }) =>
@@ -109,7 +109,7 @@ async function reassign({ assignee, key, notebook, roster }: {
   key: string;
   notebook: INotebookContent;
   roster: string[];
-}) {
+}): Promise<Workbook.Identifier> {
   const { sign } = Rubric.Assignment;
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked;
   const { roster: encrypted, ...assignment } = metadata.assignment;
@@ -117,6 +117,7 @@ async function reassign({ assignee, key, notebook, roster }: {
   (metadata as Rubric.Locked & { accessed: number }).accessed = Date.now();
   (metadata as Rubric.Locked & { assignment: Rubric.Assignment }).assignment =
     { ...assignment, assignee, roster: encrypted, signature };
+  return { assignee, assignment: metadata.id, signature };
 }
 
 async function template(

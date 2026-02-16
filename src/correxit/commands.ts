@@ -17,6 +17,7 @@ import * as state from './state';
 export namespace CommandIDs {
   export const add = 'correxit:add';
   export const assign = 'correxit:assign';
+  export const certify = 'correxit:certify';
   export const comment = 'correxit:comment';
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
@@ -39,15 +40,20 @@ type Cell = Rubric.Cell;
 type CellToolbar = Rubric.Cell.Toolbar;
 type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
+type Reified =
+  { handle: Credentials | null; rubric: null; workbook: null; } |
+  { handle: Credentials | null; rubric: null; workbook: Workbook; } |
+  { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
 const { get, has, size } = Rubric;
-const { add, assign, comment, convert, correct, draft } = Workbook;
-const { lock, remove, reset, submit, toggle } = Workbook;
+const { add, assign, certify, comment, convert, correct } = Workbook;
+const { draft, lock, remove, reset, submit, toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  { consumer, registrar, scheduler, submitter, translator, unlocker }: {
+  utilities: {
+    collector: Correxit.Collector;
     consumer: Correxit.Consumer;
     registrar: Correxit.Registrar;
     scheduler: Correxit.Scheduler;
@@ -56,23 +62,20 @@ export function addCommands(
     unlocker: Correxit.Unlocker;
   }
 ) {
-  const { commands } = app;
-  const manager = app.serviceManager;
+  const { commands, serviceManager: manager } = app;
+  const { collector, consumer, registrar } = utilities;
+  const { scheduler, submitter, translator, unlocker } = utilities;
   const trans = translator.load('correxit');
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
     io.request(handle, factory, manager, unlocker);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
-  const reify = async (args: Partial<Credentials>): Promise<{
-    handle: Credentials | null;
-    rubric: Rubric | null;
-    workbook: Workbook | null;
-  }> => {
+  const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
     const workbook = handle ? await fetch(handle) : state.workbook();
     const rubric = open(workbook);
-    return { handle, rubric, workbook };
+    return { handle, rubric, workbook } as Reified;
   };
   const disposables = [];
   disposables.push(commands.addCommand(CommandIDs.add, {
@@ -114,10 +117,10 @@ export function addCommands(
       return '';
     },
     execute: async (args: Partial<Cell & Credentials>) => {
-      const { workbook, rubric } = await reify(args);
+      const { rubric, workbook } = await reify(args);
       const id = state.cell(args);
       const is = args.is;
-      if (!workbook || !rubric || !id || !is) {
+      if (!rubric || !id || !is) {
         return;
       }
 
@@ -184,13 +187,32 @@ export function addCommands(
     label: trans.__('Assign workbook...'),
     execute: async (args: Partial<Credentials & Assignment>) => {
       const { rubric, workbook } = await reify(args);
-      if (!workbook || !rubric) {
+      if (!rubric) {
         return;
       }
 
-      const identifier = Rubric.Assignment.identifier(rubric);
+      const identifier = Workbook.identifier(workbook);
       const roster = await registrar(workbook, identifier) || args.roster;
       await assign(workbook, { ...args, roster });
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.certify, {
+    icon: Icons.certify,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      const assigned = !!rubric?.assignment.assignee;
+      return assigned && !rubric.locked;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.certify),
+    label: trans.__('Certify workbook...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || rubric.locked || !rubric.assignment.assignee) {
+        return;
+      }
+      for await (const _ of collector([await certify(workbook)])) {
+        void _; // Exhaust the generator that collector returns.
+      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
@@ -366,7 +388,7 @@ export function addCommands(
     label: trans.__('Lock'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
-      if (!workbook || !rubric) {
+      if (!rubric) {
         return;
       }
       try {
@@ -392,7 +414,7 @@ export function addCommands(
       args: Partial<Credentials>
     ): Promise<AsyncIterable<[string, Correxit.Emitter.Emission]>> => {
       const { rubric, workbook } = await reify(args);
-      if (!workbook || !rubric || rubric.locked) {
+      if (!rubric || rubric.locked) {
         return (async function* empty() {})();
       }
 
@@ -408,7 +430,7 @@ export function addCommands(
   disposables.push(commands.addCommand(CommandIDs.registrar, {
     execute: async (args: Partial<Credentials>): Promise<string[] | null> => {
       const { rubric, workbook } = await reify(args);
-      if (!rubric || !workbook) {
+      if (!rubric) {
         return null;
       }
 
@@ -416,8 +438,8 @@ export function addCommands(
         console.warn('registrar failed for workbook', workbook, error);
         return [];
       };
-      const identifier = Rubric.Assignment.identifier(rubric);
-      return workbook && await registrar(workbook, identifier).catch(warn);
+      const identifier = Workbook.identifier(workbook);
+      return await registrar(workbook, identifier).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
@@ -488,9 +510,10 @@ export function addCommands(
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
-      if (!workbook || !rubric) {
+      if (!rubric) {
         return;
       }
+
       const title = trans.__('Submit assignment');
       const body = trans.__(
         'Submit assignment? This workbook will be set to read-only.'
@@ -507,7 +530,7 @@ export function addCommands(
         return;
       }
       try {
-        const identifier = Rubric.Assignment.identifier(rubric);
+        const identifier = Workbook.identifier(workbook);
         const confirmation = await submitter(workbook, identifier);
         await submit(workbook, confirmation);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
