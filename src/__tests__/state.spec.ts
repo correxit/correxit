@@ -1,14 +1,13 @@
 declare const require: any;
+jest.mock('../correxit/commands', () => ({ CommandIDs: {} }));
+jest.mock('../correxit/icons', () => ({ Icons: {} }));
+jest.mock('../correxit/input', () => ({ text: jest.fn() }));
 jest.mock('../correxit/security', () => require('./mocks/security'));
+jest.mock('../correxit/workbook', () => ({ Workbook: { open: jest.fn() } }));
+
 import { Rubric } from '../correxit/rubric';
 import { Workbook } from '../correxit/workbook';
 import * as state from '../correxit/state';
-
-jest.mock('../correxit/workbook', () => ({
-  Workbook: {
-    open: jest.fn()
-  }
-}));
 
 // We need to type-cast the mocked module to access the mock function
 const MockWorkbook = Workbook as unknown as { open: jest.Mock };

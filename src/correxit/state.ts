@@ -1,5 +1,4 @@
-import { Rubric } from './rubric';
-import { Workbook } from './workbook';
+import { Rubric, Workbook } from '.';
 
 const state: {
   report: Map<string, Rubric.Score>;
