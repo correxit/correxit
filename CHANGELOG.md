@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/QuantStack/correxit/compare/v1.0.4...v1.0.5) (2026-02-16)
+
+
+### Bug Fixes
+
+* Iterate on releaser workflow ([#26](https://github.com/QuantStack/correxit/issues/26)) ([c3fe33f](https://github.com/QuantStack/correxit/commit/c3fe33f12c3cdaa7dcc8b68e7e23d79ddea7d7bb))
+
 ## [1.0.4](https://github.com/QuantStack/correxit/compare/v1.0.3...v1.0.4) (2026-02-16)
 
 
