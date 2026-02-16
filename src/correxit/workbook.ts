@@ -366,10 +366,10 @@ export namespace Workbook {
     const { spec, outputs } = result;
     const report = await score(rubric, outputs, id);
     const scored = Object.entries(report.scores);
+    scored.forEach(([id, score]) => state.cache(workbook, id, score));
     if (!rubric.locked) {
       await update(workbook, await Rubric.sign(rubric, report));
     }
-    scored.forEach(([id, score]) => state.cache(workbook, id, score));
     return { spec, score: id ? report.scores[id] : summary(report) };
   }
 

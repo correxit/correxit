@@ -21,7 +21,7 @@ export function cache(workbook: Workbook, id: string, score: Rubric.Score) {
   }
 
   const key = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
-  if (state.report.size >= footprint) {
+  if (!state.report.has(key) && state.report.size >= footprint) {
     state.report.delete(state.report.keys().next().value!); // FIFO eviction
   }
   state.report.set(key, score);
