@@ -113,9 +113,8 @@ jobs:
       - name: Publish package
         run: |
           set -eux
-          corepack enable
-          yarn install --frozen-lockfile
-          yarn build:prod
+          jlpm install
+          jlpm run build:prod
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm publish --access internal  #  Explicitly set public access.
 
