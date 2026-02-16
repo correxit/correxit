@@ -121,11 +121,11 @@ export namespace Correxit {
 
   export const Source = new Token<Source>(SOURCE);
 
-  export const TOOLBARS = '@quantstack/correxit:toolbars';
-  
-  export const SUBMITTER = '@quantstacl/correxit:submitter';
+  export const SUBMITTER = '@quantstack/correxit:submitter';
 
   export const Submitter = new Token<Correxit.Submitter>(SUBMITTER);
+
+  export const TOOLBARS = '@quantstack/correxit:toolbars';
 
   export const UI = '@quantstack/correxit:ui';
 
