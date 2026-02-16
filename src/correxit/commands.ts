@@ -210,7 +210,9 @@ export function addCommands(
       if (!rubric || rubric.locked || !rubric.assignment.assignee) {
         return;
       }
-      await collector([await certify(workbook)]).next();
+      for await (const _ of collector([await certify(workbook)])) {
+        void _; // Exhaust the generator that collector returns.
+      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {

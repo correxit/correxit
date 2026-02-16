@@ -31,8 +31,7 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
   description: Correxit.DESCRIPTION.CONSUMER,
   provides: Correxit.Consumer,
   ...((deactivator?: () => void) => ({
-    activate: ({ commands, serviceManager }): Correxit.Consumer => {
-      const manager = serviceManager;
+    activate: ({ commands, serviceManager: manager }): Correxit.Consumer => {
       const factory = new NotebookModelFactory();
       const mkdir = async (path: string) => {
         const parent = PathExt.dirname(path);
