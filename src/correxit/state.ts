@@ -44,7 +44,9 @@ export function cell(args: Partial<Rubric.Cell & Rubric.Cell.Toolbar>): string {
 /**
  * @returns the cached score for a cell or the persisted score when uncached.
  */
-export function report(workbook: Workbook | null, id: string
+export function report(
+  workbook: Workbook | null,
+  id: string
 ): Rubric.Score | null {
   const rubric = Workbook.open(workbook, true);
   if (!rubric || !workbook) {
@@ -68,8 +70,6 @@ export function report(workbook: Workbook | null, id: string
  * @returns the active workbook and updates cache if given a workbook.
  */
 export function workbook(update?: Workbook | null): Workbook | null {
-  if (update !== undefined) {
-    state.workbook = update;
-  }
+  state.workbook = update === undefined ? state.workbook : update;
   return state.workbook;
 }
