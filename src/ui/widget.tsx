@@ -58,7 +58,8 @@ export class SidebarWidget extends ReactWidget {
 
   protected render() {
     const { annotate, commands, trans, workbook } = this;
-    return <Sidebar {...{ annotate, commands, trans, workbook }} />;
+    const key = Date.now();
+    return <Sidebar {...{ annotate, commands, trans, workbook }} key={key} />;
   }
 
   protected async subscribe(source: Correxit.Source) {
