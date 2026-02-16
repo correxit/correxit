@@ -267,10 +267,13 @@ describe('Rubric', () => {
       };
       const roster = ['A', 'B'];
 
-      rubric = await Rubric.assign({
-        ...rubric,
-        assignment: { ...rubric.assignment, assignee: 'A', report, roster }
-      }, { assignee: 'A' });
+      rubric = await Rubric.assign(
+        {
+          ...rubric,
+          assignment: { ...rubric.assignment, assignee: 'A', report, roster }
+        },
+        { assignee: 'A' }
+      );
       expect(rubric.assignment.report.scores).toEqual(report.scores);
 
       rubric = await Rubric.assign(rubric, { assignee: 'B' });
