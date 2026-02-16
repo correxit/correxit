@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/QuantStack/correxit/compare/v1.0.2...v1.0.3) (2026-02-16)
+
+
+### Bug Fixes
+
+* remove package-lock.json ([#21](https://github.com/QuantStack/correxit/issues/21)) ([8cd628b](https://github.com/QuantStack/correxit/commit/8cd628b9cf06531b8e0d25598baac6f16288e08c))
+
 ## [1.0.2](https://github.com/QuantStack/correxit/compare/v1.0.1...v1.0.2) (2026-02-16)
 
 
