@@ -403,7 +403,9 @@ export namespace Rubric {
   ): Promise<Unlocked> {
     roster = unique(roster);
 
-    const { report } = rubric.assignment;
+    const report = assignee === rubric.assignment.assignee
+      ? rubric.assignment.report // Keep report if assignee is unchanged.
+      : { order: [], scores: {}, timestamp: Date.now() };
     const unsigned = { assignee, expiration, report, roster };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = {

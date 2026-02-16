@@ -258,6 +258,26 @@ describe('Rubric', () => {
       expect(rubric.assignment.expiration).toBe(expiration); // Should preserve
     });
 
+    it('resets report if assignee changes', async () => {
+      let rubric = create();
+      const report = {
+        order: ['cell-1'],
+        scores: { 'cell-1': Rubric.Score.CORRECT },
+        timestamp: Date.now()
+      };
+      const roster = ['A', 'B'];
+
+      rubric = await Rubric.assign({
+        ...rubric,
+        assignment: { ...rubric.assignment, assignee: 'A', report, roster }
+      }, { assignee: 'A' });
+      expect(rubric.assignment.report.scores).toEqual(report.scores);
+
+      rubric = await Rubric.assign(rubric, { assignee: 'B' });
+      expect(rubric.assignment.report.scores).toEqual({});
+      expect(rubric.assignment.report.order).toEqual([]);
+    });
+
     it('expiration can be set to control deadline', async () => {
       const expiration = Date.now() + 86400000; // 24 hours from now
       const rubric = await Rubric.assign(create(), {
