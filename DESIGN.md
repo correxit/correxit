@@ -56,11 +56,11 @@ A rubric is defined by two mutually exclusive states:
 The `Rubric` must always be one of two union types:
 
 1. **`Rubric.Unlocked`**: The live, mutable working state. Contains the
-   decryption `key` and the full cell configuration (`secret`). This state is used
-   for editing and configuration.
+   decryption `key` and a decrypted `assignment.roster`. This state is used
+   for editing, configuring, and certifying.
 
 2. **`Rubric.Locked`**: The persisted, encrypted state stored in the notebook
-   metadata. The `key` field is `null`, and the sensitive configuration (`secret`)
+   metadata. The `key` field is `null`, and the sensitive `assignment.roster`
    is an encrypted string. This state is used for distribution and secure
    correction.
 
@@ -69,6 +69,15 @@ The `Rubric` must always be one of two union types:
 `Workbook` is an abstraction that maps onto active `Headed` instances of
 `NotebookPanel` as well as `Headless` workbooks that only have a `context` and
 `content: null`.
+
+### Discriminated union types
+
+Correxit uses TypeScript discriminated unions to encode mutually exclusive states, enabling the compiler to enforce correctness, e.g.:
+
+- **`Rubric.Locked | Rubric.Unlocked`**: The `locked` boolean discriminates between encrypted (persisted) and decrypted (working) rubrics.
+- **`Reified`** (in `commands.ts`): Encodes three possible states when resolving a workbook from command arguments, allowing TypeScript to narrow types after guard checks.
+
+This pattern eliminates entire classes of runtime errors by making invalid states unrepresentable.
 
 ### Rubric state cache
 
@@ -121,3 +130,18 @@ a single word identifier is better than a compound identifier.
 One prominent counterexample is `set*` and `use*` React state managment
 functions, which are both well-established conventions and are enforced by some
 React tooling. So, e.g., the hook mentioned above is named `useCommand`.
+
+## Plugin architecture
+
+Correxit provides several extension points as Jupyter plugins, allowing
+implementors to integrate with external systems:
+
+| Plugin Type     | Purpose                                                          | Default Behavior                        |
+| --------------- | ---------------------------------------------------------------- | --------------------------------------- |
+| **`Collector`** | Receive certified workbook grades (e.g., for backend submission) | Pass-through async generator            |
+| **`Consumer`**  | Process propagated assignments (e.g., write to LMS)              | Writes to local filesystem              |
+| **`Registrar`** | Provide student rosters for assignments                          | Returns null (manual roster entry)      |
+| **`Submitter`** | Handle assignment submission confirmation                        | Returns null (no external confirmation) |
+| **`Unlocker`**  | Manage rubric keys securely                                      | Uses SecretsManager plugin              |
+
+All plugins are optional with sensible defaults. See `src/correxit/correxit.ts` for type definitions and `src/plugins.tsx` for default implementations.
