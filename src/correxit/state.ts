@@ -1,10 +1,15 @@
-import { Rubric, Workbook } from '.';
+import { Rubric } from './rubric';
+import { Workbook } from './workbook';
 
 const state: {
   report: Map<string, Rubric.Score>;
   workbook: Workbook | null;
 } = { report: new Map(), workbook: null };
-const footprint = 1000;
+
+/**
+ * The maximum number of cached cell score reports.
+ */
+export const footprint = 1000;
 
 /**
  * Caches a cell score in memory.
@@ -64,5 +69,8 @@ export function report(workbook: Workbook | null, id: string
  * @returns the active workbook and updates cache if given a workbook.
  */
 export function workbook(update?: Workbook | null): Workbook | null {
-  return state.workbook = update ?? state.workbook;
+  if (update !== undefined) {
+    state.workbook = update;
+  }
+  return state.workbook;
 }
