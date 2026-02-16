@@ -92,11 +92,11 @@ export namespace Correxit {
 
   export const CommandIDs = COMMAND_IDS;
 
-  export const CONSUMER = 'correxit:consumer';
+  export const CONSUMER = '@quantstack/correxit:consumer';
 
   export const Consumer = new Token<Consumer>(CONSUMER);
 
-  export const CORRECTOR = 'correxit:corrector';
+  export const CORRECTOR = '@quantstack/correxit:corrector';
 
   export const DESCRIPTION = {
     COLLECTOR: description.COLLECTOR,
@@ -113,23 +113,23 @@ export namespace Correxit {
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
-  export const REGISTRAR = 'correxit:registrar';
+  export const REGISTRAR = '@quantstack/correxit:registrar';
 
   export const Registrar = new Token<Registrar>(REGISTRAR);
 
-  export const SOURCE = 'correxit:source';
+  export const SOURCE = '@quantstack/correxit:source';
 
   export const Source = new Token<Source>(SOURCE);
 
-  export const SUBMITTER = 'correxit:submitter';
+  export const SUBMITTER = '@quantstack/correxit:submitter';
 
   export const Submitter = new Token<Correxit.Submitter>(SUBMITTER);
 
-  export const TOOLBARS = 'correxit:toolbars';
+  export const TOOLBARS = '@quantstack/correxit:toolbars';
 
-  export const UI = 'correxit:ui';
+  export const UI = '@quantstack/correxit:ui';
 
-  export const UNLOCKER = 'correxit:unlocker';
+  export const UNLOCKER = '@quantstack/correxit:unlocker';
 
   export const Unlocker = new Token<Unlocker>(UNLOCKER);
 }
