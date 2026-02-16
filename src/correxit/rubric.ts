@@ -15,9 +15,12 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 export namespace Rubric {
   export type Assignment = Readonly<{
     assignee: string;
+    confirmation: string | null;
+    expiration: number | null;
     report: Assignment.Report;
     roster: string[];
     signature: string;
+    submission: number | null;
   }>;
 
   type Base = Readonly<{
@@ -146,11 +149,11 @@ export namespace Rubric {
      * @returns an array of of cell outputs.
      */
     export async function execute(
-      { sharedModel }: ICodeCellModel,
+      { sharedModel: cell }: ICodeCellModel,
       kernel: Kernel.IKernelConnection
     ): Promise<Output[]> {
       const outputs: Output[] = [];
-      const code = sharedModel.getSource();
+      const code = cell.getSource();
       if (!code.length) {
         return outputs;
       }
@@ -222,16 +225,23 @@ export namespace Rubric {
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
   export namespace Assignment {
+    /**
+     * A score report for an assignment.
+     */
     export type Report = Readonly<{
       order: string[];
       scores: { [id: string]: Score };
+      timestamp: number | null;
     }>;
 
     export const EMPTY: Assignment = {
       assignee: '',
-      report: { order: [], scores: {} },
+      confirmation: null,
+      expiration: null,
+      report: { order: [], scores: {}, timestamp: null },
       roster: [],
-      signature: ''
+      signature: '',
+      submission: null
     };
 
     /**
@@ -264,15 +274,18 @@ export namespace Rubric {
       const scores = Object.fromEntries([...current, ...done]);
       const filtered = report.order.filter(valid);
       const order = unique(id ? [...filtered, id] : [...subset, ...filtered]);
-      return { order, scores };
+      return { order, scores, timestamp: Date.now() };
     }
 
     export async function sign(
-      assignment: Pick<Assignment, 'assignee' | 'report' | 'roster'>,
+      { assignee, expiration, report: { order, scores }, roster }:
+        Omit<Assignment, 'confirmation' | 'signature' | 'submission'>,
       key: string
     ): Promise<string> {
-      const { assignee, report, roster } = assignment;
-      return security.digest(JSON.stringify({ assignee, key, report, roster }));
+      const entries = order.map(id => [id, scores[id]]);
+      const report = { order, scores: Object.fromEntries(entries) };
+      const unsigned = { assignee, expiration, report, roster };
+      return security.digest(JSON.stringify(unsigned).concat(key));
     }
 
     export function summary(report: Report): Score {
@@ -323,11 +336,11 @@ export namespace Rubric {
       | 'error-is-unknown'
       | 'mismatch-congruence'
       | 'mismatch-data'
-      | 'missing-given'
       | 'mismatch-digest'
       | 'mismatch-message'
       | 'mismatch-name-text'
       | 'missing-cell-given'
+      | 'missing-given'
       | 'missing-reference'
       | 'missing-rubric'
       | 'missing-stdout'
@@ -374,21 +387,30 @@ export namespace Rubric {
     }
     return {
       ...rubric,
-      accessed: Date.now(),
       cells: { ...rubric.cells, [cell.id]: cell }
     };
   }
 
   export async function assign(
     { key, ...rubric }: Unlocked,
-    assignee = '',
-    roster: string[] = []
+    {
+      assignee = rubric.assignment.assignee,
+      confirmation = rubric.assignment.confirmation,
+      expiration = rubric.assignment.expiration,
+      roster = rubric.assignment.roster,
+      submission = rubric.assignment.submission
+    }: Partial<Assignment> = {}
   ): Promise<Unlocked> {
-    const unsigned = { ...Assignment.EMPTY, assignee, roster: unique(roster) };
+    roster = unique(roster);
+
+    const { report } = rubric.assignment;
+    const unsigned = { assignee, expiration, report, roster };
     const signature = await Assignment.sign(unsigned, key);
-    const assignment = { ...unsigned, signature };
+    const assignment = {
+      ...unsigned, confirmation, signature, submission
+    };
     await Assignment.validate({ assignment, key });
-    return { ...rubric, accessed: Date.now(), assignment, key };
+    return { ...rubric, assignment, key };
   }
 
   /**
@@ -401,6 +423,16 @@ export namespace Rubric {
     const encoded = accessed.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
     return { accessed, assignment, cells: {}, id, locked: false };
+  }
+
+  /**
+   * @returns a locked rubric with null assignment submission and confirmation.
+   */
+  export function draft(rubric: Locked): Locked {
+    const confirmation = null;
+    const submission = null;
+    const assignment = { ...rubric.assignment, confirmation, submission };
+    return { ...rubric, accessed: Date.now(), assignment };
   }
 
   /**
@@ -420,8 +452,8 @@ export namespace Rubric {
     }
     if (deep) {
       const reference = id;
-      const all = Object.keys(rubric.cells);
-      return !!find(all, id => rubric.cells[id].reference?.[0] === reference);
+      const entries = Object.entries(rubric.cells);
+      return !!find(entries, ([, cell]) => cell.reference?.[0] === reference);
     }
     return false;
   }
@@ -437,9 +469,9 @@ export namespace Rubric {
 
     const locked = true;
     const { cells, id, key } = rubric;
-    const { assignee, report, roster, signature } = rubric.assignment;
-    const encrypted = await security.encrypt(JSON.stringify(roster), key);
-    const assignment = { assignee, report, roster: [encrypted], signature };
+    const serialized = JSON.stringify(rubric.assignment.roster);
+    const roster = [await security.encrypt(serialized, key)];
+    const assignment = { ...rubric.assignment, roster };
     const accessed = Date.now();
     return { accessed, assignment, cells, id, key: null, locked };
   }
@@ -468,6 +500,9 @@ export namespace Rubric {
     return { accessed, assignment, cells, id, key, locked };
   }
 
+  /**
+   * Remove a cell from a rubric. Report scores are left intact.
+   */
   export function remove(rubric: Unlocked, id: string): Unlocked {
     if (!get(rubric, id)) {
       return rubric;
@@ -475,28 +510,17 @@ export namespace Rubric {
 
     const { [id]: _, ...cells } = rubric.cells;
     void _; // This is the removed cell.
-    const { assignment: { assignee, report } } = rubric;
-    const order = report.order.filter(key => key !== id);
-    const removed = Object.entries(report.scores).filter(([key]) => key !== id);
-    const scores = Object.fromEntries(removed);
-    const assignment: Assignment = {
-      ...rubric.assignment, assignee,
-      report: { order, scores }
-    };
-    const accessed = Date.now();
-    return { ...rubric, accessed, assignment, cells };
+    return { ...rubric, cells };
   }
 
   export async function sign(
     rubric: Rubric.Unlocked,
     report: Assignment.Report
   ): Promise<Rubric.Unlocked> {
-    const { key } = rubric;
-    const { assignee, roster } = rubric.assignment;
-    const signature = await Assignment.sign({ assignee, report, roster }, key);
-    const assignment = { assignee, report, roster, signature };
-    const accessed = Date.now();
-    return { ...rubric, accessed, assignment };
+    const unsigned = { ...rubric.assignment, report };
+    const signature = await Assignment.sign(unsigned, rubric.key);
+    const assignment = { ...unsigned, signature };
+    return { ...rubric, assignment };
   }
 
   /**
@@ -504,6 +528,14 @@ export namespace Rubric {
    */
   export function size(rubric: Rubric): number {
     return Object.keys(rubric.cells).length;
+  }
+
+  export function submit(
+    rubric: Locked, confirmation: string | null = null
+  ): Locked {
+    const submission = Date.now();
+    const assignment = { ...rubric.assignment, confirmation, submission };
+    return { ...rubric, accessed: submission, assignment };
   }
 
   /**
@@ -516,7 +548,7 @@ export namespace Rubric {
     }
 
     const cells = { ...rubric.cells, [id]: { ...cell, shared: !cell.shared } };
-    return { ...rubric, accessed: Date.now(), cells };
+    return { ...rubric, cells };
   }
 
   /**

@@ -6,6 +6,13 @@ import * as description from './description';
 import { Icons as ICONS } from './icons';
 
 export namespace Correxit {
+  /**
+   * A collector of certified workbook grades.
+   */
+  export type Collector = (
+    grades: AsyncIterable<Workbook.Certified> | Iterable<Workbook.Certified>
+  ) => AsyncGenerator<Workbook.Certified>;
+
   export type Consumer = (output: {
     log: Emitter.Log;
     path: string;
@@ -24,6 +31,9 @@ export namespace Correxit {
      */
     export type Emission = { slots: (string | number)[]; type: string; };
 
+    /**
+     * A logging function wired for UI updates for clients to invoke.
+     */
     export type Log = (payload: Emitter.Emission) => Promise<void>;
   }
 
@@ -35,24 +45,8 @@ export namespace Correxit {
 
   export namespace Propagator {
     export type Notebook = {
-      /**
-       * The assignee (typically an email address).
-       */
-      assignee: string;
-
-      /**
-       * The assignment id, i.e. the rubric id of the workbook.
-       */
-      assignment: string;
-
-      /**
-       * The raw notebook content JSON.
-       */
+      identifier: Workbook.Identifier;
       notebook: INotebookContent;
-
-      /**
-       * The suggested file path a local consumer should write the content to.
-       */
       path: string;
     };
   }
@@ -60,12 +54,22 @@ export namespace Correxit {
   /**
    * A registrar that provides an immutable roster for a workbook.
    */
-  export type Registrar = (workbook: Workbook) => Promise<string[] | null>;
+  export type Registrar = (
+    workbook: Workbook,
+    identifier: Workbook.Identifier
+  ) => Promise<string[] | null>;
+
+  export type Scheduler = (workbook: Workbook | null) => void;
 
   /**
-   * The core Correxit plugin registers commands and returns a workbook source.
+   * The Correxit source asynchronously yields the active workbook or null.
    */
   export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
+
+  export type Submitter = (
+    workbook: Workbook,
+    identifier: Workbook.Identifier
+  ) => Promise<string | null>;
 
   export type Unlocker = {
     /**
@@ -82,6 +86,10 @@ export namespace Correxit {
     ): Promise<Rubric.Unlocked | null>;
   };
 
+  export const COLLECTOR = 'correxit:collector';
+
+  export const Collector = new Token<Collector>(COLLECTOR);
+
   export const CommandIDs = COMMAND_IDS;
 
   export const CONSUMER = '@quantstack/correxit:consumer';
@@ -91,10 +99,12 @@ export namespace Correxit {
   export const CORRECTOR = '@quantstack/correxit:corrector';
 
   export const DESCRIPTION = {
+    COLLECTOR: description.COLLECTOR,
     CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
     REGISTRAR: description.REGISTRAR,
     SOURCE: description.SOURCE,
+    SUBMITTER: description.SUBMITTER,
     UI: description.UI,
     UNLOCKER: description.UNLOCKER
   };
@@ -112,6 +122,10 @@ export namespace Correxit {
   export const Source = new Token<Source>(SOURCE);
 
   export const TOOLBARS = '@quantstack/correxit:toolbars';
+  
+  export const SUBMITTER = '@quantstacl/correxit:submitter';
+
+  export const Submitter = new Token<Correxit.Submitter>(SUBMITTER);
 
   export const UI = '@quantstack/correxit:ui';
 

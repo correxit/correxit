@@ -31,8 +31,7 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
   description: Correxit.DESCRIPTION.CONSUMER,
   provides: Correxit.Consumer,
   ...((deactivator?: () => void) => ({
-    activate: ({ commands, serviceManager }): Correxit.Consumer => {
-      const manager = serviceManager;
+    activate: ({ commands, serviceManager: manager }): Correxit.Consumer => {
       const factory = new NotebookModelFactory();
       const mkdir = async (path: string) => {
         const parent = PathExt.dirname(path);
@@ -65,12 +64,30 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
 };
 
 /**
+ * The default (pass-through) Correxit grade collector.
+ */
+const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
+  id: Correxit.COLLECTOR,
+  description: Correxit.DESCRIPTION.COLLECTOR,
+  provides: Correxit.Collector,
+  ...((deactivator?: () => void) => ({
+    activate: (): Correxit.Collector =>
+      async function* (grades) {
+        for await (const grade of grades) {
+          yield grade;
+        }
+      },
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/**
  * The Correxit Corrector UI.
  */
 const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
   description: Correxit.DESCRIPTION.CORRECTOR,
-  requires: [IDocumentManager],
+  requires: [Correxit.Collector, IDocumentManager],
   optional: [
     IDefaultFileBrowser,
     ICommandPalette,
@@ -82,6 +99,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
   ...((deactivator?: () => void) => ({
     activate: (
       app: JupyterFrontEnd,
+      collector: Correxit.Collector,
       documents: IDocumentManager,
       browser: IDefaultFileBrowser | null,
       palette: ICommandPalette | null,
@@ -93,8 +111,8 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const { launch } = Corrector.CommandIDs;
-      const dependencies = { browser, documents, tracker, trans, tree };
-      const added = Corrector.addCommands(app, dependencies);
+      const utilities = { browser, collector, documents, tracker, trans, tree };
+      const added = Corrector.addCommands(app, utilities);
       if (palette) {
         palette.addItem({ category: 'correxit', command: launch });
       }
@@ -129,16 +147,17 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
 };
 
 /**
- * The Correxit source plugin loads settings, adds commands, and provides an
- * async iterable workbook source that emits when the user changes tabs.
+ * The Correxit source asynchronously yields the active workbook or null.
  */
 const source: JupyterFrontEndPlugin<Correxit.Source> = {
   id: Correxit.SOURCE,
   description: Correxit.DESCRIPTION.SOURCE,
   autoStart: true,
   requires: [
+    Correxit.Collector,
     Correxit.Consumer,
     Correxit.Registrar,
+    Correxit.Submitter,
     Correxit.Unlocker,
     INotebookTracker
   ],
@@ -147,37 +166,42 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
   ...((deactivator?: () => void) => ({
     activate: (
       app,
+      collector: Correxit.Collector,
       consumer: Correxit.Consumer,
       registrar: Correxit.Registrar,
+      submitter: Correxit.Submitter,
       unlocker: Correxit.Unlocker,
       tracker: INotebookTracker,
       translator: ITranslator | null
     ): Correxit.Source => {
+      translator ||= nullTranslator;
+
       const { commands, shell } = app;
+      const { CommandIDs } = Correxit;
+      const notify = () => {
+        // The sidebar can rely on metadata changes, but the native toolbar
+        // buttons only change when their respective command has changed.
+        const { add, convert, correct, draft, lock, submit, toggle, unlock } =
+          CommandIDs;
+        const ui = [add, convert, correct, draft, lock, submit, toggle, unlock];
+        for (const command of ui) {
+          commands.notifyCommandChanged(command);
+        }
+      };
       const source = new Poll<Workbook | null>({
         auto: false,
         frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
         factory: async () => null
       });
-      const { CommandIDs } = Correxit;
       const { open } = Workbook;
       const quiet = true;
-      const notify = () => {
-        // The sidebar can rely on metadata changes, but the native toolbar
-        // buttons only change when their respective command has changed.
-        const { add, convert, correct, lock, toggle, unlock } = CommandIDs;
-        const buttons = [add, convert, correct, lock, toggle, unlock];
-        for (const command of buttons) {
-          commands.notifyCommandChanged(command);
-        }
-      };
       const subscribe = (prev: Workbook | null, next: Workbook | null) => {
         prev?.context.fileChanged.disconnect(notify);
         prev?.context.model.sharedModel.metadataChanged.disconnect(notify);
         next?.context.fileChanged.connect(notify);
         next?.context.model.sharedModel.metadataChanged.connect(notify);
       };
-      const schedule: (workbook: Workbook | null) => void = (
+      const scheduler: (workbook: Workbook | null) => void = (
         previous => workbook => {
           if (workbook !== source.state.payload) {
             void open(workbook, quiet);
@@ -189,14 +213,20 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
           }
         }
       )(null as Workbook | null);
-      const trans = (translator || nullTranslator).load('correxit');
-      const dependencies = { consumer, registrar, schedule, trans, unlocker };
-      const added = addCommands(app, dependencies);
+      const added = addCommands(app, {
+        collector,
+        consumer,
+        registrar,
+        scheduler,
+        submitter,
+        translator,
+        unlocker
+      });
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>
-          schedule(newValue instanceof NotebookPanel ? newValue : null),
+          scheduler(newValue instanceof NotebookPanel ? newValue : null),
         tracker: (_: unknown, workbook: Workbook.Headed | null) =>
-          schedule(workbook)
+          scheduler(workbook)
       };
       shell.currentChanged?.connect(slots.shell);
       tracker.currentChanged.connect(slots.tracker);
@@ -209,6 +239,50 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
         tracker.currentChanged.disconnect(slots.tracker);
       };
       return source;
+    },
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/**
+ * The default Correxit assignment submitter.
+ */
+const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
+  id: Correxit.SUBMITTER,
+  description: Correxit.DESCRIPTION.SUBMITTER,
+  autoStart: true,
+  ...((deactivator?: () => void) => ({
+    provides: Correxit.Submitter,
+    activate: (): Correxit.Submitter => async _ => null,
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+const ui: JupyterFrontEndPlugin<void> = {
+  id: Correxit.UI,
+  description: Correxit.DESCRIPTION.UI,
+  autoStart: true,
+  requires: [Correxit.Source],
+  optional: [ITranslator, ILayoutRestorer, ISettingRegistry],
+  ...((deactivator?: () => void) => ({
+    activate: (
+      { commands, shell },
+      source: Correxit.Source,
+      translator: ITranslator | null,
+      restorer: ILayoutRestorer | null,
+      registry: ISettingRegistry
+    ) => {
+      const settings = registry ? registry.load(Correxit.UI) : null;
+      const trans = (translator || nullTranslator).load('correxit');
+      const widget = new Sidebar.Widget({ commands, settings, source, trans });
+      widget.id = 'correxit-sidebar';
+      widget.title.caption = 'Correxit';
+      widget.title.icon = Correxit.Icons.correct;
+      shell.add(widget, 'right', {});
+      if (restorer) {
+        restorer.add(widget, widget.id);
+      }
+      deactivator = () => widget.dispose();
     },
     deactivate: () => deactivator?.()
   }))()
@@ -241,34 +315,13 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
   })
 );
 
-const ui: JupyterFrontEndPlugin<void> = {
-  id: Correxit.UI,
-  description: Correxit.DESCRIPTION.UI,
-  autoStart: true,
-  requires: [Correxit.Source],
-  optional: [ITranslator, ILayoutRestorer, ISettingRegistry],
-  ...((deactivator?: () => void) => ({
-    activate: (
-      { commands, shell },
-      source: Correxit.Source,
-      translator: ITranslator | null,
-      restorer: ILayoutRestorer | null,
-      registry: ISettingRegistry
-    ) => {
-      const settings = registry ? registry.load(Correxit.UI) : null;
-      const trans = (translator || nullTranslator).load('correxit');
-      const widget = new Sidebar.Widget({ commands, settings, source, trans });
-      widget.id = 'correxit-sidebar';
-      widget.title.caption = 'Correxit';
-      widget.title.icon = Correxit.Icons.correct;
-      shell.add(widget, 'right', {});
-      if (restorer) {
-        restorer.add(widget, widget.id);
-      }
-      deactivator = () => widget.dispose();
-    },
-    deactivate: () => deactivator?.()
-  }))()
-};
-
-export const plugins = [consumer, corrector, registrar, source, ui, unlocker];
+export const plugins = [
+  collector,
+  consumer,
+  corrector,
+  registrar,
+  source,
+  submitter,
+  ui,
+  unlocker
+];

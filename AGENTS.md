@@ -27,6 +27,14 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - **Workbook Abstraction**: Use `Workbook` functions (e.g., `Workbook.update`) to modify notebook metadata. Do not touch `notebook.model.metadata` directly.
 - **WeakMap Caching**: `Workbook.open()` uses a WeakMap cache to avoid expensive decryption/parsing.
 
+### Type System Patterns
+
+- **Discriminated Unions**: Use union types with a common discriminator field to encode mutually exclusive states.
+  - _Example_: `Reified` type in `commands.ts` enables safe type narrowing after `if (!rubric)` guards.
+  - _Pattern_: After checking `if (!rubric) return`, TypeScript knows `workbook` is non-null.
+- **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, assignment ID, and signature.
+- **Timestamps**: Use `Workbook.timestamp()` to retrieve the assignment report timestamp (throws if missing).
+
 ## 3. Asynchronous Patterns
 
 - **Streaming / Async Generators**: Long-running ops (grading, distributing) must implement the `async generator` pattern yielding updates.
@@ -56,7 +64,9 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 ## 6. Key Module Map
 
 - `rubric.ts`: Core immutable data model & scoring logic.
-- `workbook.ts`: Stateful notebook wrapper & metadata I/O.
+- `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing.
 - `security.ts`: `openpgp` & `window.crypto` wrappers.
-- `commands.ts`: The central controller registry.
-- `propagator.ts`: Async generator for logical distribution.
+- `commands.ts`: The central controller registry. Defines `Reified` type for safe workbook resolution.
+- `propagator.ts`: Async generator for assignment distribution to rosters.
+- `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
+- `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Registrar`, `Submitter`, `Unlocker`).

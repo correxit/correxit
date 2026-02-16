@@ -1,48 +1,16 @@
 import { expect, test } from '@jupyterlab/galata';
-
-type CellInput = { id: string; source: string };
+import { setup } from './utils';
 
 test.use({ autoGoto: false });
 
-async function setupNotebook(page: any, cells: CellInput[]) {
-  await page.goto();
+test('audits and prunes invalid rubric cells', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'known', source: '' }]);
 
-  const name = await page.notebook.createNew();
-  expect(name).toBeTruthy();
-  await page.evaluate(
-    ({ cells }: { cells: CellInput[] }) => {
-      const panel = (window as any).jupyterapp.shell.currentWidget;
-      const { sharedModel } = panel.context.model;
-      while (sharedModel.cells.length) {
-        sharedModel.deleteCell(0);
-      }
-      cells.forEach((cell, index) => {
-        sharedModel.insertCell(index, {
-          cell_type: 'code',
-          id: cell.id,
-          metadata: {},
-          source: cell.source
-        });
-      });
-    },
-    { cells }
-  );
-  return {
-    async dispose() {
-      await page.notebook.close(true);
-      if (name) {
-        await page.contents.deleteFile(name);
-      }
-    }
-  };
-}
-
-test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
-  const { dispose } = await setupNotebook(page, [{ id: 'known', source: '' }]);
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context } as any;
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -54,6 +22,7 @@ test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
         payload: null
       }
     );
+
     const audit = Workbook.audit(workbook, rubric);
     return {
       ok: audit.ok,
@@ -61,6 +30,7 @@ test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
       invalid: audit.ok ? Rubric.has(audit.rubric, 'missing-ref') : null
     };
   });
+
   expect(result.ok).toBe(true);
   expect(result.pruned).toBe(1);
   expect(result.invalid).toBe(false);
@@ -68,16 +38,18 @@ test('audits and prunes invalid rubric cells in a rubric', async ({ page }) => {
 });
 
 test('locks unlocked rubric and writes notebook metadata', async ({ page }) => {
-  const { dispose } = await setupNotebook(page, []);
+  const { dispose } = await setup(page, []);
+
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
+
     const rubric = { ...Rubric.create(), key: 'secret' } as any;
-    const updated = await Workbook.update(workbook, rubric);
+    const written = await Workbook.update(workbook, rubric);
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
     return {
-      locked: updated?.locked ?? null,
+      locked: written?.locked ?? null,
       stored: metadata?.locked ?? null,
       key: metadata?.key ?? null
     };
@@ -90,7 +62,7 @@ test('locks unlocked rubric and writes notebook metadata', async ({ page }) => {
 });
 
 test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
-  const { dispose } = await setupNotebook(page, [
+  const { dispose } = await setup(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
@@ -99,6 +71,7 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
+
     const rubric = Rubric.add(
       { ...Rubric.create(), key: 'secret' },
       {
@@ -113,8 +86,8 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
 
-    const { sharedModel } = panel.context.model;
-    const cell = sharedModel.cells[0];
+    const notebook = panel.context.model.sharedModel;
+    const cell = notebook.cells[0];
     const locked = {
       type: cell.cell_type,
       jupyter: cell.getMetadata('jupyter'),
@@ -122,12 +95,12 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     };
     await Workbook.unlock(workbook, rubric.key);
 
-    const decrypted = sharedModel.cells[0];
+    const opened = notebook.cells[0];
     const unlocked = {
-      type: decrypted.cell_type,
-      source: decrypted.getSource(),
-      jupyter: decrypted.getMetadata('jupyter'),
-      editable: decrypted.getMetadata('editable')
+      type: opened.cell_type,
+      source: opened.getSource(),
+      jupyter: opened.getMetadata('jupyter'),
+      editable: opened.getMetadata('editable')
     };
     return { locked, unlocked };
   });
@@ -139,5 +112,140 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
   expect(result.unlocked.source).toBe('answer');
   expect(result.unlocked.jupyter.source_hidden).toBeUndefined();
   expect(result.unlocked.editable).toBeUndefined();
+  await dispose();
+});
+
+test('assigns workbook and updates metadata', async ({ page }) => {
+  const { dispose } = await setup(page, []);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const initial = { ...Rubric.create(), key: 'secret' };
+    await Workbook.update(workbook, initial);
+
+    const changes = {
+      assignee: 'assignee@example.com',
+      roster: ['assignee@example.com']
+    };
+
+    const final = await Workbook.assign(workbook, changes);
+    const metadata = panel.context.model.sharedModel.getMetadata('correxit');
+    return {
+      assignee: final.assignment.assignee,
+      stored: metadata?.assignment?.assignee ?? null,
+      signature: !!final.assignment.signature
+    };
+  });
+
+  expect(result.assignee).toBe('assignee@example.com');
+  expect(result.stored).toBe('assignee@example.com');
+  expect(result.signature).toBe(true);
+  await dispose();
+});
+
+test('assign short-circuits when no fields changed', async ({ page }) => {
+  const { dispose } = await setup(page, []);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const initial = { ...Rubric.create(), key: 'secret' };
+    await Workbook.update(workbook, initial);
+
+    const assigned = await Workbook.assign(workbook, {
+      assignee: 'test@example.com',
+      roster: ['test@example.com']
+    });
+
+    const signature = assigned.assignment.signature;
+    const unchanged = await Workbook.assign(workbook, {});
+    return {
+      same: unchanged.assignment.signature === signature,
+      assignee: unchanged.assignment.assignee
+    };
+  });
+
+  expect(result.same).toBe(true);
+  expect(result.assignee).toBe('test@example.com');
+  await dispose();
+});
+
+test('submits a workbook and sets cells to read-only', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'a', source: 'x = 1' },
+    { id: 'b', source: 'y = 2' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const rubric = { ...Rubric.create(), key: 'secret' } as any;
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+
+    const submitted = await Workbook.submit(workbook, 'receipt-123');
+    const notebook = panel.context.model.sharedModel;
+    const metadata = notebook.getMetadata('correxit');
+    return {
+      locked: submitted.locked,
+      submission: submitted.assignment.submission,
+      confirmation: submitted.assignment.confirmation,
+      stored: metadata?.assignment?.submission ?? null,
+      editable: notebook.cells.map((c: any) => c.getMetadata('editable'))
+    };
+  });
+
+  expect(result.locked).toBe(true);
+  expect(result.submission).toBeGreaterThan(0);
+  expect(result.confirmation).toBe('receipt-123');
+  expect(result.stored).toBeGreaterThan(0);
+  expect(result.editable).toEqual([false, false]);
+  await dispose();
+});
+
+test('drafts a submitted workbook, restores editability', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'a', source: 'x = 1' },
+    { id: 'b', source: 'y = 2' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const rubric = { ...Rubric.create(), key: 'secret' } as any;
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+    await Workbook.submit(workbook, 'receipt');
+
+    // Mark one cell as source_hidden to simulate an encrypted cell.
+    const notebook = panel.context.model.sharedModel;
+    notebook.cells[1].setMetadata('jupyter', { source_hidden: true });
+
+    const drafted = await Workbook.draft(workbook);
+    const metadata = notebook.getMetadata('correxit');
+    return {
+      locked: drafted.locked,
+      submission: drafted.assignment.submission,
+      confirmation: drafted.assignment.confirmation,
+      stored: metadata?.assignment?.submission ?? null,
+      editable: notebook.cells.map((c: any) => c.getMetadata('editable'))
+    };
+  });
+
+  expect(result.locked).toBe(true);
+  expect(result.submission).toBeNull();
+  expect(result.confirmation).toBeNull();
+  expect(result.stored).toBeNull();
+  expect(result.editable[0]).toBeUndefined();
+  expect(result.editable[1]).toBe(false);
   await dispose();
 });

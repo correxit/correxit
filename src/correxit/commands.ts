@@ -3,6 +3,7 @@ import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { ITranslator } from '@jupyterlab/translation';
 import { notebookIcon, saveIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '..';
@@ -14,62 +15,67 @@ import * as security from './security';
 import * as state from './state';
 
 export namespace CommandIDs {
-  export const add = 'correxit::add';
-  export const assign = 'correxit::assign';
-  export const comment = 'correxit::comment';
-  export const convert = 'correxit::convert';
-  export const correct = 'correxit::correct';
-  export const emit = 'correxit::emit';
-  export const fetch = 'correxit::fetch';
-  export const lock = 'correxit::lock';
-  export const propagate = 'correxit::propagate';
-  export const registrar = 'correxit::registrar';
-  export const remove = 'correxit::remove';
-  export const reset = 'correxit::reset';
-  export const save = 'correxit::save';
-  export const toggle = 'correxit::toggle';
-  export const unlock = 'correxit::unlock';
+  export const add = 'correxit:add';
+  export const assign = 'correxit:assign';
+  export const certify = 'correxit:certify';
+  export const comment = 'correxit:comment';
+  export const convert = 'correxit:convert';
+  export const correct = 'correxit:correct';
+  export const draft = 'correxit:draft';
+  export const emit = 'correxit:emit';
+  export const fetch = 'correxit:fetch';
+  export const lock = 'correxit:lock';
+  export const propagate = 'correxit:propagate';
+  export const registrar = 'correxit:registrar';
+  export const remove = 'correxit:remove';
+  export const reset = 'correxit:reset';
+  export const save = 'correxit:save';
+  export const submit = 'correxit:submit';
+  export const toggle = 'correxit:toggle';
+  export const unlock = 'correxit:unlock';
 }
 
 type Assignment = Rubric.Assignment;
 type Cell = Rubric.Cell;
+type CellToolbar = Rubric.Cell.Toolbar;
 type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
-type CellToolbar = Rubric.Cell.Toolbar;
+type Reified =
+  { handle: Credentials | null; rubric: null; workbook: null; } |
+  { handle: Credentials | null; rubric: null; workbook: Workbook; } |
+  { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
 const { get, has, size } = Rubric;
-const {
-  add, assign, comment, convert, correct, lock, remove, reset, toggle
-} = Workbook;
+const { add, assign, certify, comment, convert, correct } = Workbook;
+const { draft, lock, remove, reset, submit, toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
   app: JupyterFrontEnd,
-  dependencies: {
+  utilities: {
+    collector: Correxit.Collector;
     consumer: Correxit.Consumer;
     registrar: Correxit.Registrar;
-    schedule: (workbook: Workbook | null) => void;
-    trans: IRenderMime.TranslationBundle;
+    scheduler: Correxit.Scheduler;
+    submitter: Correxit.Submitter;
+    translator: ITranslator;
     unlocker: Correxit.Unlocker;
   }
 ) {
-  const { commands } = app;
-  const manager = app.serviceManager;
-  const { consumer, registrar, schedule, trans, unlocker } = dependencies;
+  const { commands, serviceManager: manager } = app;
+  const { collector, consumer, registrar } = utilities;
+  const { scheduler, submitter, translator, unlocker } = utilities;
+  const trans = translator.load('correxit');
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
     io.request(handle, factory, manager, unlocker);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
-  const reify = async (args: Partial<Credentials>): Promise<{
-    handle: Credentials | null;
-    rubric: Rubric | null;
-    workbook: Workbook | null;
-  }> => {
+  const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
     const workbook = handle ? await fetch(handle) : state.workbook();
     const rubric = open(workbook);
-    return { handle, rubric, workbook };
+    return { handle, rubric, workbook } as Reified;
   };
   const disposables = [];
   disposables.push(commands.addCommand(CommandIDs.add, {
@@ -77,9 +83,9 @@ export function addCommands(
     icon: ({ is }: Partial<Cell>) =>
       Rubric.Cell.types.some(type => is === type) ? Icons[is!] : void 0,
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
-      const cells = state.workbook()?.context.model.sharedModel.cells || [];
+      const notebook = state.workbook()?.context.model.sharedModel;
       const id = state.cell(args);
-      const cell = find(cells, cell => cell.id === id);
+      const cell = find(notebook?.cells || [], cell => cell.id === id);
       const reference = args.reference;
       const rubric = open(state.workbook());
       if (!cell || !rubric || rubric.locked || !id || id === reference?.[0]) {
@@ -111,10 +117,10 @@ export function addCommands(
       return '';
     },
     execute: async (args: Partial<Cell & Credentials>) => {
-      const { workbook, rubric } = await reify(args);
+      const { rubric, workbook } = await reify(args);
       const id = state.cell(args);
       const is = args.is;
-      if (!workbook || !rubric || !id || !is) {
+      if (!rubric || !id || !is) {
         return;
       }
 
@@ -181,21 +187,31 @@ export function addCommands(
     label: trans.__('Assign workbook...'),
     execute: async (args: Partial<Credentials & Assignment>) => {
       const { rubric, workbook } = await reify(args);
-      if (!workbook || !rubric) {
+      if (!rubric) {
         return;
       }
 
-      const registered = registrar && await registrar(workbook);
-      const assignment: Partial<Assignment> = {
-        assignee: args.assignee || undefined,
-        roster: registered || args.roster || []
-      };
-      const different = (a: Partial<Assignment>, b: Assignment) =>
-        // Normalize assignee here to ignore `undefined` mismatches.
-        JSON.stringify({ x: a.assignee || '', y: a.roster }) !==
-        JSON.stringify({ x: b.assignee || '', y: b.roster });
-      if (different(assignment, rubric.assignment)) {
-        await assign(workbook, assignment);
+      const identifier = Workbook.identifier(workbook);
+      const roster = await registrar(workbook, identifier) || args.roster;
+      await assign(workbook, { ...args, roster });
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.certify, {
+    icon: Icons.certify,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      const assigned = !!rubric?.assignment.assignee;
+      return assigned && !rubric.locked;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.certify),
+    label: trans.__('Certify workbook...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || rubric.locked || !rubric.assignment.assignee) {
+        return;
+      }
+      for await (const _ of collector([await certify(workbook)])) {
+        void _; // Exhaust the generator that collector returns.
       }
     }
   }));
@@ -285,6 +301,36 @@ export function addCommands(
       }
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.draft, {
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!rubric?.locked && !!rubric.assignment.submission;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.draft),
+    label: trans.__('Revert to draft...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { workbook } = await reify(args);
+      if (!workbook) {
+        return;
+      }
+      const title = trans.__('Revert to draft');
+      const body = trans.__('Revert read-only submission to draft workbook?');
+      const buttons = [
+        Dialog.cancelButton({ label: trans.__('Cancel') }),
+        Dialog.okButton({ label: trans.__('Revert') })
+      ];
+      const { button } = await showDialog({ title, body, buttons });
+      if (!button.accept) {
+        return;
+      }
+      try {
+        await draft(workbook);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        void showErrorMessage(trans.__('Could not revert'), error as Error);
+      }
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.emit, {
     label: trans.__('Schedule one Correxit source emission'),
     execute: () => (fired => {
@@ -293,7 +339,7 @@ export function addCommands(
           return;
         }
         fired = true;
-        schedule(emission);
+        scheduler(emission);
       };
     })(false)
   }));
@@ -342,7 +388,7 @@ export function addCommands(
     label: trans.__('Lock'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
-      if (!workbook || !rubric) {
+      if (!rubric) {
         return;
       }
       try {
@@ -368,7 +414,7 @@ export function addCommands(
       args: Partial<Credentials>
     ): Promise<AsyncIterable<[string, Correxit.Emitter.Emission]>> => {
       const { rubric, workbook } = await reify(args);
-      if (!workbook || !rubric || rubric.locked) {
+      if (!rubric || rubric.locked) {
         return (async function* empty() {})();
       }
 
@@ -383,16 +429,17 @@ export function addCommands(
   }));
   disposables.push(commands.addCommand(CommandIDs.registrar, {
     execute: async (args: Partial<Credentials>): Promise<string[] | null> => {
-      if (!registrar) {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric) {
         return null;
       }
 
-      const { workbook } = await reify(args);
       const warn = (error: any) => {
         console.warn('registrar failed for workbook', workbook, error);
         return [];
       };
-      return workbook && await registrar(workbook).catch(warn);
+      const identifier = Workbook.identifier(workbook);
+      return await registrar(workbook, identifier).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
@@ -442,11 +489,53 @@ export function addCommands(
         return;
       }
       if (args.undo === false) {
-        workbook.context.model.sharedModel.clearUndoHistory();
+        const notebook = workbook.context.model.sharedModel;
+        notebook.clearUndoHistory();
       }
       await workbook.context.save();
       if (commands.hasCommand(Corrector.CommandIDs.refresh)) {
         await commands.execute(Corrector.CommandIDs.refresh);
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.submit, {
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      const locked = !!rubric?.locked;
+      const assigned = !!rubric?.assignment.assignee;
+      const submitted = !!rubric?.assignment.submission;
+      return locked && assigned && !submitted;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.submit),
+    label: trans.__('Submit assignment...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric) {
+        return;
+      }
+
+      const title = trans.__('Submit assignment');
+      const body = trans.__(
+        'Submit assignment? This workbook will be set to read-only.'
+      );
+      const { button } = await showDialog({
+        title,
+        body,
+        buttons: [
+          Dialog.cancelButton({ label: trans.__('Cancel') }),
+          Dialog.okButton({ label: trans.__('Submit') })
+        ]
+      });
+      if (!button.accept) {
+        return;
+      }
+      try {
+        const identifier = Workbook.identifier(workbook);
+        const confirmation = await submitter(workbook, identifier);
+        await submit(workbook, confirmation);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        void showErrorMessage(trans.__('Could not submit'), error as Error);
       }
     }
   }));

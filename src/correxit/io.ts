@@ -1,7 +1,7 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { Context } from '@jupyterlab/docregistry';
 import { INotebookContent } from '@jupyterlab/nbformat';
-import { INotebookModel, NotebookModelFactory } from '@jupyterlab/notebook';
+import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
@@ -21,59 +21,57 @@ export async function create(options: {
   notebook: INotebookContent;
   path: string;
 }): Promise<boolean> {
-  const { notebook, factory, manager } = options;
-  const { contents } = manager;
+  const { notebook, factory, manager, manager: { contents } } = options;
   const ext = '.ipynb';
   const path = PathExt.dirname(options.path);
   const type = 'notebook';
-  let context: Context<INotebookModel> | null = null;
   try {
     const untitled = await contents.newUntitled({ ext, path, type });
     const renamed = await contents.rename(untitled.path, options.path);
-    context = new Context({ manager, factory, path: renamed.path });
-    await context.initialize(true);
-    await context.ready;
-    context.model.sharedModel.fromJSON(notebook);
-    await context.save();
-    context.dispose();
-    return true;
+    const context = new Context({ factory, manager, path: renamed.path });
+    try {
+      await context.initialize(true);
+      await context.ready;
+      context.model.sharedModel.fromJSON(notebook);
+      await context.save();
+      return true;
+    } finally {
+      context.dispose();
+    }
   } catch (error) {
     console.warn('create error', error);
+    return false;
   }
-  context?.dispose();
-  return false;
 }
 
 export async function folder(
-  manager: ServiceManager.IManager,
+  { contents }: ServiceManager.IManager,
   pwd: string,
   seed: string
 ): Promise<string> {
-  const response = await manager.contents.get(pwd);
+  const response = await contents.get(pwd);
   if (response.type !== 'directory') {
     throw new Error(`not a folder(${pwd}, ${seed})`);
   }
-  const paths = (response.content as Contents.IModel[]).reduce(
-    (paths, { path }) => paths.set(path, null),
-    new Map<string, null>()
-  );
-  let suffix = 0;
-  let folder: string;
-  do {
-    folder = PathExt.join(pwd, `${seed}${suffix ? `-${suffix}` : ''}`);
-    suffix += 1;
-  } while (paths.has(folder));
-  return folder;
+
+  const paths = (response.content as Contents.IModel[]).map(({ path }) => path);
+  const parent = new Set(paths);
+  for (let suffix = 0; ; suffix++) {
+    const name = PathExt.join(pwd, suffix ? `${seed}-${suffix}` : seed);
+    if (parent.has(name)) {
+      continue;
+    }
+    return name;
+  }
 }
 
 export async function mkdir(
-  manager: ServiceManager.IManager,
+  { contents }: ServiceManager.IManager,
   pwd: string,
   path: string
 ) {
-  const type = 'directory';
-  const created = await manager.contents.newUntitled({ path: pwd, type });
-  return await manager.contents.rename(created.path, path);
+  const untitled = await contents.newUntitled({ path: pwd, type: 'directory' });
+  return await contents.rename(untitled.path, path);
 }
 
 export async function request(
@@ -82,17 +80,18 @@ export async function request(
   manager: ServiceManager.IManager,
   unlocker: Correxit.Unlocker
 ): Promise<Workbook.Headless | null> {
-  const { path } = handle;
+  const { key, passphrase, path, unlock } = handle;
   const context = new Context({ manager, factory, path });
   const workbook = { content: null, context };
   await context.initialize(false);
 
   const rubric = Workbook.open(workbook, true);
+  const unauthenticated = !(key || passphrase || unlock);
   if (!rubric) {
     context.dispose();
     return null;
   }
-  if (!rubric.locked || handle.unlock === false || !(handle.unlock || handle.key)) {
+  if (!rubric.locked || unlock === false || unauthenticated) {
     await Workbook.lock(workbook);
     return workbook;
   }

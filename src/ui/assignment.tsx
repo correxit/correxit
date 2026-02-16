@@ -41,6 +41,7 @@ export const Assignment: React.FC<{
       ) : (
         <Roster {...{ assignment, locked, registered, toggle, trans }} />
       )}
+      <Expiration {...{ assignment, locked, toggle, trans }} />
       {!locked && <Propagate {...{ accessed, commands, trans }} />}
     </div>
   );
@@ -96,6 +97,59 @@ const Assignee: React.FC<{
   );
 };
 
+const format = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const Expiration: React.FC<{
+  assignment: Assignment;
+  locked: boolean;
+  toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
+  trans: TranslationBundle;
+}> = ({ assignment, locked, toggle, trans }) => {
+  const { expiration } = assignment;
+  const className =
+    expiration !== null && Date.now() > expiration
+      ? 'correxit-assignment-expiration cxt-mod-expired'
+      : 'correxit-assignment-expiration';
+  if (locked) {
+    const label = expiration
+      ? trans.__('Due %1', new Date(expiration).toLocaleString())
+      : trans.__('No deadline');
+    return (
+      <div className={className}>
+        <div className="correxit-monospace">{label}</div>
+      </div>
+    );
+  }
+  const update = (value: string) => {
+    const expiration = value ? new Date(value).getTime() : null;
+    toggle('assignee', { ...assignment, expiration });
+  };
+  return (
+    <div className={className}>
+      <div>
+        <label htmlFor="correxit-assignment-expiration">
+          {trans.__('Deadline')}
+        </label>
+        <input
+          id="correxit-assignment-expiration"
+          name="correxit-assignment-expiration"
+          onChange={({ target: { value } }) => update(value)}
+          type="datetime-local"
+          value={expiration ? format(expiration) : ''}
+        />
+      </div>
+    </div>
+  );
+};
+
 const Roster: React.FC<{
   assignment: Assignment;
   locked: boolean;
@@ -110,9 +164,9 @@ const Roster: React.FC<{
   useEffect(() => void (registered && freeze(registered)), [registered]);
   useEffect(
     () =>
-      setAssignment(({ assignee, report, signature }) => {
+      setAssignment(({ assignee, ...assignment }) => {
         assignee = find(roster, record => record === assignee) ? assignee : '';
-        return { assignee, report, roster, signature };
+        return { ...assignment, assignee, roster };
       }),
     [roster]
   );
@@ -159,7 +213,7 @@ const Propagate: React.FC<{
   const [timestamp, setTimestamp] = useState(accessed);
   const [log, done] = useCommand<Message>(commands, command, { timestamp });
   const messages = log
-    .filter(([_, { type }]) => type !== 'progress')
+    .filter(([, { type }]) => type !== 'progress')
     .map(([message]) => message);
   const [value, max]: [number, number] = log.reduce(
     (progress, [_, { type, slots }]) =>

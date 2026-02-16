@@ -6,7 +6,7 @@ import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
 
 /**
- * Kicks off a propagator loop.
+ * Kicks off a propagator loop, which in turn invokes the given consumer.
  * @returns a message emitter for tracking loop progress.
  */
 export function invoke({ consumer, workbook }: {
@@ -86,9 +86,10 @@ async function propagate({ consumer, log, rubric, workbook }: {
       const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
       const path = PathExt.join(pwd, file);
       await log({ type: 'separator', slots: [] });
-      await reassign({ assignee, key, notebook, roster });
+
+      const identifier = await reassign({ assignee, key, notebook, roster });
       await log({ type: 'assigned', slots: [assignee] });
-      yield { assignee, assignment: rubric.id, notebook, path };
+      yield { identifier, notebook, path };
     }
   }
   const stream = async (location: { base: string; pwd: string }) =>
@@ -96,19 +97,27 @@ async function propagate({ consumer, log, rubric, workbook }: {
   await consumer({ log, path, rubric, stream });
 }
 
+/**
+ * Reassigns a serialized workbook to an assignee using a given unlocked rubric.
+ *
+ * #### Notes
+ * This function explicitly mutates the serialized rubric in the given workbook
+ * to overwrite its assignee and signature.
+ */
 async function reassign({ assignee, key, notebook, roster }: {
   assignee: string;
   key: string;
   notebook: INotebookContent;
   roster: string[];
-}) {
+}): Promise<Workbook.Identifier> {
   const { sign } = Rubric.Assignment;
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked;
-  const { report, roster: encrypted } = metadata.assignment;
-  const signature = await sign({ assignee, report, roster }, key);
+  const { roster: encrypted, ...assignment } = metadata.assignment;
+  const signature = await sign({ ...assignment, assignee, roster }, key);
   (metadata as Rubric.Locked & { accessed: number }).accessed = Date.now();
   (metadata as Rubric.Locked & { assignment: Rubric.Assignment }).assignment =
-    { assignee, report, roster: encrypted, signature };
+    { ...assignment, assignee, roster: encrypted, signature };
+  return { assignee, assignment: metadata.id, signature };
 }
 
 async function template(

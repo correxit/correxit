@@ -15,9 +15,10 @@ import { SidebarWidget } from './widget';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
+const { CommandIDs } = Correxit;
 const { get, has } = Rubric;
-const { add, comment, convert, correct, lock, remove, reset, toggle, unlock } =
-  Correxit.CommandIDs;
+const { add, certify, comment, convert, correct, draft, lock } = CommandIDs;
+const { remove, reset, submit, toggle, unlock } = Correxit.CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Sidebar(props: Sidebar.Props) {
@@ -70,12 +71,14 @@ const Header: React.FC<{
     : null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   const idle = trans.__('Correxit: idle');
+  const date = (timestamp: number) => new Date(timestamp).toLocaleString();
   const subheading =
-    score === null
-      ? ''
-      : score.status === 'unscored'
-        ? trans.__('Unscored')
-        : trans.__('Workbook Grade %1 out of %2', score.points, score.possible);
+    score === null || score.status === 'unscored'
+      ? trans.__('Unscored')
+      : trans.__('Workbook Grade %1 out of %2', score.points, score.possible);
+  const submission = rubric?.assignment.submission
+    ? trans.__('Submitted %1', date(rubric.assignment.submission))
+    : trans.__('Unsubmitted');
   return (
     <section className="correxit-sidebar-header">
       <div className="correxit-sidebar-inner-header">
@@ -84,9 +87,13 @@ const Header: React.FC<{
         <CommandToolbarButtonComponent commands={commands} id={unlock} />
       </div>
       {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
+      <p>{subheading}</p>
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <CommandToolbarButtonComponent commands={commands} id={correct} />
-      <p>{subheading}</p>
+      <CommandToolbarButtonComponent commands={commands} id={certify} />
+      <p>{submission}</p>
+      <CommandToolbarButtonComponent commands={commands} id={submit} />
+      <CommandToolbarButtonComponent commands={commands} id={draft} />
     </section>
   );
 };
@@ -103,10 +110,9 @@ const CellReport: React.FC<{
   const [editable, setEditable] = useState(false);
 
   useEffect(() => {
-    setValue(report?.comment ?? '');
+    setValue(report?.comment || '');
     setEditable(false);
   }, [report]);
-
   if (!report) {
     return <></>;
   }
