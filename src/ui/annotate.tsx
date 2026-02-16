@@ -1,56 +1,67 @@
+import { Widget } from '@lumino/widgets';
 import React, { useEffect } from 'react';
 import { Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 
+const correct = 'cxt-mod-correct';
+const incorrect = 'cxt-mod-incorrect';
+const decorations = Rubric.Cell.types
+  .map(type => `cxt-mod-${type}`)
+  .concat(correct, incorrect);
+
+function clear({ content }: Workbook) {
+  if (content && !content.isDisposed) {
+    content.widgets.forEach(reset);
+  }
+}
+
+function decorate(workbook: Workbook, cell: Rubric.Cell, widget: Widget) {
+  const report = state.report(workbook, cell.id);
+  widget.addClass(`cxt-mod-${cell.is}`);
+  if (report?.status === 'correct') {
+    widget.addClass(correct);
+  } else if (report?.status === 'incorrect') {
+    widget.addClass(incorrect);
+  }
+}
+
+function reset(widget: Widget) {
+  for (const decoration of decorations) {
+    widget.removeClass(decoration);
+  }
+}
+
 /**
  * A side-effect component that synchronizes rubric state with the notebook UI.
  *
- * This component renders `null` but manipulates the active notebook's DOM to
- * apply visual indicators to workbook cells based on their status in the rubric
- * (e.g., 'correct', 'incorrect', etc.).
+ * This component renders `null` but uses Lumino's widget API to apply visual
+ * indicators to workbook cells based on their status in the rubric (e.g.,
+ * 'correct', 'incorrect', etc.).
  *
- * Its lifecycle is bound to the Correxit sidebar: when mounted, it augments the
- * active notebook if it is a workbook. When unmounted or updated, it cleans up
- * and restores the notebook DOM to its original state.
+ * Its lifecycle is bound to the Correxit sidebar: when mounted, it augments
+ * the active notebook if it is a workbook. When unmounted or updated, it
+ * cleans up and restores widgets to their original state.
  */
 export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
   const { workbook } = props;
-  const notebook = workbook?.content;
   const rubric = Workbook.open(workbook, true);
-  const classes = Rubric.Cell.types.map(type => `cxt-mod-${type}`);
-  const selector = Rubric.Cell.types.map(type => `.cxt-mod-${type}`).join(', ');
   useEffect(() => {
-    const status = ['cxt-mod-correct', 'cxt-mod-incorrect'];
-    const reset = (node: Element) => {
-      node.classList.remove(...classes);
-      node.classList.remove(...status);
-    };
-    const clear = () =>
-      void notebook?.node.querySelectorAll(selector).forEach(reset);
-    if (!notebook || notebook.isDisposed || !rubric) {
-      return clear;
+    const notebook = workbook?.content;
+    if (!notebook || !rubric || notebook.isDisposed) {
+      return;
     }
 
     let remaining = Rubric.size(rubric);
-    for (const { node, model } of notebook.widgets) {
-      const cell = Rubric.get(rubric, model.id);
-      if (!cell) {
-        continue;
-      }
-      node.classList.add(`cxt-mod-${cell.is}`);
-
-      const report = state.report(workbook, cell.id);
-      const [correct, incorrect] = status;
-      if (report?.status === 'correct') {
-        node.classList.add(correct);
-      } else if (report?.status === 'incorrect') {
-        node.classList.add(incorrect);
-      }
-      if (--remaining === 0) {
-        break;
+    for (const widget of notebook.widgets) {
+      const cell = Rubric.get(rubric, widget.model.id);
+      if (cell) {
+        decorate(workbook, cell, widget);
+        if (--remaining === 0) {
+          break;
+        }
       }
     }
-    return clear;
-  }, [notebook, rubric]);
+    return () => clear(workbook);
+  }, [rubric, workbook]);
   return null;
 };
