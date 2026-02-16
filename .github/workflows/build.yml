@@ -108,12 +108,14 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
+          cache: 'yarn'
 
       - name: Publish package
         run: |
           set -eux
-          npm ci
-          npm run build:prod
+          corepack enable
+          yarn install --frozen-lockfile
+          yarn build:prod
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm publish --access internal  #  Explicitly set public access.
 
