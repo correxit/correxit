@@ -10,6 +10,7 @@ import { findIndex, range } from '@lumino/algorithm';
 import { Correxit, Rubric } from '.';
 import * as kernels from './kernels';
 import * as security from './security';
+import * as state from './state';
 
 /**
  * A headed or headless Correxit workbook.
@@ -364,9 +365,11 @@ export namespace Workbook {
     const { score, summary } = Rubric.Assignment;
     const { spec, outputs } = result;
     const report = await score(rubric, outputs, id);
+    const scored = Object.entries(report.scores);
     if (!rubric.locked) {
       await update(workbook, await Rubric.sign(rubric, report));
     }
+    scored.forEach(([id, score]) => state.cache(workbook, id, score));
     return { spec, score: id ? report.scores[id] : summary(report) };
   }
 

@@ -1,30 +1,58 @@
 import { Rubric, Workbook } from '.';
 
 const state: {
-  report: { [cached: string]: Rubric.Score };
+  report: Map<string, Rubric.Score>;
   workbook: Workbook | null;
-} = {
-  report: Object.create(null),
-  workbook: null
-};
+} = { report: new Map(), workbook: null };
+const footprint = 1000;
+
+/**
+ * Caches a cell score in memory.
+ */
+export function cache(workbook: Workbook, id: string, score: Rubric.Score) {
+  const rubric = Workbook.open(workbook, true);
+  if (!rubric) {
+    return;
+  }
+
+  const key = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
+  if (state.report.size >= footprint) {
+    state.report.delete(state.report.keys().next().value!); // FIFO eviction
+  }
+  state.report.set(key, score);
+}
+
+/**
+ * @returns the resolved cell id from command arguments.
+ */
+export function cell(args: Partial<Rubric.Cell & Rubric.Cell.Toolbar>): string {
+  const notebook = workbook()?.content;
+  const toolbar = args[Rubric.Cell.TOOLBAR];
+  return args.id || toolbar && notebook?.activeCell?.model.id || '';
+}
+
 
 /**
  * @returns the cached score for a cell or the persisted score when uncached.
  */
-export function report(
-  workbook: Workbook | null,
-  id: string,
-  score: Rubric.Score | null = null
+export function report(workbook: Workbook | null, id: string
 ): Rubric.Score | null {
   const rubric = Workbook.open(workbook, true);
-  if (!rubric) {
+  if (!rubric || !workbook) {
     return null;
   }
 
-  const cached = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
-  return score
-    ? state.report[cached] = score
-    : state.report[cached] || rubric.assignment.report.scores[id] || null;
+  const key = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
+  const cached = state.report.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  const score = rubric.assignment.report.scores[id] || null;
+  if (score) {
+    cache(workbook, id, score);
+  }
+  return score;
 }
 
 /**
@@ -32,15 +60,4 @@ export function report(
  */
 export function workbook(update?: Workbook | null): Workbook | null {
   return state.workbook = update ?? state.workbook;
-}
-
-/**
- * @returns the resolved cell id from command arguments.
- */
-export function cell(args: Partial<
-  Rubric.Cell & Rubric.Cell.Toolbar
->): Rubric.Cell['id'] {
-  const notebook = workbook()?.content;
-  const toolbar = args[Rubric.Cell.TOOLBAR];
-  return args.id || toolbar && notebook?.activeCell?.model.id || '';
 }
