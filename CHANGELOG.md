@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/QuantStack/correxit/compare/v1.0.3...v1.0.4) (2026-02-16)
+
+
+### Bug Fixes
+
+* Add jupyter base setup for build workflow ([#25](https://github.com/QuantStack/correxit/issues/25)) ([e7cc1ca](https://github.com/QuantStack/correxit/commit/e7cc1ca3c916f84e660663640a5c8937fb72439d))
+
 ## [1.0.3](https://github.com/QuantStack/correxit/compare/v1.0.2...v1.0.3) (2026-02-16)
 
 
