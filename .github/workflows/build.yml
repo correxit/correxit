@@ -104,9 +104,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Base Setup
-        uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
       
       - name: Configure Registry
         uses: actions/setup-node@v4
@@ -118,8 +115,9 @@ jobs:
       - name: Publish package
         run: |
           set -eux
-          jlpm install
-          jlpm run build:prod
+          corepack enable
+          yarn install
+          yarn run build:prod
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm publish --access internal  #  Explicitly set public access.
 
