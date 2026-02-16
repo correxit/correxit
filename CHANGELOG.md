@@ -1,9 +1,15 @@
-## [1.0.1](https://github.com/QuantStack/correxit/compare/v1.0.0...v1.0.1) (2026-02-16)
+## [1.0.2](https://github.com/QuantStack/correxit/compare/v1.0.1...v1.0.2) (2026-02-16)
 
 
 ### Bug Fixes
 
-* Fix semantic releaser  ([#19](https://github.com/QuantStack/correxit/issues/19)) ([6517c1c](https://github.com/QuantStack/correxit/commit/6517c1c39b2ff54e2c005b0ea03a871e9a432a10))
+* Fix release CI ([#20](https://github.com/QuantStack/correxit/issues/20)) ([edd0a37](https://github.com/QuantStack/correxit/commit/edd0a37b177b41b45c82f4bad95f9a494f117ab4))
+
+## [1.0.1](https://github.com/QuantStack/correxit/compare/v1.0.0...v1.0.1) (2026-02-16)
+
+### Bug Fixes
+
+- Fix semantic releaser ([#19](https://github.com/QuantStack/correxit/issues/19)) ([6517c1c](https://github.com/QuantStack/correxit/commit/6517c1c39b2ff54e2c005b0ea03a871e9a432a10))
 
 # 1.0.0 (2026-02-16)
 
