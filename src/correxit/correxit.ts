@@ -14,7 +14,7 @@ export namespace Correxit {
   ) => AsyncGenerator<Workbook.Certified>;
 
   export type Consumer = (output: {
-    log: Emitter.Log;
+    log: (emission: Emitter.Emission) => void;
     path: string;
     rubric: Rubric.Unlocked;
     stream: Propagator;
@@ -23,19 +23,19 @@ export namespace Correxit {
   /**
    * A message emitter for notifications and other Correxit UI updates.
    */
-  export type Emitter = AsyncIterable<{ payload: Emitter.Emission }>;
+  export type Emitter = AsyncIterable<Emitter.Emission>;
 
   export namespace Emitter {
     /**
      * A notification/message emission with slots to populate interpolations.
      */
     export type Emission = { slots: (string | number)[]; type: string; };
-
-    /**
-     * A logging function wired for UI updates for clients to invoke.
-     */
-    export type Log = (payload: Emitter.Emission) => Promise<void>;
   }
+
+  /**
+   * Operator connects/disconnects workbooks and yields them to other plugins.
+   */
+  export type Operator = AsyncIterable<Workbook | null>;
 
   /**
    * An async propagator of assigned workbook content.
@@ -64,11 +64,6 @@ export namespace Correxit {
   ) => Promise<string[] | null>;
 
   export type Scheduler = (workbook: Workbook | null) => void;
-
-  /**
-   * The Correxit source asynchronously yields the active workbook or null.
-   */
-  export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
 
   export type Submitter = (
     workbook: Workbook,
@@ -106,8 +101,8 @@ export namespace Correxit {
     COLLECTOR: description.COLLECTOR,
     CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
+    OPERATOR: description.OPERATOR,
     REGISTRAR: description.REGISTRAR,
-    SOURCE: description.SOURCE,
     SUBMITTER: description.SUBMITTER,
     UI: description.UI,
     UNLOCKER: description.UNLOCKER
@@ -117,13 +112,13 @@ export namespace Correxit {
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
+  export const OPERATOR = '@quantstack/correxit:operator';
+
+  export const Operator = new Token<Operator>(OPERATOR);
+
   export const REGISTRAR = '@quantstack/correxit:registrar';
 
   export const Registrar = new Token<Registrar>(REGISTRAR);
-
-  export const SOURCE = '@quantstack/correxit:source';
-
-  export const Source = new Token<Source>(SOURCE);
 
   export const SUBMITTER = '@quantstack/correxit:submitter';
 

@@ -15,7 +15,7 @@ import {
 } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
-import { Poll } from '@lumino/polling';
+import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
 import { addCommands, Correxit, Unlocker, Workbook } from './correxit';
@@ -45,12 +45,10 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
       return async function consumer({ log, stream, path, rubric }) {
         let progress = 0;
         const total = rubric.assignment.roster.length + 1;
-        await log({ type: 'separator', slots: [] });
         const { directory, location } = await mkdir(path);
         await log({ type: 'mkdir', slots: [directory.path] });
         await log({ type: 'progress', slots: [++progress, total] });
         for await (const { notebook, path } of await stream(location)) {
-          await log({ type: 'separator', slots: [] });
           const saved = await io.create({ factory, manager, notebook, path });
           await log({ type: saved ? 'saved' : 'create-error', slots: [path] });
           await log({ type: 'progress', slots: [++progress, total] });
@@ -72,8 +70,9 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   provides: Correxit.Collector,
   ...((deactivator?: () => void) => ({
     activate: (): Correxit.Collector =>
-      async function* (grades) {
+      async function* collector(grades) {
         for await (const grade of grades) {
+          console.log('grade', grade);
           yield grade;
         }
       },
@@ -147,11 +146,11 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
 };
 
 /**
- * The Correxit source asynchronously yields the active workbook or null.
+ * Operator connects/disconnects workbooks and yields them to other plugins.
  */
-const source: JupyterFrontEndPlugin<Correxit.Source> = {
-  id: Correxit.SOURCE,
-  description: Correxit.DESCRIPTION.SOURCE,
+const operator: JupyterFrontEndPlugin<Correxit.Operator> = {
+  id: Correxit.OPERATOR,
+  description: Correxit.DESCRIPTION.OPERATOR,
   autoStart: true,
   requires: [
     Correxit.Collector,
@@ -162,7 +161,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
     INotebookTracker
   ],
   optional: [ITranslator],
-  provides: Correxit.Source,
+  provides: Correxit.Operator,
   ...((deactivator?: () => void) => ({
     activate: (
       app,
@@ -173,7 +172,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       unlocker: Correxit.Unlocker,
       tracker: INotebookTracker,
       translator: ITranslator | null
-    ): Correxit.Source => {
+    ): Correxit.Operator => {
       translator ||= nullTranslator;
 
       const { commands, shell } = app;
@@ -188,11 +187,7 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
           commands.notifyCommandChanged(command);
         }
       };
-      const source = new Poll<Workbook | null>({
-        auto: false,
-        frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
-        factory: async () => null
-      });
+      const operator = new Stream<null, Workbook | null>(null);
       const { open } = Workbook;
       const quiet = true;
       const subscribe = (prev: Workbook | null, next: Workbook | null) => {
@@ -203,12 +198,12 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
       };
       const scheduler: (workbook: Workbook | null) => void = (
         previous => workbook => {
-          if (workbook !== source.state.payload) {
-            void open(workbook, quiet);
+          if (workbook !== state.workbook()) {
+            open(workbook, quiet);
             subscribe(previous, workbook);
-            void state.workbook(workbook);
+            state.workbook(workbook);
             previous = workbook;
-            void source.schedule({ payload: workbook });
+            operator.emit(workbook);
             notify();
           }
         }
@@ -234,11 +229,12 @@ const source: JupyterFrontEndPlugin<Correxit.Source> = {
         for (const command of added) {
           command.dispose();
         }
-        source.dispose();
         shell.currentChanged?.disconnect(slots.shell);
+        operator.stop();
+        Signal.clearData(operator);
         tracker.currentChanged.disconnect(slots.tracker);
       };
-      return source;
+      return operator;
     },
     deactivate: () => deactivator?.()
   }))()
@@ -262,19 +258,20 @@ const ui: JupyterFrontEndPlugin<void> = {
   id: Correxit.UI,
   description: Correxit.DESCRIPTION.UI,
   autoStart: true,
-  requires: [Correxit.Source],
+  requires: [Correxit.Operator],
   optional: [ITranslator, ILayoutRestorer, ISettingRegistry],
   ...((deactivator?: () => void) => ({
     activate: (
       { commands, shell },
-      source: Correxit.Source,
+      operator: Correxit.Operator,
       translator: ITranslator | null,
       restorer: ILayoutRestorer | null,
       registry: ISettingRegistry
     ) => {
       const settings = registry ? registry.load(Correxit.UI) : null;
       const trans = (translator || nullTranslator).load('correxit');
-      const widget = new Sidebar.Widget({ commands, settings, source, trans });
+      const options = { commands, operator, settings, trans };
+      const widget = new Sidebar.Widget(options);
       widget.id = 'correxit-sidebar';
       widget.title.caption = 'Correxit';
       widget.title.icon = Correxit.Icons.correct;
@@ -319,8 +316,8 @@ export const plugins = [
   collector,
   consumer,
   corrector,
+  operator,
   registrar,
-  source,
   submitter,
   ui,
   unlocker

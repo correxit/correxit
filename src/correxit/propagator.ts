@@ -1,7 +1,7 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { findIndex } from '@lumino/algorithm';
-import { Poll } from '@lumino/polling';
+import { Signal, Stream } from '@lumino/signaling';
 import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
 
@@ -16,7 +16,8 @@ export function invoke({ consumer, workbook }: {
   const rubric = Workbook.open(workbook, true);
   const [emitter, log, end] = logger();
   if (!rubric || rubric.locked) {
-    log({ type: 'error', slots: ['invalid rubric'] }).then(end);
+    log({ type: 'error', slots: ['invalid rubric'] });
+    end();
     return emitter;
   }
   propagate({ consumer, log, rubric, workbook })
@@ -50,26 +51,22 @@ async function encrypt(
 
 function logger(): [
   emitter: Correxit.Emitter,
-  log: (payload: Correxit.Emitter.Emission) => Promise<void>,
+  log: (emission: Correxit.Emitter.Emission) => void,
   end: () => void
 ] {
-  const emitter = new Poll<Correxit.Emitter.Emission>({
-    auto: false,
-    frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
-    factory: async () => ({ type: 'never', slots: [] })
-  });
-  const log = async (payload: Correxit.Emitter.Emission) => {
-    await emitter.schedule({ payload });
-    await emitter.refresh();
-    await emitter.tick;
+  const emitter = new Stream<unknown, Correxit.Emitter.Emission>(null);
+  const log = (emission: Correxit.Emitter.Emission) =>
+    emitter.emit(emission);;
+  const end = () => {
+    emitter.stop();
+    Signal.clearData(emitter);
   };
-  const end = () => emitter.dispose();
   return [emitter, log, end];
 }
 
 async function propagate({ consumer, log, rubric, workbook }: {
   consumer: Correxit.Consumer;
-  log: (payload: Correxit.Emitter.Emission) => Promise<void>;
+  log: (emission: Correxit.Emitter.Emission) => void;
   rubric: Rubric.Unlocked;
   workbook: Workbook;
 }): Promise<void> {
@@ -125,7 +122,7 @@ async function reassign({ assignee, key, notebook, roster }: {
 async function template(
   decrypted: INotebookContent,
   rubric: Rubric.Unlocked,
-  log: (payload: Correxit.Emitter.Emission) => Promise<void>
+  log: (emission: Correxit.Emitter.Emission) => void
 ): Promise<INotebookContent> {
   const encrypted: INotebookContent = JSON.parse(JSON.stringify(decrypted));
   for (const id in rubric.cells) {
@@ -139,6 +136,5 @@ async function template(
       await log({ type: 'encrypted', slots: [reference] });
     }
   }
-  await log({ type: 'separator', slots: [] });
   return encrypted;
 }

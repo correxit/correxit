@@ -6,11 +6,11 @@ import { Workbook } from '.';
  * client should call after it is done with the kernel to release it back to an
  * active kernel pool.
  */
-type Leased = [Kernel.IKernelConnection, () => void];
+type Leased = [kernel: Kernel.IKernelConnection, release: () => void];
 
 type Started = {
+  clean: boolean;
   kernel: Kernel.IKernelConnection;
-  ready: boolean;
   timeout: ReturnType<typeof setTimeout>;
 };
 
@@ -28,13 +28,16 @@ const pool = new Map<string, Started[]>();
  * #### Notes
  * If no kernel is available, a new one is started. If no kernel can be started,
  * the returned promise resolves to `null`. If a kernel available but it is not
- * ready, it is restarted.
+ * clean, it is restarted.
  */
-export const lease = (workbook: Workbook): Promise<Leased | null> => {
+export async function lease(workbook: Workbook): Promise<Leased | null> {
   const started = queue(workbook.context.model.defaultKernelName).pop();
-  const leased = started && (lend(started) || restart(started));
-  return (async potential => await potential || start(workbook))(leased);
-};
+  if (started) {
+    // If both lend (sync) and restart (async) fail fallback to start.
+    return lend(started) || await restart(started) || start(workbook);
+  }
+  return start(workbook);
+}
 
 function dispose(kernel: Kernel.IKernelConnection): void {
   if (kernel.isDisposed) {
@@ -43,8 +46,8 @@ function dispose(kernel: Kernel.IKernelConnection): void {
   kernel.shutdown().catch(() => {}).finally(() => kernel.dispose());
 }
 
-function lend({ kernel, ready }: Omit<Started, 'timeout'>): Leased | null {
-  return ready ? [kernel, () => release(kernel)] : null;
+function lend({ clean, kernel }: Omit<Started, 'timeout'>): Leased | null {
+  return clean ? [kernel, () => release(kernel)] : null;
 }
 
 function queue(name: string): Started[] {
@@ -53,7 +56,7 @@ function queue(name: string): Started[] {
 
 function release(kernel: Kernel.IKernelConnection): void {
   const timeout = setTimeout(() => remove(kernel), TTL);
-  queue(kernel.name).push({ kernel, ready: false, timeout });
+  queue(kernel.name).push({ clean: false, kernel, timeout });
 }
 
 function remove(kernel: Kernel.IKernelConnection): void {
@@ -65,7 +68,7 @@ function remove(kernel: Kernel.IKernelConnection): void {
 async function restart({ kernel, timeout }: Started): Promise<Leased | null> {
   clearTimeout(timeout);
   if (await kernel.restart().then(() => true).catch(() => false)) {
-    return lend({ kernel, ready: true });
+    return lend({ clean: true, kernel });
   }
   dispose(kernel);
   return null;
@@ -80,7 +83,7 @@ async function start(workbook: Workbook): Promise<Leased | null> {
   }
   try {
     const kernel = await kernelManager.startNew({ name });
-    return lend({ kernel, ready: true });
+    return lend({ clean: true, kernel });
   } catch (error) {
     console.warn('start kernel error', error);
   }

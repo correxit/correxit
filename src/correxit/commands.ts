@@ -631,10 +631,10 @@ async function* translate(
       'success': trans.__('Finished! (roster: %1)', ...slots)
     })[type] || '';
   };
-  for await (const { payload } of emitter) {
-    const message = payload && translate(payload);
+  for await (const emission of emitter) {
+    const message = emission && translate(emission);
     if (message) {
-      yield [message, payload] as [string, Correxit.Emitter.Emission];
+      yield [message, emission] as [string, Correxit.Emitter.Emission];
     }
   }
 }
