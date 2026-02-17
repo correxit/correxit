@@ -112,13 +112,13 @@ describe('state', () => {
       const rubric = { ...Rubric.create(), id: 'eviction-test' };
       MockWorkbook.open.mockReturnValue(rubric);
 
-      for (let i = 0; i < state.footprint; i++) {
+      for (let i = 0; i < state.LIMIT; i++) {
         state.cache(dummy, `cell-${i}`, score);
       }
       expect(state.report(dummy, 'cell-0')).toEqual(score);
-      state.cache(dummy, `cell-${state.footprint}`, score);
+      state.cache(dummy, `cell-${state.LIMIT}`, score);
       expect(state.report(dummy, 'cell-0')).toBeNull();
-      expect(state.report(dummy, `cell-${state.footprint}`)).toEqual(score);
+      expect(state.report(dummy, `cell-${state.LIMIT}`)).toEqual(score);
     });
   });
 

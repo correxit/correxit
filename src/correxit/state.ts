@@ -1,6 +1,10 @@
 import { Rubric, Workbook } from '.';
 
-const LIMIT = 500; // Upper bound for in-memory cache of cell scores.
+/**
+ * Upper bound for in-memory cache of cell scores.
+ */
+export const LIMIT = 500;
+
 const state: {
   report: Map<string, Rubric.Score>;
   workbook: Workbook | null;
