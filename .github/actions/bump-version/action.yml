@@ -31,11 +31,13 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
-        npm install
+        export NPM_CONFIG_PACKAGE_LOCK=false
+        npm install --no-package-lock
     - name: Bump version
       id: bump-version
       shell: bash
       run: |
+        export NPM_CONFIG_PACKAGE_LOCK=false
         if [ "$DRY_RUN" == "true" ]; then
           echo "Dry run only"
           GITHUB_REF=${{ github.head_ref }}
