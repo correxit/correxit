@@ -31,7 +31,8 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
-        npm install
+        export NPM_CONFIG_PACKAGE_LOCK=false
+        npm install --no-package-lock
     - name: Bump version
       id: bump-version
       shell: bash
