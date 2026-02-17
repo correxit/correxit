@@ -1,14 +1,10 @@
 import { Rubric, Workbook } from '.';
 
+const LIMIT = 500; // Upper bound for in-memory cache of cell scores.
 const state: {
   report: Map<string, Rubric.Score>;
   workbook: Workbook | null;
 } = { report: new Map(), workbook: null };
-
-/**
- * The maximum number of cached cell score reports.
- */
-export const footprint = 1000;
 
 /**
  * Caches a cell score in memory.
@@ -25,7 +21,7 @@ export function cache(workbook: Workbook, id: string, score: Rubric.Score) {
   }
 
   const key = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
-  if (!state.report.has(key) && state.report.size >= footprint) {
+  if (!state.report.has(key) && state.report.size >= LIMIT) {
     state.report.delete(state.report.keys().next().value!); // FIFO eviction
   }
   state.report.set(key, score);
