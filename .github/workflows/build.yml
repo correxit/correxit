@@ -119,7 +119,7 @@ jobs:
           corepack prepare yarn@stable --activate
           python -m pip install -U "jupyterlab>=4.0.0,<5"
 
-          yarn install --frozen-lockfile
+          yarn install
           yarn run build:prod
           
           export NPM_CONFIG_PACKAGE_LOCK=false

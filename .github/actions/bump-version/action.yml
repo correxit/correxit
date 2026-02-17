@@ -36,6 +36,7 @@ runs:
       id: bump-version
       shell: bash
       run: |
+        export NPM_CONFIG_PACKAGE_LOCK=false
         if [ "$DRY_RUN" == "true" ]; then
           echo "Dry run only"
           GITHUB_REF=${{ github.head_ref }}
