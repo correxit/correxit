@@ -1,3 +1,10 @@
+## [1.0.8](https://github.com/QuantStack/correxit/compare/v1.0.7...v1.0.8) (2026-02-17)
+
+
+### Bug Fixes
+
+* Disable yarn immutable installs in workflows ([#29](https://github.com/QuantStack/correxit/issues/29)) ([dbc46ad](https://github.com/QuantStack/correxit/commit/dbc46add4386f8d266d3e6cb459300f8379b878f))
+
 ## [1.0.7](https://github.com/QuantStack/correxit/compare/v1.0.6...v1.0.7) (2026-02-17)
 
 
