@@ -1,3 +1,10 @@
+## [1.0.6](https://github.com/QuantStack/correxit/compare/v1.0.5...v1.0.6) (2026-02-17)
+
+
+### Bug Fixes
+
+* Iterate on publishing workflow ([#27](https://github.com/QuantStack/correxit/issues/27)) ([202cef8](https://github.com/QuantStack/correxit/commit/202cef852026411df715dc50c4744257c8251982))
+
 ## [1.0.5](https://github.com/QuantStack/correxit/compare/v1.0.4...v1.0.5) (2026-02-16)
 
 
