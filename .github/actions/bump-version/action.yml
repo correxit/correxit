@@ -31,13 +31,15 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
-        export NPM_CONFIG_PACKAGE_LOCK=false
-        npm install --no-package-lock
+        corepack enable
+        yarn install
+      env:
+        YARN_ENABLE_IMMUTABLE_INSTALLS: '0'
+        NPM_CONFIG_PACKAGE_LOCK: 'false'
     - name: Bump version
       id: bump-version
       shell: bash
       run: |
-        export NPM_CONFIG_PACKAGE_LOCK=false
         if [ "$DRY_RUN" == "true" ]; then
           echo "Dry run only"
           GITHUB_REF=${{ github.head_ref }}
@@ -60,3 +62,5 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         DRY_RUN: ${{ inputs.dry_run }}
         NPM_TOKEN: ${{ inputs.github_token }}
+        YARN_ENABLE_IMMUTABLE_INSTALLS: '0'
+        NPM_CONFIG_PACKAGE_LOCK: 'false'
