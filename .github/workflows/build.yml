@@ -122,10 +122,11 @@ jobs:
           yarn install
           yarn run build:prod
           
-          export NPM_CONFIG_PACKAGE_LOCK=false
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm publish --access internal  #  Explicitly set public access.
 
         env:
           VERSION: ${{ needs.version-bump.outputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YARN_ENABLE_IMMUTABLE_INSTALLS: '0'
+          NPM_CONFIG_PACKAGE_LOCK: 'false'
