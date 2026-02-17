@@ -53,6 +53,10 @@ export namespace Correxit {
 
   /**
    * A registrar that provides an immutable roster for a workbook.
+   *
+   * #### Notes
+   * If the returned roster is null, user roster input is unlocked.
+   * If it is an empty list or populated list, user roster input is locked.
    */
   export type Registrar = (
     workbook: Workbook,
