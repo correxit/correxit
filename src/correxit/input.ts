@@ -25,14 +25,14 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
     document.removeEventListener('click', click);
     document.removeEventListener('keydown', keydown);
     overlay.remove();
-    target?.node.classList.remove(TARGET_CELL);
+    target?.removeClass(TARGET_CELL);
     target = null;
     throttler.dispose();
     delegate.resolve(model);
   };
   const keydown = ({ key }: KeyboardEvent) => {
     if (key === 'Escape') {
-      target?.node.classList.remove(TARGET_CELL);
+      target?.removeClass(TARGET_CELL);
       target = null;
       submit();
     }
@@ -42,9 +42,13 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
     ({ clientX, clientY }: PointerEvent) => {
       const notebook = workbook.content;
       const cells = notebook.widgets;
-      notebook.node.querySelectorAll(`.${TARGET_CELL}`)
-        .forEach(({ classList }) =>
-          classList.remove(TARGET_CELL, EXCLUDE, INCLUDE));
+      notebook.widgets.forEach(cell => {
+        if (cell.hasClass(TARGET_CELL)) {
+          cell.removeClass(TARGET_CELL);
+          cell.removeClass(EXCLUDE);
+          cell.removeClass(INCLUDE);
+        }
+      });
       for (const cell of filter(cells, cell => cell.inViewport)) {
         const code = cell.model.type === 'code';
         const rect = cell.node.getBoundingClientRect();
@@ -53,8 +57,8 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
           clientX >= rect.x &&
           clientX <= rect.x + rect.width;
         if (overlap) {
-          cell.node.classList.add(TARGET_CELL);
-          cell.node.classList.add(code ? INCLUDE : EXCLUDE);
+          cell.addClass(TARGET_CELL);
+          cell.addClass(code ? INCLUDE : EXCLUDE);
           target = cell;
           return;
         }
@@ -64,7 +68,7 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
   );
   const pointermove = (event: PointerEvent) => throttler.invoke(event);
   const pointerout = () => {
-    target?.node.classList.remove(TARGET_CELL);
+    target?.removeClass(TARGET_CELL);
     target = null;
   };
   overlay.classList.add(OVERLAY);
