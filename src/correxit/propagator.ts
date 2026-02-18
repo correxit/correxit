@@ -82,10 +82,10 @@ async function propagate({ consumer, log, rubric, workbook }: {
       const notebook: INotebookContent = JSON.parse(JSON.stringify(template));
       const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
       const path = PathExt.join(pwd, file);
-      await log({ type: 'separator', slots: [] });
+      log({ type: 'separator', slots: [] });
 
       const identifier = await reassign({ assignee, key, notebook, roster });
-      await log({ type: 'assigned', slots: [assignee] });
+      log({ type: 'assigned', slots: [assignee] });
       yield { identifier, notebook, path };
     }
   }
@@ -133,7 +133,7 @@ async function template(
     if (cell.is === 'comparable' || cell.is === 'correctable') {
       const [reference] = cell.reference;
       await encrypt(encrypted, reference, rubric.key);
-      await log({ type: 'encrypted', slots: [reference] });
+      log({ type: 'encrypted', slots: [reference] });
     }
   }
   return encrypted;

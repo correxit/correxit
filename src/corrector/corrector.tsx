@@ -23,6 +23,7 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 
 const PENDING = 'cxt-mod-pending';
 const SELECTED = 'cxt-mod-selected';
+const { batch, scan } = COMMAND_IDS;
 const { basename } = PathExt;
 
 /**
@@ -75,10 +76,9 @@ const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Corrector(props: Corrector.Props) {
   const { commands, correct, notify, path, trans, unlock } = props;
-  const grade = correct ? Corrector.CommandIDs.batch : '';
-  const scan = Corrector.CommandIDs.scan;
-  const handle = correct ? { path } : { unlock, path };
-  const auth = { unlock, path };
+  const grade = correct ? batch : '';
+  const handle = correct ? { path } : { path, unlock };
+  const auth = { path, unlock };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
   const [grades, graded] = useCommand<Batched>(commands, grade, auth);
   const collated: Collated = Object.fromEntries(grades);

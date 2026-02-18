@@ -46,15 +46,15 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
         let progress = 0;
         const total = rubric.assignment.roster.length + 1;
         const { directory, location } = await mkdir(path);
-        await log({ type: 'mkdir', slots: [directory.path] });
-        await log({ type: 'progress', slots: [++progress, total] });
+        log({ type: 'mkdir', slots: [directory.path] });
+        log({ type: 'progress', slots: [++progress, total] });
         for await (const { notebook, path } of await stream(location)) {
           const saved = await io.create({ factory, manager, notebook, path });
-          await log({ type: saved ? 'saved' : 'create-error', slots: [path] });
-          await log({ type: 'progress', slots: [++progress, total] });
+          log({ type: saved ? 'saved' : 'create-error', slots: [path] });
+          log({ type: 'progress', slots: [++progress, total] });
         }
         await io.cd(commands, directory.path);
-        await log({ type: 'success', slots: [total] });
+        log({ type: 'success', slots: [total] });
       };
     },
     deactivate: () => deactivator?.()
