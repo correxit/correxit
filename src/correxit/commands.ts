@@ -419,7 +419,7 @@ export function addCommands(
       }
 
       try {
-        const output = propagator.invoke({ consumer, workbook });
+        const output = await propagator.invoke({ consumer, workbook });
         return translate(output, trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);

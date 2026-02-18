@@ -9,22 +9,29 @@ import * as security from './security';
  * Kicks off a propagator loop, which in turn invokes the given consumer.
  * @returns a message emitter for tracking loop progress.
  */
-export function invoke({ consumer, workbook }: {
+export async function invoke({ consumer, workbook }: {
   consumer: Correxit.Consumer;
   workbook: Workbook;
-}): Correxit.Emitter {
+}): Promise<Correxit.Emitter> {
   const rubric = Workbook.open(workbook, true);
   const [emitter, log, end] = logger();
   if (!rubric || rubric.locked) {
-    log({ type: 'error', slots: ['invalid rubric'] });
-    end();
+    defer(() => {
+      log({ type: 'error', slots: ['invalid rubric'] });
+      end();
+    });
     return emitter;
   }
-  propagate({ consumer, log, rubric, workbook })
-    .catch(error => log({ type: 'error', slots: [`${error}`] }))
-    .finally(end);
+  defer(() => propagate({ consumer, log, rubric, workbook })
+  .catch(error => log({ type: 'error', slots: [`${error}`] }))
+  .finally(end));
   return emitter;
 };
+
+async function defer(action: () => unknown | Promise<unknown>) {
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  await action();
+}
 
 async function encrypt(
   notebook: INotebookContent,
@@ -55,8 +62,7 @@ function logger(): [
   end: () => void
 ] {
   const emitter = new Stream<null, Correxit.Emitter.Emission>(null);
-  const log = (emission: Correxit.Emitter.Emission) =>
-    emitter.emit(emission);;
+  const log = (emission: Correxit.Emitter.Emission) => emitter.emit(emission);
   const end = () => {
     emitter.stop();
     Signal.clearData(emitter);
