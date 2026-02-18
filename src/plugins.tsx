@@ -72,7 +72,6 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
     activate: (): Correxit.Collector =>
       async function* collector(grades) {
         for await (const grade of grades) {
-          console.log('grade', grade);
           yield grade;
         }
       },
@@ -146,11 +145,11 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
 };
 
 /**
- * Operator connects/disconnects workbooks and yields them to other plugins.
+ * The Correxit workbook monitor asynchronously yields the active workbook or null.
  */
-const operator: JupyterFrontEndPlugin<Correxit.Operator> = {
-  id: Correxit.OPERATOR,
-  description: Correxit.DESCRIPTION.OPERATOR,
+const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
+  id: Correxit.MONITOR,
+  description: Correxit.DESCRIPTION.MONITOR,
   autoStart: true,
   requires: [
     Correxit.Collector,
@@ -161,7 +160,7 @@ const operator: JupyterFrontEndPlugin<Correxit.Operator> = {
     INotebookTracker
   ],
   optional: [ITranslator],
-  provides: Correxit.Operator,
+  provides: Correxit.Monitor,
   ...((deactivator?: () => void) => ({
     activate: (
       app,
@@ -172,7 +171,7 @@ const operator: JupyterFrontEndPlugin<Correxit.Operator> = {
       unlocker: Correxit.Unlocker,
       tracker: INotebookTracker,
       translator: ITranslator | null
-    ): Correxit.Operator => {
+    ): Correxit.Monitor => {
       translator ||= nullTranslator;
 
       const { commands, shell } = app;
@@ -187,7 +186,7 @@ const operator: JupyterFrontEndPlugin<Correxit.Operator> = {
           commands.notifyCommandChanged(command);
         }
       };
-      const operator = new Stream<null, Workbook | null>(null);
+      const monitor = new Stream<null, Workbook | null>(null);
       const { open } = Workbook;
       const quiet = true;
       const subscribe = (prev: Workbook | null, next: Workbook | null) => {
@@ -196,14 +195,14 @@ const operator: JupyterFrontEndPlugin<Correxit.Operator> = {
         next?.context.fileChanged.connect(notify);
         next?.context.model.sharedModel.metadataChanged.connect(notify);
       };
-      const scheduler: (workbook: Workbook | null) => void = (
+      const injector: (workbook: Workbook | null) => void = (
         previous => workbook => {
           if (workbook !== state.workbook()) {
             open(workbook, quiet);
             subscribe(previous, workbook);
             state.workbook(workbook);
             previous = workbook;
-            operator.emit(workbook);
+            monitor.emit(workbook);
             notify();
           }
         }
@@ -211,17 +210,17 @@ const operator: JupyterFrontEndPlugin<Correxit.Operator> = {
       const added = addCommands(app, {
         collector,
         consumer,
+        injector,
         registrar,
-        scheduler,
         submitter,
         translator,
         unlocker
       });
       const slots = {
         shell: (_: unknown, { newValue }: { newValue: unknown }) =>
-          scheduler(newValue instanceof NotebookPanel ? newValue : null),
+          injector(newValue instanceof NotebookPanel ? newValue : null),
         tracker: (_: unknown, workbook: Workbook.Headed | null) =>
-          scheduler(workbook)
+          injector(workbook)
       };
       shell.currentChanged?.connect(slots.shell);
       tracker.currentChanged.connect(slots.tracker);
@@ -230,11 +229,11 @@ const operator: JupyterFrontEndPlugin<Correxit.Operator> = {
           command.dispose();
         }
         shell.currentChanged?.disconnect(slots.shell);
-        operator.stop();
-        Signal.clearData(operator);
+        monitor.stop();
+        Signal.clearData(monitor);
         tracker.currentChanged.disconnect(slots.tracker);
       };
-      return operator;
+      return monitor;
     },
     deactivate: () => deactivator?.()
   }))()
@@ -258,19 +257,19 @@ const ui: JupyterFrontEndPlugin<void> = {
   id: Correxit.UI,
   description: Correxit.DESCRIPTION.UI,
   autoStart: true,
-  requires: [Correxit.Operator],
+  requires: [Correxit.Monitor],
   optional: [ITranslator, ILayoutRestorer, ISettingRegistry],
   ...((deactivator?: () => void) => ({
     activate: (
       { commands, shell },
-      operator: Correxit.Operator,
+      monitor: Correxit.Monitor,
       translator: ITranslator | null,
       restorer: ILayoutRestorer | null,
       registry: ISettingRegistry
     ) => {
       const settings = registry ? registry.load(Correxit.UI) : null;
       const trans = (translator || nullTranslator).load('correxit');
-      const options = { commands, operator, settings, trans };
+      const options = { commands, monitor, settings, trans };
       const widget = new Sidebar.Widget(options);
       widget.id = 'correxit-sidebar';
       widget.title.caption = 'Correxit';
@@ -316,7 +315,7 @@ export const plugins = [
   collector,
   consumer,
   corrector,
-  operator,
+  monitor,
   registrar,
   submitter,
   ui,

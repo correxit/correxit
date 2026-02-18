@@ -4,7 +4,7 @@ export const CONSUMER = 'A consumer of propagated Correxit workbook assignments'
 
 export const CORRECTOR = 'Correxit Corrector user interface for batch grading workbooks';
 
-export const OPERATOR = 'Correxit operator connects/disconnects workbooks and yields them to other plugins.';
+export const MONITOR = 'Correxit monitor connects/disconnects active workbooks and yields them';
 
 export const REGISTRAR = 'Correxit registrar to provide rosters for workbooks';
 

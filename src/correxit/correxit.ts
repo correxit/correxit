@@ -33,9 +33,9 @@ export namespace Correxit {
   }
 
   /**
-   * Operator connects/disconnects workbooks and yields them to other plugins.
+   * Monitor connects/disconnects workbooks and yields them to other plugins.
    */
-  export type Operator = AsyncIterable<Workbook | null>;
+  export type Monitor = AsyncIterable<Workbook | null>;
 
   /**
    * An async propagator of assigned workbook content.
@@ -63,7 +63,7 @@ export namespace Correxit {
     identifier: Workbook.Identifier
   ) => Promise<string[] | null>;
 
-  export type Scheduler = (workbook: Workbook | null) => void;
+  export type Injector = (workbook: Workbook | null) => void;
 
   export type Submitter = (
     workbook: Workbook,
@@ -101,7 +101,7 @@ export namespace Correxit {
     COLLECTOR: description.COLLECTOR,
     CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
-    OPERATOR: description.OPERATOR,
+    MONITOR: description.MONITOR,
     REGISTRAR: description.REGISTRAR,
     SUBMITTER: description.SUBMITTER,
     UI: description.UI,
@@ -112,9 +112,9 @@ export namespace Correxit {
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
-  export const OPERATOR = '@quantstack/correxit:operator';
+  export const MONITOR = '@quantstack/correxit:monitor';
 
-  export const Operator = new Token<Operator>(OPERATOR);
+  export const Monitor = new Token<Monitor>(MONITOR);
 
   export const REGISTRAR = '@quantstack/correxit:registrar';
 

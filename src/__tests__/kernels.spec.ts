@@ -27,9 +27,10 @@ function create(
   }> = {}
 ) {
   const name = overrides.name ?? 'python3';
-  const manager = 'kernelManager' in overrides
-    ? overrides.kernelManager
-    : { startNew: jest.fn(async () => spawn({ name })) };
+  const manager =
+    'kernelManager' in overrides
+      ? overrides.kernelManager
+      : { startNew: jest.fn(async () => spawn({ name })) };
   return {
     context: {
       model: { defaultKernelName: name },
@@ -76,7 +77,9 @@ describe('kernels', () => {
     it('returns null when startNew throws', async () => {
       const workbook = create({
         kernelManager: {
-          startNew: jest.fn(async () => { throw new Error('fail'); })
+          startNew: jest.fn(async () => {
+            throw new Error('fail');
+          })
         }
       });
       const result = await lease(workbook);
@@ -100,8 +103,9 @@ describe('kernels', () => {
       expect(second).not.toBeNull();
       // The kernel was restarted (not freshly started) so startNew was
       // called only once (for the first lease).
-      expect(workbook.context.sessionContext.kernelManager.startNew)
-        .toHaveBeenCalledTimes(1);
+      expect(
+        workbook.context.sessionContext.kernelManager.startNew
+      ).toHaveBeenCalledTimes(1);
     });
 
     it('restarts a dirty kernel from the pool', async () => {
@@ -125,7 +129,7 @@ describe('kernels', () => {
       let calls = 0;
       const workbook = create({
         kernelManager: {
-          startNew: jest.fn(async () => calls++ === 0 ? failing : fresh)
+          startNew: jest.fn(async () => (calls++ === 0 ? failing : fresh))
         }
       });
 
@@ -146,7 +150,7 @@ describe('kernels', () => {
       let calls = 0;
       const workbook = create({
         kernelManager: {
-          startNew: jest.fn(async () => calls++ === 0 ? failing : fresh)
+          startNew: jest.fn(async () => (calls++ === 0 ? failing : fresh))
         }
       });
 

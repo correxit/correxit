@@ -54,7 +54,7 @@ function logger(): [
   log: (emission: Correxit.Emitter.Emission) => void,
   end: () => void
 ] {
-  const emitter = new Stream<unknown, Correxit.Emitter.Emission>(null);
+  const emitter = new Stream<null, Correxit.Emitter.Emission>(null);
   const log = (emission: Correxit.Emitter.Emission) =>
     emitter.emit(emission);;
   const end = () => {

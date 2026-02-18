@@ -22,8 +22,8 @@ export namespace CommandIDs {
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const draft = 'correxit:draft';
-  export const emit = 'correxit:emit';
   export const fetch = 'correxit:fetch';
+  export const inject = 'correxit:inject';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
   export const registrar = 'correxit:registrar';
@@ -55,8 +55,8 @@ export function addCommands(
   utilities: {
     collector: Correxit.Collector;
     consumer: Correxit.Consumer;
+    injector: Correxit.Injector;
     registrar: Correxit.Registrar;
-    scheduler: Correxit.Scheduler;
     submitter: Correxit.Submitter;
     translator: ITranslator;
     unlocker: Correxit.Unlocker;
@@ -64,7 +64,7 @@ export function addCommands(
 ) {
   const { commands, serviceManager: manager } = app;
   const { collector, consumer, registrar } = utilities;
-  const { scheduler, submitter, translator, unlocker } = utilities;
+  const { injector, submitter, translator, unlocker } = utilities;
   const trans = translator.load('correxit');
   const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
@@ -331,18 +331,6 @@ export function addCommands(
       }
     }
   }));
-  disposables.push(commands.addCommand(CommandIDs.emit, {
-    label: trans.__('Schedule one Correxit source emission'),
-    execute: () => (fired => {
-      return (emission: Workbook | null) => {
-        if (fired) {
-          return;
-        }
-        fired = true;
-        scheduler(emission);
-      };
-    })(false)
-  }));
   disposables.push(commands.addCommand(CommandIDs.fetch, {
     label: trans.__('Fetch a headless Correxit workbook for a given path'),
     describedBy: {
@@ -375,6 +363,18 @@ export function addCommands(
         return null;
       }
     }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.inject, {
+    label: trans.__('Inject one Correxit monitor emission'),
+    execute: () => (fired => {
+      return (emission: Workbook | null) => {
+        if (fired) {
+          return;
+        }
+        fired = true;
+        injector(emission);
+      };
+    })(false)
   }));
   disposables.push(commands.addCommand(CommandIDs.lock, {
     icon: Icons.locked,

@@ -32,16 +32,16 @@ const dispose = (workbooks: Headless[]) =>
   workbooks.forEach(({ context }) => context.dispose());
 
 /**
- * Emits a new workbook to be yielded by the Correxit source plugin.
+ * Injects a new workbook to be yielded by the Correxit monitor plugin.
  *
  * #### Notes
- * The `correxit:emit` command returns a single-emission function that accepts
+ * The `correxit:inject` command returns a single-emission function that accepts
  * a workbook or `null`. If the single-emission function is invoked more than
  * once, all except the initial invocation is a no-op.
  */
-const emit = (commands: CommandRegistry, workbook: Workbook | null) =>
+const inject = (commands: CommandRegistry, workbook: Workbook | null) =>
   void (async workbook =>
-    (await commands.execute(Correxit.CommandIDs.emit))?.(workbook))(workbook);
+    (await commands.execute(Correxit.CommandIDs.inject))?.(workbook))(workbook);
 
 /**
  * @returns The logo of a kernel in order of preference.
@@ -85,7 +85,7 @@ export function Corrector(props: Corrector.Props) {
   const merged = merge(workbooks, collated);
   const [selection, setSelection] = useState('');
   const [workbook, setWorkbook] = useState(() => match(merged, selection));
-  useEffect(() => emit(commands, workbook), [workbook]);
+  useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => () => dispose(workbooks), [scanned]);
   useEffect(() => () => dispose(grades.map(([, _]) => _.workbook)), [graded]);
