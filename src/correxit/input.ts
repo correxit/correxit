@@ -42,13 +42,9 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
     ({ clientX, clientY }: PointerEvent) => {
       const notebook = workbook.content;
       const cells = notebook.widgets;
-      notebook.widgets.forEach(cell => {
-        if (cell.hasClass(TARGET_CELL)) {
-          cell.removeClass(TARGET_CELL);
-          cell.removeClass(EXCLUDE);
-          cell.removeClass(INCLUDE);
-        }
-      });
+      target?.removeClass(TARGET_CELL);
+      target?.removeClass(EXCLUDE);
+      target?.removeClass(INCLUDE);
       for (const cell of filter(cells, cell => cell.inViewport)) {
         const code = cell.model.type === 'code';
         const rect = cell.node.getBoundingClientRect();
