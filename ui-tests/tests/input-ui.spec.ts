@@ -14,6 +14,7 @@ test('selects a reference cell for comparison', async ({ page }) => {
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
     await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
+    // This command invokes input.cell, so it can not be awaited.
     void app.commands.execute('correxit:add', {
       id: 'source',
       is: 'comparable'
