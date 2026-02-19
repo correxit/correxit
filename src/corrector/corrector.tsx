@@ -77,10 +77,9 @@ const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 export function Corrector(props: Corrector.Props) {
   const { commands, correct, notify, path, trans, unlock } = props;
   const grade = correct ? batch : '';
-  const handle = correct ? { path } : { path, unlock };
-  const auth = { path, unlock };
+  const handle = { path, unlock };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
-  const [grades, graded] = useCommand<Batched>(commands, grade, auth);
+  const [grades, graded] = useCommand<Batched>(commands, grade, handle);
   const collated: Collated = Object.fromEntries(grades);
   const merged = merge(workbooks, collated);
   const [selection, setSelection] = useState('');
