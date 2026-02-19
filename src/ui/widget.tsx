@@ -7,13 +7,13 @@ import { Correxit, Workbook } from '..';
 import { Sidebar } from '.';
 
 export class SidebarWidget extends ReactWidget {
-  constructor({ commands, settings, source, trans }: SidebarWidget.IOptions) {
+  constructor({ commands, monitor, settings, trans }: SidebarWidget.IOptions) {
     super();
     this.addClass('correxit-sidebar');
     this.commands = commands;
     this.trans = trans;
     void this.initialize(settings);
-    void this.subscribe(source);
+    void this.subscribe(monitor);
   }
 
   protected annotate = true;
@@ -62,12 +62,12 @@ export class SidebarWidget extends ReactWidget {
     return <Sidebar {...{ annotate, commands, trans, workbook }} key={key} />;
   }
 
-  protected async subscribe(source: Correxit.Source) {
-    for await (const { payload } of source) {
+  protected async subscribe(monitor: Correxit.Monitor) {
+    for await (const workbook of monitor) {
       if (this.isDisposed) {
         return;
       }
-      this.workbook = payload;
+      this.workbook = workbook;
     }
   }
 
@@ -77,8 +77,8 @@ export class SidebarWidget extends ReactWidget {
 export namespace SidebarWidget {
   export interface IOptions {
     commands: CommandRegistry;
+    monitor: Correxit.Monitor;
     settings: ReturnType<ISettingRegistry['load']> | null;
-    source: Correxit.Source;
     trans: IRenderMime.TranslationBundle;
   }
 }

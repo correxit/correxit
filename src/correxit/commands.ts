@@ -10,7 +10,7 @@ import { Correxit, Rubric, Workbook } from '..';
 import { Corrector } from '../corrector';
 import * as input from './input';
 import * as io from './io';
-import * as propagator from './propagator';
+import { propagate } from './propagator';
 import * as security from './security';
 import * as state from './state';
 
@@ -22,8 +22,8 @@ export namespace CommandIDs {
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const draft = 'correxit:draft';
-  export const emit = 'correxit:emit';
   export const fetch = 'correxit:fetch';
+  export const inject = 'correxit:inject';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
   export const registrar = 'correxit:registrar';
@@ -55,18 +55,18 @@ export function addCommands(
   utilities: {
     collector: Correxit.Collector;
     consumer: Correxit.Consumer;
+    injector: Correxit.Injector;
     registrar: Correxit.Registrar;
-    scheduler: Correxit.Scheduler;
     submitter: Correxit.Submitter;
     translator: ITranslator;
     unlocker: Correxit.Unlocker;
   }
 ) {
   const { commands, serviceManager: manager } = app;
-  const { collector, consumer, registrar } = utilities;
-  const { scheduler, submitter, translator, unlocker } = utilities;
-  const trans = translator.load('correxit');
   const { Icons } = Correxit;
+  const { collector, consumer, injector, registrar } = utilities;
+  const { submitter, translator, unlocker } = utilities;
+  const trans = translator.load('correxit');
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
     io.request(handle, factory, manager, unlocker);
@@ -331,18 +331,6 @@ export function addCommands(
       }
     }
   }));
-  disposables.push(commands.addCommand(CommandIDs.emit, {
-    label: trans.__('Schedule one Correxit source emission'),
-    execute: () => (fired => {
-      return (emission: Workbook | null) => {
-        if (fired) {
-          return;
-        }
-        fired = true;
-        scheduler(emission);
-      };
-    })(false)
-  }));
   disposables.push(commands.addCommand(CommandIDs.fetch, {
     label: trans.__('Fetch a headless Correxit workbook for a given path'),
     describedBy: {
@@ -375,6 +363,18 @@ export function addCommands(
         return null;
       }
     }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.inject, {
+    label: trans.__('Inject one Correxit monitor emission'),
+    execute: () => (fired => {
+      return (emission: Workbook | null) => {
+        if (fired) {
+          return;
+        }
+        fired = true;
+        injector(emission);
+      };
+    })(false)
   }));
   disposables.push(commands.addCommand(CommandIDs.lock, {
     icon: Icons.locked,
@@ -417,10 +417,8 @@ export function addCommands(
       if (!rubric || rubric.locked) {
         return (async function* empty() {})();
       }
-
       try {
-        const output = propagator.invoke({ consumer, workbook });
-        return translate(output, trans);
+        return translate(propagate({ consumer, workbook }), trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
@@ -631,10 +629,10 @@ async function* translate(
       'success': trans.__('Finished! (roster: %1)', ...slots)
     })[type] || '';
   };
-  for await (const { payload } of emitter) {
-    const message = payload && translate(payload);
+  for await (const emission of emitter) {
+    const message = emission && translate(emission);
     if (message) {
-      yield [message, payload] as [string, Correxit.Emitter.Emission];
+      yield [message, emission] as [string, Correxit.Emitter.Emission];
     }
   }
 }

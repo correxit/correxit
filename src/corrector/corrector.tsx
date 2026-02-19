@@ -23,6 +23,7 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 
 const PENDING = 'cxt-mod-pending';
 const SELECTED = 'cxt-mod-selected';
+const { batch, scan } = COMMAND_IDS;
 const { basename } = PathExt;
 
 /**
@@ -32,16 +33,16 @@ const dispose = (workbooks: Headless[]) =>
   workbooks.forEach(({ context }) => context.dispose());
 
 /**
- * Emits a new workbook to be yielded by the Correxit source plugin.
+ * Injects a new workbook to be yielded by the Correxit monitor plugin.
  *
  * #### Notes
- * The `correxit:emit` command returns a single-emission function that accepts
+ * The `correxit:inject` command returns a single-emission function that accepts
  * a workbook or `null`. If the single-emission function is invoked more than
  * once, all except the initial invocation is a no-op.
  */
-const emit = (commands: CommandRegistry, workbook: Workbook | null) =>
+const inject = (commands: CommandRegistry, workbook: Workbook | null) =>
   void (async workbook =>
-    (await commands.execute(Correxit.CommandIDs.emit))?.(workbook))(workbook);
+    (await commands.execute(Correxit.CommandIDs.inject))?.(workbook))(workbook);
 
 /**
  * @returns The logo of a kernel in order of preference.
@@ -75,17 +76,15 @@ const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Corrector(props: Corrector.Props) {
   const { commands, correct, notify, path, trans, unlock } = props;
-  const grade = correct ? Corrector.CommandIDs.batch : '';
-  const scan = Corrector.CommandIDs.scan;
-  const handle = correct ? { path } : { unlock, path };
-  const auth = { unlock, path };
+  const grade = correct ? batch : '';
+  const handle = { path, unlock };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
-  const [grades, graded] = useCommand<Batched>(commands, grade, auth);
+  const [grades, graded] = useCommand<Batched>(commands, grade, handle);
   const collated: Collated = Object.fromEntries(grades);
   const merged = merge(workbooks, collated);
   const [selection, setSelection] = useState('');
   const [workbook, setWorkbook] = useState(() => match(merged, selection));
-  useEffect(() => emit(commands, workbook), [workbook]);
+  useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => () => dispose(workbooks), [scanned]);
   useEffect(() => () => dispose(grades.map(([, _]) => _.workbook)), [graded]);

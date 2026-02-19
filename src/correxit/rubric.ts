@@ -24,10 +24,10 @@ export namespace Rubric {
   }>;
 
   type Base = Readonly<{
-    accessed: number;
     assignment: Assignment;
     cells: Readonly<{ [id: string]: Cell }>;
     id: string;
+    revised: number;
   }>;
 
   export type Cell = Readonly<{
@@ -420,11 +420,11 @@ export namespace Rubric {
    * to add a `key` field to use the rubric.
    */
   export function create(): Omit<Unlocked, 'key'> {
-    const accessed = Date.now();
+    const revised = Date.now();
     const assignment = { ...Assignment.EMPTY };
-    const encoded = accessed.toString(36);
+    const encoded = revised.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
-    return { accessed, assignment, cells: {}, id, locked: false };
+    return { assignment, cells: {}, id, locked: false, revised };
   }
 
   /**
@@ -434,7 +434,7 @@ export namespace Rubric {
     const confirmation = null;
     const submission = null;
     const assignment = { ...rubric.assignment, confirmation, submission };
-    return { ...rubric, accessed: Date.now(), assignment };
+    return { ...rubric, assignment, revised: Date.now() };
   }
 
   /**
@@ -474,18 +474,18 @@ export namespace Rubric {
     const serialized = JSON.stringify(rubric.assignment.roster);
     const roster = [await security.encrypt(serialized, key)];
     const assignment = { ...rubric.assignment, roster };
-    const accessed = Date.now();
-    return { accessed, assignment, cells, id, key: null, locked };
+    const revised = Date.now();
+    return { assignment, cells, id, key: null, locked, revised };
   }
 
   /**
    * @returns a normalized locked rubric or throws an error.
    */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
-    const { accessed, cells, id, key, locked } = rubric;
+    const { cells, id, key, locked, revised } = rubric;
     const assignment = rubric.assignment || { ...Assignment.EMPTY };
-    if (!accessed) {
-      throw new Error('invalid rubric, missing accessed');
+    if (!revised) {
+      throw new Error('invalid rubric, missing revised');
     }
     if (typeof id !== 'string' || !id) {
       throw new Error('invalid rubric, missing id');
@@ -499,7 +499,7 @@ export namespace Rubric {
     if (!cells || typeof cells !== 'object' || Array.isArray(cells)) {
       throw new Error('invalid rubric, missing cells');
     }
-    return { accessed, assignment, cells, id, key, locked };
+    return { assignment, cells, id, key, locked, revised };
   }
 
   /**
@@ -537,7 +537,7 @@ export namespace Rubric {
   ): Locked {
     const submission = Date.now();
     const assignment = { ...rubric.assignment, confirmation, submission };
-    return { ...rubric, accessed: submission, assignment };
+    return { ...rubric, assignment, revised: submission };
   }
 
   /**
@@ -561,9 +561,9 @@ export namespace Rubric {
     const { cells, id, assignment: { roster: [block]} } = rubric;
     const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
     const assignment = { ...rubric.assignment, roster };
-    const accessed = Date.now();
+    const revised = Date.now();
     await Assignment.validate({ assignment, key });
-    return { accessed, assignment, cells, id, key, locked };
+    return { assignment, cells, id, key, locked, revised };
   }
 }
 

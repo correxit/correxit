@@ -17,7 +17,7 @@ export const Assignment: React.FC<{
   rubric: Rubric;
   trans: TranslationBundle;
 }> = ({ commands, rubric, trans }) => {
-  const { accessed, locked } = rubric;
+  const { locked, revised } = rubric;
   const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
   const [registered, setRegistered] = useState<string[] | null>(null);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
@@ -42,7 +42,7 @@ export const Assignment: React.FC<{
         <Roster {...{ assignment, locked, registered, toggle, trans }} />
       )}
       <Expiration {...{ assignment, locked, toggle, trans }} />
-      {!locked && <Propagate {...{ accessed, commands, trans }} />}
+      {!locked && <Propagate {...{ commands, revised, trans }} />}
     </div>
   );
 };
@@ -203,14 +203,14 @@ const Roster: React.FC<{
 };
 
 const Propagate: React.FC<{
-  accessed: number;
   commands: CommandRegistry;
+  revised: number;
   trans: TranslationBundle;
-}> = ({ accessed, commands, trans }) => {
+}> = ({ commands, revised, trans }) => {
   type Message = [string, Correxit.Emitter.Emission];
   const { propagate } = Correxit.CommandIDs;
   const [command, setCommand] = useState('');
-  const [timestamp, setTimestamp] = useState(accessed);
+  const [timestamp, setTimestamp] = useState(revised);
   const [log, done] = useCommand<Message>(commands, command, { timestamp });
   const messages = log
     .filter(([, { type }]) => type !== 'progress')

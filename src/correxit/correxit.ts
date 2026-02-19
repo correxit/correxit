@@ -14,28 +14,27 @@ export namespace Correxit {
   ) => AsyncGenerator<Workbook.Certified>;
 
   export type Consumer = (output: {
-    log: Emitter.Log;
     path: string;
     rubric: Rubric.Unlocked;
     stream: Propagator;
-  }) => Promise<void>;
+  }) => AsyncGenerator<Emitter.Emission>;
 
   /**
    * A message emitter for notifications and other Correxit UI updates.
    */
-  export type Emitter = AsyncIterable<{ payload: Emitter.Emission }>;
+  export type Emitter = AsyncIterable<Emitter.Emission>;
 
   export namespace Emitter {
     /**
      * A notification/message emission with slots to populate interpolations.
      */
     export type Emission = { slots: (string | number)[]; type: string; };
-
-    /**
-     * A logging function wired for UI updates for clients to invoke.
-     */
-    export type Log = (payload: Emitter.Emission) => Promise<void>;
   }
+
+  /**
+   * Monitor connects/disconnects workbooks and yields them to other plugins.
+   */
+  export type Monitor = AsyncIterable<Workbook | null>;
 
   /**
    * An async propagator of assigned workbook content.
@@ -63,12 +62,7 @@ export namespace Correxit {
     identifier: Workbook.Identifier
   ) => Promise<string[] | null>;
 
-  export type Scheduler = (workbook: Workbook | null) => void;
-
-  /**
-   * The Correxit source asynchronously yields the active workbook or null.
-   */
-  export type Source = AsyncIterable<{ payload: Workbook.Headed | null }>;
+  export type Injector = (workbook: Workbook | null) => void;
 
   export type Submitter = (
     workbook: Workbook,
@@ -106,8 +100,8 @@ export namespace Correxit {
     COLLECTOR: description.COLLECTOR,
     CONSUMER: description.CONSUMER,
     CORRECTOR: description.CORRECTOR,
+    MONITOR: description.MONITOR,
     REGISTRAR: description.REGISTRAR,
-    SOURCE: description.SOURCE,
     SUBMITTER: description.SUBMITTER,
     UI: description.UI,
     UNLOCKER: description.UNLOCKER
@@ -117,13 +111,13 @@ export namespace Correxit {
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
+  export const MONITOR = '@quantstack/correxit:monitor';
+
+  export const Monitor = new Token<Monitor>(MONITOR);
+
   export const REGISTRAR = '@quantstack/correxit:registrar';
 
   export const Registrar = new Token<Registrar>(REGISTRAR);
-
-  export const SOURCE = '@quantstack/correxit:source';
-
-  export const Source = new Token<Source>(SOURCE);
 
   export const SUBMITTER = '@quantstack/correxit:submitter';
 

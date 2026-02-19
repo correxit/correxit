@@ -1,29 +1,43 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { findIndex } from '@lumino/algorithm';
-import { Poll } from '@lumino/polling';
 import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
 
-/**
- * Kicks off a propagator loop, which in turn invokes the given consumer.
- * @returns a message emitter for tracking loop progress.
- */
-export function invoke({ consumer, workbook }: {
+export async function* propagate({ consumer, workbook }: {
   consumer: Correxit.Consumer;
   workbook: Workbook;
-}): Correxit.Emitter {
+}): AsyncGenerator<Correxit.Emitter.Emission> {
   const rubric = Workbook.open(workbook, true);
-  const [emitter, log, end] = logger();
   if (!rubric || rubric.locked) {
-    log({ type: 'error', slots: ['invalid rubric'] }).then(end);
-    return emitter;
+    yield { type: 'error', slots: ['invalid rubric'] };
+    return;
   }
-  propagate({ consumer, log, rubric, workbook })
-    .catch(error => log({ type: 'error', slots: [`${error}`] }))
-    .finally(end);
-  return emitter;
-};
+  try {
+    const { assignment: { roster }, key } = rubric;
+    const path = workbook.context.path;
+    const { encrypted, notebook: content } = await template(workbook, rubric);
+    for (const reference of encrypted) {
+      yield { type: 'encrypted', slots: [reference] };
+    }
+
+    const loop = async function* (location: { base: string; pwd: string }) {
+      const { base, pwd } = location;
+      for (const assignee of roster) {
+        const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
+        const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
+        const path = PathExt.join(pwd, file);
+        const identifier = await reassign({ assignee, key, notebook, roster });
+        yield { identifier, notebook, path };
+      }
+    };
+    const stream = async (location: { base: string; pwd: string }) =>
+      loop(location);
+    yield* consumer({ path, rubric, stream });
+  } catch (error) {
+    yield { type: 'error', slots: [`${error}`] };
+  }
+}
 
 async function encrypt(
   notebook: INotebookContent,
@@ -48,55 +62,6 @@ async function encrypt(
   delete cell.metadata.trusted;
 }
 
-function logger(): [
-  emitter: Correxit.Emitter,
-  log: (payload: Correxit.Emitter.Emission) => Promise<void>,
-  end: () => void
-] {
-  const emitter = new Poll<Correxit.Emitter.Emission>({
-    auto: false,
-    frequency: { backoff: false, interval: Poll.NEVER, max: Poll.NEVER },
-    factory: async () => ({ type: 'never', slots: [] })
-  });
-  const log = async (payload: Correxit.Emitter.Emission) => {
-    await emitter.schedule({ payload });
-    await emitter.refresh();
-    await emitter.tick;
-  };
-  const end = () => emitter.dispose();
-  return [emitter, log, end];
-}
-
-async function propagate({ consumer, log, rubric, workbook }: {
-  consumer: Correxit.Consumer;
-  log: (payload: Correxit.Emitter.Emission) => Promise<void>;
-  rubric: Rubric.Unlocked;
-  workbook: Workbook;
-}): Promise<void> {
-  const { assignment: { roster }, key } = rubric;
-  const original = workbook.context.model.sharedModel.toJSON();
-  const path = workbook.context.path;
-  async function* loop(
-    template: INotebookContent,
-    location: { base: string; pwd: string }
-  ) {
-    const { base, pwd } = location;
-    for (const assignee of roster) {
-      const notebook: INotebookContent = JSON.parse(JSON.stringify(template));
-      const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
-      const path = PathExt.join(pwd, file);
-      await log({ type: 'separator', slots: [] });
-
-      const identifier = await reassign({ assignee, key, notebook, roster });
-      await log({ type: 'assigned', slots: [assignee] });
-      yield { identifier, notebook, path };
-    }
-  }
-  const stream = async (location: { base: string; pwd: string }) =>
-    loop(await template(original, rubric, log), location);
-  await consumer({ log, path, rubric, stream });
-}
-
 /**
  * Reassigns a serialized workbook to an assignee using a given unlocked rubric.
  *
@@ -111,23 +76,23 @@ async function reassign({ assignee, key, notebook, roster }: {
   roster: string[];
 }): Promise<Workbook.Identifier> {
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
-    { accessed: number, assignment: Rubric.Assignment };
+    { assignment: Rubric.Assignment, revised: number };
   const { expiration, roster: encrypted } = metadata.assignment;
   const blank = { order: [], scores: {}, timestamp: null  };
   const lifecycle = { confirmation: null, expiration, submission: null };
   const unsigned = { assignee, ...lifecycle, report: blank, roster };
   const signature = await Rubric.Assignment.sign(unsigned, key);
-  metadata.accessed = Date.now();
   metadata.assignment = { ...unsigned, roster: encrypted, signature };
+  metadata.revised = Date.now();
   return { assignee, assignment: metadata.id, signature };
 }
 
 async function template(
-  decrypted: INotebookContent,
-  rubric: Rubric.Unlocked,
-  log: (payload: Correxit.Emitter.Emission) => Promise<void>
-): Promise<INotebookContent> {
-  const encrypted: INotebookContent = JSON.parse(JSON.stringify(decrypted));
+  workbook: Workbook,
+  rubric: Rubric.Unlocked
+): Promise<{ encrypted: string[]; notebook: INotebookContent }> {
+  const encrypted: string[] = [];
+  const notebook = workbook.context.model.sharedModel.toJSON();
   for (const id in rubric.cells) {
     const cell = rubric.cells[id];
     if (cell.shared) {
@@ -135,10 +100,9 @@ async function template(
     }
     if (cell.is === 'comparable' || cell.is === 'correctable') {
       const [reference] = cell.reference;
-      await encrypt(encrypted, reference, rubric.key);
-      await log({ type: 'encrypted', slots: [reference] });
+      await encrypt(notebook, reference, rubric.key);
+      encrypted.push(reference);
     }
   }
-  await log({ type: 'separator', slots: [] });
-  return encrypted;
+  return { encrypted, notebook };
 }
