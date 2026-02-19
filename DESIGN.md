@@ -147,14 +147,14 @@ Correxit provides extension points as JupyterLab plugins, each identified by a
 single token. Core logic is decoupled from IO, e.g. replacing the file-system
 consumer with an LMS consumer requires no changes to the propagator or commands.
 
-| Plugin          | Purpose                                          | Default                            |
-| --------------- | ------------------------------------------------ | ---------------------------------- |
-| **`Consumer`**  | Process propagated assignments                   | Writes to local filesystem         |
-| **`Collector`** | Receive certified grades                         | Pass-through generator             |
-| **`Registrar`** | Provide rosters for assignments                  | Returns null (manual entry)        |
-| **`Submitter`** | Handle submission confirmation                   | Returns null (no confirmation)     |
-| **`Unlocker`**  | Manage rubric key lifecycle (store and unlock)    | Uses SecretsManager                |
-| **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable   |
+| Plugin          | Purpose                                             | Default                        |
+| --------------- | --------------------------------------------------- | ------------------------------ |
+| **`Consumer`**  | Process propagated assignments                      | Writes to local filesystem     |
+| **`Collector`** | Receive certified grades                            | Pass-through generator         |
+| **`Registrar`** | Provide rosters for assignments                     | Returns null (manual entry)    |
+| **`Submitter`** | Handle submission confirmation                      | Returns null (no confirmation) |
+| **`Unlocker`**  | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager            |
+| **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable  |
 
 Type definitions are in `src/correxit/correxit.ts`. Default implementations are
 in `src/plugins.tsx`.

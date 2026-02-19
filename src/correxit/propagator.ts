@@ -92,8 +92,8 @@ async function reassign({ assignee, key, notebook, roster }: {
   const lifecycle = { confirmation: null, expiration, submission: null };
   const unsigned = { assignee, ...lifecycle, report: blank, roster };
   const signature = await Rubric.Assignment.sign(unsigned, key);
-  metadata.revised = Date.now();
   metadata.assignment = { ...unsigned, roster: encrypted, signature };
+  metadata.revised = Date.now();
   return { assignee, assignment: metadata.id, signature };
 }
 
