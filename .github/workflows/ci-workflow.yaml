@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "*"
   pull_request:
     branches:
       - "*"
+  release:
+    types: [published]
 permissions:
   contents: write
   issues: write
@@ -181,7 +185,7 @@ jobs:
   # Main Branch: Mirror to Notebook-Link
   # ============================================================
   mirror-commit-to-notebook-link:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     needs: [set-repo-name]
     runs-on: ubuntu-latest
     env:
@@ -209,15 +213,24 @@ jobs:
           source_owner: "quantstack"
           dest_owner: "notebook-link"
           repo_name: ${{ env.NO_ORG_REPO_NAME }}
-          ref: main
+          ref: ${{ github.ref_name }}
           sync_tag: "true"
 
   trigger-version-bump:
     needs: [mirror-commit-to-notebook-link]
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
+      - name: Check if semantic release
+        id: check
+        run: |
+          if [[ "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_semantic=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_semantic=false" >> $GITHUB_OUTPUT
+          fi
       - name: Trigger event
+        if: steps.check.outputs.is_semantic == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.ADMIN_GITHUB_TOKEN }}
