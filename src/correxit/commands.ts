@@ -45,6 +45,7 @@ type Reified =
   { handle: Credentials | null; rubric: null; workbook: Workbook; } |
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
+const { Icons } = Correxit;
 const { get, has, size } = Rubric;
 const { add, assign, certify, comment, convert, correct } = Workbook;
 const { draft, lock, remove, reset, submit, toggle } = Workbook;
@@ -63,10 +64,9 @@ export function addCommands(
   }
 ) {
   const { commands, serviceManager: manager } = app;
-  const { collector, consumer, registrar } = utilities;
-  const { injector, submitter, translator, unlocker } = utilities;
+  const { collector, consumer, injector, registrar } = utilities;
+  const { submitter, translator, unlocker } = utilities;
   const trans = translator.load('correxit');
-  const { Icons } = Correxit;
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
     io.request(handle, factory, manager, unlocker);
