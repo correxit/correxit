@@ -369,6 +369,8 @@ export namespace Workbook {
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
     if (!rubric.locked) {
       await update(workbook, await Rubric.sign(rubric, report));
+    } else {
+      await update(workbook, rubric);
     }
     return { spec, score: id ? report.scores[id] : summary(report) };
   }
