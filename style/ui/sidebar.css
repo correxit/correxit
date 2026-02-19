@@ -215,6 +215,8 @@
   --cxt-annotate-size: 28px;
   --cxt-annotate-icon: 16px 16px;
 
+  border-top-right-radius: var(--jp-border-radius);
+  border-bottom-right-radius: var(--jp-border-radius);
   content: '';
   position: absolute;
   top: 5px;
