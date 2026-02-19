@@ -14,11 +14,10 @@ export namespace Correxit {
   ) => AsyncGenerator<Workbook.Certified>;
 
   export type Consumer = (output: {
-    log: (emission: Emitter.Emission) => void;
     path: string;
     rubric: Rubric.Unlocked;
     stream: Propagator;
-  }) => Promise<void>;
+  }) => AsyncGenerator<Emitter.Emission>;
 
   /**
    * A message emitter for notifications and other Correxit UI updates.

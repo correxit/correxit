@@ -73,7 +73,6 @@
         "@jupyterlab/translation": "^4.4.3",
         "@jupyterlab/ui-components": "^4.4.3",
         "@lumino/algorithm": "^2.0.3",
-        "@lumino/collections": "^2.0.4",
         "@lumino/commands": "^2.3.2",
         "@lumino/coreutils": "^2.2.1",
         "@lumino/disposable": "^2.1.4",

@@ -42,19 +42,22 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
         return { directory, location: { base, pwd } };
       };
       deactivator = () => factory.dispose();
-      return async function consumer({ log, stream, path, rubric }) {
+      return async function* consumer({ path, rubric, stream }) {
         let progress = 0;
         const total = rubric.assignment.roster.length + 1;
         const { directory, location } = await mkdir(path);
-        log({ type: 'mkdir', slots: [directory.path] });
-        log({ type: 'progress', slots: [++progress, total] });
-        for await (const { notebook, path } of await stream(location)) {
+        yield { type: 'mkdir', slots: [directory.path] };
+        yield { type: 'progress', slots: [++progress, total] };
+        for await (const created of await stream(location)) {
+          const { identifier, notebook, path } = created;
           const saved = await io.create({ factory, manager, notebook, path });
-          log({ type: saved ? 'saved' : 'create-error', slots: [path] });
-          log({ type: 'progress', slots: [++progress, total] });
+          yield { type: 'separator', slots: [] };
+          yield { type: 'assigned', slots: [identifier.assignee!] };
+          yield { type: saved ? 'saved' : 'create-error', slots: [path] };
+          yield { type: 'progress', slots: [++progress, total] };
         }
         await io.cd(commands, directory.path);
-        log({ type: 'success', slots: [total] });
+        yield { type: 'success', slots: [total] };
       };
     },
     deactivate: () => deactivator?.()
