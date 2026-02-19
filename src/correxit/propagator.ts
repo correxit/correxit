@@ -1,6 +1,7 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { findIndex } from '@lumino/algorithm';
+import { LinkedList } from '@lumino/collections';
 import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
 
@@ -14,14 +15,18 @@ export async function invoke({ consumer, workbook }: {
 }): Promise<Correxit.Emitter> {
   const rubric = Workbook.open(workbook, true);
   const [emitter, log, end] = logger();
-  if (!rubric || rubric.locked) {
-    log({ type: 'error', slots: ['invalid rubric'] });
-    end();
-    return emitter;
-  }
-  propagate({ consumer, log, rubric, workbook })
-    .catch(error => log({ type: 'error', slots: [`${error}`] }))
-    .finally(end);
+
+  setTimeout(async () => {
+    if (!rubric || rubric.locked) {
+      log({ type: 'error', slots: ['invalid rubric'] });
+      end();
+    } else {
+      await propagate({ consumer, log, rubric, workbook })
+        .catch(error => log({ type: 'error', slots: [`${error}`] }))
+        .finally(end);
+    }
+  }, 0);
+
   return emitter;
 };
 
@@ -55,9 +60,9 @@ function logger(): [
 ] {
   let pending: ((_?: unknown) => void) | null = null;
   let done = false;
-  const buffer: Correxit.Emitter.Emission[] = [];
+  const buffer = new LinkedList<Correxit.Emitter.Emission>();
   const log = (emission: Correxit.Emitter.Emission) => {
-    buffer.push(emission);
+    buffer.addLast(emission);
     pending?.();
     pending = null;
   };
@@ -68,14 +73,16 @@ function logger(): [
   const emitter: Correxit.Emitter = {
     [Symbol.asyncIterator]: async function* () {
       while (true) {
-        if (buffer.length) {
-          yield buffer.shift()!;
+        if (!buffer.isEmpty) {
+          yield buffer.removeFirst()!;
           continue;
         }
         if (done) {
           return;
         }
-        await new Promise(resolve => (pending = resolve));
+        await new Promise(resolve => {
+          pending = resolve;
+        });
       }
     }
   };
