@@ -15,23 +15,19 @@ export async function invoke({ consumer, workbook }: {
 }): Promise<Correxit.Emitter> {
   const rubric = Workbook.open(workbook, true);
   const [emitter, log, end] = logger();
-  if (!rubric || rubric.locked) {
-    defer(() => {
+  try {
+    return emitter;
+  } finally {
+    if (!rubric || rubric.locked) {
       log({ type: 'error', slots: ['invalid rubric'] });
       end();
-    });
-    return emitter;
+    } else {
+      propagate({ consumer, log, rubric, workbook })
+        .catch(error => log({ type: 'error', slots: [`${error}`] }))
+        .finally(end);
+    }
   }
-  defer(() => propagate({ consumer, log, rubric, workbook })
-  .catch(error => log({ type: 'error', slots: [`${error}`] }))
-  .finally(end));
-  return emitter;
 };
-
-async function defer(action: () => unknown | Promise<unknown>) {
-  await new Promise(resolve => requestAnimationFrame(resolve));
-  await action();
-}
 
 async function encrypt(
   notebook: INotebookContent,
@@ -77,7 +73,6 @@ async function propagate({ consumer, log, rubric, workbook }: {
   workbook: Workbook;
 }): Promise<void> {
   const { assignment: { roster }, key } = rubric;
-  const original = workbook.context.model.sharedModel.toJSON();
   const path = workbook.context.path;
   async function* loop(
     template: INotebookContent,
@@ -96,7 +91,7 @@ async function propagate({ consumer, log, rubric, workbook }: {
     }
   }
   const stream = async (location: { base: string; pwd: string }) =>
-    loop(await template(original, rubric, log), location);
+    loop(await template(workbook, rubric, log), location);
   await consumer({ log, path, rubric, stream });
 }
 
@@ -126,11 +121,11 @@ async function reassign({ assignee, key, notebook, roster }: {
 }
 
 async function template(
-  decrypted: INotebookContent,
+  workbook: Workbook,
   rubric: Rubric.Unlocked,
   log: (emission: Correxit.Emitter.Emission) => void
 ): Promise<INotebookContent> {
-  const encrypted: INotebookContent = JSON.parse(JSON.stringify(decrypted));
+  const notebook = workbook.context.model.sharedModel.toJSON();
   for (const id in rubric.cells) {
     const cell = rubric.cells[id];
     if (cell.shared) {
@@ -138,9 +133,9 @@ async function template(
     }
     if (cell.is === 'comparable' || cell.is === 'correctable') {
       const [reference] = cell.reference;
-      await encrypt(encrypted, reference, rubric.key);
+      await encrypt(notebook, reference, rubric.key);
       log({ type: 'encrypted', slots: [reference] });
     }
   }
-  return encrypted;
+  return notebook;
 }
