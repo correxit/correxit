@@ -1,7 +1,6 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { findIndex } from '@lumino/algorithm';
-import { Signal, Stream } from '@lumino/signaling';
 import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
 
@@ -61,12 +60,33 @@ function logger(): [
   log: (emission: Correxit.Emitter.Emission) => void,
   end: () => void
 ] {
-  const emitter = new Stream<null, Correxit.Emitter.Emission>(null);
-  const log = (emission: Correxit.Emitter.Emission) => emitter.emit(emission);
-  const end = () => {
-    emitter.stop();
-    Signal.clearData(emitter);
+  let pending: ((_?: unknown) => void) | null = null;
+  let done = false;
+  const buffer: Correxit.Emitter.Emission[] = [];
+  const log = (emission: Correxit.Emitter.Emission) => {
+    buffer.push(emission);
+    pending?.();
+    pending = null;
   };
+  const end = () => {
+    done = true;
+    pending?.();
+  };
+  const emitter: Correxit.Emitter = {
+    [Symbol.asyncIterator]: async function* () {
+      while (true) {
+        if (buffer.length) {
+          yield buffer.shift()!;
+          continue;
+        }
+        if (done) {
+          return;
+        }
+        await new Promise(resolve => (pending = resolve));
+      }
+    }
+  };
+
   return [emitter, log, end];
 }
 
