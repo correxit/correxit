@@ -31,8 +31,9 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
-        corepack enable
-        yarn install
+          corepack enable
+          corepack prepare yarn@3.5.0 --activate
+          yarn install
       env:
         YARN_ENABLE_IMMUTABLE_INSTALLS: '0'
         NPM_CONFIG_PACKAGE_LOCK: 'false'
