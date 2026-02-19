@@ -74,12 +74,33 @@ const merge = (workbooks: Headless[], grades: Collated) =>
  */
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
+/**
+ * @returns the grade for a workbook given current batch and scan state.
+ */
+const resolve = (
+  workbook: Headless,
+  collated: Collated,
+  graded: boolean
+): Grade | 'pending' => {
+  const { path } = workbook.context;
+  if (path in collated) {
+    return collated[path].grade;
+  }
+  if (!graded) {
+    return 'pending';
+  }
+  const rubric = open(workbook);
+  const score = rubric && Rubric.Assignment.summary(rubric.assignment.report);
+  return { path, score: score || Rubric.Score.UNSCORED, spec: null };
+};
+
 export function Corrector(props: Corrector.Props) {
-  const { commands, correct, notify, path, trans, unlock } = props;
+  const { certify, commands, correct, notify, path, trans, unlock } = props;
   const grade = correct ? batch : '';
   const handle = { path, unlock };
+  const auth = { path, unlock, certify };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
-  const [grades, graded] = useCommand<Batched>(commands, grade, handle);
+  const [grades, graded] = useCommand<Batched>(commands, grade, auth);
   const collated: Collated = Object.fromEntries(grades);
   const merged = merge(workbooks, collated);
   const [selection, setSelection] = useState('');
@@ -93,8 +114,7 @@ export function Corrector(props: Corrector.Props) {
     <table className="correxit-corrector">
       {merged.map(workbook => {
         const { path } = workbook.context;
-        const grade: Grade | 'idle' | 'pending' =
-          path in collated ? collated[path].grade : graded ? 'idle' : 'pending';
+        const grade = resolve(workbook, collated, graded);
         const key = `${path}:${JSON.stringify(grade)}`;
         const select = (selection: string) => setSelection(selection);
         const props = { commands, grade, select, trans, workbook };
@@ -106,6 +126,7 @@ export function Corrector(props: Corrector.Props) {
 
 export namespace Corrector {
   export type Props = {
+    certify: boolean;
     commands: CommandRegistry;
     correct: boolean;
     notify: (updates: { graded: boolean; scanned: boolean }) => void;
@@ -121,7 +142,7 @@ export namespace Corrector {
 
 const Row: React.FC<{
   commands: CommandRegistry;
-  grade: Grade | 'idle' | 'pending';
+  grade: Grade | 'pending';
   select: (path: string) => void;
   selected: boolean;
   trans: TranslationBundle;
@@ -137,7 +158,7 @@ const Row: React.FC<{
       <Lock {...{ trans, workbook }} />
       <Assignment {...{ trans, workbook }} />
       <td width="*">{basename(path)}</td>
-      {grade !== 'idle' && <Score {...{ grade, trans }} />}
+      <Score {...{ grade, trans }} />
     </tr>
   );
 });

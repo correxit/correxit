@@ -31,6 +31,14 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
   }
 
+  get certify(): boolean {
+    return this.content.certify;
+  }
+
+  set certify(value: boolean) {
+    this.content.set({ certify: value });
+  }
+
   protected commands: CommandRegistry;
   protected trans: IRenderMime.TranslationBundle;
 
@@ -46,7 +54,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
         : trans.__('Scanning...');
       status.dispose();
       status = ReactWidget.create(<span>{current}</span>);
-      toolbar.insertItem(5, 'status', status);
+      toolbar.insertItem(6, 'status', status);
     };
     const cd = new CommandToolbarButton({
       commands,
@@ -66,6 +74,12 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
       id: Corrector.CommandIDs.refresh,
       noFocusOnClick: true
     });
+    const certify = new CommandToolbarButton({
+      commands,
+      id: Corrector.CommandIDs.certify,
+      label: '',
+      noFocusOnClick: true
+    });
     const toggle = (unlock: boolean) => content.set({ correct: false, unlock });
     const passphrase = new UnlockButton({ toggle, trans });
     content.toggled.connect((_, locked) => passphrase.set(locked));
@@ -73,6 +87,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     toolbar.addItem('refresh', refresh);
     toolbar.addItem('passphrase', passphrase);
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
+    toolbar.addItem('certify', certify);
     toolbar.addItem('correct', correct);
     toolbar.addItem('status', status);
     content.set({ notify });
@@ -90,8 +105,18 @@ export namespace CorrectorWidget {
 class Content extends ReactWidget {
   constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
     super();
-    this.props = { ...props, correct: false, notify: () => {}, unlock: false };
+    this.props = {
+      ...props,
+      certify: false,
+      correct: false,
+      notify: () => {},
+      unlock: false
+    };
     this.addClass('correxit-corrector-widget-content');
+  }
+
+  get certify(): boolean {
+    return this.props.certify;
   }
 
   get path(): string {

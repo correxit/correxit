@@ -13,6 +13,7 @@ import { Corrector } from '.';
 export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
+  export const certify = 'correxit-corrector:certify';
   export const launch = 'correxit-corrector:launch';
   export const refresh = 'correxit-corrector:refresh';
   export const scan = 'correxit-corrector:scan';
@@ -36,9 +37,10 @@ export function addCommands(
 ) {
   const { commands, serviceManager: manager, shell } = app;
   const { browser, collector, documents, tracker, trans, tree } = utilities;
-  const { batch, cd, launch, refresh, scan } = CommandIDs;
+  const { batch, cd, certify, launch, refresh, scan } = CommandIDs;
   const fetch = (handle: Credentials) =>
     commands.execute(Correxit.CommandIDs.fetch, handle);
+  const save = (workbook: Workbook | null) => workbook?.context.save();
   const { normalize } = Workbook.Credentials;
   const disposables = [];
   let widget: Corrector.Widget | null = null;
@@ -50,8 +52,9 @@ export function addCommands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const handle = normalize(args) || ({} as Partial<Workbook.Credentials>);
         const { certify } = Workbook;
+        const commit = !!args.certify;
         const credentials = handle.key ? handle : { ...handle, unlock: true };
-        const correct = async (workbook: Workbook): Promise<Certified> => {
+        const grade = async (workbook: Workbook): Promise<Certified> => {
           const corrected = await Workbook.correct(workbook);
           const grade = { ...corrected, path: workbook.context.path };
           const identifier = Workbook.identifier(workbook);
@@ -59,13 +62,15 @@ export function addCommands(
           return { grade, identifier, timestamp, workbook };
         };
         const grader = async function* () {
-          const workbooks = await commands.execute(scan, credentials);
-          for await (const workbook of workbooks as AsyncGenerator<Headless>) {
-            yield await (args.certify ? certify(workbook) : correct(workbook));
+          const scanner = await commands.execute(scan, credentials);
+          for await (const workbook of scanner as AsyncGenerator<Headless>) {
+            const graded = await (commit ? certify(workbook) : grade(workbook));
+            await save(commit ? workbook : null);
+            yield graded;
           }
         };
-        return (async function* (grades) {
-          for await (const { grade, workbook } of grades) {
+        return (async function* (grader) {
+          for await (const { grade, workbook } of grader) {
             yield [grade.path, { grade, workbook: workbook as Headless }];
           }
         })(args.certify ? collector(grader()) : grader());
@@ -96,6 +101,24 @@ export function addCommands(
           widget.path = path || '.';
         }
         widget.removeClass('cxt-mod-cd');
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(certify, {
+      icon: () =>
+        commands.isToggled(certify)
+          ? Correxit.Icons.certify
+          : Correxit.Icons.secret,
+      label: trans.__('Certify workbooks'),
+      caption: trans.__('Lock and save grades after correcting'),
+      isToggleable: true,
+      isToggled: () => widget?.certify ?? false,
+      execute: () => {
+        if (widget && !widget.isDisposed) {
+          widget.certify = !widget.certify;
+          commands.notifyCommandChanged(certify);
+        }
       }
     })
   );
