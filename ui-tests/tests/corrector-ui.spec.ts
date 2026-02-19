@@ -288,7 +288,6 @@ test('full lifecycle: propagate, scan, grade, verify scores', async ({
       const { Workbook } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
 
-      // Phase 1: scan and verify all workbooks are present and locked.
       const scanned: AsyncGenerator<any> = await app.commands.execute(
         'correxit-corrector:scan',
         { path: directory }
@@ -303,7 +302,6 @@ test('full lifecycle: propagate, scan, grade, verify scores', async ({
         workbook.context.dispose();
       }
 
-      // Phase 2: batch grade with key.
       const graded: AsyncGenerator<any> = await app.commands.execute(
         'correxit-corrector:batch',
         { key: 'secret', path: directory }
@@ -335,14 +333,12 @@ test('full lifecycle: propagate, scan, grade, verify scores', async ({
     { directory: propagated.directory, roster }
   );
 
-  // Verify scan phase.
   expect(result.scanned).toHaveLength(3);
   for (const workbook of result.scanned) {
     expect(workbook.locked).toBe(true);
     expect(result.roster).toContain(workbook.assignee);
   }
 
-  // Verify grade phase.
   expect(result.graded).toHaveLength(3);
   for (const grade of result.graded) {
     expect(result.roster).toContain(grade.assignee);
@@ -351,7 +347,6 @@ test('full lifecycle: propagate, scan, grade, verify scores', async ({
     expect(grade.spec).toBeTruthy();
   }
 
-  // Verify every roster member was graded exactly once.
   const assignees = result.graded.map((g: any) => g.assignee).sort();
   expect(assignees).toEqual(result.roster);
 

@@ -102,7 +102,6 @@ describe('Rubric', () => {
       rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
 
       const removed = Rubric.remove(rubric, 'c1');
-      // Report data persists after removal
       expect(removed.assignment.report.order).toEqual(['c1']);
       expect(removed.assignment.report.scores.c1).toBeDefined();
     });
@@ -180,7 +179,6 @@ describe('Rubric', () => {
       expect(rubric.assignment.expiration).toBe(expiration);
       expect(rubric.assignment.submission).toBe(null);
 
-      // Reassign without providing expiration/submission
       rubric = await Rubric.assign(rubric, {
         assignee: 'reassignee@example.com',
         roster
@@ -227,7 +225,6 @@ describe('Rubric', () => {
       expect(rubric.assignment.submission).toBe(submission);
       await expect(validate(rubric)).resolves.not.toThrow();
 
-      // Tampering with expiration should fail validation
       const tampered = {
         ...rubric,
         assignment: { ...rubric.assignment, expiration: expiration + 1000 }
@@ -247,7 +244,6 @@ describe('Rubric', () => {
       });
       expect(rubric.assignment.submission).toBe(null);
 
-      // Student submits
       const timestamp = Date.now();
       rubric = await Rubric.assign(rubric, {
         assignee: 'assignee@example.com',
@@ -255,7 +251,7 @@ describe('Rubric', () => {
         submission: timestamp
       });
       expect(rubric.assignment.submission).toBe(timestamp);
-      expect(rubric.assignment.expiration).toBe(expiration); // Should preserve
+      expect(rubric.assignment.expiration).toBe(expiration);
     });
 
     it('resets report if assignee changes', async () => {
@@ -627,7 +623,6 @@ describe('Rubric', () => {
         }
       };
       expect(rubric.assignment.report.order).toEqual(['c1', 'c2', 'c3']);
-      // New execution order 3 -> 1 -> 2
       outputs = new Map([
         ['c3', [output('3')]],
         ['c1', [output('1')]],

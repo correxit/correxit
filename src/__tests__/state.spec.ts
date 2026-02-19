@@ -13,7 +13,7 @@ import * as state from '../correxit/state';
 const MockWorkbook = Workbook as unknown as { open: jest.Mock };
 
 describe('state', () => {
-  const dummy: any = { context: { path: 'dummy.ipynb' } }; // Workbook mock
+  const dummy: any = { context: { path: 'dummy.ipynb' } };
   const score: Rubric.Score = {
     ...Rubric.Score.CORRECT,
     code: '',
@@ -108,7 +108,6 @@ describe('state', () => {
 
   describe('eviction policy', () => {
     it('evicts oldest entries when cache exceeds footprint', () => {
-      // Create a specific rubric ID for this test to isolate completely
       const rubric = { ...Rubric.create(), id: 'eviction-test' };
       MockWorkbook.open.mockReturnValue(rubric);
 

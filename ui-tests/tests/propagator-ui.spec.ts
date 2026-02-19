@@ -103,8 +103,6 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
     expect(check.source).not.toContain('answer = 42');
   }
 
-  // Navigate file browser back to root before cleanup to avoid
-  // "Directory not found" dialogs blocking notebook close.
   await cd(page, '.');
   await page.evaluate(
     async ({
