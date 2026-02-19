@@ -244,15 +244,21 @@
   background-image: url('../source/icons/correctable.svg');
 }
 
-.jp-Notebook
+.jp-Notebook.jp-mod-editMode
   .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correct
+  .jp-InputArea-editor,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Cell.jp-CodeCell.cxt-mod-correct
   .jp-InputArea-editor {
   border: 1px solid var(--md-green-300);
   border-radius: 6px;
 }
 
-.jp-Notebook
+.jp-Notebook.jp-mod-editMode
   .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-incorrect
+  .jp-InputArea-editor,
+.jp-Notebook.jp-mod-commandMode
+  .jp-Cell.jp-CodeCell.cxt-mod-incorrect
   .jp-InputArea-editor {
   border: 1px solid var(--md-red-300);
   border-radius: 6px;
