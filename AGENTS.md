@@ -5,21 +5,24 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 ## 1. Core Architecture
 
 - **No Backend**: Logic exists solely in the browser. Correxit is purely client-side.
+- **Two Modules**: `correxit/` (assignment authoring and distribution) and `corrector/` (grading and batch processing). Shared primitives (`Rubric`, `Workbook`, `Security`) live at the package root.
 - **MVC Pattern**:
   - **Model**: `rubric.ts` (immutable data), `workbook.ts` (notebook state).
   - **Controller**: `commands.ts` (orchestrates all mutations).
   - **View**: `ui/` (React components).
 - **Command-Driven**: **Never** mutate state directly from UI components. UI triggers Commands; Commands call Model functions.
+- **Plugin Composition**: Each plugin provides exactly one capability via a JupyterLab token (`Consumer`, `Collector`, `Submitter`, `Unlocker`, `Registrar`, `Monitor`). Core logic is decoupled from IO. Swapping a file-system consumer for an LMS consumer requires no changes to `propagator.ts`.
 
 ## 2. Critical Technical Invariants
 
-### Data Integrity & Security
+### Security Model
 
 - **Explicit Nulls**: Use `field: Type | null` instead of optional `field?: Type`.
   - _Reason_: Stable JSON serialization is required for cryptographic signatures.
 - **Validate-Before-Encrypt**: Always validate rubric/assignment data _before_ encryption.
   - _Wrong_: Encrypt -> Validate.
   - _Right_: Validate -> Encrypt.
+- **Keys Never on Disk**: Cryptographic keys only exist in memory (closure scope, `Set<string>`). They enter via user input and die with the browser tab. Never serialize keys to notebook metadata or persist them.
 - **Immutability**: `Rubric` is an immutable data structure. Mutations return new instances (e.g., `Rubric.add()`).
 
 ### State Management
@@ -37,10 +40,12 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 
 ## 3. Asynchronous Patterns
 
-- **Streaming / Async Generators**: Long-running ops (grading, distributing) must implement the `async generator` pattern yielding updates.
+- **Pull-Based Generators**: Long-running ops (propagation, grading, scanning) are cold `async function*` generators. They do no work until iterated. Backpressure is inherent. Each `yield` suspends until the consumer pulls.
+- **Generator Pipelines**: Composition is via `yield*` delegation: `propagator yield* consumer`, `consumer yield* stream`. No push channels, no buffers, no callbacks.
 - **UI Consumption**: Use the custom `useCommand` hook to consume these generators.
   - _Pattern_: `const [messages, idle] = useCommand(commands, 'command:id', args);`
   - This hook throttles updates ~60fps and handles cleanup.
+- **Monitor**: The `Stream`-based `Monitor` plugin is the one hot (push) async iterable in the system. It emits workbook changes as the user switches tabs. The sidebar subscribes via `for await`.
 
 ## 4. Coding Style & Conventions
 
@@ -50,7 +55,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
   - **Preferred**: `Object.fromEntries(items.map(...))`
   - **Discouraged**: `items.reduce({...acc}, ...)` (Spread in reduce is a performance/complexity anti-pattern).
   - **Allowed**: `reduce` is fine for aggregation (sums, counts).
-- **Naming**: Prefer single, distinct English words (e.g., `report` vs `scoreReport`).
+- **Naming**: Prefer single, distinct English words (e.g., `report` vs `scoreReport`). Names should be domain words (`propagate`, `certify`, `lease`) not pattern words (`producer`, `handler`, `manager`). Bias toward beauty.
 
 ## 5. Common Pitfalls (Quick Check)
 
@@ -70,3 +75,6 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `propagator.ts`: Async generator for assignment distribution to rosters.
 - `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
 - `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Registrar`, `Submitter`, `Unlocker`).
+- `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction.
+- `state.ts`: In-memory cache for active workbook and cell scores (`Map` with FIFO eviction).
+- `use-command.ts`: React hook bridging async generators to component state at ~60fps.
