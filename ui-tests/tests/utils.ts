@@ -10,6 +10,22 @@ export interface Fixture {
 }
 
 /**
+ * Change directory in the file browser.
+ *
+ * After propagation the file browser points at the propagated directory.
+ * If the test deletes that directory without resetting, JupyterLab pops a
+ * "Directory not found" dialog that blocks subsequent UI interactions.
+ */
+export async function cd(page: any, path = '.'): Promise<void> {
+  await page.evaluate(async (path: string) => {
+    const app = (window as any).jupyterapp;
+    if (app.commands.hasCommand('filebrowser:go-to-path')) {
+      await app.commands.execute('filebrowser:go-to-path', { path });
+    }
+  }, path);
+}
+
+/**
  * Creates a notebook with the given cells and returns a dispose function.
  */
 export async function setup(page: any, cells: Cell[]): Promise<Fixture> {

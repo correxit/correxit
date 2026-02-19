@@ -1,5 +1,5 @@
 import { expect, test } from '@jupyterlab/galata';
-import { setup } from './utils';
+import { cd, setup } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -74,17 +74,11 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
         type: cell?.cell_type
       };
     });
-    for (const path of saved) {
-      await app.serviceManager.contents.delete(path);
-    }
-    if (directory) {
-      await app.serviceManager.contents.delete(directory);
-    }
-
     return {
       assigned: log
         .filter(({ type }) => type === 'assigned')
         .map(x => x.slots[0]),
+      directory,
       encrypted: log.filter(({ type }) => type === 'encrypted').length,
       saved,
       checks
@@ -109,6 +103,27 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
     expect(check.source).not.toContain('answer = 42');
   }
 
+  // Navigate file browser back to root before cleanup to avoid
+  // "Directory not found" dialogs blocking notebook close.
+  await cd(page, '.');
+  await page.evaluate(
+    async ({
+      directory,
+      paths
+    }: {
+      directory: string | null;
+      paths: string[];
+    }) => {
+      const contents = (window as any).jupyterapp.serviceManager.contents;
+      for (const path of paths) {
+        await contents.delete(path).catch(() => {});
+      }
+      if (directory) {
+        await contents.delete(directory).catch(() => {});
+      }
+    },
+    { directory: result.directory, paths: result.saved }
+  );
   await dispose();
 });
 
