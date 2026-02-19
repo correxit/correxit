@@ -1,3 +1,10 @@
+## [1.0.9](https://github.com/QuantStack/correxit/compare/v1.0.8...v1.0.9) (2026-02-19)
+
+
+### Bug Fixes
+
+* Fix publish step of release workflow ([#35](https://github.com/QuantStack/correxit/issues/35)) ([2da0c44](https://github.com/QuantStack/correxit/commit/2da0c44d39fa9226bdef5a2064af7b07e2aec5aa))
+
 ## [1.0.8](https://github.com/QuantStack/correxit/compare/v1.0.7...v1.0.8) (2026-02-17)
 
 
