@@ -116,11 +116,11 @@ jobs:
         run: |
           set -eux
           corepack enable
-          corepack prepare yarn@stable --activate
+          corepack prepare yarn@3.5.0 --activate
           python -m pip install -U "jupyterlab>=4.0.0,<5"
 
           yarn install
-          yarn run build:prod
+          yarn run build:lib
           
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm publish --access internal  #  Explicitly set public access.
