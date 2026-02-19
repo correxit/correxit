@@ -4,40 +4,7 @@ import { findIndex } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '.';
 import * as security from './security';
 
-/**
- * Returns an async iterable of emissions for tracking propagation progress.
- */
-export function invoke({ consumer, workbook }: {
-  consumer: Correxit.Consumer;
-  workbook: Workbook;
-}): Correxit.Emitter {
-  return propagate({ consumer, workbook });
-}
-
-async function encrypt(
-  notebook: INotebookContent,
-  reference: string,
-  key: string
-): Promise<void> {
-  const index = findIndex(notebook.cells, ({ id }) => id === reference);
-  if (!key || index === -1) {
-    throw new Error('encrypt error');
-  }
-
-  const cell = notebook.cells[index];
-  const source = Array.isArray(cell.source)
-    ? cell.source.join('\n')
-    : cell.source;
-  const encrypted = await security.encrypt(source, key);
-  const jupyter = cell.metadata.jupyter || {};
-  cell.cell_type = 'raw';
-  cell.metadata.editable = false;
-  cell.metadata.jupyter = { ...jupyter, 'source_hidden': true };
-  cell.source = encrypted;
-  delete cell.metadata.trusted;
-}
-
-async function* propagate({ consumer, workbook }: {
+export async function* propagate({ consumer, workbook }: {
   consumer: Correxit.Consumer;
   workbook: Workbook;
 }): AsyncGenerator<Correxit.Emitter.Emission> {
@@ -70,6 +37,29 @@ async function* propagate({ consumer, workbook }: {
   } catch (error) {
     yield { type: 'error', slots: [`${error}`] };
   }
+}
+
+async function encrypt(
+  notebook: INotebookContent,
+  reference: string,
+  key: string
+): Promise<void> {
+  const index = findIndex(notebook.cells, ({ id }) => id === reference);
+  if (!key || index === -1) {
+    throw new Error('encrypt error');
+  }
+
+  const cell = notebook.cells[index];
+  const source = Array.isArray(cell.source)
+    ? cell.source.join('\n')
+    : cell.source;
+  const encrypted = await security.encrypt(source, key);
+  const jupyter = cell.metadata.jupyter || {};
+  cell.cell_type = 'raw';
+  cell.metadata.editable = false;
+  cell.metadata.jupyter = { ...jupyter, 'source_hidden': true };
+  cell.source = encrypted;
+  delete cell.metadata.trusted;
 }
 
 /**

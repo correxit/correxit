@@ -10,7 +10,7 @@ import { Correxit, Rubric, Workbook } from '..';
 import { Corrector } from '../corrector';
 import * as input from './input';
 import * as io from './io';
-import * as propagator from './propagator';
+import { propagate } from './propagator';
 import * as security from './security';
 import * as state from './state';
 
@@ -417,10 +417,8 @@ export function addCommands(
       if (!rubric || rubric.locked) {
         return (async function* empty() {})();
       }
-
       try {
-        const output = await propagator.invoke({ consumer, workbook });
-        return translate(output, trans);
+        return translate(propagate({ consumer, workbook }), trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
