@@ -113,12 +113,70 @@ cold `async function*` generators. They do no work until iterated. Each `yield`
 suspends execution until the consumer pulls the next value, providing automatic
 backpressure.
 
-Composition is via `yield*` delegation. For example, `propagator` yields
-encrypted-cell emissions, then delegates to the `consumer` via `yield*`, which
-in turn iterates the notebook `stream`. The entire pipeline is pull-driven.
+### Generator pipelines
 
-The one intentionally _hot_ async iterable is the `Monitor` plugin, which emits
-workbook changes as the user switches tabs. It is backed by a Lumino `Stream`.
+Each pipeline is a vertical chain of generators. Shapes indicate role:
+
+- **Stadium** (rounded) — UI boundary where iteration starts and ends
+- **Rectangle** — generator stage that transforms or delegates
+- **Hexagon** — data source that produces raw values
+
+Solid arrows are the pull direction (`for await` or `yield*`). Dotted arrows
+are values flowing back up. Nothing moves until asked.
+
+**Assignment propagation** — the propagator defines a roster loop (one notebook
+per assignee) and hands it to the consumer as a factory via `yield*`. The
+consumer decides _where_ to write by calling `stream(location)`, then iterates:
+
+```mermaid
+graph TB
+    classDef ui fill:#dbeafe,stroke:#3b82f6,color:#1e40af
+    classDef gen fill:#f3f4f6,stroke:#6b7280,color:#1f2937
+    classDef src fill:#d1fae5,stroke:#10b981,color:#065f46
+
+    UI(["useCommand"]):::ui
+    P["propagator()"]:::gen
+    C["consumer()"]:::gen
+    R{{"roster loop"}}:::src
+
+    UI -- for await --> P
+    P -- "yield*" --> C
+    C -- for await --> R
+    R -. notebook .-> C
+    C -. progress .-> P
+    P -. progress .-> UI
+```
+
+**Batch grading** — the batch command iterates a grader, which iterates scanned
+workbooks. When certifying, a collector wraps the grader to receive certified
+grades (without `certify`, the collector is omitted and batch iterates the
+grader directly):
+
+```mermaid
+graph TB
+    classDef ui fill:#dbeafe,stroke:#3b82f6,color:#1e40af
+    classDef gen fill:#f3f4f6,stroke:#6b7280,color:#1f2937
+    classDef src fill:#d1fae5,stroke:#10b981,color:#065f46
+
+    UI(["useCommand"]):::ui
+    B["batch()"]:::gen
+    CO["collector()"]:::gen
+    G["grader()"]:::gen
+    SC{{"scan()"}}:::src
+
+    UI -- for await --> B
+    B -- for await --> CO
+    CO -- for await --> G
+    G -- for await --> SC
+    SC -. workbook .-> G
+    G -. grade .-> CO
+    CO -. certified .-> B
+    B -. "path, grade" .-> UI
+```
+
+Every pipeline is pull-driven and cold. The one intentionally _hot_ async
+iterable is the `Monitor` plugin, which emits workbook changes as the user
+switches tabs. It is backed by a Lumino `Stream`.
 
 ### `useCommand` (`use-command.ts`)
 
