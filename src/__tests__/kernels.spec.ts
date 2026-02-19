@@ -86,7 +86,7 @@ describe('kernels', () => {
       expect(result).toBeNull();
     });
 
-    it('reuses a clean kernel from the pool', async () => {
+    it('takes from pool instead of starting a new kernel', async () => {
       const mock = spawn();
       const workbook = create({
         kernelManager: { startNew: jest.fn(async () => mock) }
