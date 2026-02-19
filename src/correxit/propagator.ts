@@ -15,9 +15,7 @@ export async function invoke({ consumer, workbook }: {
 }): Promise<Correxit.Emitter> {
   const rubric = Workbook.open(workbook, true);
   const [emitter, log, end] = logger();
-  try {
-    return emitter;
-  } finally {
+  const start = async () => {
     if (!rubric || rubric.locked) {
       log({ type: 'error', slots: ['invalid rubric'] });
       end();
@@ -26,6 +24,12 @@ export async function invoke({ consumer, workbook }: {
         .catch(error => log({ type: 'error', slots: [`${error}`] }))
         .finally(end);
     }
+  };
+  try {
+    return emitter;
+  } finally {
+    // Defer execution to ensure the caller can subscribe to the emitter.
+    void new Promise(resolve => requestAnimationFrame(resolve)).then(start);
   }
 };
 
