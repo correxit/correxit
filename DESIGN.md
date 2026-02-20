@@ -74,8 +74,8 @@ The `locked` boolean serves as the discriminator for TypeScript narrowing.
 
 ## Data model: `Workbook` (`workbook.ts`)
 
-`Workbook` is an abstraction over Jupyter notebooks. A `Headed` workbook has
-an active `NotebookPanel` (visible in the UI). A `Headless` workbook has only a
+`Workbook` is an abstraction over Jupyter notebooks. A `Headed` workbook is
+backed by an active `NotebookPanel` (visible in the UI), exposing only its `content` widget and its document `context`. A `Headless` workbook has only a
 `context` and `content: null`. It is used for batch grading and scanning.
 
 ### Discriminated unions
