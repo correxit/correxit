@@ -53,7 +53,7 @@ const Assignee: React.FC<{
   toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
   trans: TranslationBundle;
 }> = ({ assignment, locked, toggle, trans }) => {
-  const unassigned = trans.__('Template – unassigned');
+  const unassigned = trans.__('Template - unassigned');
   const { assignee, roster } = assignment;
   if (locked) {
     const { Icons } = Correxit;
@@ -85,8 +85,8 @@ const Assignee: React.FC<{
         >
           <option value="">
             {roster.length
-              ? trans.__('Template – unassigned (roster: %1)', roster.length)
-              : trans.__('Template – unassigned (roster: empty)')}
+              ? trans.__('Template - unassigned (roster: %1)', roster.length)
+              : trans.__('Template - unassigned (roster: empty)')}
           </option>
           {roster.map((value, key) => (
             <option {...{ key, value }}>{value}</option>

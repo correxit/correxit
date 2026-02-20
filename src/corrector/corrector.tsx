@@ -197,8 +197,8 @@ const Assignment: React.FC<{
   const title = assignee
     ? trans.__('Assigned to: %1', assignee)
     : roster.length && !locked
-      ? trans.__('Template – unassigned (roster: %1)', roster.length)
-      : trans.__('Template – unassigned (empty roster)');
+      ? trans.__('Template - unassigned (roster: %1)', roster.length)
+      : trans.__('Template - unassigned (empty roster)');
   return (
     <td className="correxit-corrector-assignment">
       <div className="correxit-corrector-icon">
