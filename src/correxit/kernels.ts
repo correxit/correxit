@@ -6,18 +6,24 @@ import { Workbook } from '.';
  * client should call after it is done with the kernel to release it back to an
  * active kernel pool.
  */
-type Leased = [kernel: Kernel.IKernelConnection, release: () => void];
+type Leased<ASYNC extends boolean = false> = [
+  kernel: Kernel.IKernelConnection,
+  release: ASYNC extends true ? () => Promise<void> : () => void
+];
 
-type Started = {
-  clean: boolean;
-  kernel: Kernel.IKernelConnection;
-  timeout: ReturnType<typeof setTimeout>;
-};
+type Started = { kernel: Kernel.IKernelConnection; timeout: Timeout; };
+
+type Timeout = ReturnType<typeof setTimeout>;
 
 /**
  * Time-to-live (TTL) for a five-second opportunistic kernel cache.
  */
 const TTL = 5000;
+
+/**
+ * The cap for the number of hot kernels in the pool.
+ */
+const HOT = 5;
 
 const pool = new Map<string, Started[]>();
 
@@ -27,18 +33,42 @@ const pool = new Map<string, Started[]>();
  *
  * #### Notes
  * If no kernel is available, a new one is started. If no kernel can be started,
- * the returned promise resolves to `null`. If a kernel available but it is not
- * clean, it is restarted.
+ * the returned promise resolves to `null`.
+ *
+ * By default, the returned release function is synchronous fire-and-forget.
+ * Pass `{ async: true }` to receive an async release function that resolves
+ * after recycle is complete.
  */
-export async function lease(workbook: Workbook): Promise<Leased | null> {
-  const started = queue(workbook.context.model.defaultKernelName).pop();
-  if (started) {
-    // If both lend (sync) and restart (async) fail fallback to start.
-    return lend(started) || await restart(started) || start(workbook);
+export async function lease(workbook: Workbook): Promise<Leased | null>;
+export async function lease(
+  workbook: Workbook,
+  _: { async: false; }
+): Promise<Leased | null>;
+export async function lease(
+  workbook: Workbook,
+  _: { async: true; }
+): Promise<Leased<true> | null>;
+export async function lease(
+  workbook: Workbook,
+  _: { async?: boolean; }
+): Promise<Leased | Leased<true> | null>;
+export async function lease(
+  workbook: Workbook,
+  { async }: { async?: boolean; } = {}
+): Promise<Leased | Leased<true> | null> {
+  const started = take(workbook.context.model.defaultKernelName);
+  const kernel = lend(started) || await start(workbook);
+  if (!kernel) {
+    return null;
   }
-  return start(workbook);
+  return async
+    ? [kernel, () => recycle(kernel)]
+    : [kernel, () => void recycle(kernel)];
 }
 
+/**
+ * Disposes a kernel by shutting it down and releasing its resources.
+ */
 function dispose(kernel: Kernel.IKernelConnection): void {
   if (kernel.isDisposed) {
     return;
@@ -46,35 +76,64 @@ function dispose(kernel: Kernel.IKernelConnection): void {
   kernel.shutdown().catch(() => {}).finally(() => kernel.dispose());
 }
 
-function lend({ clean, kernel }: Omit<Started, 'timeout'>): Leased | null {
-  return clean ? [kernel, () => release(kernel)] : null;
+/**
+ * Caches an idle kernel with TTL eviction when pool capacity allows.
+ */
+function keep(kernel: Kernel.IKernelConnection): void {
+  const started = { kernel, timeout: setTimeout(() => remove(kernel), TTL) };
+  const kernels = queue(kernel.name);
+  if (kernels.length >= HOT) {
+    clearTimeout(started.timeout);
+    dispose(kernel);
+    return;
+  }
+  kernels.push(started);
 }
 
+/**
+ * Returns a leased kernel tuple when a cached kernel is usable.
+ */
+function lend(started: Started | null): Kernel.IKernelConnection | null {
+  if (!started || started.kernel.isDisposed) {
+    return null;
+  }
+  return started.kernel;
+}
+
+/**
+ * Returns the idle-kernel queue for a kernel name, creating it if missing.
+ */
 function queue(name: string): Started[] {
   return pool.get(name) || pool.set(name, []).get(name)!;
 }
 
-function release(kernel: Kernel.IKernelConnection): void {
-  const timeout = setTimeout(() => remove(kernel), TTL);
-  queue(kernel.name).push({ clean: false, kernel, timeout });
+/**
+ * Restarts a kernel before returning it to the hot pool or disposing it.
+ */
+async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
+  const restarted = await kernel.restart().then(() => true).catch(() => false);
+  if (restarted) {
+    keep(kernel);
+    return;
+  }
+  dispose(kernel);
 }
 
+/**
+ * Removes a kernel from its queue and disposes it.
+ */
 function remove(kernel: Kernel.IKernelConnection): void {
   const name = kernel.name;
   pool.set(name, queue(name).filter(started => kernel !== started.kernel));
   dispose(kernel);
 }
 
-async function restart({ kernel, timeout }: Started): Promise<Leased | null> {
-  clearTimeout(timeout);
-  if (await kernel.restart().then(() => true).catch(() => false)) {
-    return lend({ clean: true, kernel });
-  }
-  dispose(kernel);
-  return null;
-}
-
-async function start(workbook: Workbook): Promise<Leased | null> {
+/**
+ * Starts a new kernel for the workbook and returns a leased tuple.
+ */
+async function start(
+  workbook: Workbook
+): Promise<Kernel.IKernelConnection | null> {
   const { kernelManager } = workbook.context.sessionContext;
   const name = workbook.context.model.defaultKernelName;
   if (!kernelManager || !name) {
@@ -82,10 +141,20 @@ async function start(workbook: Workbook): Promise<Leased | null> {
     return null;
   }
   try {
-    const kernel = await kernelManager.startNew({ name });
-    return lend({ clean: true, kernel });
+    return await kernelManager.startNew({ name });
   } catch (error) {
     console.warn('start kernel error', error);
   }
   return null;
+}
+
+/**
+ * Takes the most recently cached idle kernel for a kernel name.
+ */
+function take(name: string): Started | null {
+  const started = queue(name).pop() || null;
+  if (started) {
+    clearTimeout(started.timeout);
+  }
+  return started;
 }
