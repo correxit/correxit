@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/QuantStack/correxit/compare/v1.0.9...v1.1.0) (2026-02-20)
+
+
+### Features
+
+* bigger kernel pool ([#39](https://github.com/QuantStack/correxit/issues/39)) ([a9b879f](https://github.com/QuantStack/correxit/commit/a9b879f3b5550e80ecd1454d560c68198366e3fa))
+
 ## [1.0.9](https://github.com/QuantStack/correxit/compare/v1.0.8...v1.0.9) (2026-02-19)
 
 
