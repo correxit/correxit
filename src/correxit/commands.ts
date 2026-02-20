@@ -275,8 +275,8 @@ export function addCommands(
         : trans.__('Correct workbook...');
     },
     execute: async (args: Partial<Cell & Credentials & CellToolbar>) => {
-      const { workbook } = await reify(args);
-      if (!workbook) {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric) {
         return { score: Rubric.Score.UNSCORED, spec: null };
       }
 
@@ -298,6 +298,11 @@ export function addCommands(
       });
       if (workbook.content.activeCell) {
         workbook.content.scrollToCell(workbook.content.activeCell);
+      }
+      // Manually force a refresh.
+      if (rubric.locked) {
+        injector(null);
+        injector(workbook);
       }
     }
   }));
