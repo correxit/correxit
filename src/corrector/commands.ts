@@ -9,6 +9,7 @@ import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
 import { Correxit, Workbook } from '..';
 import { Corrector } from '.';
+import { grader } from './grader';
 
 export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
@@ -61,19 +62,23 @@ export function addCommands(
           const timestamp = Workbook.timestamp(workbook);
           return { grade, identifier, timestamp, workbook };
         };
-        const grader = async function* () {
-          const scanner = await commands.execute(scan, credentials);
-          for await (const workbook of scanner as AsyncGenerator<Headless>) {
-            const graded = await (commit ? certify(workbook) : grade(workbook));
-            await save(commit ? workbook : null);
-            yield graded;
+        const correct = async (workbook: Workbook): Promise<Certified> => {
+          const graded = await (commit ? certify(workbook) : grade(workbook));
+          await save(commit ? workbook : null);
+          return graded;
+        };
+        const scanner = (): Promise<AsyncGenerator<Headless>> =>
+          commands.execute(scan, credentials);
+        const grades = async function* () {
+          for await (const grade of grader(await scanner(), correct, 5)) {
+            yield grade;
           }
         };
-        return (async function* (grader) {
-          for await (const { grade, workbook } of grader) {
+        return (async function* (grades) {
+          for await (const { grade, workbook } of grades) {
             yield [grade.path, { grade, workbook: workbook as Headless }];
           }
-        })(args.certify ? collector(grader()) : grader());
+        })(args.certify ? collector(grades()) : grades());
       }
     })
   );

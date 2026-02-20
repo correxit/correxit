@@ -6,7 +6,7 @@ import {
 } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
 import {
@@ -25,6 +25,20 @@ const PENDING = 'cxt-mod-pending';
 const SELECTED = 'cxt-mod-selected';
 const { batch, scan } = COMMAND_IDS;
 const { basename } = PathExt;
+
+/**
+ * Cache workbook contexts by path.
+ */
+const cache = (cached: { [path: string]: Headless }, workbooks: Headless[]) => {
+  for (const workbook of workbooks) {
+    const path = workbook.context.path;
+    const kept = cached[path];
+    if (kept && kept !== workbook) {
+      kept.context.dispose();
+    }
+    cached[path] = workbook;
+  }
+};
 
 /**
  * Dispose workbook contexts.
@@ -63,16 +77,58 @@ const match = (workbooks: Headless[], path = '') =>
 /**
  * @returns A merged list workbooks that prioritizes the graded collection.
  */
-const merge = (workbooks: Headless[], grades: Collated) =>
-  workbooks.map(workbook => {
-    const { path } = workbook.context;
-    return path in grades ? grades[path].workbook : workbook;
-  });
+const merge = (workbooks: Headless[], grades: Collated) => {
+  const known = new Set(workbooks.map(({ context }) => context.path));
+  return [
+    ...workbooks.map(workbook => {
+      const { path } = workbook.context;
+      return path in grades ? grades[path].workbook : workbook;
+    }),
+    ...Object.entries(grades)
+      .filter(([path]) => !known.has(path))
+      .map(([, { workbook }]) => workbook)
+  ];
+};
 
 /**
  * Open a workbook rubric quietly.
  */
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
+
+/**
+ * Collect workbook paths as a set.
+ */
+const paths = (workbooks: Headless[]) =>
+  new Set(workbooks.map(({ context }) => context.path));
+
+/**
+ * Dispose and remove cached workbooks not in the live path set.
+ */
+const prune = (
+  cached: { [path: string]: Headless },
+  live: Set<string>,
+  active: string | null
+) => {
+  for (const [path, workbook] of Object.entries(cached)) {
+    if (live.has(path) || path === active) {
+      continue;
+    }
+    workbook.context.dispose();
+    delete cached[path];
+  }
+};
+
+/**
+ * Reconcile cached workbooks with the current merged list.
+ */
+const reconcile = (
+  cached: { [path: string]: Headless },
+  workbooks: Headless[],
+  active: string | null
+) => {
+  prune(cached, paths(workbooks), active);
+  cache(cached, workbooks);
+};
 
 /**
  * @returns the grade for a workbook given current batch and scan state.
@@ -98,27 +154,27 @@ export function Corrector(props: Corrector.Props) {
   const { certify, commands, correct, notify, path, trans, unlock } = props;
   const grade = correct ? batch : '';
   const handle = { path, unlock };
-  const auth = { path, unlock, certify };
+  const auth = { certify, path, unlock };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
   const [grades, graded] = useCommand<Batched>(commands, grade, auth);
   const collated: Collated = Object.fromEntries(grades);
   const merged = merge(workbooks, collated);
+  const cached = useRef({} as { [path: string]: Headless });
   const [selection, setSelection] = useState('');
-  const [workbook, setWorkbook] = useState(() => match(merged, selection));
+  const workbook = useMemo(() => match(merged, selection), [merged, selection]);
+  const active = workbook?.context.path || null;
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
-  useEffect(() => () => dispose(workbooks), [scanned]);
-  useEffect(() => () => dispose(grades.map(([, _]) => _.workbook)), [graded]);
-  useEffect(() => setWorkbook(match(merged, selection)), [merged, selection]);
+  useEffect(() => reconcile(cached.current, merged, active), [active, merged]);
+  useEffect(() => () => dispose(Object.values(cached.current)), []);
   return (
     <table className="correxit-corrector">
       {merged.map(workbook => {
         const { path } = workbook.context;
         const grade = resolve(workbook, collated, graded);
-        const key = `${path}:${JSON.stringify(grade)}`;
         const select = (selection: string) => setSelection(selection);
         const props = { commands, grade, select, trans, workbook };
-        return <Row key={key} selected={path === selection} {...props} />;
+        return <Row key={path} selected={path === selection} {...props} />;
       })}
     </table>
   );
