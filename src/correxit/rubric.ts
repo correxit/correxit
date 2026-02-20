@@ -568,6 +568,6 @@ export namespace Rubric {
 }
 
 /**
-  * @returns a list of strings with no duplicate values.
-  */
+ * @returns a list of strings with no duplicate values.
+ */
 const unique = (list: string[]): string[] => Array.from(new Set(list));
