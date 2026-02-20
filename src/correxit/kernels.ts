@@ -16,14 +16,14 @@ type Started = { kernel: Kernel.IKernelConnection; timeout: Timeout; };
 type Timeout = ReturnType<typeof setTimeout>;
 
 /**
- * Time-to-live (TTL) for a five-second opportunistic kernel cache.
- */
-const TTL = 5000;
-
-/**
  * The cap for the number of hot kernels in the pool.
  */
 const HOT = 5;
+
+/**
+ * Time-to-live (TTL) for a five-second opportunistic kernel cache.
+ */
+const TTL = 5000;
 
 const pool = new Map<string, Started[]>();
 
@@ -34,6 +34,8 @@ const pool = new Map<string, Started[]>();
  * #### Notes
  * If no kernel is available, a new one is started. If no kernel can be started,
  * the returned promise resolves to `null`.
+ *
+ * Released kernels are recycled (restart-then-repool) or disposed on failure.
  *
  * By default, the returned release function is synchronous fire-and-forget.
  * Pass `{ async: true }` to receive an async release function that resolves
@@ -48,10 +50,6 @@ export async function lease(
   workbook: Workbook,
   _: { async: true; }
 ): Promise<Leased<true> | null>;
-export async function lease(
-  workbook: Workbook,
-  _: { async?: boolean; }
-): Promise<Leased | Leased<true> | null>;
 export async function lease(
   workbook: Workbook,
   { async }: { async?: boolean; } = {}
@@ -91,7 +89,7 @@ function keep(kernel: Kernel.IKernelConnection): void {
 }
 
 /**
- * Returns a leased kernel tuple when a cached kernel is usable.
+ * @returns a cached kernel connection when it is usable, or `null` otherwise.
  */
 function lend(started: Started | null): Kernel.IKernelConnection | null {
   if (!started || started.kernel.isDisposed) {
@@ -101,7 +99,7 @@ function lend(started: Started | null): Kernel.IKernelConnection | null {
 }
 
 /**
- * Returns the idle-kernel queue for a kernel name, creating it if missing.
+ * @returns the idle-kernel queue for a kernel name, creating it if missing.
  */
 function queue(name: string): Started[] {
   return pool.get(name) || pool.set(name, []).get(name)!;
@@ -129,7 +127,7 @@ function remove(kernel: Kernel.IKernelConnection): void {
 }
 
 /**
- * Starts a new kernel for the workbook and returns a leased tuple.
+ * Starts a new kernel for the workbook and returns its connection.
  */
 async function start(
   workbook: Workbook
