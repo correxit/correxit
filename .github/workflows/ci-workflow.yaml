@@ -185,7 +185,7 @@ jobs:
   # Main Branch: Mirror to Notebook-Link
   # ============================================================
   mirror-commit-to-notebook-link:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [set-repo-name]
     runs-on: ubuntu-latest
     env:
@@ -213,7 +213,7 @@ jobs:
           source_owner: "quantstack"
           dest_owner: "notebook-link"
           repo_name: ${{ env.NO_ORG_REPO_NAME }}
-          ref: ${{ github.ref_name }}
+          ref: main
           sync_tag: "true"
 
   trigger-version-bump:
