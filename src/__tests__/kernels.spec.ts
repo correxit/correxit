@@ -86,17 +86,19 @@ describe('kernels', () => {
       expect(result).toBeNull();
     });
 
-    it('reuses a clean kernel from the pool', async () => {
+    it('takes from pool instead of starting a new kernel', async () => {
       const mock = spawn();
       const workbook = create({
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
 
+      // Lease and release to populate the pool.
       const first = await lease(workbook);
       expect(first).not.toBeNull();
       const [, release] = first!;
       release();
 
+      // The released kernel is dirty, so it restarts. Lease again.
       const second = await lease(workbook);
       expect(second).not.toBeNull();
       // The kernel was restarted (not freshly started) so startNew was
