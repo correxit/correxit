@@ -74,8 +74,8 @@ The `locked` boolean serves as the discriminator for TypeScript narrowing.
 
 ## Data model: `Workbook` (`workbook.ts`)
 
-`Workbook` is an abstraction over Jupyter notebooks. A `Headed` workbook has
-an active `NotebookPanel` (visible in the UI). A `Headless` workbook has only a
+`Workbook` is an abstraction over Jupyter notebooks. A `Headed` workbook is
+backed by an active `NotebookPanel` (visible in the UI), exposing only its `content` widget and its document `context`. A `Headless` workbook has only a
 `context` and `content: null`. It is used for batch grading and scanning.
 
 ### Discriminated unions
@@ -115,48 +115,41 @@ backpressure.
 
 ### Generator pipelines
 
-Each pipeline is a vertical chain of generators. Shapes indicate role:
+Each pipeline is a pull-driven chain of generators. Nothing moves until asked.
 
-- **Stadium** (rounded) — UI boundary where iteration starts and ends
-- **Rectangle** — generator stage that transforms or delegates
-- **Hexagon** — data source that produces raw values
-
-Solid arrows are the pull direction (`for await` or `yield*`). Dotted arrows
-are values flowing back up. Nothing moves until asked.
-
-**Assignment propagation** — the propagator defines a roster loop (one notebook
+**Assignment propagation:** the propagator defines a roster loop (one notebook
 per assignee) and hands it to the consumer as a factory via `yield*`. The
 consumer decides _where_ to write by calling `stream(location)`, then iterates:
 
 ```mermaid
-graph TB
-    classDef ui fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    classDef gen fill:#f3f4f6,stroke:#6b7280,color:#1f2937
-    classDef src fill:#d1fae5,stroke:#10b981,color:#065f46
+flowchart TB
+  classDef ui fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e,stroke-width:1px
+  classDef gen fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1px
+  classDef src fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1px
 
     UI(["useCommand"]):::ui
     P["propagator()"]:::gen
     C["consumer()"]:::gen
     R{{"roster loop"}}:::src
 
-    UI -- for await --> P
-    P -- "yield*" --> C
-    C -- for await --> R
-    R -. notebook .-> C
-    C -. progress .-> P
-    P -. progress .-> UI
+  UI -->|for await| P
+  P -->|yield*| C
+  C -->|for await| R
+  R -. notebook .-> C
+  C -. progress .-> P
+  P -. progress .-> UI
 ```
 
-**Batch grading** — the batch command iterates a grader, which iterates scanned
+**Batch grading:** the batch command iterates a grader, which iterates scanned
 workbooks. When certifying, a collector wraps the grader to receive certified
 grades (without `certify`, the collector is omitted and batch iterates the
 grader directly):
 
 ```mermaid
-graph TB
-    classDef ui fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    classDef gen fill:#f3f4f6,stroke:#6b7280,color:#1f2937
-    classDef src fill:#d1fae5,stroke:#10b981,color:#065f46
+flowchart TB
+  classDef ui fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e,stroke-width:1px
+  classDef gen fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1px
+  classDef src fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1px
 
     UI(["useCommand"]):::ui
     B["batch()"]:::gen
@@ -164,10 +157,10 @@ graph TB
     G["grader()"]:::gen
     SC{{"scan()"}}:::src
 
-    UI -- for await --> B
-    B -- for await --> CO
-    CO -- for await --> G
-    G -- for await --> SC
+  UI -->|for await| B
+  B -->|for await| CO
+  CO -->|for await| G
+  G -->|for await| SC
     SC -. workbook .-> G
     G -. grade .-> CO
     CO -. certified .-> B

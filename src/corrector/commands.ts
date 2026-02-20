@@ -75,7 +75,7 @@ export function addCommands(
   disposables.push(
     commands.addCommand(cd, {
       icon: folderIcon,
-      caption: () => trans.__('Change directory – current: %1', widget?.path),
+      caption: () => trans.__('Change directory - current: %1', widget?.path),
       label: () => `/ ${widget?.path.split('/').join(' / ')} /`,
       execute: async ({ path }: { path?: string }) => {
         if (!widget || widget.isDisposed) {
