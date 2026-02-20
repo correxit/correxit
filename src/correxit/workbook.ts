@@ -473,6 +473,7 @@ export namespace Workbook {
     }
 
     const [kernel, release] = leased;
+    const spec = await kernel.spec || null;
     for (const index of range(cell ? scan(cell) : cells.length)) {
       const cell = cells.get(index);
       if (cell.type === 'code') {
@@ -484,7 +485,7 @@ export namespace Workbook {
       }
     }
     release();
-    return { outputs, spec: await kernel.spec || null };
+    return { outputs, spec };
   }
 
   export function identifier(workbook: Workbook): Identifier {

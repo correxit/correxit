@@ -1,5 +1,7 @@
 import { lease } from '../correxit/kernels';
 
+let serial = 0;
+
 function spawn(
   overrides: Partial<{
     isDisposed: boolean;
@@ -26,7 +28,7 @@ function create(
     name: string;
   }> = {}
 ) {
-  const name = overrides.name ?? 'python3';
+  const name = overrides.name ?? `python3-${serial++}`;
   const manager =
     'kernelManager' in overrides
       ? overrides.kernelManager
@@ -42,11 +44,14 @@ function create(
 describe('kernels', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
+  const named = () => `python3-${serial++}`;
 
   describe('lease', () => {
     it('starts a new kernel when the pool is empty', async () => {
-      const mock = spawn();
+      const name = named();
+      const mock = spawn({ name });
       const workbook = create({
+        name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
 
@@ -86,55 +91,58 @@ describe('kernels', () => {
       expect(result).toBeNull();
     });
 
-    it('takes from pool instead of starting a new kernel', async () => {
-      const mock = spawn();
+    it('reuses a clean kernel from the pool', async () => {
+      const name = named();
+      const mock = spawn({ name });
       const workbook = create({
+        name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
 
-      // Lease and release to populate the pool.
-      const first = await lease(workbook);
+      const first = await lease(workbook, { async: true });
       expect(first).not.toBeNull();
       const [, release] = first!;
-      release();
+      await release();
 
-      // The released kernel is dirty, so it restarts. Lease again.
       const second = await lease(workbook);
       expect(second).not.toBeNull();
-      // The kernel was restarted (not freshly started) so startNew was
-      // called only once (for the first lease).
       expect(
         workbook.context.sessionContext.kernelManager.startNew
       ).toHaveBeenCalledTimes(1);
     });
 
-    it('restarts a dirty kernel from the pool', async () => {
-      const mock = spawn();
+    it('restarts a kernel before re-pooling it', async () => {
+      const name = named();
+      const mock = spawn({ name });
       const workbook = create({
+        name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
-      const first = await lease(workbook);
-      first![1]();
+      const first = await lease(workbook, { async: true });
+      await first![1]();
 
       const second = await lease(workbook);
       expect(second).not.toBeNull();
-      expect(mock.restart).toHaveBeenCalled();
+      expect(mock.restart).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to start when restart fails', async () => {
+      const name = named();
       const failing = spawn({
+        name,
         restart: () => Promise.reject(new Error('restart failed'))
       });
-      const fresh = spawn();
+      const fresh = spawn({ name });
       let calls = 0;
       const workbook = create({
+        name,
         kernelManager: {
           startNew: jest.fn(async () => (calls++ === 0 ? failing : fresh))
         }
       });
 
-      const first = await lease(workbook);
-      first![1](); // release → dirty
+      const first = await lease(workbook, { async: true });
+      await first![1]();
 
       const second = await lease(workbook);
       expect(second).not.toBeNull();
@@ -143,45 +151,75 @@ describe('kernels', () => {
     });
 
     it('disposes kernel on restart failure', async () => {
+      const name = named();
       const failing = spawn({
+        name,
         restart: () => Promise.reject(new Error('fail'))
       });
-      const fresh = spawn();
+      const fresh = spawn({ name });
       let calls = 0;
       const workbook = create({
+        name,
         kernelManager: {
           startNew: jest.fn(async () => (calls++ === 0 ? failing : fresh))
         }
       });
 
-      const first = await lease(workbook);
-      first![1](); // release
+      const first = await lease(workbook, { async: true });
+      await first![1]();
       await lease(workbook);
       expect(failing.shutdown).toHaveBeenCalled();
     });
 
     it('evicts kernel after TTL expires', async () => {
-      const mock = spawn();
+      const name = named();
+      const mock = spawn({ name });
       const workbook = create({
+        name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
 
-      const first = await lease(workbook);
-      first![1](); // release
+      const first = await lease(workbook, { async: true });
+      await first![1]();
       jest.advanceTimersByTime(5000);
       expect(mock.shutdown).toHaveBeenCalled();
     });
 
     it('skips shutdown for already disposed kernel', async () => {
-      const mock = spawn({ isDisposed: true });
+      const name = named();
+      const mock = spawn({ isDisposed: true, name });
       const workbook = create({
+        name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
 
-      const first = await lease(workbook);
-      first![1](); // release
+      const first = await lease(workbook, { async: true });
+      await first![1]();
       jest.advanceTimersByTime(5000);
       expect(mock.shutdown).not.toHaveBeenCalled();
+    });
+
+    it('keeps at most five idle kernels per name', async () => {
+      const name = named();
+      const kernels = Array.from({ length: 6 }, () => spawn({ name }));
+      let calls = 0;
+      const workbook = create({
+        name,
+        kernelManager: {
+          startNew: jest.fn(async () => kernels[calls++])
+        }
+      });
+
+      const leases = [] as Awaited<ReturnType<typeof lease>>[];
+      for (let i = 0; i < kernels.length; i++) {
+        leases.push(await lease(workbook, { async: true }));
+      }
+
+      for (const started of leases) {
+        await started![1]();
+      }
+
+      expect(kernels[5].shutdown).toHaveBeenCalled();
     });
   });
 });
