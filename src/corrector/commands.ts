@@ -5,7 +5,7 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
-import { folderIcon, refreshIcon } from '@jupyterlab/ui-components';
+import { folderIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
 import { Correxit, Workbook } from '..';
 import { Corrector } from '.';
@@ -16,7 +16,6 @@ export namespace CommandIDs {
   export const cd = 'correxit-corrector:cd';
   export const certify = 'correxit-corrector:certify';
   export const launch = 'correxit-corrector:launch';
-  export const refresh = 'correxit-corrector:refresh';
   export const scan = 'correxit-corrector:scan';
 }
 
@@ -152,17 +151,6 @@ export function addCommands(
           shell.add(widget, 'main');
         }
         shell.activateById(widget.id);
-      }
-    })
-  );
-  disposables.push(
-    commands.addCommand(CommandIDs.refresh, {
-      icon: refreshIcon,
-      caption: () => trans.__('Rescan directory'),
-      execute: ({ hard }: { hard?: boolean }) => {
-        if (widget && !widget.isDisposed) {
-          return hard ? void (widget.path = `${widget.path}`) : widget.update();
-        }
       }
     })
   );

@@ -66,12 +66,6 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
       noFocusOnClick: true,
       onClick: () => content.set({ correct: true })
     });
-    const refresh = new CommandToolbarButton({
-      args: { hard: true },
-      commands,
-      id: Corrector.CommandIDs.refresh,
-      noFocusOnClick: true
-    });
     const certify = new CommandToolbarButton({
       commands,
       id: Corrector.CommandIDs.certify,
@@ -82,7 +76,6 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     const passphrase = new UnlockButton({ toggle, trans });
     content.toggled.connect((_, locked) => passphrase.set(locked));
     toolbar.addItem('cd', cd);
-    toolbar.addItem('refresh', refresh);
     toolbar.addItem('passphrase', passphrase);
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
     toolbar.addItem('certify', certify);

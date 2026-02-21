@@ -127,10 +127,6 @@ td.correxit-corrector-pending > span {
   }
 }
 
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='refresh'] {
-  padding-right: 5px;
-}
-
 .correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='status'] {
   width: 100px;
 

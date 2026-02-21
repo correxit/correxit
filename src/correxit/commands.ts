@@ -7,7 +7,6 @@ import { ITranslator } from '@jupyterlab/translation';
 import { notebookIcon, saveIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '..';
-import { Corrector } from '../corrector';
 import * as input from './input';
 import * as io from './io';
 import { propagate } from './propagator';
@@ -299,7 +298,7 @@ export function addCommands(
       if (workbook.content.activeCell) {
         workbook.content.scrollToCell(workbook.content.activeCell);
       }
-      // Manually force a refresh.
+      // Manually trigger a refresh.
       if (rubric.locked) {
         injector(null);
         injector(workbook);
@@ -496,9 +495,6 @@ export function addCommands(
         notebook.clearUndoHistory();
       }
       await workbook.context.save();
-      if (commands.hasCommand(Corrector.CommandIDs.refresh)) {
-        await commands.execute(Corrector.CommandIDs.refresh);
-      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.submit, {
