@@ -125,9 +125,9 @@ const prune = (
 const reconcile = (
   cached: { [path: string]: Headless },
   workbooks: Headless[],
-  active: string | null
+  focus: string | null
 ) => {
-  prune(cached, paths(workbooks), active);
+  prune(cached, paths(workbooks), focus);
   cache(cached, workbooks);
 };
 
@@ -152,8 +152,10 @@ const resolve = (
 };
 
 export function Corrector(props: Corrector.Props) {
-  const { certify, commands, correct, notify, path, trans, unlock } = props;
-  const grade = correct ? batch : '';
+  const { active, commands, mode, notify, path, trans } = props;
+  const certify = mode === 'certify';
+  const unlock = mode !== 'scan';
+  const grade = active && (mode === 'grade' || mode === 'certify') ? batch : '';
   const handle: Partial<Workbook.Credentials> = { path, unlock };
   const auth = { certify, path, unlock };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
@@ -163,11 +165,11 @@ export function Corrector(props: Corrector.Props) {
   const cached = useRef({} as { [path: string]: Headless });
   const [selection, setSelection] = useState('');
   const workbook = useMemo(() => match(merged, selection), [merged, selection]);
-  const active = workbook?.context.path || null;
+  const focus = workbook?.context.path || null;
   useEffect(() => () => dispose(Object.values(cached.current)), []);
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
-  useEffect(() => reconcile(cached.current, merged, active), [active, merged]);
+  useEffect(() => reconcile(cached.current, merged, focus), [focus, merged]);
   return (
     <table className="correxit-corrector">
       {merged.map(workbook => {
@@ -182,12 +184,12 @@ export function Corrector(props: Corrector.Props) {
 }
 
 export namespace Corrector {
+  export type Mode = 'scan' | 'unlock' | 'grade' | 'certify';
   export type Props = {
-    certify: boolean;
+    active: boolean;
     commands: CommandRegistry;
-    correct: boolean;
+    mode: Mode;
     notify: (updates: { graded: boolean; scanned: boolean }) => void;
-    unlock: boolean;
     path: string;
     trans: TranslationBundle;
   };

@@ -4,14 +4,10 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import {
   CommandToolbarButton,
   ReactWidget,
-  Toolbar,
-  ToolbarButton,
-  ToolbarButtonComponent
+  Toolbar
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { ISignal, Signal } from '@lumino/signaling';
 import React from 'react';
-import { Correxit } from '..';
 import { Corrector } from '.';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
@@ -28,16 +24,9 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     return this.content.path;
   }
   set path(path: string) {
-    this.content.set({ correct: false, path: PathExt.normalize(path) });
+    this.content.set({ path: PathExt.normalize(path) });
+    this.modeSelector?.reset();
     this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
-  }
-
-  get certify(): boolean {
-    return this.content.certify;
-  }
-
-  set certify(value: boolean) {
-    this.content.set({ certify: value });
   }
 
   dispose() {
@@ -46,6 +35,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
   }
 
   protected commands: CommandRegistry;
+  protected modeSelector: ModeSelector | null = null;
   protected status: CorrectorStatus | null;
   protected trans: IRenderMime.TranslationBundle;
 
@@ -59,27 +49,13 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
       id: Corrector.CommandIDs.cd,
       noFocusOnClick: true
     });
-    const correct = new ToolbarButton({
-      icon: Correxit.Icons.correct,
-      label: trans.__('Correct workbooks'),
-      tooltip: trans.__('Correct all workbooks in directory'),
-      noFocusOnClick: true,
-      onClick: () => content.set({ correct: true })
-    });
-    const certify = new CommandToolbarButton({
-      commands,
-      id: Corrector.CommandIDs.certify,
-      label: '',
-      noFocusOnClick: true
-    });
-    const toggle = (unlock: boolean) => content.set({ correct: false, unlock });
-    const passphrase = new UnlockButton({ toggle, trans });
-    content.toggled.connect((_, locked) => passphrase.set(locked));
+    const go = (mode: Corrector.Mode) =>
+      content.set({ active: true, key: `${Date.now()}`, mode });
+    const selector = new ModeSelector({ go, trans });
+    this.modeSelector = selector;
     toolbar.addItem('cd', cd);
-    toolbar.addItem('passphrase', passphrase);
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
-    toolbar.addItem('certify', certify);
-    toolbar.addItem('correct', correct);
+    toolbar.addItem('mode', selector);
     content.set({ notify });
   }
 }
@@ -102,11 +78,11 @@ export class CorrectorStatus extends ReactWidget {
 
   render() {
     const { graded, scanned, trans } = this;
-    const label = scanned
-      ? graded
+    const label = graded
+      ? scanned
         ? trans.__('Idle')
-        : trans.__('Correcting...')
-      : trans.__('Scanning...');
+        : trans.__('Scanning...')
+      : trans.__('Correcting...');
     return <span className="jp-StatusBar-TextItem">{label}</span>;
   }
 
@@ -126,34 +102,22 @@ class Content extends ReactWidget {
     super();
     this.props = {
       ...props,
-      certify: false,
-      correct: false,
-      notify: () => {},
-      unlock: false
+      active: false,
+      mode: 'scan',
+      notify: () => {}
     };
     this.addClass('correxit-corrector-widget-content');
-  }
-
-  get certify(): boolean {
-    return this.props.certify;
   }
 
   get path(): string {
     return this.props.path || '';
   }
 
-  get toggled(): ISignal<Content, boolean> {
-    return this._toggled;
-  }
-
   set(updates: Partial<Corrector.Props & { key?: string }>) {
     if (updates.path !== undefined) {
-      updates = { ...updates, unlock: false, key: `${Date.now()}` };
+      updates = { ...updates, active: false, key: `${Date.now()}` };
     }
     this.props = { ...this.props, ...updates };
-    if (updates.unlock !== undefined) {
-      this._toggled.emit(!updates.unlock);
-    }
     this.update();
   }
 
@@ -162,41 +126,64 @@ class Content extends ReactWidget {
   }
 
   protected props: Corrector.Props & { key?: string };
-  private _toggled = new Signal<Content, boolean>(this);
 }
 
-class UnlockButton extends ReactWidget {
+const MODES: { label: string; value: Corrector.Mode }[] = [
+  { value: 'scan', label: 'Scan' },
+  { value: 'unlock', label: 'Scan & Unlock' },
+  { value: 'grade', label: 'Grade' },
+  { value: 'certify', label: 'Grade & Certify' }
+];
+
+class ModeSelector extends ReactWidget {
   constructor(options: {
-    toggle: (unlock: boolean) => void;
+    go: (mode: Corrector.Mode) => void;
     trans: IRenderMime.TranslationBundle;
   }) {
     super();
-    this.toggle = options.toggle;
+    this.go = options.go;
     this.trans = options.trans;
+    this.addClass('correxit-corrector-mode');
   }
 
   render() {
-    const { locked, toggle, trans } = this;
+    const { go, mode, trans } = this;
     return (
-      <ToolbarButtonComponent
-        className="jp-Button jp-mod-minimal"
-        onClick={() => toggle(locked)}
-        icon={locked ? Correxit.Icons.key : Correxit.Icons.locked}
-        iconLabel={
-          locked ? trans.__('Unlock workbooks') : trans.__('Lock workbooks')
-        }
-      />
+      <>
+        <span className="correxit-corrector-mode-options" role="group">
+          {MODES.map(({ value, label }) => (
+            <label key={value}>
+              <input
+                type="radio"
+                name="correxit-mode"
+                value={value}
+                checked={mode === value}
+                onChange={() => this.select(value)}
+              />
+              <span>{trans.__(label)}</span>
+            </label>
+          ))}
+        </span>
+        <button
+          className="correxit-corrector-mode-go jp-mod-accept"
+          onClick={() => go(mode)}
+        >
+          {trans.__('Go')}
+        </button>
+      </>
     );
   }
 
-  set(locked: boolean) {
-    if (locked !== this.locked) {
-      this.locked = locked;
-      this.update();
-    }
+  reset() {
+    this.select('scan');
   }
 
-  protected locked = true;
-  protected toggle: (unlock: boolean) => void;
+  private select(mode: Corrector.Mode) {
+    this.mode = mode;
+    this.update();
+  }
+
+  protected go: (mode: Corrector.Mode) => void;
+  protected mode: Corrector.Mode = 'scan';
   protected trans: IRenderMime.TranslationBundle;
 }

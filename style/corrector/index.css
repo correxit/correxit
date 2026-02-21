@@ -120,21 +120,44 @@ td.correxit-corrector-pending > span {
   }
 }
 
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='cd'],
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='correct'] {
-  .jp-ToolbarButtonComponent-label {
-    padding-left: 3px;
-  }
+.correxit-corrector-mode {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='status'] {
-  width: 100px;
+.correxit-corrector-mode-options {
+  display: flex;
+  gap: 6px;
+}
 
-  span {
-    padding-right: 10px;
-    text-align: right;
-    width: 100%;
-  }
+.correxit-corrector-mode-options label {
+  align-items: center;
+  color: var(--jp-ui-font-color1);
+  display: flex;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  gap: 4px;
+}
+
+.correxit-corrector-mode-go {
+  background-color: var(--jp-brand-color1);
+  border: none;
+  border-radius: var(--jp-border-radius);
+  color: var(--jp-ui-inverse-font-color1);
+  cursor: pointer;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  padding: 2px 10px;
+}
+
+.correxit-corrector-mode-go:hover {
+  background-color: var(--jp-brand-color0);
+}
+
+.correxit-corrector-mode-go:focus-visible {
+  outline: 1px solid var(--jp-brand-color1);
+  outline-offset: 2px;
 }
 
 .correxit-corrector-widget.cxt-mod-cd .jp-Dialog .jp-Dialog-content {

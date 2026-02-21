@@ -14,7 +14,6 @@ import { grader } from './grader';
 export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
-  export const certify = 'correxit-corrector:certify';
   export const launch = 'correxit-corrector:launch';
   export const scan = 'correxit-corrector:scan';
 }
@@ -106,24 +105,6 @@ export function addCommands(
           widget.path = path || '.';
         }
         widget.removeClass('cxt-mod-cd');
-      }
-    })
-  );
-  disposables.push(
-    commands.addCommand(CommandIDs.certify, {
-      icon: () =>
-        commands.isToggled(CommandIDs.certify)
-          ? Correxit.Icons.certify
-          : Correxit.Icons.secret,
-      label: trans.__('Certify workbooks'),
-      caption: trans.__('Lock and save grades after correcting'),
-      isToggleable: true,
-      isToggled: () => widget?.certify ?? false,
-      execute: () => {
-        if (widget && !widget.isDisposed) {
-          widget.certify = !widget.certify;
-          commands.notifyCommandChanged(CommandIDs.certify);
-        }
       }
     })
   );
