@@ -14,6 +14,7 @@ import {
   NotebookPanel
 } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
+import { IStatusBar } from '@jupyterlab/statusbar';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
@@ -90,10 +91,11 @@ const corrector: JupyterFrontEndPlugin<void> = {
   description: Correxit.DESCRIPTION.CORRECTOR,
   requires: [Correxit.Collector, IDocumentManager],
   optional: [
-    IDefaultFileBrowser,
     ICommandPalette,
+    IDefaultFileBrowser,
     ILayoutRestorer,
     INotebookTree,
+    IStatusBar,
     ITranslator
   ],
   autoStart: true,
@@ -102,18 +104,37 @@ const corrector: JupyterFrontEndPlugin<void> = {
       app: JupyterFrontEnd,
       collector: Correxit.Collector,
       documents: IDocumentManager,
-      browser: IDefaultFileBrowser | null,
       palette: ICommandPalette | null,
+      browser: IDefaultFileBrowser | null,
       restorer: ILayoutRestorer | null,
       tree: INotebookTree | null,
+      bar: IStatusBar | null,
       translator: ITranslator | null
     ) => {
       const name = 'correxit-corrector';
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
+      const status = new Corrector.Status(trans);
+      const active = new Signal<typeof tracker, void>(tracker);
+      tracker.currentChanged.connect(() => active.emit(void 0));
       const { launch } = Corrector.CommandIDs;
-      const utilities = { browser, collector, documents, tracker, trans, tree };
-      const added = Corrector.addCommands(app, utilities);
+      const added = Corrector.addCommands(app, {
+        browser,
+        collector,
+        documents,
+        status,
+        tracker,
+        trans,
+        tree
+      });
+      if (bar) {
+        bar.registerStatusItem('correxit-corrector:status', {
+          item: status,
+          align: 'right',
+          isActive: () => !!tracker.currentWidget,
+          activeStateChanged: active
+        });
+      }
       if (palette) {
         palette.addItem({ category: 'correxit', command: launch });
       }
@@ -126,6 +147,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       }
       deactivator = () => {
         added.forEach(command => command.dispose());
+        status.dispose();
         tracker.dispose();
       };
     },

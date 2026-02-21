@@ -15,9 +15,10 @@ import { Correxit } from '..';
 import { Corrector } from '.';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
-  constructor({ commands, path, trans }: CorrectorWidget.IOptions) {
+  constructor({ commands, path, status, trans }: CorrectorWidget.IOptions) {
     super({ content: new Content({ commands, path, trans }) });
     this.commands = commands;
+    this.status = status;
     this.trans = trans;
     this.addClass('correxit-corrector-widget');
     void this.initialize();
@@ -39,23 +40,20 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     this.content.set({ certify: value });
   }
 
+  dispose() {
+    this.status?.set({ graded: true, scanned: true });
+    super.dispose();
+  }
+
   protected commands: CommandRegistry;
+  protected status: CorrectorStatus | null;
   protected trans: IRenderMime.TranslationBundle;
 
   protected async initialize() {
-    const { commands, content, toolbar, trans } = this;
-    let status = ReactWidget.create(<></>);
-    const notify = (updates: { graded: boolean; scanned: boolean }) => {
-      const { graded, scanned } = updates;
-      const current = scanned
-        ? graded
-          ? trans.__('Idle')
-          : trans.__('Correcting...')
-        : trans.__('Scanning...');
-      status.dispose();
-      status = ReactWidget.create(<span>{current}</span>);
-      toolbar.insertItem(6, 'status', status);
-    };
+    const { commands, content, status, toolbar, trans } = this;
+    const notify = status
+      ? (updates: { graded: boolean; scanned: boolean }) => status.set(updates)
+      : () => {};
     const cd = new CommandToolbarButton({
       commands,
       id: Corrector.CommandIDs.cd,
@@ -89,7 +87,6 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
     toolbar.addItem('certify', certify);
     toolbar.addItem('correct', correct);
-    toolbar.addItem('status', status);
     content.set({ notify });
   }
 }
@@ -98,8 +95,37 @@ export namespace CorrectorWidget {
   export interface IOptions {
     commands: CommandRegistry;
     path: string;
+    status: CorrectorStatus | null;
     trans: IRenderMime.TranslationBundle;
   }
+}
+
+export class CorrectorStatus extends ReactWidget {
+  constructor(trans: IRenderMime.TranslationBundle) {
+    super();
+    this.trans = trans;
+    this.addClass('correxit-corrector-status');
+  }
+
+  render() {
+    const { graded, scanned, trans } = this;
+    const label = scanned
+      ? graded
+        ? trans.__('Idle')
+        : trans.__('Correcting...')
+      : trans.__('Scanning...');
+    return <span className="jp-StatusBar-TextItem">{label}</span>;
+  }
+
+  set(updates: { graded: boolean; scanned: boolean }) {
+    this.graded = updates.graded;
+    this.scanned = updates.scanned;
+    this.update();
+  }
+
+  protected graded = true;
+  protected scanned = true;
+  protected trans: IRenderMime.TranslationBundle;
 }
 
 class Content extends ReactWidget {

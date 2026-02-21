@@ -64,9 +64,9 @@ export function addCommands(
 ) {
   const { commands, serviceManager: manager } = app;
   const { Icons } = Correxit;
-  const { collector, consumer, injector, registrar } = utilities;
-  const { submitter, translator, unlocker } = utilities;
-  const trans = translator.load('correxit');
+  const { collector, consumer, injector } = utilities;
+  const { registrar, submitter, unlocker } = utilities;
+  const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials) =>
     io.request(handle, factory, manager, unlocker);

@@ -31,13 +31,14 @@ export function addCommands(
     browser: IDefaultFileBrowser | null;
     collector: Correxit.Collector;
     documents: IDocumentManager;
+    status: Corrector.Status | null;
     tracker: WidgetTracker<Corrector.Widget>;
     trans: IRenderMime.TranslationBundle;
     tree: INotebookTree | null;
   }
 ) {
   const { commands, serviceManager: manager, shell } = app;
-  const { browser, collector, documents, tracker, trans, tree } = utilities;
+  const { collector, status, tracker, trans, tree } = utilities;
   const { batch, cd, certify, launch, refresh, scan } = CommandIDs;
   const fetch = (handle: Credentials) =>
     commands.execute(Correxit.CommandIDs.fetch, handle);
@@ -97,7 +98,7 @@ export function addCommands(
           const label = trans.__('Choose a directory for Correxit Corrector');
           const defaultPath = widget.path;
           const host = widget.node;
-          const manager = documents;
+          const manager = utilities.documents;
           const options = { defaultPath, host, label, manager, title };
           const pending = await FileDialog.getExistingDirectory(options);
           path = pending.value?.[0].path;
@@ -132,12 +133,8 @@ export function addCommands(
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
         if (!widget || widget.isDisposed) {
-          path ||= browser?.model.path || '.';
-          widget = new Corrector.Widget({
-            commands,
-            path,
-            trans
-          });
+          path ||= utilities.browser?.model.path || '.';
+          widget = new Corrector.Widget({ commands, path, status, trans });
           widget.id = 'correxit-corrector-widget';
           widget.title.label = trans.__('Correxit Corrector');
           widget.title.closable = true;

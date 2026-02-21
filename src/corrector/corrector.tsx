@@ -13,7 +13,7 @@ import {
   addCommands as ADD_COMMANDS,
   CommandIDs as COMMAND_IDS
 } from './commands';
-import { CorrectorWidget } from './widget';
+import { CorrectorStatus, CorrectorWidget } from './widget';
 
 type Batched = [path: string, file: { grade: Grade; workbook: Headless }];
 type Collated = Map<string, { grade: Grade; workbook: Headless }>;
@@ -154,7 +154,7 @@ const resolve = (
 export function Corrector(props: Corrector.Props) {
   const { certify, commands, correct, notify, path, trans, unlock } = props;
   const grade = correct ? batch : '';
-  const handle = { path, unlock };
+  const handle: Partial<Workbook.Credentials> = { path, unlock };
   const auth = { certify, path, unlock };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
   const [grades, graded] = useCommand<Batched>(commands, grade, auth);
@@ -191,9 +191,11 @@ export namespace Corrector {
     path: string;
     trans: TranslationBundle;
   };
+  export type Status = CorrectorStatus;
   export type Widget = CorrectorWidget;
   export const addCommands = ADD_COMMANDS;
   export const CommandIDs = COMMAND_IDS;
+  export const Status = CorrectorStatus;
   export const Widget = CorrectorWidget;
 }
 
