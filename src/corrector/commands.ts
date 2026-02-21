@@ -8,6 +8,7 @@ import { Contents } from '@jupyterlab/services';
 import { folderIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
 import { Correxit, Workbook } from '..';
+import { HOT } from '../correxit/kernels';
 import { Corrector } from '.';
 import { grader } from './grader';
 
@@ -68,7 +69,7 @@ export function addCommands(
         const scanner = (): Promise<AsyncGenerator<Headless>> =>
           commands.execute(CommandIDs.scan, credentials);
         const grades = async function* (): AsyncGenerator<Certified> {
-          yield* grader(await scanner(), correct, 5);
+          yield* grader(await scanner(), correct, HOT);
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
           for await (const { grade, workbook } of stream) {

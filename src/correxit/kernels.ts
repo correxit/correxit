@@ -20,7 +20,7 @@ const pool = new Map<string, Started[]>();
 /**
  * The cap for the number of hot kernels in the pool.
  */
-const HOT = 3;
+export const HOT = 3;
 
 /**
  * Time-to-live (TTL) for a five-second opportunistic kernel cache.
