@@ -96,8 +96,8 @@ const corrector: JupyterFrontEndPlugin<void> = {
     IDefaultFileBrowser,
     ILayoutRestorer,
     INotebookTree,
-    IStatusBar,
     ISettingRegistry,
+    IStatusBar,
     ITranslator
   ],
   autoStart: true,
@@ -131,7 +131,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
         tree
       });
       if (status) {
-        status.registerStatusItem('correxit-corrector:status', {
+        status.registerStatusItem('correxit-corrector:indicator', {
           item: indicator,
           align: 'right',
           isActive: () => !!tracker.currentWidget,

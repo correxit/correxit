@@ -153,13 +153,11 @@ const resolve = (
 
 export function Corrector(props: Corrector.Props) {
   const { active, commands, mode, notify, path, trans } = props;
-  const certify = mode === 'certify';
-  const unlock = mode !== 'scan';
   const grading = active && (mode === 'grade' || mode === 'certify');
   const grade = grading ? batch : '';
   const args = {
-    grade: { certify, path, unlock },
-    scan: { path, unlock: !grading && unlock }
+    grade: { certify: mode === 'certify', path, unlock: mode !== 'scan' },
+    scan: { path, unlock: !grading && mode !== 'scan' }
   };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, args.scan);
   const [grades, graded] = useCommand<Batched>(commands, grade, args.grade);
