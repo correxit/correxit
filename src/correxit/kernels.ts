@@ -60,7 +60,7 @@ export async function lease(
     return null;
   }
 
-  const release = async ? () => recycle(kernel) : void recycle(kernel);
+  const release = async ? () => recycle(kernel) : () => void recycle(kernel);
   return [kernel, release] as Leased;
 }
 
