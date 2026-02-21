@@ -8,11 +8,25 @@ type Settled =
 
 /**
  * Grade scanned workbooks with bounded in-flight concurrency.
+ *
+ * @param scanner - Cold async iterable of headless workbooks to grade.
+ * @param correct - Async function that grades a single workbook and returns
+ *   the certified result. Errors thrown here are caught and logged.
+ * @param limit - Maximum number of workbooks being graded simultaneously.
+ *   Values less than 1 are clamped to 1. Defaults to 5.
+ *
+ * #### Notes
+ * `grader` consumes `scanner` lazily: the next workbook is only fetched once a
+ * concurrency slot is free, so the kernel pool never grows faster than grading
+ * can drain it.
+ *
+ * Graded workbooks are yielded in completion order (fastest first).
+ * Failures are logged and skipped so a bad workbook cannot stall the batch.
  */
 export async function* grader(
   scanner: AsyncIterable<Headless>,
   correct: (workbook: Headless) => Promise<Certified>,
-  limit = 5
+  limit = 3
 ): AsyncGenerator<Certified> {
   let next: (() => void) | null = null;
   let running = 0;
