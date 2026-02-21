@@ -187,7 +187,9 @@ describe('grader', () => {
 
       expect(collected).toEqual([]);
       expect(warn).toHaveBeenCalledTimes(paths.length);
-      expect(warn.mock.calls.every(([, , e]) => e.message === 'grader timeout')).toBe(true);
+      expect(
+        warn.mock.calls.every(([, , e]) => e.message === 'grader timeout')
+      ).toBe(true);
     } finally {
       warn.mockRestore();
     }
