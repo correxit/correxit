@@ -155,11 +155,14 @@ export function Corrector(props: Corrector.Props) {
   const { active, commands, mode, notify, path, trans } = props;
   const certify = mode === 'certify';
   const unlock = mode !== 'scan';
-  const grade = active && (mode === 'grade' || mode === 'certify') ? batch : '';
-  const handle: Partial<Workbook.Credentials> = { path, unlock };
-  const auth = { certify, path, unlock };
-  const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
-  const [grades, graded] = useCommand<Batched>(commands, grade, auth);
+  const grading = active && (mode === 'grade' || mode === 'certify');
+  const grade = grading ? batch : '';
+  const args = {
+    grade: { certify, path, unlock },
+    scan: { path, unlock: !grading && unlock }
+  };
+  const [workbooks, scanned] = useCommand<Headless>(commands, scan, args.scan);
+  const [grades, graded] = useCommand<Batched>(commands, grade, args.grade);
   const collated: Collated = new Map(grades);
   const merged = merge(workbooks, collated);
   const cached = useRef({} as { [path: string]: Headless });
