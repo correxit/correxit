@@ -14,17 +14,18 @@ export async function* grader(
   correct: (workbook: Headless) => Promise<Certified>,
   limit = 5
 ): AsyncGenerator<Certified> {
-  let resume: (() => void) | null = null;
+  let next: (() => void) | null = null;
   let running = 0;
   const max = Math.max(1, limit);
   const queue: Settled[] = [];
-  const signal = () => {
-    resume?.();
-    resume = null;
+  const sleep = () => new Promise<void>(resolve => void (next = resolve));
+  const wake = () => {
+    next?.();
+    next = null;
   };
   const push = (item: Settled) => {
     queue.push(item);
-    signal();
+    wake();
   };
   const start = (workbook: Headless) => {
     running++;
@@ -33,17 +34,16 @@ export async function* grader(
       .catch(error => push({ ok: false, error, workbook }))
       .finally(() => {
         running--;
-        signal();
+        wake();
       });
   };
+
   const take = async (): Promise<Settled | null> => {
     while (!queue.length) {
       if (!running) {
         return null;
       }
-      await new Promise<void>(resolve => {
-        resume = resolve;
-      });
+      await sleep();
     }
     return queue.shift()!;
   };
