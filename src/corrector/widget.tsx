@@ -77,11 +77,11 @@ export class CorrectorStatus extends ReactWidget {
 
   render() {
     const { graded, scanned, trans } = this;
-    const label = graded
-      ? scanned
-        ? trans.__('Idle')
-        : trans.__('Scanning...')
-      : trans.__('Correcting...');
+    const label = !scanned
+      ? trans.__('Scanning...')
+      : !graded
+        ? trans.__('Grading...')
+        : trans.__('Idle');
     return <span className="jp-StatusBar-TextItem">{label}</span>;
   }
 

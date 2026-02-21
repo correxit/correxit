@@ -12,8 +12,10 @@ type Settled =
  * @param scanner - Cold async iterable of headless workbooks to grade.
  * @param correct - Async function that grades a single workbook and returns
  *   the certified result. Errors thrown here are caught and logged.
- * @param limit - Maximum number of workbooks being graded simultaneously.
- *   Values less than 1 are clamped to 1. Defaults to 5.
+ * @param cap - Maximum number of workbooks being graded simultaneously.
+ *   Values less than 1 are clamped to 1.
+ * @param timeout - Milliseconds before a single workbook grade is abandoned.
+ *   Pass `0` to disable the timeout.
  *
  * #### Notes
  * `grader` consumes `scanner` lazily: the next workbook is only fetched once a
@@ -26,8 +28,8 @@ type Settled =
 export async function* grader(
   scanner: AsyncIterable<Headless>,
   correct: (workbook: Headless) => Promise<Certified>,
-  cap = 3,
-  timeout = 0
+  cap: number,
+  timeout: number
 ): AsyncGenerator<Certified> {
   let next: (() => void) | null = null;
   let running = 0;

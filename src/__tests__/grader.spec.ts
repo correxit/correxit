@@ -33,7 +33,7 @@ describe('grader', () => {
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
 
-    for await (const graded of grader(source([]), correct, 5)) {
+    for await (const graded of grader(source([]), correct, 5, 0)) {
       collected.push(graded.grade.path);
     }
 
@@ -46,7 +46,7 @@ describe('grader', () => {
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
 
-    for await (const graded of grader(source(paths), correct, 5)) {
+    for await (const graded of grader(source(paths), correct, 5, 0)) {
       collected.push(graded.grade.path);
     }
 
@@ -66,7 +66,7 @@ describe('grader', () => {
 
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      for await (const graded of grader(source(paths), correct, 2)) {
+      for await (const graded of grader(source(paths), correct, 2, 0)) {
         collected.push(graded.grade.path);
       }
     } finally {
@@ -94,7 +94,7 @@ describe('grader', () => {
 
     const pending = (async () => {
       const collected: string[] = [];
-      for await (const graded of grader(source(paths), correct, 0)) {
+      for await (const graded of grader(source(paths), correct, 0, 0)) {
         collected.push(graded.grade.path);
       }
       return collected;
@@ -136,7 +136,7 @@ describe('grader', () => {
 
     const pending = (async () => {
       const collected: string[] = [];
-      for await (const graded of grader(source(paths), correct, 2)) {
+      for await (const graded of grader(source(paths), correct, 2, 0)) {
         collected.push(graded.grade.path);
       }
       return collected;
@@ -162,6 +162,37 @@ describe('grader', () => {
     expect(collected.sort()).toEqual(paths.slice().sort());
   });
 
+  it('abandons workbooks that exceed the timeout', async () => {
+    const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
+    const collected: string[] = [];
+    const delegates: Record<string, PromiseDelegate<void>> = Object.fromEntries(
+      paths.map(path => [path, new PromiseDelegate<void>()])
+    );
+    const correct = jest.fn(async (workbook: Headless) => {
+      await delegates[workbook.context.path].promise;
+      return grade(workbook);
+    });
+
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const pending = (async () => {
+        for await (const graded of grader(source(paths), correct, 3, 10)) {
+          collected.push(graded.grade.path);
+        }
+      })();
+
+      // Let the timeout elapse for all three.
+      await new Promise<void>(resolve => setTimeout(resolve, 50));
+      await pending;
+
+      expect(collected).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(paths.length);
+      expect(warn.mock.calls.every(([, , e]) => e.message === 'grader timeout')).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('drains and completes when all workbooks fail', async () => {
     const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
     const collected: string[] = [];
@@ -171,7 +202,7 @@ describe('grader', () => {
 
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      for await (const graded of grader(source(paths), correct, 3)) {
+      for await (const graded of grader(source(paths), correct, 3, 0)) {
         collected.push(graded.grade.path);
       }
       expect(warn).toHaveBeenCalledTimes(paths.length);
