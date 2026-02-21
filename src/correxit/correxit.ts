@@ -84,7 +84,7 @@ export namespace Correxit {
     ): Promise<Rubric.Unlocked | null>;
   };
 
-  export const COLLECTOR = 'correxit:collector';
+  export const COLLECTOR = '@quantstack/correxit:collector';
 
   export const Collector = new Token<Collector>(COLLECTOR);
 
