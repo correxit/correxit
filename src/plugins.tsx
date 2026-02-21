@@ -20,6 +20,7 @@ import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
 import { addCommands, Correxit, Unlocker, Workbook } from './correxit';
+import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
@@ -96,6 +97,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
     ILayoutRestorer,
     INotebookTree,
     IStatusBar,
+    ISettingRegistry,
     ITranslator
   ],
   autoStart: true,
@@ -108,13 +110,14 @@ const corrector: JupyterFrontEndPlugin<void> = {
       browser: IDefaultFileBrowser | null,
       restorer: ILayoutRestorer | null,
       tree: INotebookTree | null,
-      bar: IStatusBar | null,
+      registry: ISettingRegistry | null,
+      status: IStatusBar | null,
       translator: ITranslator | null
     ) => {
       const name = 'correxit-corrector';
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
-      const status = new Corrector.Status(trans);
+      const indicator = new Corrector.Status(trans);
       const active = new Signal<typeof tracker, void>(tracker);
       tracker.currentChanged.connect(() => active.emit(void 0));
       const { launch } = Corrector.CommandIDs;
@@ -122,14 +125,14 @@ const corrector: JupyterFrontEndPlugin<void> = {
         browser,
         collector,
         documents,
-        status,
+        indicator,
         tracker,
         trans,
         tree
       });
-      if (bar) {
-        bar.registerStatusItem('correxit-corrector:status', {
-          item: status,
+      if (status) {
+        status.registerStatusItem('correxit-corrector:status', {
+          item: indicator,
           align: 'right',
           isActive: () => !!tracker.currentWidget,
           activeStateChanged: active
@@ -145,9 +148,17 @@ const corrector: JupyterFrontEndPlugin<void> = {
           args: ({ path }) => ({ path })
         });
       }
+      if (registry) {
+        void registry.load(Correxit.CORRECTOR).then(settings => {
+          const reconfigure = () =>
+            kernels.configure(settings.composite as kernels.Config);
+          reconfigure();
+          settings.changed.connect(reconfigure);
+        });
+      }
       deactivator = () => {
         added.forEach(command => command.dispose());
-        status.dispose();
+        indicator.dispose();
         tracker.dispose();
       };
     },

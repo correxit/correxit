@@ -1,0 +1,15 @@
+{
+  "title": "Correxit Corrector",
+  "description": "Settings for the Correxit Corrector batch grading interface",
+  "type": "object",
+  "properties": {
+    "concurrency": {
+      "title": "Grading concurrency",
+      "description": "Maximum number of workbooks graded simultaneously. Also caps the idle kernel pool.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 3
+    }
+  },
+  "additionalProperties": false
+}

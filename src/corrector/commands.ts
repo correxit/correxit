@@ -8,7 +8,7 @@ import { Contents } from '@jupyterlab/services';
 import { folderIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
 import { Correxit, Workbook } from '..';
-import { HOT } from '../correxit/kernels';
+import * as kernels from '../correxit/kernels';
 import { Corrector } from '.';
 import { grader } from './grader';
 
@@ -30,14 +30,14 @@ export function addCommands(
     browser: IDefaultFileBrowser | null;
     collector: Correxit.Collector;
     documents: IDocumentManager;
-    status: Corrector.Status | null;
+    indicator: Corrector.Status | null;
     tracker: WidgetTracker<Corrector.Widget>;
     trans: IRenderMime.TranslationBundle;
     tree: INotebookTree | null;
   }
 ) {
   const { commands, serviceManager: manager, shell } = app;
-  const { browser, collector, status, tracker, trans, tree } = utilities;
+  const { browser, collector, indicator, tracker, trans, tree } = utilities;
   const { certify } = Workbook;
   const fetch = (handle: Credentials) =>
     commands.execute(Correxit.CommandIDs.fetch, handle);
@@ -69,7 +69,7 @@ export function addCommands(
         const scanner = (): Promise<AsyncGenerator<Headless>> =>
           commands.execute(CommandIDs.scan, credentials);
         const grades = async function* (): AsyncGenerator<Certified> {
-          yield* grader(await scanner(), correct, HOT);
+          yield* grader(await scanner(), correct, kernels.cap());
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
           for await (const { grade, workbook } of stream) {
@@ -113,7 +113,7 @@ export function addCommands(
       execute: ({ path }: { path?: string }) => {
         if (!widget || widget.isDisposed) {
           path ||= browser?.model.path || '.';
-          widget = new Corrector.Widget({ commands, path, status, trans });
+          widget = new Corrector.Widget({ commands, path, indicator, trans });
           widget.id = 'correxit-corrector-widget';
           widget.title.label = trans.__('Correxit Corrector');
           widget.title.closable = true;

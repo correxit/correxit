@@ -2,8 +2,8 @@ import { PromiseDelegate } from '@lumino/coreutils';
 import { Workbook } from '..';
 import { grader } from '../corrector/grader';
 
-type Headless = Workbook.Headless;
 type Certified = Workbook.Certified;
+type Headless = Workbook.Headless;
 
 const workbook = (path: string): Headless =>
   ({ context: { path } }) as unknown as Headless;

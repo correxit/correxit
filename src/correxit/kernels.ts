@@ -18,9 +18,25 @@ type Timeout = ReturnType<typeof setTimeout>;
 const pool = new Map<string, Started[]>();
 
 /**
- * The cap for the number of hot kernels in the pool.
+ * Kernel pool configuration.
  */
-export const HOT = 3;
+export type Config = { concurrency: number };
+
+let hot = 3;
+
+/**
+ * Update the kernel pool configuration.
+ */
+export function configure({ concurrency }: Config): void {
+  hot = Math.max(1, concurrency);
+}
+
+/**
+ * @returns the current concurrency cap.
+ */
+export function cap(): number {
+  return hot;
+}
 
 /**
  * Time-to-live (TTL) for a five-second opportunistic kernel cache.
@@ -80,7 +96,7 @@ function dispose(kernel: Kernel.IKernelConnection): void {
 function keep(kernel: Kernel.IKernelConnection): void {
   const started = { kernel, timeout: setTimeout(() => remove(kernel), TTL) };
   const kernels = queue(kernel.name);
-  if (kernels.length >= HOT) {
+  if (kernels.length >= hot) {
     clearTimeout(started.timeout);
     dispose(kernel);
     return;

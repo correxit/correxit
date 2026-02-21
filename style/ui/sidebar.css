@@ -233,15 +233,15 @@
 }
 
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after {
-  background-image: url('../source/icons/answerable.svg');
+  background-image: url('../monitor/icons/answerable.svg');
 }
 
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after {
-  background-image: url('../source/icons/comparable.svg');
+  background-image: url('../monitor/icons/comparable.svg');
 }
 
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
-  background-image: url('../source/icons/correctable.svg');
+  background-image: url('../monitor/icons/correctable.svg');
 }
 
 .jp-Notebook

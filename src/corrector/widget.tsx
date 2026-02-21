@@ -11,10 +11,10 @@ import React from 'react';
 import { Corrector } from '.';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
-  constructor({ commands, path, status, trans }: CorrectorWidget.IOptions) {
+  constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
     super({ content: new Content({ commands, path, trans }) });
     this.commands = commands;
-    this.status = status;
+    this.indicator = indicator;
     this.trans = trans;
     this.addClass('correxit-corrector-widget');
     void this.initialize();
@@ -25,25 +25,24 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
   }
   set path(path: string) {
     this.content.set({ path: PathExt.normalize(path) });
-    this.modeSelector?.reset();
+    this.modes?.reset();
     this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
   }
 
   dispose() {
-    this.status?.set({ graded: true, scanned: true });
+    this.indicator?.set({ graded: true, scanned: true });
     super.dispose();
   }
 
   protected commands: CommandRegistry;
-  protected modeSelector: ModeSelector | null = null;
-  protected status: CorrectorStatus | null;
+  protected indicator: CorrectorStatus | null;
+  protected modes: ModeSelector | null = null;
   protected trans: IRenderMime.TranslationBundle;
 
   protected async initialize() {
-    const { commands, content, status, toolbar, trans } = this;
-    const notify = status
-      ? (updates: { graded: boolean; scanned: boolean }) => status.set(updates)
-      : () => {};
+    const { commands, content, indicator, toolbar, trans } = this;
+    const notify = (updates: { graded: boolean; scanned: boolean }) =>
+      indicator?.set(updates);
     const cd = new CommandToolbarButton({
       commands,
       id: Corrector.CommandIDs.cd,
@@ -52,7 +51,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     const go = (mode: Corrector.Mode) =>
       content.set({ active: true, key: `${Date.now()}`, mode });
     const selector = new ModeSelector({ go, trans });
-    this.modeSelector = selector;
+    this.modes = selector;
     toolbar.addItem('cd', cd);
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
     toolbar.addItem('mode', selector);
@@ -63,8 +62,8 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
 export namespace CorrectorWidget {
   export interface IOptions {
     commands: CommandRegistry;
+    indicator: CorrectorStatus | null;
     path: string;
-    status: CorrectorStatus | null;
     trans: IRenderMime.TranslationBundle;
   }
 }
