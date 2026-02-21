@@ -38,8 +38,8 @@ export function addCommands(
   }
 ) {
   const { commands, serviceManager: manager, shell } = app;
-  const { collector, status, tracker, trans, tree } = utilities;
-  const { batch, cd, certify, launch, refresh, scan } = CommandIDs;
+  const { browser, collector, status, tracker, trans, tree } = utilities;
+  const { certify } = Workbook;
   const fetch = (handle: Credentials) =>
     commands.execute(Correxit.CommandIDs.fetch, handle);
   const save = (workbook: Workbook | null) => workbook?.context.save();
@@ -47,14 +47,13 @@ export function addCommands(
   const disposables = [];
   let widget: Corrector.Widget | null = null;
   disposables.push(
-    commands.addCommand(batch, {
+    commands.addCommand(CommandIDs.batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
         args: Partial<Credentials & { certify: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const handle = normalize(args) || ({} as Partial<Workbook.Credentials>);
-        const { certify } = Workbook;
         const commit = !!args.certify;
+        const handle: Partial<Workbook.Credentials> = normalize(args) || {};
         const credentials = handle.key ? handle : { ...handle, unlock: true };
         const grade = async (workbook: Workbook): Promise<Certified> => {
           const corrected = await Workbook.correct(workbook);
@@ -69,8 +68,8 @@ export function addCommands(
           return graded;
         };
         const scanner = (): Promise<AsyncGenerator<Headless>> =>
-          commands.execute(scan, credentials);
-        const grades = async function* () {
+          commands.execute(CommandIDs.scan, credentials);
+        const grades = async function* (): AsyncGenerator<Certified> {
           for await (const grade of grader(await scanner(), correct, 5)) {
             yield grade;
           }
@@ -84,7 +83,7 @@ export function addCommands(
     })
   );
   disposables.push(
-    commands.addCommand(cd, {
+    commands.addCommand(CommandIDs.cd, {
       icon: folderIcon,
       caption: () => trans.__('Change directory - current: %1', widget?.path),
       label: () => `/ ${widget?.path.split('/').join(' / ')} /`,
@@ -92,13 +91,14 @@ export function addCommands(
         if (!widget || widget.isDisposed) {
           return;
         }
+
         widget.addClass('cxt-mod-cd');
         if (typeof path !== 'string') {
           const title = trans.__('Correxit Corrector: change directory');
           const label = trans.__('Choose a directory for Correxit Corrector');
           const defaultPath = widget.path;
           const host = widget.node;
-          const manager = utilities.documents;
+          const manager = browser?.model.manager || utilities.documents;
           const options = { defaultPath, host, label, manager, title };
           const pending = await FileDialog.getExistingDirectory(options);
           path = pending.value?.[0].path;
@@ -111,9 +111,9 @@ export function addCommands(
     })
   );
   disposables.push(
-    commands.addCommand(certify, {
+    commands.addCommand(CommandIDs.certify, {
       icon: () =>
-        commands.isToggled(certify)
+        commands.isToggled(CommandIDs.certify)
           ? Correxit.Icons.certify
           : Correxit.Icons.secret,
       label: trans.__('Certify workbooks'),
@@ -123,17 +123,17 @@ export function addCommands(
       execute: () => {
         if (widget && !widget.isDisposed) {
           widget.certify = !widget.certify;
-          commands.notifyCommandChanged(certify);
+          commands.notifyCommandChanged(CommandIDs.certify);
         }
       }
     })
   );
   disposables.push(
-    commands.addCommand(launch, {
+    commands.addCommand(CommandIDs.launch, {
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
         if (!widget || widget.isDisposed) {
-          path ||= utilities.browser?.model.path || '.';
+          path ||= browser?.model.path || '.';
           widget = new Corrector.Widget({ commands, path, status, trans });
           widget.id = 'correxit-corrector-widget';
           widget.title.label = trans.__('Correxit Corrector');
@@ -156,7 +156,7 @@ export function addCommands(
     })
   );
   disposables.push(
-    commands.addCommand(refresh, {
+    commands.addCommand(CommandIDs.refresh, {
       icon: refreshIcon,
       caption: () => trans.__('Rescan directory'),
       execute: ({ hard }: { hard?: boolean }) => {
@@ -167,7 +167,7 @@ export function addCommands(
     })
   );
   disposables.push(
-    commands.addCommand(scan, {
+    commands.addCommand(CommandIDs.scan, {
       label: trans.__('Scan a directory for Correxit workbooks'),
       describedBy: {
         args: {
