@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/QuantStack/correxit/compare/v1.1.0...v1.1.1) (2026-02-21)
+
+
+### Bug Fixes
+
+* Correxit.Collector id needs to match the others ([#40](https://github.com/QuantStack/correxit/issues/40)) ([23fed72](https://github.com/QuantStack/correxit/commit/23fed726a21f48cf6ef1a7639c92ea985a951fe1))
+
 # [1.1.0](https://github.com/QuantStack/correxit/compare/v1.0.9...v1.1.0) (2026-02-20)
 
 
