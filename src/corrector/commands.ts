@@ -69,7 +69,9 @@ export function addCommands(
         const scanner = (): Promise<AsyncGenerator<Headless>> =>
           commands.execute(CommandIDs.scan, credentials);
         const grades = async function* (): AsyncGenerator<Certified> {
-          yield* grader(await scanner(), correct, kernels.cap());
+          const cap = kernels.cap();
+          const timeout = kernels.timeout();
+          yield* grader(await scanner(), correct, cap, timeout);
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
           for await (const { grade, workbook } of stream) {

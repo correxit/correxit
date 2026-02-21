@@ -9,6 +9,13 @@
       "type": "integer",
       "minimum": 1,
       "default": 3
+    },
+    "timeout": {
+      "title": "Grading timeout",
+      "description": "Maximum seconds to wait for a single workbook to grade before abandoning it and freeing the kernel slot. Set to 0 to disable.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 60
     }
   },
   "additionalProperties": false

@@ -20,22 +20,31 @@ const pool = new Map<string, Started[]>();
 /**
  * Kernel pool configuration.
  */
-export type Config = { concurrency: number };
+export type Config = { concurrency: number; timeout: number };
 
-let hot = 3;
+let workers = 3;
+let lifespan = 60;
 
 /**
  * Update the kernel pool configuration.
  */
-export function configure({ concurrency }: Config): void {
-  hot = Math.max(1, concurrency);
+export function configure({ concurrency, timeout }: Config): void {
+  workers = Math.max(1, concurrency);
+  lifespan = Math.max(0, timeout);
 }
 
 /**
  * @returns the current concurrency cap.
  */
 export function cap(): number {
-  return hot;
+  return workers;
+}
+
+/**
+ * @returns the current grading timeout in milliseconds (0 = disabled).
+ */
+export function timeout(): number {
+  return lifespan * 1000;
 }
 
 /**
@@ -96,7 +105,7 @@ function dispose(kernel: Kernel.IKernelConnection): void {
 function keep(kernel: Kernel.IKernelConnection): void {
   const started = { kernel, timeout: setTimeout(() => remove(kernel), TTL) };
   const kernels = queue(kernel.name);
-  if (kernels.length >= hot) {
+  if (kernels.length >= workers) {
     clearTimeout(started.timeout);
     dispose(kernel);
     return;

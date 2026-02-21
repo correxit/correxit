@@ -26,12 +26,14 @@ type Settled =
 export async function* grader(
   scanner: AsyncIterable<Headless>,
   correct: (workbook: Headless) => Promise<Certified>,
-  limit = 3
+  cap = 3,
+  timeout = 0
 ): AsyncGenerator<Certified> {
   let next: (() => void) | null = null;
   let running = 0;
-  const max = Math.max(1, limit);
+  const max = Math.max(1, cap);
   const queue: Settled[] = [];
+  const expired = new Error('grader timeout');
   const sleep = () => new Promise<void>(resolve => void (next = resolve));
   const wake = () => {
     next?.();
@@ -41,9 +43,18 @@ export async function* grader(
     queue.push(item);
     wake();
   };
+  const task = (workbook: Headless) => {
+    if (timeout === 0) {
+      return correct(workbook);
+    }
+    const countdown = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(expired), timeout)
+    );
+    return Promise.race([correct(workbook), countdown]);
+  };
   const start = (workbook: Headless) => {
     running++;
-    void correct(workbook)
+    void task(workbook)
       .then(grade => push({ ok: true, grade }))
       .catch(error => push({ ok: false, error, workbook }))
       .finally(() => {
