@@ -16,7 +16,7 @@ import {
 import { CorrectorWidget } from './widget';
 
 type Batched = [path: string, file: { grade: Grade; workbook: Headless }];
-type Collated = { [path: string]: { grade: Grade; workbook: Headless } };
+type Collated = Map<string, { grade: Grade; workbook: Headless }>;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 type TranslationBundle = IRenderMime.TranslationBundle;
@@ -79,15 +79,16 @@ const match = (workbooks: Headless[], path = '') =>
  */
 const merge = (workbooks: Headless[], grades: Collated) => {
   const known = new Set(workbooks.map(({ context }) => context.path));
-  return [
-    ...workbooks.map(workbook => {
-      const { path } = workbook.context;
-      return path in grades ? grades[path].workbook : workbook;
-    }),
-    ...Object.entries(grades)
-      .filter(([path]) => !known.has(path))
-      .map(([, { workbook }]) => workbook)
-  ];
+  const merged = workbooks.map(workbook => {
+    const path = workbook.context.path;
+    return grades.get(path)?.workbook ?? workbook;
+  });
+  for (const [path, file] of grades) {
+    if (!known.has(path)) {
+      merged.push(file.workbook);
+    }
+  }
+  return merged;
 };
 
 /**
@@ -139,8 +140,8 @@ const resolve = (
   graded: boolean
 ): Grade | 'pending' => {
   const { path } = workbook.context;
-  if (path in collated) {
-    return collated[path].grade;
+  if (collated.has(path)) {
+    return collated.get(path)!.grade;
   }
   if (!graded) {
     return 'pending';
@@ -157,16 +158,16 @@ export function Corrector(props: Corrector.Props) {
   const auth = { certify, path, unlock };
   const [workbooks, scanned] = useCommand<Headless>(commands, scan, handle);
   const [grades, graded] = useCommand<Batched>(commands, grade, auth);
-  const collated: Collated = Object.fromEntries(grades);
+  const collated: Collated = new Map(grades);
   const merged = merge(workbooks, collated);
   const cached = useRef({} as { [path: string]: Headless });
   const [selection, setSelection] = useState('');
   const workbook = useMemo(() => match(merged, selection), [merged, selection]);
   const active = workbook?.context.path || null;
+  useEffect(() => () => dispose(Object.values(cached.current)), []);
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => reconcile(cached.current, merged, active), [active, merged]);
-  useEffect(() => () => dispose(Object.values(cached.current)), []);
   return (
     <table className="correxit-corrector">
       {merged.map(workbook => {
