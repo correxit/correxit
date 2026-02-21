@@ -459,7 +459,7 @@ export namespace Workbook {
       1 + findIndex(cells, ({ id }) => id === target);
     const scan = (cell: Rubric.Cell) =>
       cell.is === 'correctable' || cell.is === 'comparable'
-        ? Math.max(position(cell.id), position(cell.reference[0]))
+        ? Math.max(position(cell.id), ...cell.reference.map(position))
         : position(cell.id);
     const cell = id && Rubric.get(rubric, id);
     if (id && !cell) {
@@ -475,13 +475,14 @@ export namespace Workbook {
     const [kernel, release] = leased;
     const spec = await kernel.spec || null;
     for (const index of range(cell ? scan(cell) : cells.length)) {
-      const cell = cells.get(index);
-      if (cell.type === 'code') {
-        try {
-          outputs.set(cell.id, await execute(cell as ICodeCellModel, kernel));
-        } catch (error) {
-          console.warn('cell execute error', cell, error);
-        }
+      if (cells.get(index).type !== 'code') {
+        continue;
+      }
+      try {
+        const cell = cells.get(index) as ICodeCellModel;
+        outputs.set(cell.id, await execute(cell, kernel));
+      } catch (error) {
+        console.warn('cell execute error', cell, error);
       }
     }
     release();
