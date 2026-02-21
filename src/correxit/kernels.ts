@@ -15,6 +15,8 @@ type Started = { kernel: Kernel.IKernelConnection; timeout: Timeout; };
 
 type Timeout = ReturnType<typeof setTimeout>;
 
+const pool = new Map<string, Started[]>();
+
 /**
  * The cap for the number of hot kernels in the pool.
  */
@@ -24,8 +26,6 @@ const HOT = 5;
  * Time-to-live (TTL) for a five-second opportunistic kernel cache.
  */
 const TTL = 5000;
-
-const pool = new Map<string, Started[]>();
 
 /**
  * @returns A promise that resolves to a leased kernel (i.e., a kernel and its
@@ -59,9 +59,9 @@ export async function lease(
   if (!kernel) {
     return null;
   }
-  return async
-    ? [kernel, () => recycle(kernel)]
-    : [kernel, () => void recycle(kernel)];
+
+  const release = async ? () => recycle(kernel) : void recycle(kernel);
+  return [kernel, release] as Leased;
 }
 
 /**
