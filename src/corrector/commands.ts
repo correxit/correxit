@@ -53,7 +53,8 @@ export function addCommands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const commit = !!args.certify;
         const handle: Partial<Workbook.Credentials> = normalize(args) || {};
-        const credentials = handle.key ? handle : { ...handle, unlock: true };
+        const auth = handle.key || handle.passphrase;
+        const credentials = auth ? handle : { ...handle, unlock: true };
         const grade = async (workbook: Workbook): Promise<Certified> => {
           const corrected = await Workbook.correct(workbook);
           const grade = { ...corrected, path: workbook.context.path };
