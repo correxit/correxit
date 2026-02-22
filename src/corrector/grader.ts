@@ -49,10 +49,13 @@ export async function* grader(
     if (timeout === 0) {
       return correct(workbook);
     }
-    const countdown = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(expired), timeout)
+
+    let handle: ReturnType<typeof setTimeout>;
+    const clear = () => clearTimeout(handle);
+    const countdown = new Promise<never>(
+      (_, reject) => void (handle = setTimeout(() => reject(expired), timeout))
     );
-    return Promise.race([correct(workbook), countdown]);
+    return Promise.race([correct(workbook), countdown]).finally(clear);
   };
   const start = (workbook: Headless) => {
     running++;

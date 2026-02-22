@@ -149,7 +149,11 @@ class ModeSelector extends ReactWidget {
     const { go, mode, trans } = this;
     return (
       <>
-        <span className="correxit-corrector-mode-options" role="group">
+        <span
+          className="correxit-corrector-mode-options"
+          role="group"
+          aria-label={trans.__('Corrector mode')}
+        >
           {MODES.map(({ value, label }) => (
             <label key={value}>
               <input
