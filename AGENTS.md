@@ -75,6 +75,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `propagator.ts`: Async generator for assignment distribution to rosters.
 - `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
 - `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Registrar`, `Submitter`, `Unlocker`).
-- `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction.
+- `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, timeout })`, `cap()`, and `timeout()` for settings-driven control.
+- `grader.ts`: Bounded-concurrency async generator for batch grading. Accepts `cap` and `timeout` (ms); hung kernels are abandoned and logged rather than stalling the pipeline.
 - `state.ts`: In-memory cache for active workbook and cell scores (`Map` with FIFO eviction).
-- `use-command.ts`: React hook bridging async generators to component state at ~60fps.
+- `use-command.ts`: React hook bridging async generators to component state at ~60fps. Restarts the stream whenever `id` or serialized `args` changes; cleanup marks the prior stream interrupted.

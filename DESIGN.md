@@ -142,8 +142,8 @@ flowchart TB
 
 **Batch grading:** the batch command iterates a grader, which iterates scanned
 workbooks. When certifying, a collector wraps the grader to receive certified
-grades (without `certify`, the collector is omitted and batch iterates the
-grader directly):
+grades; without `certify`, the collector is omitted and batch iterates the
+grader directly:
 
 ```mermaid
 flowchart TB
