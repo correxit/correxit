@@ -5,7 +5,7 @@
   "properties": {
     "concurrency": {
       "title": "Grading concurrency",
-      "description": "Maximum number of workbooks graded simultaneously. During grading, up to one additional idle kernel may be visible as finished kernels are briefly cached before reuse.",
+      "description": "Maximum number of kernel connections active at any one time. This bounds running, restarting, and idle kernels combined.",
       "type": "integer",
       "minimum": 1,
       "default": 3

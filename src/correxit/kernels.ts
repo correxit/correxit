@@ -34,21 +34,15 @@ let live = 0;
 const waiters: Array<() => void> = [];
 
 /**
- * Acquires one semaphore slot, blocking until `live < workers`.
+ * Time-to-live (TTL) for opportunistic kernel caching.
  */
-async function acquire(): Promise<void> {
-  while (live >= workers) {
-    await new Promise<void>(resolve => waiters.push(resolve));
-  }
-  live++;
-}
+const TTL = 2500;
 
 /**
- * Releases one semaphore slot and wakes the next waiter, if any.
+ * @returns the current concurrency cap.
  */
-function signal(): void {
-  live--;
-  waiters.shift()?.();
+export function cap(): number {
+  return workers;
 }
 
 /**
@@ -65,30 +59,20 @@ export function configure({ concurrency, retries, timeout }: Config): void {
 }
 
 /**
- * @returns the current concurrency cap.
+ * @internal Resets all module state. For use in tests only.
  */
-export function cap(): number {
-  return workers;
+export function drain(): void {
+  for (const kernels of pool.values()) {
+    for (const { timeout, kernel } of kernels) {
+      clearTimeout(timeout);
+      dispose(kernel);
+    }
+  }
+  pool.clear();
+  live = 0;
+  workers = 3;
+  waiters.length = 0;
 }
-
-/**
- * @returns the current grading timeout in milliseconds (0 = disabled).
- */
-export function timeout(): number {
-  return lifespan * 1000;
-}
-
-/**
- * @returns the current retry count for failed workbooks.
- */
-export function retries(): number {
-  return attempts;
-}
-
-/**
- * Time-to-live (TTL) for opportunistic kernel caching.
- */
-const TTL = 2500;
 
 /**
  * @returns A promise that resolves to a leased kernel (i.e., a kernel and its
@@ -121,12 +105,29 @@ export async function lease(
   const started = take(workbook.context.model.defaultKernelName);
   const kernel = lend(started) || await start(workbook);
   if (!kernel) {
-    signal();
+    relinquish();
     return null;
   }
 
   const release = async ? () => recycle(kernel) : () => void recycle(kernel);
   return [kernel, release] as Leased;
+}
+
+/**
+ * @returns the current retry count for failed workbooks.
+ */
+export function retries(): number {
+  return attempts;
+}
+
+/**
+ * Acquires one semaphore slot, blocking until `live < workers`.
+ */
+async function acquire(): Promise<void> {
+  while (live >= workers) {
+    await new Promise<void>(resolve => waiters.push(resolve));
+  }
+  live++;
 }
 
 /**
@@ -180,23 +181,15 @@ async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
   } else {
     dispose(kernel);
   }
-  signal();
+  relinquish();
 }
 
 /**
- * @internal Resets all module state. For use in tests only.
+ * Release one semaphore slot and wakes the next waiter, if any.
  */
-export function drain(): void {
-  for (const kernels of pool.values()) {
-    for (const { timeout, kernel } of kernels) {
-      clearTimeout(timeout);
-      dispose(kernel);
-    }
-  }
-  pool.clear();
-  live = 0;
-  workers = 3;
-  waiters.length = 0;
+function relinquish(): void {
+  live--;
+  waiters.shift()?.();
 }
 
 /**
@@ -237,4 +230,11 @@ function take(name: string): Started | null {
     clearTimeout(started.timeout);
   }
   return started;
+}
+
+/**
+ * @returns the current grading timeout in milliseconds (0 = disabled).
+ */
+export function timeout(): number {
+  return lifespan * 1000;
 }
