@@ -15,6 +15,7 @@ import { grader } from './grader';
 export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
+  export const count = 'correxit-corrector:count';
   export const launch = 'correxit-corrector:launch';
   export const scan = 'correxit-corrector:scan';
 }
@@ -163,6 +164,25 @@ export function addCommands(
           widget.path = path || '.';
         }
         widget.removeClass('cxt-mod-cd');
+      }
+    })
+  );
+
+  disposables.push(
+    commands.addCommand(CommandIDs.count, {
+      label: trans.__('Count Correxit workbooks in a directory'),
+      execute: async ({ path }: { path?: string }): Promise<number> => {
+        const directory = path || '.';
+        const notebook = ({ type }: Contents.IModel) => type === 'notebook';
+        try {
+          const response = await manager.contents.get(directory);
+          if (response.type !== 'directory') {
+            return 0;
+          }
+          return Array.from(filter(response.content, notebook)).length;
+        } catch {
+          return 0;
+        }
       }
     })
   );

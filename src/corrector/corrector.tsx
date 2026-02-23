@@ -24,7 +24,7 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 const FAILED = 'cxt-mod-failed';
 const PENDING = 'cxt-mod-pending';
 const SELECTED = 'cxt-mod-selected';
-const { batch, scan } = COMMAND_IDS;
+const { batch, count, scan } = COMMAND_IDS;
 const { basename } = PathExt;
 
 /**
@@ -154,29 +154,33 @@ const resolve = (
 };
 
 const Progress: React.FC<{
+  commands: CommandRegistry;
+  graded: boolean;
   grading: boolean;
   collated: Collated;
-  max: number;
+  path: string;
   trans: TranslationBundle;
-}> = ({ collated, grading, max, trans }) => {
+}> = ({ collated, commands, graded, grading, path, trans }) => {
   const peak = useRef(0);
-  const ceiling = useRef(0);
-  if (!grading) {
+  const [max, setMax] = useState(0);
+  useEffect(() => {
+    if (grading) {
+      void commands.execute(count, { path }).then(setMax);
+      return;
+    }
     peak.current = 0;
-    ceiling.current = 0;
-    return <></>;
-  }
-  if (!max) {
+    setMax(0);
+  }, [grading]);
+  if (!grading || !max || graded) {
     return <></>;
   }
   const resolved = Array.from(collated.values()).filter(
     ({ grade }) => grade.resolved
   ).length;
   const value = (peak.current = Math.max(peak.current, resolved));
-  const total = (ceiling.current = Math.max(ceiling.current, max));
-  const text = trans.__('%1 of %2', value, total);
+  const text = trans.__('%1 of %2', value, max);
   return (
-    <progress max={total} value={value}>
+    <progress max={max} value={value}>
       {text}
     </progress>
   );
@@ -204,9 +208,7 @@ export function Corrector(props: Corrector.Props) {
   useEffect(() => reconcile(cached.current, merged, focus), [focus, merged]);
   return (
     <>
-      {!graded && (
-        <Progress {...{ collated, grading, max: workbooks.length, trans }} />
-      )}
+      <Progress {...{ collated, commands, graded, grading, path, trans }} />
       <table className="correxit-corrector">
         {merged.map(workbook => {
           const { path } = workbook.context;
