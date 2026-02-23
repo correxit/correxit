@@ -103,11 +103,7 @@ export function addCommands(
         };
         const correct = async (workbook: Workbook): Promise<Certified> => {
           const rubric = Workbook.open(workbook, true);
-          const audited = rubric && Workbook.audit(workbook, rubric);
-          if (audited && audited.ok && audited.pruned.length) {
-            return recover(workbook as Headless);
-          }
-          if (rubric?.locked) {
+          if (!rubric || rubric.locked) {
             return recover(workbook as Headless);
           }
           const existing = certified(workbook);

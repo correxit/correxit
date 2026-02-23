@@ -292,13 +292,13 @@ test('flags workbook unresolved when rubric cell is missing from notebook', asyn
     });
     await Workbook.update(workbook, rubric);
 
-    // Correct with both cells present — should resolve.
+    // Correct with both cells present. Should resolve.
     const before = await Workbook.correct(workbook);
 
     // Delete the second cell from the notebook.
     panel.context.model.sharedModel.deleteCell(1);
 
-    // Correct again — the missing rubric cell should flag unresolved.
+    // Correct again. The missing rubric cell should flag unresolved.
     const after = await Workbook.correct(workbook);
 
     return {

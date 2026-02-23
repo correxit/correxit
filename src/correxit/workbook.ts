@@ -256,6 +256,11 @@ export namespace Workbook {
    *
    * #### Notes
    * If the rubric is locked, it is left unmodified.
+   *
+   * Headed workbooks tolerate missing cells: the pruned rubric is returned
+   * with `ok: true` so the instructor can still interact with what remains.
+   * Headless workbooks fail immediately. Batch grading cannot recover from
+   * a structurally incomplete notebook.
    */
   export function audit(workbook: Workbook, rubric: Rubric | null): Audit {
     if (!rubric) {
@@ -284,8 +289,13 @@ export namespace Workbook {
     }
     if (pruned.length) {
       console.warn('audit pruned these rubric cells', pruned);
-      const modified: Rubric = pruned.reduce((rubric, { cell: { id } }) =>
-        Rubric.remove(rubric, id), rubric);
+      if (!workbook.content) {
+        return { ok: false, error: 'missing cells', rubric };
+      }
+      const modified: Rubric = pruned.reduce(
+        (rubric, { cell: { id } }) => Rubric.remove(rubric, id),
+        rubric
+      );
       return { ok: true, pruned, rubric: modified };
     }
     return { ok: true, pruned: [], rubric };
@@ -348,8 +358,8 @@ export namespace Workbook {
     workbook: Workbook,
     id?: string
   ): Promise<Omit<Grade, 'path'>> {
-    const rubric = open(workbook, quiet);
-    if (!rubric) {
+    const opened = open(workbook, quiet);
+    if (!opened) {
       return {
         resolved: false,
         score: { ...Rubric.Score.UNSCORED, code: 'missing-rubric' },
@@ -357,28 +367,18 @@ export namespace Workbook {
       };
     }
 
-    if (!id) {
-      const notebook = workbook.context.model.sharedModel;
-      const existing = new Set(Array.from(notebook.cells).map(cell => cell.id));
-      const missing = (cell: Rubric.Cell) => {
-        const { id, is, reference } = cell;
-        if (!existing.has(id)) {
-          return true;
-        }
-        if ((is === 'comparable' || is === 'correctable') && reference) {
-          return reference.some(id => !existing.has(id));
-        }
-        return false;
+    // Re-audit to get the pruned rubric: headed workbooks tolerate
+    // missing cells (they are pruned), headless ones fail outright.
+    const audited = audit(workbook, opened);
+    if (!audited.ok) {
+      return {
+        resolved: false,
+        score: { ...Rubric.Score.UNSCORED, code: '' },
+        spec: null
       };
-      if (Object.values(rubric.cells).some(missing)) {
-        return {
-          resolved: false,
-          score: { ...Rubric.Score.UNSCORED, code: 'missing-cell-notebook' },
-          spec: null
-        };
-      }
     }
 
+    const rubric = audited.rubric;
     const result = await execute(workbook, rubric, id);
     if (!result) {
       const code: Rubric.Score.Code = 'error-execute';
