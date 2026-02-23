@@ -334,7 +334,6 @@ const Score: React.FC<{
   return (
     <>
       <Kernel spec={grade.spec} />
-      <Spec spec={grade.spec} />
       <Report score={grade.score} trans={trans} />
     </>
   );
@@ -368,17 +367,6 @@ const Kernel: React.FC<{ spec: Workbook.Grade['spec'] }> = ({ spec }) => {
     </td>
   );
 };
-
-const Spec: React.FC<{ spec: Workbook.Grade['spec'] }> = ({ spec }) => (
-  <td className="correxit-corrector-spec">
-    {spec && (
-      <>
-        <span>{spec.display_name}</span>
-        <span className="correxit-corrector-spec-name">: {spec.name}</span>
-      </>
-    )}
-  </td>
-);
 
 const Report: React.FC<{
   score: Rubric.Score;
