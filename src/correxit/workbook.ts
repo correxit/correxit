@@ -63,6 +63,7 @@ export namespace Workbook {
 
   export type Grade = {
     path: string;
+    resolved: boolean;
     score: Rubric.Score;
     spec: KernelSpec.ISpecModel | null;
   };
@@ -353,13 +354,13 @@ export namespace Workbook {
     const rubric = open(workbook, quiet);
     if (!rubric) {
       const code: Rubric.Score.Code = 'missing-rubric';
-      return { spec: null, score: { ...Rubric.Score.UNSCORED, code }};
+      return { resolved: false, spec: null, score: { ...Rubric.Score.UNSCORED, code }};
     }
 
     const result = await execute(workbook, rubric, id);
     if (!result) {
       const code: Rubric.Score.Code = 'error-execute';
-      return { spec: null, score: { ...Rubric.Score.UNSCORED, code }};
+      return { resolved: false, spec: null, score: { ...Rubric.Score.UNSCORED, code }};
     }
 
     const { score, summary } = Rubric.Assignment;
@@ -370,7 +371,7 @@ export namespace Workbook {
     if (!rubric.locked) {
       await update(workbook, await Rubric.sign(rubric, report));
     }
-    return { spec, score: id ? report.scores[id] : summary(report) };
+    return { resolved: true, spec, score: id ? report.scores[id] : summary(report) };
   }
 
    /**

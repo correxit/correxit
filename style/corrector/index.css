@@ -8,6 +8,14 @@
   width: 100%;
 }
 
+.correxit-corrector-widget-content > progress {
+  display: block;
+  position: sticky;
+  top: 0;
+  width: 100%;
+  z-index: 1;
+}
+
 table.correxit-corrector {
   border-collapse: collapse;
   table-layout: fixed;
@@ -64,13 +72,21 @@ td.correxit-corrector-open {
   }
 }
 
+td.correxit-corrector-assignee {
+  width: 100%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 td.correxit-corrector-score-report {
   width: 60px;
   text-align: right;
 }
 
 td.correxit-corrector-spec {
-  width: 200px;
+  width: 150px;
 
   .correxit-corrector-spec-name {
     font-family: var(--jp-code-font-family-default);
@@ -118,6 +134,14 @@ td.correxit-corrector-pending > span {
     transform: scale(1.2);
     opacity: 1;
   }
+}
+
+table.correxit-corrector tr.cxt-mod-failed td {
+  opacity: 0.6;
+}
+
+td.correxit-corrector-failed > span {
+  color: var(--jp-error-color1);
 }
 
 .correxit-corrector-mode {

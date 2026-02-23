@@ -21,6 +21,7 @@ type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 type TranslationBundle = IRenderMime.TranslationBundle;
 
+const FAILED = 'cxt-mod-failed';
 const PENDING = 'cxt-mod-pending';
 const SELECTED = 'cxt-mod-selected';
 const { batch, scan } = COMMAND_IDS;
@@ -147,8 +148,9 @@ const resolve = (
     return 'pending';
   }
   const rubric = open(workbook);
-  const score = rubric && Rubric.Assignment.summary(rubric.assignment.report);
-  return { path, score: score || Rubric.Score.UNSCORED, spec: null };
+  const summary = rubric && Rubric.Assignment.summary(rubric.assignment.report);
+  const score = summary || Rubric.Score.UNSCORED;
+  return { path, resolved: true, score, spec: null };
 };
 
 export function Corrector(props: Corrector.Props) {
@@ -171,16 +173,25 @@ export function Corrector(props: Corrector.Props) {
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => reconcile(cached.current, merged, focus), [focus, merged]);
+  const max = workbooks.length;
+  const value = collated.size;
   return (
-    <table className="correxit-corrector">
-      {merged.map(workbook => {
-        const { path } = workbook.context;
-        const grade = resolve(workbook, collated, graded);
-        const select = (selection: string) => setSelection(selection);
-        const props = { commands, grade, select, trans, workbook };
-        return <Row key={path} selected={path === selection} {...props} />;
-      })}
-    </table>
+    <>
+      {grading && !graded && max > 0 && (
+        <progress {...{ max, value }}>
+          {trans.__('%1 of %2', value, max)}
+        </progress>
+      )}
+      <table className="correxit-corrector">
+        {merged.map(workbook => {
+          const { path } = workbook.context;
+          const grade = resolve(workbook, collated, graded);
+          const select = (selection: string) => setSelection(selection);
+          const props = { commands, grade, select, trans, workbook };
+          return <Row key={path} selected={path === selection} {...props} />;
+        })}
+      </table>
+    </>
   );
 }
 
@@ -211,19 +222,34 @@ const Row: React.FC<{
   workbook: Workbook.Headless;
 }> = React.memo(({ commands, grade, select, selected, trans, workbook }) => {
   const { path } = workbook.context;
-  const className = [grade === 'pending' && PENDING, selected && SELECTED]
+  const pending = grade === 'pending';
+  const failed = !pending && !grade.resolved;
+  const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');
   return (
-    <tr {...{ className, onClick: () => select(selected ? '' : path) }}>
+    <tr className={className} onClick={() => select(selected ? '' : path)}>
       <Notebook {...{ commands, trans, workbook }} />
       <Lock {...{ trans, workbook }} />
       <Assignment {...{ trans, workbook }} />
-      <td width="*">{basename(path)}</td>
+      <Assignee {...{ trans, workbook }} />
       <Score {...{ grade, trans }} />
     </tr>
   );
 });
+
+const Assignee: React.FC<{
+  trans: TranslationBundle;
+  workbook: Workbook.Headless;
+}> = ({ trans, workbook }) => {
+  const path = basename(workbook.context.path);
+  const rubric = open(workbook);
+  return (
+    <td className="correxit-corrector-assignee">
+      {rubric?.assignment.assignee || path}
+    </td>
+  );
+};
 
 const Notebook: React.FC<{
   commands: CommandRegistry;
@@ -297,6 +323,13 @@ const Score: React.FC<{
 }> = ({ grade, trans }) => {
   if (grade === 'pending') {
     return <Pending columns={3} />;
+  }
+  if (!grade.resolved) {
+    return (
+      <td className="correxit-corrector-failed" colSpan={3}>
+        <span>{trans.__('Failed')}</span>
+      </td>
+    );
   }
   return (
     <>

@@ -276,12 +276,12 @@ export function addCommands(
     execute: async (args: Partial<Cell & Credentials & CellToolbar>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric) {
-        return { score: Rubric.Score.UNSCORED, spec: null };
+        return { resolved: false, score: Rubric.Score.UNSCORED, spec: null };
       }
 
       const id = state.cell(args);
       if (args[Rubric.Cell.TOOLBAR] && !id) {
-        return { score: Rubric.Score.UNSCORED, spec: null };
+        return { resolved: true, score: Rubric.Score.UNSCORED, spec: null };
       }
 
       const result = await correct(workbook, id);

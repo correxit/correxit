@@ -20,17 +20,19 @@ const pool = new Map<string, Started[]>();
 /**
  * Kernel pool configuration.
  */
-export type Config = { concurrency: number; timeout: number };
+export type Config = { concurrency: number; retries: number; timeout: number };
 
+let attempts = 1;
 let workers = 3;
 let lifespan = 60;
 
 /**
  * Update the kernel pool configuration.
  */
-export function configure({ concurrency, timeout }: Config): void {
-  workers = Math.max(1, concurrency);
+export function configure({ concurrency, retries, timeout }: Config): void {
+  attempts = Math.max(0, retries);
   lifespan = Math.max(0, timeout);
+  workers = Math.max(1, concurrency);
 }
 
 /**
@@ -48,9 +50,16 @@ export function timeout(): number {
 }
 
 /**
- * Time-to-live (TTL) for a five-second opportunistic kernel cache.
+ * @returns the current retry count for failed workbooks.
  */
-const TTL = 5000;
+export function retries(): number {
+  return attempts;
+}
+
+/**
+ * Time-to-live (TTL) for opportunistic kernel caching.
+ */
+const TTL = 2500;
 
 /**
  * @returns A promise that resolves to a leased kernel (i.e., a kernel and its

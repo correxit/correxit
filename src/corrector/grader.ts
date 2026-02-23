@@ -11,7 +11,9 @@ type Settled =
  *
  * @param scanner - Cold async iterable of headless workbooks to grade.
  * @param correct - Async function that grades a single workbook and returns
- *   the certified result. Errors thrown here are caught and logged.
+ *   the certified result. Errors thrown here are caught and recovered.
+ * @param recover - Function that converts a failed workbook into a synthetic
+ *   certified result for the consumer. The error is logged before recovery.
  * @param cap - Maximum number of workbooks being graded simultaneously.
  *   Values less than 1 are clamped to 1.
  * @param timeout - Milliseconds before a single workbook grade is abandoned.
@@ -23,11 +25,12 @@ type Settled =
  * can drain it.
  *
  * Graded workbooks are yielded in completion order (fastest first).
- * Failures are logged and skipped so a bad workbook cannot stall the batch.
+ * Failures are recovered and yielded so a bad workbook cannot stall the batch.
  */
 export async function* grader(
-  scanner: AsyncIterable<Headless>,
+  scanner: Iterable<Headless> | AsyncIterable<Headless>,
   correct: (workbook: Headless) => Promise<Certified>,
+  recover: (workbook: Headless) => Certified,
   cap: number,
   timeout: number
 ): AsyncGenerator<Certified> {
@@ -86,7 +89,7 @@ export async function* grader(
       return item.grade;
     }
     console.warn('grader error', item.workbook.context.path, item.error);
-    return null;
+    return recover(item.workbook);
   };
 
   for await (const workbook of scanner) {

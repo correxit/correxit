@@ -12,11 +12,25 @@ const grade = (workbook: Headless): Certified =>
   ({
     grade: {
       path: workbook.context.path,
+      resolved: true,
       score: { status: 'unscored' },
       spec: null
     },
     identifier: { assignee: null, assignment: 'x', signature: null },
     timestamp: 1,
+    workbook
+  }) as unknown as Certified;
+
+const failed = (workbook: Headless): Certified =>
+  ({
+    grade: {
+      path: workbook.context.path,
+      resolved: false,
+      score: { status: 'unscored' },
+      spec: null
+    },
+    identifier: { assignee: null, assignment: '', signature: null },
+    timestamp: 0,
     workbook
   }) as unknown as Certified;
 
@@ -32,8 +46,9 @@ describe('grader', () => {
   it('yields nothing for an empty scan', async () => {
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
+    const recover = jest.fn((workbook: Headless) => failed(workbook));
 
-    for await (const graded of grader(source([]), correct, 5, 0)) {
+    for await (const graded of grader(source([]), correct, recover, 5, 0)) {
       collected.push(graded.grade.path);
     }
 
@@ -46,7 +61,13 @@ describe('grader', () => {
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
 
-    for await (const graded of grader(source(paths), correct, 5, 0)) {
+    for await (const graded of grader(
+      source(paths),
+      correct,
+      jest.fn(),
+      5,
+      0
+    )) {
       collected.push(graded.grade.path);
     }
 
@@ -54,26 +75,38 @@ describe('grader', () => {
     expect(correct).toHaveBeenCalledTimes(paths.length);
   });
 
-  it('continues grading after per-workbook failures', async () => {
+  it('yields recovered grades for per-workbook failures', async () => {
     const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
-    const collected: string[] = [];
+    const collected: Certified[] = [];
     const correct = jest.fn(async (workbook: Headless) => {
       if (workbook.context.path === 'b.ipynb') {
         throw new Error('boom');
       }
       return grade(workbook);
     });
+    const recover = jest.fn((workbook: Headless) => failed(workbook));
 
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      for await (const graded of grader(source(paths), correct, 2, 0)) {
-        collected.push(graded.grade.path);
+      for await (const graded of grader(
+        source(paths),
+        correct,
+        recover,
+        2,
+        0
+      )) {
+        collected.push(graded);
       }
     } finally {
       warn.mockRestore();
     }
 
-    expect(collected.sort()).toEqual(['a.ipynb', 'c.ipynb']);
+    expect(collected.map(c => c.grade.path).sort()).toEqual(
+      paths.slice().sort()
+    );
+    expect(recover).toHaveBeenCalledTimes(1);
+    const b = collected.find(c => c.grade.path === 'b.ipynb')!;
+    expect(b.grade.resolved).toBe(false);
     expect(correct).toHaveBeenCalledTimes(paths.length);
   });
 
@@ -94,7 +127,13 @@ describe('grader', () => {
 
     const pending = (async () => {
       const collected: string[] = [];
-      for await (const graded of grader(source(paths), correct, 0, 0)) {
+      for await (const graded of grader(
+        source(paths),
+        correct,
+        jest.fn(),
+        0,
+        0
+      )) {
         collected.push(graded.grade.path);
       }
       return collected;
@@ -136,7 +175,13 @@ describe('grader', () => {
 
     const pending = (async () => {
       const collected: string[] = [];
-      for await (const graded of grader(source(paths), correct, 2, 0)) {
+      for await (const graded of grader(
+        source(paths),
+        correct,
+        jest.fn(),
+        2,
+        0
+      )) {
         collected.push(graded.grade.path);
       }
       return collected;
@@ -173,10 +218,18 @@ describe('grader', () => {
       return grade(workbook);
     });
 
+    const recover = jest.fn((workbook: Headless) => failed(workbook));
+
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const pending = (async () => {
-        for await (const graded of grader(source(paths), correct, 3, 10)) {
+        for await (const graded of grader(
+          source(paths),
+          correct,
+          recover,
+          3,
+          10
+        )) {
           collected.push(graded.grade.path);
         }
       })();
@@ -185,34 +238,46 @@ describe('grader', () => {
       await new Promise<void>(resolve => setTimeout(resolve, 50));
       await pending;
 
-      expect(collected).toEqual([]);
-      expect(warn).toHaveBeenCalledTimes(paths.length);
+      expect(collected.sort()).toEqual(paths.slice().sort());
+      expect(recover).toHaveBeenCalledTimes(paths.length);
       expect(
-        warn.mock.calls.every(([, , e]) => e.message === 'grader timeout')
+        warn.mock.calls.every(
+          ([, , e]) => (e as Error).message === 'grader timeout'
+        )
       ).toBe(true);
     } finally {
       warn.mockRestore();
     }
   });
 
-  it('drains and completes when all workbooks fail', async () => {
+  it('yields recovered grades when all workbooks fail', async () => {
     const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
-    const collected: string[] = [];
+    const collected: Certified[] = [];
     const correct = jest.fn(async () => {
       throw new Error('boom');
     });
+    const recover = jest.fn((workbook: Headless) => failed(workbook));
 
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      for await (const graded of grader(source(paths), correct, 3, 0)) {
-        collected.push(graded.grade.path);
+      for await (const graded of grader(
+        source(paths),
+        correct,
+        recover,
+        3,
+        0
+      )) {
+        collected.push(graded);
       }
       expect(warn).toHaveBeenCalledTimes(paths.length);
     } finally {
       warn.mockRestore();
     }
 
-    expect(collected).toEqual([]);
+    expect(collected.map(c => c.grade.path).sort()).toEqual(
+      paths.slice().sort()
+    );
+    expect(collected.every(c => !c.grade.resolved)).toBe(true);
     expect(correct).toHaveBeenCalledTimes(paths.length);
   });
 });

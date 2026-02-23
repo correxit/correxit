@@ -7,7 +7,7 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
 import { folderIcon } from '@jupyterlab/ui-components';
 import { filter } from '@lumino/algorithm';
-import { Correxit, Workbook } from '..';
+import { Correxit, Rubric, Workbook } from '..';
 import * as kernels from '../correxit/kernels';
 import { Corrector } from '.';
 import { grader } from './grader';
@@ -43,6 +43,22 @@ export function addCommands(
     commands.execute(Correxit.CommandIDs.fetch, handle);
   const save = (workbook: Workbook | null) => workbook?.context.save();
   const { normalize } = Workbook.Credentials;
+  const recover = (workbook: Headless): Certified => {
+    const path = workbook.context.path;
+    const grade: Grade = {
+      path,
+      resolved: false,
+      score: Rubric.Score.UNSCORED,
+      spec: null
+    };
+    let identifier: Workbook.Identifier;
+    try {
+      identifier = Workbook.identifier(workbook);
+    } catch {
+      identifier = { assignee: null, assignment: '', signature: null };
+    }
+    return { grade, identifier, timestamp: 0, workbook };
+  };
   const disposables = [];
   let widget: Corrector.Widget | null = null;
   disposables.push(
@@ -63,16 +79,51 @@ export function addCommands(
           return { grade, identifier, timestamp, workbook };
         };
         const correct = async (workbook: Workbook): Promise<Certified> => {
+          const existing = certified(workbook);
+          if (existing) {
+            return existing;
+          }
           const graded = await (commit ? certify(workbook) : grade(workbook));
           await save(commit ? workbook : null);
           return graded;
+        };
+        const certified = (workbook: Workbook): Certified | null => {
+          const rubric = Workbook.open(workbook, true);
+          if (!rubric) {
+            return null;
+          }
+          const { report } = rubric.assignment;
+          const score = Rubric.Assignment.summary(report);
+          if (!report.timestamp || score.status === 'unscored') {
+            return null;
+          }
+          const path = workbook.context.path;
+          const grade: Grade = { path, resolved: true, score, spec: null };
+          const identifier = Workbook.identifier(workbook);
+          return { grade, identifier, timestamp: report.timestamp, workbook };
         };
         const scanner = (): Promise<AsyncGenerator<Headless>> =>
           commands.execute(CommandIDs.scan, credentials);
         const grades = async function* (): AsyncGenerator<Certified> {
           const cap = kernels.cap();
           const timeout = kernels.timeout();
-          yield* grader(await scanner(), correct, cap, timeout);
+          const retries = kernels.retries();
+          let source: Iterable<Headless> | AsyncIterable<Headless> =
+            await scanner();
+          for (let pass = 0; pass <= retries; pass++) {
+            const failed: Headless[] = [];
+            const certifier = grader(source, correct, recover, cap, timeout);
+            for await (const certified of certifier) {
+              if (!certified.grade.resolved) {
+                failed.push(certified.workbook as Headless);
+              }
+              yield certified;
+            }
+            if (!failed.length) {
+              break;
+            }
+            source = failed;
+          }
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
           for await (const { grade, workbook } of stream) {
