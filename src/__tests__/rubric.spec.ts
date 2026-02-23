@@ -694,7 +694,7 @@ describe('Rubric', () => {
         ['c3', [output('C')]]
       ]);
       const updated = await Rubric.Assignment.score(rubric, subsequent);
-      expect(updated.scores['c1'].status).toBe('correct');
+      expect(updated.scores['c1'].status).toBe('incorrect');
       expect(updated.scores['c2'].status).toBe('correct');
       expect(updated.scores['c3'].status).toBe('correct');
       expect(Object.keys(updated.scores).length).toBe(3);

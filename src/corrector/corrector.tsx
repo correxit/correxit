@@ -153,6 +153,29 @@ const resolve = (
   return { path, resolved: true, score, spec: null };
 };
 
+const Progress: React.FC<{
+  grading: boolean;
+  collated: Collated;
+  max: number;
+  trans: TranslationBundle;
+}> = ({ collated, grading, max, trans }) => {
+  const peak = useRef(0);
+  if (!grading) {
+    peak.current = 0;
+    return <></>;
+  }
+  if (!max) {
+    return <></>;
+  }
+  const resolved = Array.from(collated.values()).filter(
+    ({ grade }) => grade.resolved
+  ).length;
+  const value = (peak.current = Math.max(peak.current, resolved));
+  return (
+    <progress {...{ max, value }}>{trans.__('%1 of %2', value, max)}</progress>
+  );
+};
+
 export function Corrector(props: Corrector.Props) {
   const { active, commands, mode, notify, path, trans } = props;
   const grading = active && (mode === 'grade' || mode === 'certify');
@@ -173,14 +196,10 @@ export function Corrector(props: Corrector.Props) {
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned }), [graded, scanned]);
   useEffect(() => reconcile(cached.current, merged, focus), [focus, merged]);
-  const max = workbooks.length;
-  const value = collated.size;
   return (
     <>
-      {grading && !graded && max > 0 && (
-        <progress {...{ max, value }}>
-          {trans.__('%1 of %2', value, max)}
-        </progress>
+      {!graded && (
+        <Progress {...{ collated, grading, max: workbooks.length, trans }} />
       )}
       <table className="correxit-corrector">
         {merged.map(workbook => {

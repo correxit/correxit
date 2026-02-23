@@ -190,20 +190,30 @@ export namespace Rubric {
       const given = outputs.get(id);
       const reference = cell?.reference?.[0] ?? '';
       const expected = outputs.get(reference);
-      if (!cell || !given) {
+      if (!cell) {
         return { ...Score.UNSCORED, code: 'missing-cell-given', id };
       }
+
+      const possible = cell.points;
+      const points = (score: Score) =>
+        score.status === 'correct' ? possible : 0;
+      if (!given) {
+        return { ...Score.INCORRECT, code: 'missing-given', id, possible };
+      }
       if (cell.is === 'answerable') {
-        return { ...await answer(cell.payload, given), id };
+        const score = await answer(cell.payload, given);
+        return { ...score, id, points: points(score), possible };
       }
       if (!expected) {
-        return { ...Score.UNSCORED, code: 'missing-reference', id };
+        return { ...Score.INCORRECT, code: 'missing-reference', id, possible };
       }
       if (cell.is === 'comparable') {
-        return { ...await compare(expected, given), id };
+        const score = await compare(expected, given);
+        return { ...score, id, points: points(score), possible };
       }
       if (cell.is === 'correctable') {
-        return { ...await correct(expected), id };
+        const score = await correct(expected);
+        return { ...score, id, points: points(score), possible };
       }
       return { ...Score.UNSCORED, code: 'error-is-unknown', id };
     }
@@ -249,12 +259,10 @@ export namespace Rubric {
      * @returns an amended copy of the assignment report with new scores added.
      *
      * #### Notes
-     * Because the outputs are provided by the client, instead of scoring every
-     * cell contained in the rubric, every cell that exists in the outputs is
-     * scored if it exists in the rubric.
+     * If `id` is not provided, every cell in the rubric is scored. Cells that
+     * failed to execute (missing from outputs) will be marked as incorrect.
      * All scores that already exist from previous scoring remain untouched as
      * long as they exist in the rubric and have not been rescored.
-     * The `order` of keys in the outputs (`outputs.keys()`) is preserved.
      */
     export async function score(
       rubric: Rubric,
@@ -264,16 +272,20 @@ export namespace Rubric {
       const { assignment: { report } } = rubric;
       const valid = (id: string) => has(rubric, id);
       const subset = (id ? [id] : Array.from(outputs.keys())).filter(valid);
-      if (!subset.length) {
+      const missing = id ? [] : Object.keys(rubric.cells).filter(
+        id => !subset.includes(id) && valid(id)
+      );
+      const all = [...subset, ...missing];
+      if (!all.length) {
         return report;
       }
 
       const current = Object.entries(report.scores).filter(([id]) => valid(id));
-      const pending = subset.map(id => Cell.score(rubric, id, outputs));
+      const pending = all.map(id => Cell.score(rubric, id, outputs));
       const done = (await Promise.all(pending)).map(score => [score.id, score]);
       const scores = Object.fromEntries([...current, ...done]);
       const filtered = report.order.filter(valid);
-      const order = unique(id ? [...filtered, id] : [...subset, ...filtered]);
+      const order = unique(id ? [...filtered, id] : [...all, ...filtered]);
       return { order, scores, timestamp: Date.now() };
     }
 

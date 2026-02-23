@@ -43,6 +43,26 @@ export function addCommands(
     commands.execute(Correxit.CommandIDs.fetch, handle);
   const save = (workbook: Workbook | null) => workbook?.context.save();
   const { normalize } = Workbook.Credentials;
+  const certified = (workbook: Workbook): Certified | null => {
+    const rubric = Workbook.open(workbook, true);
+    if (!rubric) {
+      return null;
+    }
+
+    const { report } = rubric.assignment;
+    const score = Rubric.Assignment.summary(report);
+    const transient = ({ code }: Rubric.Score) =>
+      code === 'missing-given' || code === 'missing-reference';
+    const partial = Object.values(report.scores).some(transient);
+    if (!report.timestamp || score.status === 'unscored' || partial) {
+      return null;
+    }
+
+    const path = workbook.context.path;
+    const grade: Grade = { path, resolved: true, score, spec: null };
+    const identifier = Workbook.identifier(workbook);
+    return { grade, identifier, timestamp: report.timestamp, workbook };
+  };
   const recover = (workbook: Headless): Certified => {
     const path = workbook.context.path;
     const grade: Grade = {
@@ -86,21 +106,6 @@ export function addCommands(
           const graded = await (commit ? certify(workbook) : grade(workbook));
           await save(commit ? workbook : null);
           return graded;
-        };
-        const certified = (workbook: Workbook): Certified | null => {
-          const rubric = Workbook.open(workbook, true);
-          if (!rubric) {
-            return null;
-          }
-          const { report } = rubric.assignment;
-          const score = Rubric.Assignment.summary(report);
-          if (!report.timestamp || score.status === 'unscored') {
-            return null;
-          }
-          const path = workbook.context.path;
-          const grade: Grade = { path, resolved: true, score, spec: null };
-          const identifier = Workbook.identifier(workbook);
-          return { grade, identifier, timestamp: report.timestamp, workbook };
         };
         const scanner = (): Promise<AsyncGenerator<Headless>> =>
           commands.execute(CommandIDs.scan, credentials);

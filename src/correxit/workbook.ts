@@ -308,8 +308,10 @@ export namespace Workbook {
     const grade = { ...corrected, path: workbook.context.path };
     const identifier = Workbook.identifier(workbook);
     const timestamp = Workbook.timestamp(workbook);
-    await lock(workbook);
-    freeze(workbook);
+    if (corrected.resolved) {
+      await lock(workbook);
+      freeze(workbook);
+    }
     return { grade, identifier, timestamp, workbook };
   }
 
@@ -353,14 +355,21 @@ export namespace Workbook {
   ): Promise<Omit<Grade, 'path'>> {
     const rubric = open(workbook, quiet);
     if (!rubric) {
-      const code: Rubric.Score.Code = 'missing-rubric';
-      return { resolved: false, spec: null, score: { ...Rubric.Score.UNSCORED, code }};
+      return {
+        resolved: false,
+        score: { ...Rubric.Score.UNSCORED, code: 'missing-rubric' },
+        spec: null
+      };
     }
 
     const result = await execute(workbook, rubric, id);
     if (!result) {
       const code: Rubric.Score.Code = 'error-execute';
-      return { resolved: false, spec: null, score: { ...Rubric.Score.UNSCORED, code }};
+      return {
+        resolved: false,
+        score: { ...Rubric.Score.UNSCORED, code },
+        spec: null
+      };
     }
 
     const { score, summary } = Rubric.Assignment;
@@ -371,7 +380,22 @@ export namespace Workbook {
     if (!rubric.locked) {
       await update(workbook, await Rubric.sign(rubric, report));
     }
-    return { resolved: true, spec, score: id ? report.scores[id] : summary(report) };
+
+    const final = id ? report.scores[id] : summary(report);
+    const notebook = workbook.context.model.sharedModel;
+    const existing = new Set(Array.from(notebook.cells).map(cell => cell.id));
+    const missing = Object.values(rubric.cells).some(cell => {
+      const { id, is, reference } = cell;
+      if (existing.has(id) && !outputs.has(id)) {
+        return true;
+      }
+      if ((is === 'comparable' || is === 'correctable') && reference) {
+        return reference.some(id => existing.has(id) && !outputs.has(id));
+      }
+      return false;
+    });
+    const resolved = !missing && final.status !== 'unscored';
+    return { resolved, spec, score: final };
   }
 
    /**

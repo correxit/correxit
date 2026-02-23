@@ -66,7 +66,14 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 | `interface Config { key?: string }`     | `interface Config { key: string \mid null }` |
 | `reduce((acc, x) => ({...acc, x}), {})` | `Object.fromEntries(arr.map(x => [k, v]))`   |
 
-## 6. Key Module Map
+## 6. Testing Strategy
+
+- **Unit Tests (`src/__tests__/`)**: For pure logic and isolated modules. The following have Jest unit tests:
+  - `rubric.ts`, `state.ts`, `kernels.ts`, `unlocker.ts`, `grader.ts`
+- **Playwright Tests (`ui-tests/`)**: For modules that require a live JupyterLab environment. These serve as the effective unit tests for the following — do not attempt to Jest-mock them:
+  - `workbook.ts`, `commands.ts` (both `correxit/` and `corrector/`), `corrector.tsx`, `widget.tsx`
+
+## 7. Key Module Map
 
 - `rubric.ts`: Core immutable data model & scoring logic.
 - `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing.
