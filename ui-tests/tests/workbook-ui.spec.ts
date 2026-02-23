@@ -249,3 +249,65 @@ test('drafts a submitted workbook, restores editability', async ({ page }) => {
   expect(result.editable[1]).toBe(false);
   await dispose();
 });
+
+test('flags workbook unresolved when rubric cell is missing from notebook', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'keep', source: 'print(1)' },
+    { id: 'remove', source: 'print(2)' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context } as any;
+
+    // Set kernelspec so a real kernel can be started.
+    panel.context.model.sharedModel.setMetadata('kernelspec', {
+      display_name: 'Python 3 (ipykernel)',
+      language: 'python',
+      name: 'python3'
+    });
+
+    // Build a rubric with two answerable cells.
+    let rubric = Rubric.add(
+      { ...Rubric.create(), key: 'secret' },
+      {
+        id: 'keep',
+        is: 'answerable',
+        points: 1,
+        reference: [],
+        shared: false,
+        payload: '1'
+      }
+    );
+    rubric = Rubric.add(rubric, {
+      id: 'remove',
+      is: 'answerable',
+      points: 1,
+      reference: [],
+      shared: false,
+      payload: '2'
+    });
+    await Workbook.update(workbook, rubric);
+
+    // Correct with both cells present — should resolve.
+    const before = await Workbook.correct(workbook);
+
+    // Delete the second cell from the notebook.
+    panel.context.model.sharedModel.deleteCell(1);
+
+    // Correct again — the missing rubric cell should flag unresolved.
+    const after = await Workbook.correct(workbook);
+
+    return {
+      before: { resolved: before.resolved },
+      after: { resolved: after.resolved }
+    };
+  });
+
+  expect(result.before.resolved).toBe(true);
+  expect(result.after.resolved).toBe(false);
+  await dispose();
+});

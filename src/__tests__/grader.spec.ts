@@ -78,7 +78,7 @@ describe('grader', () => {
     const recover = jest.fn((workbook: Headless) => failed(workbook));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const stream =  grader(source(paths), correct, recover, 2, 0);
+      const stream = grader(source(paths), correct, recover, 2, 0);
       for await (const graded of stream) {
         collected.push(graded);
       }

@@ -214,7 +214,7 @@ export function Corrector(props: Corrector.Props) {
           const { path } = workbook.context;
           const grade = resolve(workbook, collated, graded);
           const select = (selection: string) => setSelection(selection);
-          const props = { commands, grade, select, trans, workbook };
+          const props = { commands, grade, graded, select, trans, workbook };
           return <Row key={path} selected={path === selection} {...props} />;
         })}
       </table>
@@ -243,11 +243,13 @@ export namespace Corrector {
 const Row: React.FC<{
   commands: CommandRegistry;
   grade: Grade | 'pending';
+  graded: boolean;
   select: (path: string) => void;
   selected: boolean;
   trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = React.memo(({ commands, grade, select, selected, trans, workbook }) => {
+}> = React.memo(props => {
+  const { commands, grade, graded, select, selected, trans, workbook } = props;
   const { path } = workbook.context;
   const pending = grade === 'pending';
   const failed = !pending && !grade.resolved;
@@ -261,7 +263,7 @@ const Row: React.FC<{
       <Assignment {...{ trans, workbook }} />
       <Assignee {...{ trans, workbook }} />
       <Breakdown {...{ workbook }} />
-      <Score {...{ grade, trans }} />
+      <Score {...{ grade, graded, trans }} />
     </tr>
   );
 });
@@ -375,15 +377,18 @@ const Assignment: React.FC<{
 
 const Score: React.FC<{
   grade: Grade | 'pending';
+  graded: boolean;
   trans: TranslationBundle;
-}> = ({ grade, trans }) => {
+}> = ({ grade, graded, trans }) => {
+  const irrecoverable = trans.__('Grade manually');
+  const recoverable = trans.__('(Retrying...)');
   if (grade === 'pending') {
-    return <Pending columns={3} />;
+    return <Pending columns={2} />;
   }
   if (!grade.resolved) {
     return (
-      <td className="correxit-corrector-failed" colSpan={3}>
-        <span>{trans.__('Failed')}</span>
+      <td className="correxit-corrector-failed" colSpan={2}>
+        <span>{graded ? irrecoverable : recoverable}</span>
       </td>
     );
   }

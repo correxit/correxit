@@ -363,6 +363,29 @@ export namespace Workbook {
       };
     }
 
+    // Short-circuit before leasing a kernel when rubric cells are absent.
+    if (!id) {
+      const notebook = workbook.context.model.sharedModel;
+      const existing = new Set(Array.from(notebook.cells).map(c => c.id));
+      const absent = Object.values(rubric.cells).some(cell => {
+        const { id, is, reference } = cell;
+        if (!existing.has(id)) {
+          return true;
+        }
+        if ((is === 'comparable' || is === 'correctable') && reference) {
+          return reference.some(id => !existing.has(id));
+        }
+        return false;
+      });
+      if (absent) {
+        return {
+          resolved: false,
+          score: { ...Rubric.Score.UNSCORED, code: 'missing-cell-notebook' },
+          spec: null
+        };
+      }
+    }
+
     const result = await execute(workbook, rubric, id);
     if (!result) {
       const code: Rubric.Score.Code = 'error-execute';
@@ -380,15 +403,13 @@ export namespace Workbook {
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
     const final = id ? report.scores[id] : summary(report);
-    const notebook = workbook.context.model.sharedModel;
-    const existing = new Set(Array.from(notebook.cells).map(cell => cell.id));
     const missing = !id && Object.values(rubric.cells).some(cell => {
       const { id, is, reference } = cell;
-      if (existing.has(id) && !outputs.has(id)) {
+      if (!outputs.has(id)) {
         return true;
       }
       if ((is === 'comparable' || is === 'correctable') && reference) {
-        return reference.some(id => existing.has(id) && !outputs.has(id));
+        return reference.some(id => !outputs.has(id));
       }
       return false;
     });
@@ -499,20 +520,23 @@ export namespace Workbook {
     }
 
     const [kernel, release] = leased;
-    const spec = await kernel.spec || null;
-    for (const index of range(cell ? scan(cell) : cells.length)) {
-      const cell = cells.get(index) as ICodeCellModel;
-      if (cells.get(index).type !== 'code') {
-        continue;
+    try {
+      const spec = await kernel.spec || null;
+      for (const index of range(cell ? scan(cell) : cells.length)) {
+        const cell = cells.get(index) as ICodeCellModel;
+        if (cells.get(index).type !== 'code') {
+          continue;
+        }
+        try {
+          outputs.set(cell.id, await execute(cell, kernel));
+        } catch (error) {
+          console.warn('cell execute error', cell, error);
+        }
       }
-      try {
-        outputs.set(cell.id, await execute(cell, kernel));
-      } catch (error) {
-        console.warn('cell execute error', cell, error);
-      }
+      return { outputs, spec };
+    } finally {
+      release();
     }
-    release();
-    return { outputs, spec };
   }
 
   export function identifier(workbook: Workbook): Identifier {

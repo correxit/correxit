@@ -73,21 +73,21 @@ td.correxit-corrector-open {
 }
 
 td.correxit-corrector-assignee {
-  width: 100%;
-  max-width: 0;
+  width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 td.correxit-corrector-breakdown {
-  width: 200px;
+  overflow: hidden;
 }
 
 .correxit-corrector-breakdown-bar {
   display: flex;
   gap: 1px;
   height: 8px;
+  width: 100%;
 }
 
 .correxit-corrector-breakdown-segment {

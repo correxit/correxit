@@ -347,6 +347,7 @@ export namespace Rubric {
       | 'mismatch-message'
       | 'mismatch-name-text'
       | 'missing-cell-given'
+      | 'missing-cell-notebook'
       | 'missing-given'
       | 'missing-reference'
       | 'missing-rubric'
