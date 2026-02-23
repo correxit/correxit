@@ -464,9 +464,8 @@ export namespace Rubric {
    * @returns a promise that resolves to the given rubric, locked.
    */
   export async function lock(rubric: Rubric): Promise<Locked> {
-    const revised = Date.now();
     if (rubric.locked) {
-      return { ...rubric, revised };
+      return rubric;
     }
     await Assignment.validate(rubric);
 
@@ -475,6 +474,7 @@ export namespace Rubric {
     const serialized = JSON.stringify(rubric.assignment.roster);
     const roster = [await security.encrypt(serialized, key)];
     const assignment = { ...rubric.assignment, roster };
+    const revised = Date.now();
     return { assignment, cells, id, key: null, locked, revised };
   }
 
