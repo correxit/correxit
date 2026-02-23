@@ -185,7 +185,7 @@ async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
 }
 
 /**
- * Release one semaphore slot and wakes the next waiter, if any.
+ * Relinquishes one semaphore slot and wakes the next waiter, if any.
  */
 function relinquish(): void {
   live--;

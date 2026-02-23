@@ -42,7 +42,10 @@ function create(
 }
 
 describe('kernels', () => {
-  beforeEach(() => { jest.useFakeTimers(); drain(); });
+  beforeEach(() => {
+    jest.useFakeTimers();
+    drain();
+  });
   afterEach(() => jest.useRealTimers());
   const named = () => `python3-${serial++}`;
 
@@ -207,13 +210,15 @@ describe('kernels', () => {
       const first3 = [
         lease(workbook, { async: true }),
         lease(workbook, { async: true }),
-        lease(workbook, { async: true }),
+        lease(workbook, { async: true })
       ];
 
       // 4th lease must wait
       const fourth = lease(workbook, { async: true });
       let resolved = false;
-      void fourth.then(() => { resolved = true; });
+      void fourth.then(() => {
+        resolved = true;
+      });
 
       await Promise.all(first3);
       expect(resolved).toBe(false);
