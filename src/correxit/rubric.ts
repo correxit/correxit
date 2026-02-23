@@ -239,7 +239,6 @@ export namespace Rubric {
      * A score report for an assignment.
      */
     export type Report = Readonly<{
-      order: string[];
       scores: { [id: string]: Score };
       timestamp: number | null;
     }>;
@@ -248,7 +247,7 @@ export namespace Rubric {
       assignee: '',
       confirmation: null,
       expiration: null,
-      report: { order: [], scores: {}, timestamp: null },
+      report: { scores: {}, timestamp: null },
       roster: [],
       signature: '',
       submission: null
@@ -284,24 +283,21 @@ export namespace Rubric {
       const pending = all.map(id => Cell.score(rubric, id, outputs));
       const done = (await Promise.all(pending)).map(score => [score.id, score]);
       const scores = Object.fromEntries([...current, ...done]);
-      const filtered = report.order.filter(valid);
-      const order = unique(id ? [...filtered, id] : [...all, ...filtered]);
-      return { order, scores, timestamp: Date.now() };
+      return { scores, timestamp: Date.now() };
     }
 
     export async function sign(
-      { assignee, expiration, report: { order, scores }, roster }:
+      { assignee, expiration, report: { scores }, roster }:
         Omit<Assignment, 'confirmation' | 'signature' | 'submission'>,
       key: string
     ): Promise<string> {
-      const entries = order.map(id => [id, scores[id]]);
-      const report = { order, scores: Object.fromEntries(entries) };
+      const report = { scores };
       const unsigned = { assignee, expiration, report, roster };
       return security.digest(JSON.stringify(unsigned).concat(key));
     }
 
     export function summary(report: Report): Score {
-      const { order, scores } = report;
+      const { scores } = report;
       const sum = (a: Score, b: Score): Score => {
         if (a.status === 'unscored') {
           return b;
@@ -315,8 +311,7 @@ export namespace Rubric {
         const status = 'summary';
         return { code: '', comment: '', id: '', points, possible, status };
       };
-      const ordered = order.map(id => scores[id]).filter(Boolean);
-      return ordered.reduce(sum, Score.UNSCORED);
+      return Object.values(scores).reduce(sum, Score.UNSCORED);
     }
 
     export async function validate(
@@ -417,7 +412,7 @@ export namespace Rubric {
 
     const report = assignee === rubric.assignment.assignee
       ? rubric.assignment.report // Keep report if assignee is unchanged.
-      : { order: [], scores: {}, timestamp: Date.now() };
+      : { scores: {}, timestamp: Date.now() };
     const unsigned = { assignee, expiration, report, roster };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = {

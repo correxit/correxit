@@ -71,7 +71,6 @@ describe('Rubric', () => {
         payload: []
       });
       const report: Rubric.Assignment.Report = {
-        order: [id],
         scores: { [id]: Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
@@ -95,14 +94,12 @@ describe('Rubric', () => {
       });
 
       const report: Rubric.Assignment.Report = {
-        order: ['c1'],
         scores: { c1: Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
       rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
 
       const removed = Rubric.remove(rubric, 'c1');
-      expect(removed.assignment.report.order).toEqual(['c1']);
       expect(removed.assignment.report.scores.c1).toBeDefined();
     });
 
@@ -257,7 +254,6 @@ describe('Rubric', () => {
     it('resets report if assignee changes', async () => {
       let rubric = create();
       const report = {
-        order: ['cell-1'],
         scores: { 'cell-1': Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
@@ -274,7 +270,6 @@ describe('Rubric', () => {
 
       rubric = await Rubric.assign(rubric, { assignee: 'B' });
       expect(rubric.assignment.report.scores).toEqual({});
-      expect(rubric.assignment.report.order).toEqual([]);
     });
 
     it('expiration can be set to control deadline', async () => {
@@ -546,122 +541,6 @@ describe('Rubric', () => {
       const report = await Rubric.Assignment.score(rubric, outputs);
       expect(report.scores['c1'].status).toBe('correct');
       expect(report.scores['c2'].status).toBe('correct');
-      expect(report.order).toEqual(['c1', 'c2']);
-    });
-
-    it('preserves order from notebook execution', async () => {
-      let rubric = create();
-      rubric = Rubric.add(rubric, {
-        id: 'c3',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-      rubric = Rubric.add(rubric, {
-        id: 'c2',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-      rubric = Rubric.add(rubric, {
-        id: 'c1',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-      const outputs = new Map([
-        ['c1', [output('1')]],
-        ['c3', [output('3')]],
-        ['c2', [output('2')]]
-      ]);
-      const report = await Rubric.Assignment.score(rubric, outputs);
-      expect(report.order).toEqual(['c1', 'c3', 'c2']);
-    });
-
-    it('updates order when cells are moved and re-scored', async () => {
-      let rubric = create();
-      rubric = Rubric.add(rubric, {
-        id: 'c1',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-      rubric = Rubric.add(rubric, {
-        id: 'c2',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-      rubric = Rubric.add(rubric, {
-        id: 'c3',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-      let outputs = new Map([
-        ['c1', [output('1')]],
-        ['c2', [output('2')]],
-        ['c3', [output('3')]]
-      ]);
-      rubric = {
-        ...rubric,
-        assignment: {
-          ...rubric.assignment,
-          report: await Rubric.Assignment.score(rubric, outputs)
-        }
-      };
-      expect(rubric.assignment.report.order).toEqual(['c1', 'c2', 'c3']);
-      outputs = new Map([
-        ['c3', [output('3')]],
-        ['c1', [output('1')]],
-        ['c2', [output('2')]]
-      ]);
-      const report = await Rubric.Assignment.score(rubric, outputs);
-      expect(report.order).toEqual(['c3', 'c1', 'c2']);
-    });
-
-    it('preserves order when updating a single cell score', async () => {
-      let rubric = create();
-      rubric = Rubric.add(rubric, {
-        id: 'c1',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-      rubric = Rubric.add(rubric, {
-        id: 'c2',
-        is: 'answerable',
-        points: 1,
-        reference: null,
-        shared: false,
-        payload: []
-      });
-
-      const outputs = new Map([
-        ['c1', [output('1')]],
-        ['c2', [output('2')]]
-      ]);
-      let report = await Rubric.Assignment.score(rubric, outputs);
-      rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
-      expect(report.order).toEqual(['c1', 'c2']);
-
-      const updates: Rubric.Outputs = new Map([['c2', [output('2-new')]]]);
-      report = await Rubric.Assignment.score(rubric, updates, 'c2');
-      expect(report.order).toEqual(['c1', 'c2']);
     });
 
     it('merges new scores with existing valid scores', async () => {
@@ -715,7 +594,6 @@ describe('Rubric', () => {
       add('c2');
 
       const report: Rubric.Assignment.Report = {
-        order: ['c1', 'c2', 'ghost'],
         scores: {
           c1: Rubric.Score.CORRECT,
           c2: Rubric.Score.CORRECT,
@@ -734,7 +612,6 @@ describe('Rubric', () => {
 
     it('summarizes a report correctly', () => {
       const report: Rubric.Assignment.Report = {
-        order: ['c1', 'c2'],
         scores: {
           c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
           c2: { ...Rubric.Score.INCORRECT, points: 0, possible: 10 }

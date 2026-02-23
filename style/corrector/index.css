@@ -80,6 +80,33 @@ td.correxit-corrector-assignee {
   white-space: nowrap;
 }
 
+td.correxit-corrector-breakdown {
+  width: 200px;
+}
+
+.correxit-corrector-breakdown-bar {
+  display: flex;
+  gap: 1px;
+  height: 8px;
+}
+
+.correxit-corrector-breakdown-segment {
+  flex: 1;
+  min-width: 2px;
+}
+
+.correxit-corrector-breakdown-correct {
+  background-color: var(--jp-success-color1);
+}
+
+.correxit-corrector-breakdown-incorrect {
+  background-color: var(--jp-error-color1);
+}
+
+.correxit-corrector-breakdown-unscored {
+  background-color: var(--jp-border-color2);
+}
+
 td.correxit-corrector-score-report {
   width: 60px;
   text-align: right;

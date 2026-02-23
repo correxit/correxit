@@ -160,8 +160,10 @@ const Progress: React.FC<{
   trans: TranslationBundle;
 }> = ({ collated, grading, max, trans }) => {
   const peak = useRef(0);
+  const ceiling = useRef(0);
   if (!grading) {
     peak.current = 0;
+    ceiling.current = 0;
     return <></>;
   }
   if (!max) {
@@ -171,8 +173,12 @@ const Progress: React.FC<{
     ({ grade }) => grade.resolved
   ).length;
   const value = (peak.current = Math.max(peak.current, resolved));
+  const total = (ceiling.current = Math.max(ceiling.current, max));
+  const text = trans.__('%1 of %2', value, total);
   return (
-    <progress {...{ max, value }}>{trans.__('%1 of %2', value, max)}</progress>
+    <progress max={total} value={value}>
+      {text}
+    </progress>
   );
 };
 
@@ -252,10 +258,39 @@ const Row: React.FC<{
       <Lock {...{ trans, workbook }} />
       <Assignment {...{ trans, workbook }} />
       <Assignee {...{ trans, workbook }} />
+      <Breakdown {...{ workbook }} />
       <Score {...{ grade, trans }} />
     </tr>
   );
 });
+
+const Breakdown: React.FC<{
+  workbook: Workbook.Headless;
+}> = ({ workbook }) => {
+  const rubric = open(workbook);
+  const notebook = workbook.context.model.sharedModel;
+  if (!rubric) {
+    return <td className="correxit-corrector-breakdown" />;
+  }
+  const { cells } = rubric;
+  const { scores } = rubric.assignment.report;
+  const breakdown = Array.from(notebook.cells)
+    .map(cell => cell.id)
+    .filter(id => id in cells);
+  return (
+    <td className="correxit-corrector-breakdown">
+      <span className="correxit-corrector-breakdown-bar">
+        {breakdown.map(id => {
+          const className = [
+            'correxit-corrector-breakdown-segment',
+            `correxit-corrector-breakdown-${scores[id]?.status ?? 'unscored'}`
+          ].join(' ');
+          return <span key={id} className={className} />;
+        })}
+      </span>
+    </td>
+  );
+};
 
 const Assignee: React.FC<{
   trans: TranslationBundle;
