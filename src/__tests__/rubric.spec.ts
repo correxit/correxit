@@ -631,9 +631,12 @@ describe('Rubric', () => {
 
     describe('certify / verify', () => {
       const key = 'test-key';
-      const cells = { 'c1': 'print(1)' };
+      const cells = { c1: 'print(1)' };
       const scores = { c1: Rubric.Score.CORRECT };
-      const base: Omit<Rubric.Assignment.Report, 'digest'> = { scores, timestamp: null };
+      const base: Omit<Rubric.Assignment.Report, 'digest'> = {
+        scores,
+        timestamp: null
+      };
 
       it('certify produces a stable hex digest', async () => {
         const d1 = await Rubric.Assignment.certify(base, cells, key);
@@ -645,26 +648,35 @@ describe('Rubric', () => {
 
       it('certify changes when cell source changes', async () => {
         const d1 = await Rubric.Assignment.certify(base, cells, key);
-        const d2 = await Rubric.Assignment.certify(base, { c1: 'print(2)' }, key);
+        const d2 = await Rubric.Assignment.certify(
+          base,
+          { c1: 'print(2)' },
+          key
+        );
         expect(d1).not.toBe(d2);
       });
 
       it('verify passes when digest matches', async () => {
         const digest = await Rubric.Assignment.certify(base, cells, key);
         const report: Rubric.Assignment.Report = { ...base, digest };
-        await expect(Rubric.Assignment.verify(report, cells, key)).resolves.toBeUndefined();
+        await expect(
+          Rubric.Assignment.verify(report, cells, key)
+        ).resolves.toBeUndefined();
       });
 
       it('verify throws on digest mismatch', async () => {
         const digest = await Rubric.Assignment.certify(base, cells, key);
         const report: Rubric.Assignment.Report = { ...base, digest };
-        await expect(Rubric.Assignment.verify(report, { c1: 'tampered' }, key))
-          .rejects.toThrow('report cell digest mismatch');
+        await expect(
+          Rubric.Assignment.verify(report, { c1: 'tampered' }, key)
+        ).rejects.toThrow('report cell digest mismatch');
       });
 
       it('verify is a no-op when digest is empty string (unsigned)', async () => {
         const report: Rubric.Assignment.Report = { ...base, digest: '' };
-        await expect(Rubric.Assignment.verify(report, cells, key)).resolves.toBeUndefined();
+        await expect(
+          Rubric.Assignment.verify(report, cells, key)
+        ).resolves.toBeUndefined();
       });
     });
   });
