@@ -109,7 +109,31 @@ export async function lease(
     return null;
   }
 
-  const release = async ? () => recycle(kernel) : () => void recycle(kernel);
+  let released = false;
+  const expire = () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    kernel.interrupt().catch(() => {});
+    dispose(kernel);
+    relinquish();
+  };
+  const deadline = lifespan > 0
+    ? setTimeout(expire, lifespan * 1000)
+    : null;
+  const reclaim = async () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    if (deadline) {
+      clearTimeout(deadline);
+    }
+    await recycle(kernel);
+  };
+
+  const release = async ? reclaim : () => void reclaim();
   return [kernel, release] as Leased;
 }
 

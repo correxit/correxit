@@ -308,7 +308,9 @@ export namespace Workbook {
   /**
    * Certify a workbook: correct, lock, and freeze.
    */
-  export async function certify(workbook: Workbook): Promise<Certified> {
+  export async function certify(
+    workbook: Workbook
+  ): Promise<Certified> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
       throw new Error('certify error');
@@ -362,7 +364,7 @@ export namespace Workbook {
    */
   export async function correct(
     workbook: Workbook,
-    id?:string
+    id?: string
   ): Promise<Omit<Grade, 'path'>> {
     const rubric = open(workbook, quiet);
     if (!rubric) {
@@ -462,15 +464,16 @@ export namespace Workbook {
    * Decrypts workbook content.
    */
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
-    const audit = Workbook.audit(workbook, rubric);
-    if (!audit.ok) {
-      throw new Error(`decrypt error: ${audit.error}`);
+    const audited = Workbook.audit(workbook, rubric);
+    if (!audited.ok) {
+      throw new Error(`decrypt error: ${audited.error}`);
     }
-    if (audit.pruned.length) {
-      console.warn('decrypt: workbook has missing cells', audit.pruned);
+    if (audited.pruned.length) {
+      console.warn('decrypt: workbook has missing cells', audited.pruned);
     }
 
-    const { cells, key } = audit.rubric as Rubric.Unlocked;
+    // Decrypt only the cells that survived the audit.
+    const { cells, key } = audited.rubric as Rubric.Unlocked;
     for (const [, cell] of Object.entries(cells)) {
       if (cell.shared) {
         continue;
@@ -480,7 +483,9 @@ export namespace Workbook {
         await Cell.decrypt(workbook, reference, key);
       }
     };
-    return update(workbook, rubric, audit);
+    // Cache the original (un-pruned) rubric so downstream audit can
+    // still detect the missing cells.
+    return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
   /**
@@ -719,11 +724,12 @@ export namespace Workbook {
       return rubric;
     }
 
+    const unlocked = await Rubric.unlock(rubric, key);
+    const decrypted = await decrypt(workbook, unlocked);
+
     // Verify against the original rubric: the digest was computed before
     // audit pruning, so sources must come from the original cell set.
-    const unlocked = await Rubric.unlock(rubric, key);
     const cells = sources(workbook, unlocked);
-    const decrypted = await decrypt(workbook, unlocked);
     await Rubric.Assignment.verify(decrypted.assignment.report, cells, key);
     return decrypted;
   }

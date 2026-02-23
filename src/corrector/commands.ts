@@ -40,21 +40,14 @@ export function addCommands(
   const { commands, serviceManager: manager, shell } = app;
   const { browser, collector, indicator, tracker, trans, tree } = utilities;
   const { certify } = Workbook;
-  const fetch = (handle: Credentials) =>
-    commands.execute(Correxit.CommandIDs.fetch, handle);
+  const fetch = (handle: Credentials, silent = false) =>
+    commands.execute(Correxit.CommandIDs.fetch, { ...handle, silent });
   const save = (workbook: Workbook | null) => workbook?.context.save();
   const { normalize } = Workbook.Credentials;
   const certified = (workbook: Workbook): Certified | null => {
     const rubric = Workbook.open(workbook, true);
-    if (!rubric) {
+    if (!rubric || rubric.locked) {
       return null;
-    }
-    if (rubric.locked) {
-      const path = workbook.context.path;
-      const score = { ...Rubric.Score.UNSCORED };
-      const grade: Grade = { path, resolved: false, score, spec: null };
-      const identifier = Workbook.identifier(workbook);
-      return { grade, identifier, timestamp: 0, workbook };
     }
 
     const { report } = rubric.assignment;
@@ -112,6 +105,9 @@ export function addCommands(
           const rubric = Workbook.open(workbook, true);
           const audited = rubric && Workbook.audit(workbook, rubric);
           if (audited && audited.ok && audited.pruned.length) {
+            return recover(workbook as Headless);
+          }
+          if (rubric?.locked) {
             return recover(workbook as Headless);
           }
           const existing = certified(workbook);
@@ -258,8 +254,10 @@ export function addCommands(
             console.warn(CommandIDs.scan, directory, 'not a directory');
             return;
           }
+          let prompted = false;
           for (const { path } of filter(sort(response.content), notebook)) {
-            const fetched = await fetch({ ...handle, path });
+            const fetched = await fetch({ ...handle, path }, prompted);
+            prompted = true;
             if (fetched) {
               yield fetched as Headless;
             }

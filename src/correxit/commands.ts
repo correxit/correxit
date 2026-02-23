@@ -67,8 +67,8 @@ export function addCommands(
   const { registrar, submitter, unlocker } = utilities;
   const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
-  const fetch = (handle: Credentials) =>
-    io.request(handle, factory, manager, unlocker);
+  const fetch = (handle: Credentials, silent = false) =>
+    io.request(handle, factory, manager, unlocker, silent);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
@@ -357,11 +357,11 @@ export function addCommands(
         }
       }
     },
-    execute: async (args: Partial<Credentials>):
+    execute: async (args: Partial<Credentials & { silent: boolean }>):
       Promise<Headless | null> => {
       const handle = normalize(args);
       try {
-        return handle && await fetch(handle);
+        return handle && await fetch(handle, !!args.silent);
       } catch (error) {
         console.warn(CommandIDs.fetch, error);
         return null;

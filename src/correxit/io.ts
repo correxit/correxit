@@ -78,7 +78,8 @@ export async function request(
   handle: Workbook.Credentials,
   factory: NotebookModelFactory,
   manager: ServiceManager.IManager,
-  unlocker: Correxit.Unlocker
+  unlocker: Correxit.Unlocker,
+  silent = false
 ): Promise<Workbook.Headless | null> {
   const { key, passphrase, path, unlock } = handle;
   const context = new Context({ manager, factory, path });
@@ -96,7 +97,7 @@ export async function request(
     return workbook;
   }
   try {
-    await unlocker.unlock(workbook, handle);
+    await unlocker.unlock(workbook, silent ? { ...handle, silent } : handle);
   } catch (error) {
     console.warn(`access error, ${path}`, error);
   }

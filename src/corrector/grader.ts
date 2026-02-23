@@ -38,7 +38,6 @@ export async function* grader(
   let running = 0;
   const max = Math.max(1, cap);
   const queue: Settled[] = [];
-  const expired = new Error('grader timeout');
   const sleep = () => new Promise<void>(resolve => void (next = resolve));
   const wake = () => {
     next?.();
@@ -48,17 +47,16 @@ export async function* grader(
     queue.push(item);
     wake();
   };
+  const expired = new Error('grader timeout');
   const task = (workbook: Headless) => {
     if (timeout === 0) {
       return correct(workbook);
     }
 
-    let handle: ReturnType<typeof setTimeout>;
-    const clear = () => clearTimeout(handle);
-    const countdown = new Promise<never>(
-      (_, reject) => void (handle = setTimeout(() => reject(expired), timeout))
+    const countdown = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(expired), timeout)
     );
-    return Promise.race([correct(workbook), countdown]).finally(clear);
+    return Promise.race([correct(workbook), countdown]);
   };
   const start = (workbook: Headless) => {
     running++;
