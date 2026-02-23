@@ -47,11 +47,9 @@ describe('grader', () => {
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
     const recover = jest.fn((workbook: Headless) => failed(workbook));
-
     for await (const graded of grader(source([]), correct, recover, 5, 0)) {
       collected.push(graded.grade.path);
     }
-
     expect(collected).toEqual([]);
     expect(correct).toHaveBeenCalledTimes(0);
   });
@@ -60,17 +58,10 @@ describe('grader', () => {
     const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
-
-    for await (const graded of grader(
-      source(paths),
-      correct,
-      jest.fn(),
-      5,
-      0
-    )) {
+    const stream = grader(source(paths), correct, jest.fn(), 5, 0);
+    for await (const graded of stream) {
       collected.push(graded.grade.path);
     }
-
     expect(collected.sort()).toEqual(paths.slice().sort());
     expect(correct).toHaveBeenCalledTimes(paths.length);
   });
@@ -85,22 +76,15 @@ describe('grader', () => {
       return grade(workbook);
     });
     const recover = jest.fn((workbook: Headless) => failed(workbook));
-
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      for await (const graded of grader(
-        source(paths),
-        correct,
-        recover,
-        2,
-        0
-      )) {
+      const stream =  grader(source(paths), correct, recover, 2, 0);
+      for await (const graded of stream) {
         collected.push(graded);
       }
     } finally {
       warn.mockRestore();
     }
-
     expect(collected.map(c => c.grade.path).sort()).toEqual(
       paths.slice().sort()
     );
@@ -124,35 +108,25 @@ describe('grader', () => {
       active--;
       return grade(workbook);
     });
-
     const pending = (async () => {
       const collected: string[] = [];
-      for await (const graded of grader(
-        source(paths),
-        correct,
-        jest.fn(),
-        0,
-        0
-      )) {
+      const stream = grader(source(paths), correct, jest.fn(), 0, 0);
+      for await (const graded of stream) {
         collected.push(graded.grade.path);
       }
       return collected;
     })();
-
     await wait();
     expect(correct).toHaveBeenCalledTimes(1);
     expect(peak).toBe(1);
-
     gates['a.ipynb'].resolve();
     await wait();
     expect(correct).toHaveBeenCalledTimes(2);
     expect(peak).toBe(1);
-
     gates['b.ipynb'].resolve();
     await wait();
     expect(correct).toHaveBeenCalledTimes(3);
     expect(peak).toBe(1);
-
     gates['c.ipynb'].resolve();
     const collected = await pending;
     expect(collected.sort()).toEqual(paths.slice().sort());
@@ -172,35 +146,25 @@ describe('grader', () => {
       active--;
       return grade(workbook);
     });
-
     const pending = (async () => {
       const collected: string[] = [];
-      for await (const graded of grader(
-        source(paths),
-        correct,
-        jest.fn(),
-        2,
-        0
-      )) {
+      const stream = grader(source(paths), correct, jest.fn(), 2, 0);
+      for await (const graded of stream) {
         collected.push(graded.grade.path);
       }
       return collected;
     })();
-
     await wait();
     expect(correct).toHaveBeenCalledTimes(2);
     expect(peak).toBe(2);
-
     gates['a.ipynb'].resolve();
     await wait();
     expect(correct).toHaveBeenCalledTimes(3);
     expect(peak).toBe(2);
-
     gates['b.ipynb'].resolve();
     await wait();
     expect(correct).toHaveBeenCalledTimes(4);
     expect(peak).toBe(2);
-
     gates['c.ipynb'].resolve();
     gates['d.ipynb'].resolve();
     const collected = await pending;
@@ -217,27 +181,17 @@ describe('grader', () => {
       await delegates[workbook.context.path].promise;
       return grade(workbook);
     });
-
     const recover = jest.fn((workbook: Headless) => failed(workbook));
-
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const pending = (async () => {
-        for await (const graded of grader(
-          source(paths),
-          correct,
-          recover,
-          3,
-          10
-        )) {
+        const stream = grader(source(paths), correct, recover, 3, 10);
+        for await (const graded of stream) {
           collected.push(graded.grade.path);
         }
       })();
-
-      // Let the timeout elapse for all three.
       await new Promise<void>(resolve => setTimeout(resolve, 50));
       await pending;
-
       expect(collected.sort()).toEqual(paths.slice().sort());
       expect(recover).toHaveBeenCalledTimes(paths.length);
       expect(
@@ -257,23 +211,16 @@ describe('grader', () => {
       throw new Error('boom');
     });
     const recover = jest.fn((workbook: Headless) => failed(workbook));
-
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      for await (const graded of grader(
-        source(paths),
-        correct,
-        recover,
-        3,
-        0
-      )) {
+      const stream = grader(source(paths), correct, recover, 3, 0);
+      for await (const graded of stream) {
         collected.push(graded);
       }
       expect(warn).toHaveBeenCalledTimes(paths.length);
     } finally {
       warn.mockRestore();
     }
-
     expect(collected.map(c => c.grade.path).sort()).toEqual(
       paths.slice().sort()
     );
