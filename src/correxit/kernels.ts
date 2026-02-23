@@ -27,12 +27,41 @@ let workers = 3;
 let lifespan = 60;
 
 /**
+ * Semaphore state: number of outstanding leases (running + restarting) and
+ * the queue of resolvers waiting for a slot.
+ */
+let live = 0;
+const waiters: Array<() => void> = [];
+
+/**
+ * Acquires one semaphore slot, blocking until `live < workers`.
+ */
+async function acquire(): Promise<void> {
+  while (live >= workers) {
+    await new Promise<void>(resolve => waiters.push(resolve));
+  }
+  live++;
+}
+
+/**
+ * Releases one semaphore slot and wakes the next waiter, if any.
+ */
+function signal(): void {
+  live--;
+  waiters.shift()?.();
+}
+
+/**
  * Update the kernel pool configuration.
  */
 export function configure({ concurrency, retries, timeout }: Config): void {
   attempts = Math.max(0, retries);
   lifespan = Math.max(0, timeout);
   workers = Math.max(1, concurrency);
+  // Wake any blocked callers that can now proceed.
+  while (live < workers && waiters.length) {
+    waiters.shift()!();
+  }
 }
 
 /**
@@ -88,9 +117,11 @@ export async function lease(
   workbook: Workbook,
   { async }: { async?: boolean; } = {}
 ): Promise<Leased | Leased<true> | null> {
+  await acquire();
   const started = take(workbook.context.model.defaultKernelName);
   const kernel = lend(started) || await start(workbook);
   if (!kernel) {
+    signal();
     return null;
   }
 
@@ -146,9 +177,26 @@ async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
   const restarted = await kernel.restart().then(() => true).catch(() => false);
   if (restarted) {
     keep(kernel);
-    return;
+  } else {
+    dispose(kernel);
   }
-  dispose(kernel);
+  signal();
+}
+
+/**
+ * @internal Resets all module state. For use in tests only.
+ */
+export function drain(): void {
+  for (const kernels of pool.values()) {
+    for (const { timeout, kernel } of kernels) {
+      clearTimeout(timeout);
+      dispose(kernel);
+    }
+  }
+  pool.clear();
+  live = 0;
+  workers = 3;
+  waiters.length = 0;
 }
 
 /**
