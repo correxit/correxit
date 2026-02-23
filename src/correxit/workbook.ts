@@ -307,12 +307,13 @@ export namespace Workbook {
     const corrected = await correct(workbook);
     const grade = { ...corrected, path: workbook.context.path };
     const identifier = Workbook.identifier(workbook);
-    const timestamp = Workbook.timestamp(workbook);
     if (corrected.resolved) {
       await lock(workbook);
       freeze(workbook);
     }
-    return { grade, identifier, timestamp, workbook };
+
+    // If timestamp() throws, certify() should fail.
+    return { grade, identifier, timestamp: timestamp(workbook), workbook };
   }
 
   /**
