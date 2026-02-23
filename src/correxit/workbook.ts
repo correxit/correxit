@@ -188,6 +188,16 @@ export namespace Workbook {
       cell.transact(() => cell.setMetadata('editable', false));
     }
   };
+  const sources = (workbook: Workbook, rubric: Rubric): {
+    [id: string]: string;
+  } => {
+    const notebook = workbook.context.model.sharedModel;
+    const configured = new Set(Object.keys(rubric.cells));
+    return Object.fromEntries(
+      notebook.cells.filter(cell => configured.has(cell.id))
+        .map(cell => [cell.id, cell.getSource()])
+    );
+  };
   const [get, set] = (pool => {
     const get = (workbook: Workbook) => pool.get(workbook) || null;
     const set = (workbook: Workbook, rubric: Rubric | null) =>
@@ -417,7 +427,8 @@ export namespace Workbook {
       ? status !== 'unscored'
       : !Object.values(rubric.cells).some(missing) && status !== 'unscored';
     if (resolved && !rubric.locked) {
-      await update(workbook, await Rubric.sign(rubric, report));
+      const cells = sources(workbook, rubric);
+      await update(workbook, await Rubric.sign(rubric, report, cells));
     }
     return { resolved, spec, score: final };
   }
@@ -442,7 +453,9 @@ export namespace Workbook {
 
     const { report: kept } = rubric.assignment;
     const scores = { ...kept.scores, [id]: { ...kept.scores[id], comment } };
-    return update(workbook, await Rubric.sign(rubric, { ...kept, scores }));
+    const cells = sources(workbook, rubric);
+    const signed = await Rubric.sign(rubric, { ...kept, scores }, cells);
+    return update(workbook, signed);
   }
 
   /**
@@ -452,6 +465,9 @@ export namespace Workbook {
     const audit = Workbook.audit(workbook, rubric);
     if (!audit.ok) {
       throw new Error(`decrypt error: ${audit.error}`);
+    }
+    if (audit.pruned.length) {
+      console.warn('decrypt: workbook has missing cells', audit.pruned);
     }
 
     const { cells, key } = audit.rubric as Rubric.Unlocked;
@@ -699,10 +715,17 @@ export namespace Workbook {
     if (!rubric) {
       throw new Error('unlock error');
     }
-    if (rubric.locked) {
-      return decrypt(workbook, await Rubric.unlock(rubric, key));
+    if (!rubric.locked) {
+      return rubric;
     }
-    return rubric;
+
+    // Verify against the original rubric: the digest was computed before
+    // audit pruning, so sources must come from the original cell set.
+    const unlocked = await Rubric.unlock(rubric, key);
+    const cells = sources(workbook, unlocked);
+    const decrypted = await decrypt(workbook, unlocked);
+    await Rubric.Assignment.verify(decrypted.assignment.report, cells, key);
+    return decrypted;
   }
 
   /**

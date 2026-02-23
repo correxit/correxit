@@ -239,6 +239,7 @@ export namespace Rubric {
      * A score report for an assignment.
      */
     export type Report = Readonly<{
+      digest: string;
       scores: { [id: string]: Score };
       timestamp: number | null;
     }>;
@@ -247,7 +248,7 @@ export namespace Rubric {
       assignee: '',
       confirmation: null,
       expiration: null,
-      report: { scores: {}, timestamp: null },
+      report: { digest: '', scores: {}, timestamp: null },
       roster: [],
       signature: '',
       submission: null
@@ -283,7 +284,37 @@ export namespace Rubric {
       const pending = all.map(id => Cell.score(rubric, id, outputs));
       const done = (await Promise.all(pending)).map(score => [score.id, score]);
       const scores = Object.fromEntries([...current, ...done]);
-      return { scores, timestamp: Date.now() };
+      return { digest: '', scores, timestamp: Date.now() };
+    }
+
+    /**
+     * @returns a content digest committing to cell sources and scores.
+     */
+    export async function certify(
+      report: Omit<Report, 'digest'>,
+      cells: { [id: string]: string },
+      key: string
+    ): Promise<string> {
+      return security.digest(
+        JSON.stringify({ cells, scores: report.scores }).concat(key)
+      );
+    }
+
+    /**
+     * Throws if `report.digest` does not match a re-derived digest.
+     * No-ops for unsigned reports (digest is `''`).
+     */
+    export async function verify(
+      report: Report,
+      cells: { [id: string]: string },
+      key: string
+    ): Promise<void> {
+      if (report.digest === '') {
+        return;
+      }
+      if (report.digest !== await certify(report, cells, key)) {
+        throw new Error('report cell digest mismatch');
+      }
     }
 
     export async function sign(
@@ -413,7 +444,7 @@ export namespace Rubric {
 
     const report = assignee === rubric.assignment.assignee
       ? rubric.assignment.report // Keep report if assignee is unchanged.
-      : { scores: {}, timestamp: Date.now() };
+      : { digest: '', scores: {}, timestamp: Date.now() };
     const unsigned = { assignee, expiration, report, roster };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = {
@@ -491,7 +522,9 @@ export namespace Rubric {
    */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
     const { cells, id, key, locked, revised } = rubric;
-    const assignment = rubric.assignment || { ...Assignment.EMPTY };
+    const raw = rubric.assignment || { ...Assignment.EMPTY };
+    const report = { ...raw.report, digest: raw.report?.digest ?? '' };
+    const assignment = { ...raw, report };
     if (!revised) {
       throw new Error('invalid rubric, missing revised');
     }
@@ -525,9 +558,12 @@ export namespace Rubric {
 
   export async function sign(
     rubric: Rubric.Unlocked,
-    report: Assignment.Report
+    report: Assignment.Report,
+    cells: { [id: string]: string } = {}
   ): Promise<Rubric.Unlocked> {
-    const unsigned = { ...rubric.assignment, report };
+    const digest = await Assignment.certify(report, cells, rubric.key);
+    const signed = { ...report, digest };
+    const unsigned = { ...rubric.assignment, report: signed };
     const signature = await Assignment.sign(unsigned, rubric.key);
     const assignment = { ...unsigned, signature };
     return { ...rubric, assignment };

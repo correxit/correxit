@@ -8,7 +8,11 @@ export namespace Unlocker {
   export async function store(
     id: string,
     key: string,
-    secrets: { manager: ISecretsManager | null; token: symbol | null; }
+    secrets: {
+      manager: ISecretsManager | null;
+      pending: Promise<string | null> | null;
+      token: symbol | null;
+    }
   ) {
     const { manager, token } = secrets;
     if (manager && token) {
@@ -30,6 +34,7 @@ export namespace Unlocker {
     credentials: Partial<Workbook.Credentials & { silent: boolean }> | null,
     secrets: {
       manager: ISecretsManager | null;
+      pending: Promise<string | null> | null;
       passphrases: Set<string>;
       token: symbol | null;
     },
@@ -74,7 +79,12 @@ export namespace Unlocker {
       return null;
     }
 
-    const passphrase = await prompt(workbook, trans);
+    const pending = secrets.pending || prompt(workbook, trans);
+    secrets.pending = pending;
+    const passphrase = await pending;
+    if (secrets.pending === pending) {
+      secrets.pending = null;
+    }
     if (!passphrase) {
       return null;
     }
@@ -91,7 +101,12 @@ async function attempt(
   workbook: Workbook,
   key: string
 ): Promise<Rubric.Unlocked | null> {
-  return await Workbook.unlock(workbook, key).catch(_ => null);
+  return await Workbook.unlock(workbook, key).catch(error => {
+    if (error === Correxit.STRUCTURAL_ERROR) {
+      throw error;
+    }
+    return null;
+  });
 }
 
 async function prompt(

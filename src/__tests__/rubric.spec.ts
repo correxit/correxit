@@ -71,6 +71,7 @@ describe('Rubric', () => {
         payload: []
       });
       const report: Rubric.Assignment.Report = {
+        digest: '',
         scores: { [id]: Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
@@ -94,6 +95,7 @@ describe('Rubric', () => {
       });
 
       const report: Rubric.Assignment.Report = {
+        digest: '',
         scores: { c1: Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
@@ -253,7 +255,8 @@ describe('Rubric', () => {
 
     it('resets report if assignee changes', async () => {
       let rubric = create();
-      const report = {
+      const report: Rubric.Assignment.Report = {
+        digest: '',
         scores: { 'cell-1': Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
@@ -594,6 +597,7 @@ describe('Rubric', () => {
       add('c2');
 
       const report: Rubric.Assignment.Report = {
+        digest: '',
         scores: {
           c1: Rubric.Score.CORRECT,
           c2: Rubric.Score.CORRECT,
@@ -612,6 +616,7 @@ describe('Rubric', () => {
 
     it('summarizes a report correctly', () => {
       const report: Rubric.Assignment.Report = {
+        digest: '',
         scores: {
           c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
           c2: { ...Rubric.Score.INCORRECT, points: 0, possible: 10 }
@@ -622,6 +627,45 @@ describe('Rubric', () => {
       expect(summary.points).toBe(5);
       expect(summary.possible).toBe(15);
       expect(summary.status).toBe('summary');
+    });
+
+    describe('certify / verify', () => {
+      const key = 'test-key';
+      const cells = { 'c1': 'print(1)' };
+      const scores = { c1: Rubric.Score.CORRECT };
+      const base: Omit<Rubric.Assignment.Report, 'digest'> = { scores, timestamp: null };
+
+      it('certify produces a stable hex digest', async () => {
+        const d1 = await Rubric.Assignment.certify(base, cells, key);
+        const d2 = await Rubric.Assignment.certify(base, cells, key);
+        expect(d1).toBe(d2);
+        expect(typeof d1).toBe('string');
+        expect(d1.length).toBeGreaterThan(0);
+      });
+
+      it('certify changes when cell source changes', async () => {
+        const d1 = await Rubric.Assignment.certify(base, cells, key);
+        const d2 = await Rubric.Assignment.certify(base, { c1: 'print(2)' }, key);
+        expect(d1).not.toBe(d2);
+      });
+
+      it('verify passes when digest matches', async () => {
+        const digest = await Rubric.Assignment.certify(base, cells, key);
+        const report: Rubric.Assignment.Report = { ...base, digest };
+        await expect(Rubric.Assignment.verify(report, cells, key)).resolves.toBeUndefined();
+      });
+
+      it('verify throws on digest mismatch', async () => {
+        const digest = await Rubric.Assignment.certify(base, cells, key);
+        const report: Rubric.Assignment.Report = { ...base, digest };
+        await expect(Rubric.Assignment.verify(report, { c1: 'tampered' }, key))
+          .rejects.toThrow('report cell digest mismatch');
+      });
+
+      it('verify is a no-op when digest is empty string (unsigned)', async () => {
+        const report: Rubric.Assignment.Report = { ...base, digest: '' };
+        await expect(Rubric.Assignment.verify(report, cells, key)).resolves.toBeUndefined();
+      });
     });
   });
 });

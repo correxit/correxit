@@ -335,7 +335,12 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
         translator: ITranslator | null
       ) => {
         const trans = (translator || nullTranslator).load('correxit');
-        const secrets = { manager, passphrases: new Set<string>(), token };
+        const secrets = {
+          manager,
+          passphrases: new Set<string>(),
+          pending: null as Promise<string | null> | null,
+          token
+        };
         return {
           store: (id: string, key: string) => Unlocker.store(id, key, secrets),
           unlock: async (workbook, credentials) =>

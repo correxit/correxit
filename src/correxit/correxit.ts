@@ -111,6 +111,8 @@ export namespace Correxit {
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
+  export const STRUCTURAL_ERROR = new Error('correxit structural error');
+
   export const MONITOR = '@quantstack/correxit:monitor';
 
   export const Monitor = new Token<Monitor>(MONITOR);

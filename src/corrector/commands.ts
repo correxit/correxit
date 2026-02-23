@@ -49,13 +49,22 @@ export function addCommands(
     if (!rubric) {
       return null;
     }
+    if (rubric.locked) {
+      const path = workbook.context.path;
+      const score = { ...Rubric.Score.UNSCORED };
+      const grade: Grade = { path, resolved: false, score, spec: null };
+      const identifier = Workbook.identifier(workbook);
+      return { grade, identifier, timestamp: 0, workbook };
+    }
 
     const { report } = rubric.assignment;
     const score = Rubric.Assignment.summary(report);
     const transient = ({ code }: Rubric.Score) =>
       code === 'missing-given' || code === 'missing-reference';
     const partial = Object.values(report.scores).some(transient);
-    if (!report.timestamp || score.status === 'unscored' || partial) {
+    const incomplete = Object.keys(rubric.cells).some(id => !report.scores[id]);
+    const unscored = score.status === 'unscored';
+    if (!report.timestamp || unscored || partial || incomplete) {
       return null;
     }
 
@@ -100,6 +109,11 @@ export function addCommands(
           return { grade, identifier, timestamp, workbook };
         };
         const correct = async (workbook: Workbook): Promise<Certified> => {
+          const rubric = Workbook.open(workbook, true);
+          const audited = rubric && Workbook.audit(workbook, rubric);
+          if (audited && audited.ok && audited.pruned.length) {
+            return recover(workbook as Headless);
+          }
           const existing = certified(workbook);
           if (existing) {
             return existing;
