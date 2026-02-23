@@ -363,11 +363,10 @@ export namespace Workbook {
       };
     }
 
-    // Short-circuit before leasing a kernel when rubric cells are absent.
     if (!id) {
       const notebook = workbook.context.model.sharedModel;
-      const existing = new Set(Array.from(notebook.cells).map(c => c.id));
-      const absent = Object.values(rubric.cells).some(cell => {
+      const existing = new Set(Array.from(notebook.cells).map(cell => cell.id));
+      const missing = (cell: Rubric.Cell) => {
         const { id, is, reference } = cell;
         if (!existing.has(id)) {
           return true;
@@ -376,8 +375,8 @@ export namespace Workbook {
           return reference.some(id => !existing.has(id));
         }
         return false;
-      });
-      if (absent) {
+      };
+      if (Object.values(rubric.cells).some(missing)) {
         return {
           resolved: false,
           score: { ...Rubric.Score.UNSCORED, code: 'missing-cell-notebook' },
@@ -403,7 +402,7 @@ export namespace Workbook {
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
     const final = id ? report.scores[id] : summary(report);
-    const missing = !id && Object.values(rubric.cells).some(cell => {
+    const missing = (cell: Rubric.Cell) => {
       const { id, is, reference } = cell;
       if (!outputs.has(id)) {
         return true;
@@ -412,8 +411,11 @@ export namespace Workbook {
         return reference.some(id => !outputs.has(id));
       }
       return false;
-    });
-    const resolved = !missing && final.status !== 'unscored';
+    };
+    const { status } = final;
+    const resolved = id
+      ? status !== 'unscored'
+      : !Object.values(rubric.cells).some(missing) && status !== 'unscored';
     if (resolved && !rubric.locked) {
       await update(workbook, await Rubric.sign(rubric, report));
     }
