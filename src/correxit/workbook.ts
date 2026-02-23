@@ -377,14 +377,11 @@ export namespace Workbook {
     const report = await score(rubric, outputs, id);
     const scored = Object.entries(report.scores);
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
-    if (!rubric.locked) {
-      await update(workbook, await Rubric.sign(rubric, report));
-    }
 
     const final = id ? report.scores[id] : summary(report);
     const notebook = workbook.context.model.sharedModel;
     const existing = new Set(Array.from(notebook.cells).map(cell => cell.id));
-    const missing = Object.values(rubric.cells).some(cell => {
+    const missing = !id && Object.values(rubric.cells).some(cell => {
       const { id, is, reference } = cell;
       if (existing.has(id) && !outputs.has(id)) {
         return true;
@@ -395,6 +392,9 @@ export namespace Workbook {
       return false;
     });
     const resolved = !missing && final.status !== 'unscored';
+    if (resolved && !rubric.locked) {
+      await update(workbook, await Rubric.sign(rubric, report));
+    }
     return { resolved, spec, score: final };
   }
 
