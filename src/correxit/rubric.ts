@@ -47,9 +47,7 @@ export namespace Rubric {
   }>;
 
   export namespace Cell {
-    /**
-     * An output is an `iopub` message of interest.
-     */
+    /** An output is an `iopub` message of interest. */
     export type Output =
       | KernelMessage.IIOPubMessage<'execute_result'>
       | KernelMessage.IIOPubMessage<'display_data'>
@@ -235,9 +233,7 @@ export namespace Rubric {
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
   export namespace Assignment {
-    /**
-     * A score report for an assignment.
-     */
+    /** A score report for an assignment. */
     export type Report = Readonly<{
       digest: string;
       scores: { [id: string]: Score };
@@ -287,9 +283,7 @@ export namespace Rubric {
       return { digest: '', scores, timestamp: Date.now() };
     }
 
-    /**
-     * @returns a content digest committing to cell sources and scores.
-     */
+    /** @returns a digest of cell sources and scores. */
     export async function certify(
       report: Omit<Report, 'digest'>,
       cells: { [id: string]: string },
@@ -466,9 +460,7 @@ export namespace Rubric {
     return { assignment, cells: {}, id, locked: false, revised };
   }
 
-  /**
-   * @returns a locked rubric with null assignment submission and confirmation.
-   */
+  /** @returns a locked rubric with null submission and confirmation. */
   export function draft(rubric: Locked): Locked {
     const confirmation = null;
     const submission = null;
@@ -476,9 +468,7 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: Date.now() };
   }
 
-  /**
-   * @returns the rubric cell referenced by the `id` if found, otherwise `null`.
-   */
+  /** @returns the cell for `id`, or `null`. */
   export function get(rubric: Rubric, id: string): Cell | null {
     return rubric.cells[id] || null;
   }
@@ -499,9 +489,7 @@ export namespace Rubric {
     return false;
   }
 
-  /**
-   * @returns a promise that resolves to the given rubric, locked.
-   */
+  /** @returns the given rubric, locked. */
   export async function lock(rubric: Rubric): Promise<Locked> {
     if (rubric.locked) {
       return rubric;
@@ -517,9 +505,7 @@ export namespace Rubric {
     return { assignment, cells, id, key: null, locked, revised };
   }
 
-  /**
-   * @returns a normalized locked rubric or throws an error.
-   */
+  /** @returns a normalized locked rubric or throws. */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
     const { cells, id, key, locked, revised } = rubric;
     const raw = rubric.assignment || { ...Assignment.EMPTY };
@@ -543,9 +529,7 @@ export namespace Rubric {
     return { assignment, cells, id, key, locked, revised };
   }
 
-  /**
-   * Remove a cell from a rubric. Report scores are left intact.
-   */
+  /** Remove a cell from a rubric. Report scores are left intact. */
   export function remove(rubric: Unlocked, id: string): Unlocked {
     if (!get(rubric, id)) {
       return rubric;
@@ -569,9 +553,7 @@ export namespace Rubric {
     return { ...rubric, assignment };
   }
 
-  /**
-   * @returns the number of cells configured in a rubric.
-   */
+  /** @returns the number of cells in a rubric. */
   export function size(rubric: Rubric): number {
     return Object.keys(rubric.cells).length;
   }
@@ -584,9 +566,7 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: submission };
   }
 
-  /**
-   * @returns a rubric where given cell's shared flag is toggled.
-   */
+  /** @returns a rubric with the cell's shared flag toggled. */
   export function toggle(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
     if (!cell) {
@@ -597,9 +577,7 @@ export namespace Rubric {
     return { ...rubric, cells };
   }
 
-  /**
-   * @returns an unlocked rubric after decrypting the roster.
-   */
+  /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
     const locked = false;
     const { cells, id, assignment: { roster: [block]} } = rubric;
@@ -611,7 +589,5 @@ export namespace Rubric {
   }
 }
 
-/**
- * @returns a list of strings with no duplicate values.
- */
+/** @returns a list of strings with no duplicate values. */
 const unique = (list: string[]): string[] => Array.from(new Set(list));

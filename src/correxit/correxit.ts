@@ -6,9 +6,7 @@ import * as description from './description';
 import { Icons as ICONS } from './icons';
 
 export namespace Correxit {
-  /**
-   * A collector of certified workbook grades.
-   */
+  /** A collector of certified workbook grades. */
   export type Collector = (
     grades: AsyncIterable<Workbook.Certified> | Iterable<Workbook.Certified>
   ) => AsyncGenerator<Workbook.Certified>;
@@ -19,26 +17,18 @@ export namespace Correxit {
     stream: Propagator;
   }) => AsyncGenerator<Emitter.Emission>;
 
-  /**
-   * A message emitter for notifications and other Correxit UI updates.
-   */
+  /** A message emitter for notifications and other Correxit UI updates. */
   export type Emitter = AsyncIterable<Emitter.Emission>;
 
   export namespace Emitter {
-    /**
-     * A notification/message emission with slots to populate interpolations.
-     */
+    /** An emission with slots to populate interpolations. */
     export type Emission = { slots: (string | number)[]; type: string; };
   }
 
-  /**
-   * Monitor connects/disconnects workbooks and yields them to other plugins.
-   */
+  /** Connects/disconnects workbooks and yields them to plugins. */
   export type Monitor = AsyncIterable<Workbook | null>;
 
-  /**
-   * An async propagator of assigned workbook content.
-   */
+  /** An async propagator of assigned workbook content. */
   export type Propagator = (location: { base: string; pwd: string }) =>
     Promise<AsyncIterable<Propagator.Notebook>>;
 
@@ -70,14 +60,10 @@ export namespace Correxit {
   ) => Promise<string | null>;
 
   export type Unlocker = {
-    /**
-     * Store the key for a given rubric id.
-     */
+    /** Store the key for a given rubric id. */
     store(id: string, key: string): Promise<void>;
 
-    /**
-     * Unlock a given workbook with the given credentials.
-     */
+    /** Unlock a given workbook with the given credentials. */
     unlock(
       workbook: Workbook,
       credentials: Partial<Workbook.Credentials & { silent: boolean }> | null

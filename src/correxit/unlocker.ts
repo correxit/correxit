@@ -58,9 +58,7 @@ export namespace Unlocker {
   }
 }
 
-/**
- * Yields candidate keys in priority order without user interaction.
- */
+/** Yields candidate keys in priority order without user interaction. */
 async function* candidates(
   id: string,
   handle: Workbook.Credentials | null,
@@ -85,9 +83,7 @@ async function* candidates(
   }
 }
 
-/**
- * Iterates candidate keys, returning on first successful unlock.
- */
+/** Iterates candidate keys, returning on first successful unlock. */
 async function resolve(
   workbook: Workbook,
   id: string,

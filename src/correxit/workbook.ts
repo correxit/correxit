@@ -12,15 +12,11 @@ import * as kernels from './kernels';
 import * as security from './security';
 import * as state from './state';
 
-/**
- * A headed or headless Correxit workbook.
- */
+/** A headed or headless Correxit workbook. */
 export type Workbook = Workbook.Headed | Workbook.Headless;
 
 export namespace Workbook {
-  /**
-   * The result of an audit on a workbook's rubric.
-   */
+  /** The result of an audit on a workbook's rubric. */
   export type Audit = Audit.Pass | Audit.Fail;
 
   namespace Audit {
@@ -78,23 +74,15 @@ export namespace Workbook {
     readonly context: DocumentRegistry.IContext<INotebookModel>;
   };
 
-  /**
-   * A type for plugins to identify a workbook/assignment/assignee match.
-   */
+  /** A type for plugins to identify a workbook/assignment/assignee match. */
   export type Identifier = {
-    /**
-     * The assignee (typically an email address) or `null` if unassigned.
-     */
+    /** The assignee (typically an email address) or `null` if unassigned. */
     assignee: string | null;
 
-    /**
-     * The workbook/assignment id, i.e. the rubric id of the workbook.
-     */
+    /** The workbook/assignment id, i.e. the rubric id of the workbook. */
     assignment: string;
 
-    /**
-     * The workbook/assignment signature for the assignee/roster/report.
-     */
+    /** The workbook/assignment signature for the assignee/roster/report. */
     signature: string | null;
   }
 
@@ -225,9 +213,7 @@ export namespace Workbook {
     signature !== assignment.signature
   );
 
-  /**
-   * Add a cell to a workbook's rubric.
-   */
+  /** Add a cell to a workbook's rubric. */
   export async function add(
     workbook: Workbook,
     cell: Rubric.Cell
@@ -305,9 +291,7 @@ export namespace Workbook {
     return { ok: true, pruned: [], rubric };
   }
 
-  /**
-   * Certify a workbook: correct, lock, and freeze.
-   */
+  /** Certify a workbook: correct, lock, and freeze. */
   export async function certify(
     workbook: Workbook
   ): Promise<Certified> {
@@ -328,9 +312,7 @@ export namespace Workbook {
     return { grade, identifier, timestamp: timestamp(workbook), workbook };
   }
 
-  /**
-   * Convert a plain notebook into a workbook and return its rubric.
-   */
+  /** Convert a plain notebook into a workbook and return its rubric. */
   export async function convert(
     workbook: Workbook,
     passphrase: string,
@@ -460,9 +442,7 @@ export namespace Workbook {
     return update(workbook, signed);
   }
 
-  /**
-   * Decrypts workbook content.
-   */
+  /** Decrypts workbook content. */
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
     const audited = Workbook.audit(workbook, rubric);
     if (!audited.ok) {
@@ -488,9 +468,7 @@ export namespace Workbook {
     return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
-  /**
-   * Revert a submission to draft, restoring cell editability.
-   */
+  /** Revert a submission to draft, restoring cell editability. */
   export async function draft(workbook: Workbook): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked || !rubric.assignment.submission) {
@@ -573,9 +551,7 @@ export namespace Workbook {
     return { assignee, assignment, signature };
   }
 
-  /**
-   * Lock a workbook if its rubric is unlocked.
-   */
+  /** Lock a workbook if its rubric is unlocked. */
   export async function lock(workbook: Workbook): Promise<void> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
@@ -643,9 +619,7 @@ export namespace Workbook {
     }
   }
 
-  /**
-   * Remove a cell from a workbook's rubric.
-   */
+  /** Remove a cell from a workbook's rubric. */
   export function remove(workbook: Workbook, id: string): void {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
@@ -654,9 +628,7 @@ export namespace Workbook {
     update(workbook, Rubric.remove(rubric, id));
   }
 
-  /**
-   * Reset a workbook back to a plain Jupyter notebook.
-   */
+  /** Reset a workbook back to a plain Jupyter notebook. */
   export async function reset(workbook: Workbook) {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
@@ -665,9 +637,7 @@ export namespace Workbook {
     update(workbook, null);
   }
 
-  /**
-   * Submit an assignment, locking all cells to read-only.
-   */
+  /** Submit an assignment, locking all cells to read-only. */
   export async function submit(
     workbook: Workbook,
     confirmation: string | null = null
@@ -696,9 +666,7 @@ export namespace Workbook {
     return timestamp;
   };
 
-  /**
-   * Toggle a workbook cell's `shared` flag.
-   */
+  /** Toggle a workbook cell's `shared` flag. */
   export async function toggle(
     workbook: Workbook, id: string
   ): Promise<Rubric.Unlocked> {
@@ -709,9 +677,7 @@ export namespace Workbook {
     return update(workbook, Rubric.toggle(rubric, id));
   }
 
-  /**
-   * Unlocks a workbook's rubric, decrypts its contents, and returns the rubric.
-   */
+  /** Unlocks a workbook's rubric and decrypts its contents. */
   export async function unlock(
     workbook: Workbook,
     key: string

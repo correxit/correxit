@@ -12,9 +12,7 @@ export async function cd(commands: CommandRegistry, path: string) {
   }
 }
 
-/**
- * @returns A promise that resolves to a headless workbook or null.
- */
+/** @returns a headless workbook or null. */
 export async function create(options: {
   factory: NotebookModelFactory;
   manager: ServiceManager.IManager;
