@@ -9,6 +9,7 @@ import {
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Corrector } from '.';
+import { Message } from '@lumino/messaging';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
   constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
@@ -143,6 +144,22 @@ class ModeSelector extends ReactWidget {
     this.go = options.go;
     this.trans = options.trans;
     this.addClass('correxit-corrector-mode');
+  }
+
+  handleEvent(event: Event): void {
+    event.stopPropagation();
+  }
+
+  protected onBeforeAttach(msg: Message): void {
+    super.onBeforeAttach(msg);
+    this.node.addEventListener('click', this);
+    this.node.removeEventListener('pointerdown', this);
+  }
+
+  protected onAfterDetach(msg: Message): void {
+    super.onAfterDetach(msg);
+    this.node.removeEventListener('click', this);
+    this.node.removeEventListener('pointerdown', this);
   }
 
   render() {
