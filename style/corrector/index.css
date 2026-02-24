@@ -167,8 +167,12 @@ table.correxit-corrector tr.cxt-mod-failed td {
   opacity: 0.6;
 }
 
-td.correxit-corrector-failed > span {
-  color: var(--jp-error-color1);
+td.correxit-corrector-failed {
+  text-align: right;
+
+  > span {
+    color: var(--jp-error-color1);
+  }
 }
 
 .correxit-corrector-mode {

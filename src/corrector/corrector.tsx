@@ -262,15 +262,19 @@ const Row: React.FC<{
       <Lock {...{ trans, workbook }} />
       <Assignment {...{ trans, workbook }} />
       <Assignee {...{ trans, workbook }} />
-      <Breakdown {...{ workbook }} />
+      <Breakdown {...{ failed, workbook }} />
       <Score {...{ grade, graded, trans }} />
     </tr>
   );
 });
 
 const Breakdown: React.FC<{
+  failed: boolean;
   workbook: Workbook.Headless;
-}> = ({ workbook }) => {
+}> = ({ failed, workbook }) => {
+  if (failed) {
+    return <></>;
+  }
   const rubric = open(workbook);
   const notebook = workbook.context.model.sharedModel;
   if (!rubric) {
@@ -387,7 +391,7 @@ const Score: React.FC<{
   }
   if (!grade.resolved) {
     return (
-      <td className="correxit-corrector-failed" colSpan={2}>
+      <td className="correxit-corrector-failed" colSpan={3}>
         <span>{graded ? irrecoverable : recoverable}</span>
       </td>
     );
