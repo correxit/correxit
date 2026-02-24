@@ -43,26 +43,27 @@ export async function* grader(
     next?.();
     next = null;
   };
-  const push = (item: Settled) => {
-    queue.push(item);
-    wake();
-  };
   const expired = new Error('grader timeout');
-  const task = (workbook: Headless) => {
+  const task = async (workbook: Headless) => {
     if (timeout === 0) {
       return correct(workbook);
     }
 
-    const countdown = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(expired), timeout)
-    );
-    return Promise.race([correct(workbook), countdown]);
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const countdown = new Promise<never>((_, reject) => {
+        handle = setTimeout(() => reject(expired), timeout);
+      });
+      return await Promise.race([correct(workbook), countdown]);
+    } finally {
+      clearTimeout(handle);
+    }
   };
   const start = (workbook: Headless) => {
     running++;
     void task(workbook)
-      .then(grade => push({ ok: true, grade }))
-      .catch(error => push({ ok: false, error, workbook }))
+      .then(grade => queue.push({ ok: true, grade }))
+      .catch(error => queue.push({ ok: false, error, workbook }))
       .finally(() => {
         running--;
         wake();
