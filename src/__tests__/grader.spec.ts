@@ -47,7 +47,7 @@ describe('grader', () => {
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
     const recover = jest.fn((workbook: Headless) => failed(workbook));
-    for await (const graded of grader(source([]), correct, recover, 5, 0)) {
+    for await (const graded of grader(source([]), correct, recover, 5)) {
       collected.push(graded.grade.path);
     }
     expect(collected).toEqual([]);
@@ -58,7 +58,7 @@ describe('grader', () => {
     const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
-    const stream = grader(source(paths), correct, jest.fn(), 5, 0);
+    const stream = grader(source(paths), correct, jest.fn(), 5);
     for await (const graded of stream) {
       collected.push(graded.grade.path);
     }
@@ -78,7 +78,7 @@ describe('grader', () => {
     const recover = jest.fn((workbook: Headless) => failed(workbook));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const stream = grader(source(paths), correct, recover, 2, 0);
+      const stream = grader(source(paths), correct, recover, 2);
       for await (const graded of stream) {
         collected.push(graded);
       }
@@ -110,7 +110,7 @@ describe('grader', () => {
     });
     const pending = (async () => {
       const collected: string[] = [];
-      const stream = grader(source(paths), correct, jest.fn(), 0, 0);
+      const stream = grader(source(paths), correct, jest.fn(), 0);
       for await (const graded of stream) {
         collected.push(graded.grade.path);
       }
@@ -148,7 +148,7 @@ describe('grader', () => {
     });
     const pending = (async () => {
       const collected: string[] = [];
-      const stream = grader(source(paths), correct, jest.fn(), 2, 0);
+      const stream = grader(source(paths), correct, jest.fn(), 2);
       for await (const graded of stream) {
         collected.push(graded.grade.path);
       }
@@ -171,39 +171,6 @@ describe('grader', () => {
     expect(collected.sort()).toEqual(paths.slice().sort());
   });
 
-  it('abandons workbooks that exceed the timeout', async () => {
-    const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
-    const collected: string[] = [];
-    const delegates: Record<string, PromiseDelegate<void>> = Object.fromEntries(
-      paths.map(path => [path, new PromiseDelegate<void>()])
-    );
-    const correct = jest.fn(async (workbook: Headless) => {
-      await delegates[workbook.context.path].promise;
-      return grade(workbook);
-    });
-    const recover = jest.fn((workbook: Headless) => failed(workbook));
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const pending = (async () => {
-        const stream = grader(source(paths), correct, recover, 3, 10);
-        for await (const graded of stream) {
-          collected.push(graded.grade.path);
-        }
-      })();
-      await new Promise<void>(resolve => setTimeout(resolve, 50));
-      await pending;
-      expect(collected.sort()).toEqual(paths.slice().sort());
-      expect(recover).toHaveBeenCalledTimes(paths.length);
-      expect(
-        warn.mock.calls.every(
-          ([, , e]) => (e as Error).message === 'grader timeout'
-        )
-      ).toBe(true);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
   it('yields recovered grades when all workbooks fail', async () => {
     const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
     const collected: Certified[] = [];
@@ -213,7 +180,7 @@ describe('grader', () => {
     const recover = jest.fn((workbook: Headless) => failed(workbook));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const stream = grader(source(paths), correct, recover, 3, 0);
+      const stream = grader(source(paths), correct, recover, 3);
       for await (const graded of stream) {
         collected.push(graded);
       }
@@ -228,35 +195,57 @@ describe('grader', () => {
     expect(correct).toHaveBeenCalledTimes(paths.length);
   });
 
-  it('prevents concurrency leaks when tasks time out', async () => {
-    const paths = ['zombie.ipynb', 'next.ipynb'];
-    const zombie = new PromiseDelegate<Certified>();
-    const calls: string[] = [];
+  it('retries transient failures before resolving', async () => {
+    const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
+    const calls: Record<string, number> = Object.fromEntries(
+      paths.map(p => [p, 0])
+    );
     const correct = jest.fn(async (workbook: Headless) => {
-      calls.push(workbook.context.path);
-      if (workbook.context.path === 'zombie.ipynb') {
-        const result = await zombie.promise;
-        return result;
+      calls[workbook.context.path]++;
+      if (workbook.context.path === 'b.ipynb' && calls['b.ipynb'] < 3) {
+        throw new Error('transient');
       }
+      return grade(workbook);
+    });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const collected: Certified[] = [];
+    try {
+      const stream = grader(source(paths), correct, jest.fn(), 3, 2);
+      for await (const graded of stream) {
+        collected.push(graded);
+      }
+    } finally {
+      warn.mockRestore();
+    }
+    expect(collected.map(c => c.grade.path).sort()).toEqual(
+      paths.slice().sort()
+    );
+    expect(collected.every(c => c.grade.resolved)).toBe(true);
+    expect(calls['b.ipynb']).toBe(3); // failed twice, resolved on 3rd try
+    expect(correct).toHaveBeenCalledTimes(paths.length + 2);
+  });
+
+  it('recovers workbooks that exhaust all retries', async () => {
+    const paths = ['a.ipynb', 'b.ipynb'];
+    const correct = jest.fn(async (workbook: Headless) => {
+      if (workbook.context.path === 'b.ipynb') throw new Error('persistent');
       return grade(workbook);
     });
     const recover = jest.fn((workbook: Headless) => failed(workbook));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-
+    const collected: Certified[] = [];
     try {
-      const g = grader(source(paths), correct, recover, 1, 10);
-      const r1 = await g.next();
-      expect(r1.value.grade.resolved).toBe(false);
-
-      const next = g.next();
-      await new Promise(r => setTimeout(r, 20));
-      expect(calls).toEqual(['zombie.ipynb']);
-
-      zombie.resolve(grade(workbook('zombie.ipynb')));
-      await next;
-      expect(calls).toEqual(['zombie.ipynb', 'next.ipynb']);
+      const stream = grader(source(paths), correct, recover, 2, 2);
+      for await (const graded of stream) {
+        collected.push(graded);
+      }
     } finally {
       warn.mockRestore();
     }
+    expect(correct).toHaveBeenCalledTimes(1 + 3); // a=1, b=3 (initial + 2 retries)
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(
+      collected.find(c => c.grade.path === 'b.ipynb')!.grade.resolved
+    ).toBe(false);
   });
 });

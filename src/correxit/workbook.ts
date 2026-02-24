@@ -317,8 +317,6 @@ export namespace Workbook {
       await lock(workbook);
       freeze(workbook);
     }
-
-    // If timestamp() throws, certify() should fail.
     return { grade, identifier, timestamp: timestamp(workbook), workbook };
   }
 

@@ -16,13 +16,18 @@ type Settled =
  *   certified result for the consumer. The error is logged before recovery.
  * @param cap - Maximum number of workbooks being graded simultaneously.
  *   Values less than 1 are clamped to 1.
- * @param timeout - Milliseconds before a single workbook grade is abandoned.
- *   Pass `0` to disable the timeout.
+ * @param retries - How many times to retry a workbook where `correct` throws
+ *   before giving up and calling `recover`. Workbooks that return
+ *   `resolved: false` are not retried. Defaults to `0`.
  *
  * #### Notes
  * `grader` consumes `scanner` lazily: the next workbook is only fetched once a
  * concurrency slot is free, so the kernel pool never grows faster than grading
  * can drain it.
+ *
+ * Timeouts are not managed here — the kernel lease deadline (`kernels.lifespan`)
+ * is the authoritative timeout because it starts after `acquire()` resolves,
+ * not while waiting for a pool slot.
  *
  * Graded workbooks are yielded in completion order (fastest first).
  * Failures are recovered and yielded so a bad workbook cannot stall the batch.
@@ -32,52 +37,33 @@ export async function* grader(
   correct: (workbook: Headless) => Promise<Certified>,
   recover: (workbook: Headless) => Certified,
   cap: number,
-  timeout: number
+  retries: number = 0
 ): AsyncGenerator<Certified> {
   let next: (() => void) | null = null;
-  let pending = 0;
-  let grading = 0;
+  let inflight = 0;
   const max = Math.max(1, cap);
   const queue: Settled[] = [];
+  const attempts = new Map<Headless, number>();
   const sleep = () => new Promise<void>(resolve => void (next = resolve));
   const wake = () => {
     next?.();
     next = null;
   };
-  const expired = new Error('grader timeout');
-
   const start = (workbook: Headless) => {
-    pending++;
-    grading++;
-    const operation = correct(workbook);
-    const countdown = () =>
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(expired), timeout)
-      );
-    const raced = timeout ? Promise.race([operation, countdown()]) : operation;
-    void raced
+    inflight++;
+    correct(workbook)
       .then(grade => queue.push({ ok: true, grade }))
       .catch(error => queue.push({ ok: false, error, workbook }))
       .finally(() => {
-        grading--;
-        wake();
-      });
-    void operation
-      .catch(() => null)
-      .finally(() => {
-        pending--;
+        inflight--;
         wake();
       });
   };
 
   const take = async (): Promise<Settled | null> => {
     while (!queue.length) {
-      if (!grading && !pending) {
+      if (!inflight) {
         return null;
-      }
-      if (!grading && pending) {
-        await sleep();
-        continue;
       }
       await sleep();
     }
@@ -91,12 +77,19 @@ export async function* grader(
     if (item.ok) {
       return item.grade;
     }
+    const tried = (attempts.get(item.workbook) ?? 0) + 1;
+    if (tried <= retries) {
+      attempts.set(item.workbook, tried);
+      start(item.workbook);
+      return null;
+    }
+    attempts.delete(item.workbook);
     console.warn('grader error', item.workbook.context.path, item.error);
     return recover(item.workbook);
   };
 
   for await (const workbook of scanner) {
-    while (pending >= max) {
+    while (inflight >= max) {
       const grade = await emit();
       if (grade) {
         yield grade;
@@ -105,7 +98,7 @@ export async function* grader(
     start(workbook);
   }
 
-  while (grading || queue.length) {
+  while (inflight || queue.length) {
     const grade = await emit();
     if (grade) {
       yield grade;

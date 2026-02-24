@@ -69,6 +69,13 @@ export function addCommands(
     const identifier = Workbook.identifier(workbook);
     return { grade, identifier, timestamp: report.timestamp, workbook };
   };
+  const grade = async (workbook: Workbook): Promise<Certified> => {
+    const corrected = await Workbook.correct(workbook);
+    const grade = { ...corrected, path: workbook.context.path };
+    const identifier = Workbook.identifier(workbook);
+    const timestamp = Workbook.timestamp(workbook);
+    return { grade, identifier, timestamp, workbook };
+  };
   const recover = (workbook: Headless): Certified => {
     const path = workbook.context.path;
     const grade: Grade = {
@@ -97,13 +104,8 @@ export function addCommands(
         const handle: Partial<Workbook.Credentials> = normalize(args) || {};
         const auth = handle.key || handle.passphrase;
         const credentials = auth ? handle : { ...handle, unlock: true };
-        const grade = async (workbook: Workbook): Promise<Certified> => {
-          const corrected = await Workbook.correct(workbook);
-          const grade = { ...corrected, path: workbook.context.path };
-          const identifier = Workbook.identifier(workbook);
-          const timestamp = Workbook.timestamp(workbook);
-          return { grade, identifier, timestamp, workbook };
-        };
+        const cap = kernels.cap();
+        const retries = kernels.retries();
         const correct = async (workbook: Workbook): Promise<Certified> => {
           const rubric = Workbook.open(workbook, true);
           if (!rubric || rubric.locked) {
@@ -126,24 +128,7 @@ export function addCommands(
           }
         };
         const grades = async function* (): AsyncGenerator<Certified> {
-          const cap = kernels.cap();
-          const timeout = kernels.timeout();
-          const retries = kernels.retries();
-          let source: Iterable<Headless> | AsyncIterable<Headless> = scanner();
-          for (let pass = 0; pass <= retries; pass++) {
-            const failed: Headless[] = [];
-            const certifier = grader(source, correct, recover, cap, timeout);
-            for await (const certified of certifier) {
-              if (!certified.grade.resolved) {
-                failed.push(certified.workbook as Headless);
-              }
-              yield certified;
-            }
-            if (!failed.length) {
-              break;
-            }
-            source = failed;
-          }
+          yield* grader(scanner(), correct, recover, cap, retries);
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
           for await (const { grade, workbook } of stream) {

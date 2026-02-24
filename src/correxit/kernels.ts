@@ -25,6 +25,7 @@ const waiters: Array<() => void> = [];
 let attempts = 1;
 let lifespan = 60;
 let live = 0;
+let recycling = 0;
 let workers = 3;
 
 
@@ -41,7 +42,7 @@ export function configure({ concurrency, retries, timeout }: Config): void {
   attempts = Math.max(0, retries);
   lifespan = Math.max(0, timeout);
   workers = Math.max(1, concurrency);
-  while (live < workers && waiters.length) {
+  while (live + recycling < workers && waiters.length) {
     waiters.shift()!();
   }
 }
@@ -56,6 +57,7 @@ export function drain(): void {
   }
   pool.clear();
   live = 0;
+  recycling = 0;
   workers = 3;
   waiters.length = 0;
 }
@@ -127,7 +129,7 @@ export function timeout(): number {
 
 /** Blocks until a slot opens, then claims it. */
 async function acquire(): Promise<void> {
-  while (live >= workers) {
+  while (live + recycling >= workers) {
     await new Promise<void>(resolve => waiters.push(resolve));
   }
   live++;
@@ -162,12 +164,19 @@ function keep(kernel: Kernel.IKernelConnection): void {
 
 /** Restarts a kernel and returns it to the pool, or disposes on failure. */
 async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
-  relinquish();
+  live--;
+  recycling++;
   try {
-    await kernel.restart();
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('restart timeout')), 10_000)
+    );
+    await Promise.race([kernel.restart(), timeout]);
     keep(kernel);
   } catch {
     dispose(kernel);
+  } finally {
+    recycling--;
+    waiters.shift()?.();
   }
 }
 
