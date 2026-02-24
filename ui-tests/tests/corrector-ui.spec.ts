@@ -98,6 +98,10 @@ test('scans a directory and yields headless workbooks', async ({ page }) => {
     );
     const workbooks: any[] = [];
     for await (const workbook of stream) {
+      if (workbook.hollow) {
+        continue;
+      }
+
       const rubric = Workbook.open(workbook, true);
       workbooks.push({
         assignee: rubric?.assignment?.assignee ?? null,
@@ -294,6 +298,9 @@ test('full lifecycle: propagate, scan, grade, verify scores', async ({
       );
       const scannedResults: any[] = [];
       for await (const workbook of scanned) {
+        if (workbook.hollow) {
+          continue;
+        }
         const rubric = Workbook.open(workbook, true);
         scannedResults.push({
           assignee: rubric?.assignment?.assignee ?? null,

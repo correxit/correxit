@@ -106,15 +106,16 @@ export function addCommands(
         const credentials = auth ? handle : { ...handle, unlock: true };
         const cap = kernels.cap();
         const retries = kernels.retries();
-        const correct = async (workbook: Workbook): Promise<Certified> => {
+        const correct = async (workbook: Headless): Promise<Certified> => {
           const rubric = Workbook.open(workbook, true);
           if (!rubric || rubric.locked) {
-            return recover(workbook as Headless);
+            return recover(workbook);
           }
           const existing = certified(workbook);
           if (existing) {
             return existing;
           }
+
           const graded = await (commit ? certify(workbook) : grade(workbook));
           await save(commit ? workbook : null);
           return graded;
