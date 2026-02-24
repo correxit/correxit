@@ -162,13 +162,13 @@ function keep(kernel: Kernel.IKernelConnection): void {
 
 /** Restarts a kernel and returns it to the pool, or disposes on failure. */
 async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
-  const ok = await kernel.restart().then(() => true, () => false);
-  if (ok) {
+  relinquish();
+  try {
+    await kernel.restart();
     keep(kernel);
-  } else {
+  } catch {
     dispose(kernel);
   }
-  relinquish();
 }
 
 /** Frees one slot and wakes the next blocked caller. */

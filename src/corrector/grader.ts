@@ -35,7 +35,8 @@ export async function* grader(
   timeout: number
 ): AsyncGenerator<Certified> {
   let next: (() => void) | null = null;
-  let running = 0;
+  let pending = 0;
+  let grading = 0;
   const max = Math.max(1, cap);
   const queue: Settled[] = [];
   const sleep = () => new Promise<void>(resolve => void (next = resolve));
@@ -44,36 +45,39 @@ export async function* grader(
     next = null;
   };
   const expired = new Error('grader timeout');
-  const task = async (workbook: Headless) => {
-    if (timeout === 0) {
-      return correct(workbook);
-    }
 
-    let handle: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const countdown = new Promise<never>((_, reject) => {
-        handle = setTimeout(() => reject(expired), timeout);
-      });
-      return await Promise.race([correct(workbook), countdown]);
-    } finally {
-      clearTimeout(handle);
-    }
-  };
   const start = (workbook: Headless) => {
-    running++;
-    void task(workbook)
+    pending++;
+    grading++;
+    const operation = correct(workbook);
+    const countdown = () =>
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(expired), timeout)
+      );
+    const raced = timeout ? Promise.race([operation, countdown()]) : operation;
+    void raced
       .then(grade => queue.push({ ok: true, grade }))
       .catch(error => queue.push({ ok: false, error, workbook }))
       .finally(() => {
-        running--;
+        grading--;
+        wake();
+      });
+    void operation
+      .catch(() => null)
+      .finally(() => {
+        pending--;
         wake();
       });
   };
 
   const take = async (): Promise<Settled | null> => {
     while (!queue.length) {
-      if (!running) {
+      if (!grading && !pending) {
         return null;
+      }
+      if (!grading && pending) {
+        await sleep();
+        continue;
       }
       await sleep();
     }
@@ -92,16 +96,16 @@ export async function* grader(
   };
 
   for await (const workbook of scanner) {
-    start(workbook);
-    if (queue.length || running >= max) {
+    while (pending >= max) {
       const grade = await emit();
       if (grade) {
         yield grade;
       }
     }
+    start(workbook);
   }
 
-  while (running || queue.length) {
+  while (grading || queue.length) {
     const grade = await emit();
     if (grade) {
       yield grade;

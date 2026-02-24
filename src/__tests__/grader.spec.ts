@@ -227,4 +227,36 @@ describe('grader', () => {
     expect(collected.every(c => !c.grade.resolved)).toBe(true);
     expect(correct).toHaveBeenCalledTimes(paths.length);
   });
+
+  it('prevents concurrency leaks when tasks time out', async () => {
+    const paths = ['zombie.ipynb', 'next.ipynb'];
+    const zombie = new PromiseDelegate<Certified>();
+    const calls: string[] = [];
+    const correct = jest.fn(async (workbook: Headless) => {
+      calls.push(workbook.context.path);
+      if (workbook.context.path === 'zombie.ipynb') {
+        const result = await zombie.promise;
+        return result;
+      }
+      return grade(workbook);
+    });
+    const recover = jest.fn((workbook: Headless) => failed(workbook));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const g = grader(source(paths), correct, recover, 1, 10);
+      const r1 = await g.next();
+      expect(r1.value.grade.resolved).toBe(false);
+
+      const next = g.next();
+      await new Promise(r => setTimeout(r, 20));
+      expect(calls).toEqual(['zombie.ipynb']);
+
+      zombie.resolve(grade(workbook('zombie.ipynb')));
+      await next;
+      expect(calls).toEqual(['zombie.ipynb', 'next.ipynb']);
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
