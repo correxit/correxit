@@ -11,7 +11,8 @@ import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
 import {
   addCommands as ADD_COMMANDS,
-  CommandIDs as COMMAND_IDS
+  CommandIDs as COMMAND_IDS,
+  Scanned
 } from './commands';
 import { CorrectorStatus, CorrectorWidget } from './widget';
 
@@ -24,7 +25,7 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 const FAILED = 'cxt-mod-failed';
 const PENDING = 'cxt-mod-pending';
 const SELECTED = 'cxt-mod-selected';
-const { batch, count, scan } = COMMAND_IDS;
+const { batch, scan } = COMMAND_IDS;
 const { basename } = PathExt;
 
 /**
@@ -72,35 +73,35 @@ const logo = (spec: Exclude<Workbook.Grade['spec'], null>) => {
 /**
  * @returns A workbook or `null` if path matches workbook context.
  */
-const match = (workbooks: Headless[], path = '') =>
-  find(workbooks, ({ context }) => context.path === path) || null;
+const match = (workbooks: Scanned[], path = ''): Headless | null =>
+  (find(workbooks, workbook => {
+    return workbook.context.path === path && !workbook.hollow;
+  }) || null) as Headless | null;
 
 /**
  * @returns A merged list workbooks that prioritizes the graded collection.
  */
-const merge = (workbooks: Headless[], grades: Collated) => {
-  const known = new Set(workbooks.map(({ context }) => context.path));
-  const merged = workbooks.map(workbook => {
-    const path = workbook.context.path;
-    return grades.get(path)?.workbook ?? workbook;
-  });
-  for (const [path, file] of grades) {
-    if (!known.has(path)) {
-      merged.push(file.workbook);
-    }
+const merge = (scanned: Scanned[], grades: Collated) => {
+  const latest = new Map<string, Scanned>();
+  for (const workbook of scanned) {
+    latest.set(workbook.context.path, workbook);
   }
-  return merged;
+  for (const [path, file] of grades) {
+    latest.set(path, file.workbook);
+  }
+  return Array.from(latest.values());
 };
 
 /**
  * Open a workbook rubric quietly.
  */
-const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
+const open = (workbook: Scanned | null) =>
+  workbook && !workbook.hollow ? Workbook.open(workbook, true) : null;
 
 /**
  * Collect workbook paths as a set.
  */
-const paths = (workbooks: Headless[]) =>
+const paths = (workbooks: Scanned[]) =>
   new Set(workbooks.map(({ context }) => context.path));
 
 /**
@@ -125,18 +126,19 @@ const prune = (
  */
 const reconcile = (
   cached: { [path: string]: Headless },
-  workbooks: Headless[],
+  workbooks: Scanned[],
   focus: string | null
 ) => {
+  const headless = (item: Scanned): item is Headless => !item.hollow;
   prune(cached, paths(workbooks), focus);
-  cache(cached, workbooks);
+  cache(cached, workbooks.filter(headless));
 };
 
 /**
  * @returns the grade for a workbook given current batch and scan state.
  */
 const resolve = (
-  workbook: Headless,
+  workbook: Scanned,
   collated: Collated,
   graded: boolean
 ): Grade | 'pending' => {
@@ -144,7 +146,7 @@ const resolve = (
   if (collated.has(path)) {
     return collated.get(path)!.grade;
   }
-  if (!graded) {
+  if (workbook.hollow || !graded) {
     return 'pending';
   }
   const rubric = open(workbook);
@@ -154,23 +156,13 @@ const resolve = (
 };
 
 const Progress: React.FC<{
-  commands: CommandRegistry;
   graded: boolean;
   grading: boolean;
   collated: Collated;
-  path: string;
+  max: number;
   trans: TranslationBundle;
-}> = ({ collated, commands, graded, grading, path, trans }) => {
+}> = ({ collated, graded, grading, max, trans }) => {
   const peak = useRef(0);
-  const [max, setMax] = useState(0);
-  useEffect(() => {
-    if (grading) {
-      void commands.execute(count, { path }).then(setMax);
-      return;
-    }
-    peak.current = 0;
-    setMax(0);
-  }, [grading]);
   if (!grading || !max || graded) {
     return <></>;
   }
@@ -194,7 +186,7 @@ export function Corrector(props: Corrector.Props) {
     grade: { certify: mode === 'certify', path, unlock: mode !== 'scan' },
     scan: { path, unlock: !grading && mode !== 'scan' }
   };
-  const [workbooks, scanned] = useCommand<Headless>(commands, scan, args.scan);
+  const [workbooks, scanned] = useCommand<Scanned>(commands, scan, args.scan);
   const [grades, graded] = useCommand<Batched>(commands, grade, args.grade);
   const collated: Collated = new Map(grades);
   const merged = merge(workbooks, collated);
@@ -208,7 +200,7 @@ export function Corrector(props: Corrector.Props) {
   useEffect(() => reconcile(cached.current, merged, focus), [focus, merged]);
   return (
     <>
-      <Progress {...{ collated, commands, graded, grading, path, trans }} />
+      <Progress {...{ collated, graded, grading, max: merged.length, trans }} />
       <table className="correxit-corrector">
         {merged.map(workbook => {
           const { path } = workbook.context;
@@ -244,6 +236,16 @@ export namespace Corrector {
   export const Widget = CorrectorWidget;
 }
 
+const HollowRow: React.FC<{
+  className: string;
+  path: string;
+}> = ({ className, path }) => (
+  <tr {...{ className }}>
+    <td colSpan={5}>{basename(path)}</td>
+    <Pending columns={2} />
+  </tr>
+);
+
 const Row: React.FC<{
   commands: CommandRegistry;
   grade: Grade | 'pending';
@@ -251,7 +253,7 @@ const Row: React.FC<{
   select: (path: string) => void;
   selected: boolean;
   trans: TranslationBundle;
-  workbook: Workbook.Headless;
+  workbook: Scanned;
 }> = React.memo(props => {
   const { commands, grade, graded, select, selected, trans, workbook } = props;
   const { path } = workbook.context;
@@ -260,6 +262,9 @@ const Row: React.FC<{
   const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');
+  if (workbook.hollow) {
+    return <HollowRow {...{ className, path }} />;
+  }
   return (
     <tr className={className} onClick={() => select(selected ? '' : path)}>
       <Notebook {...{ commands, trans, workbook }} />

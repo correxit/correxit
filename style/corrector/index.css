@@ -112,17 +112,15 @@ td.correxit-corrector-score-report {
   text-align: right;
 }
 
-td.correxit-corrector-spec {
-  width: 150px;
-
-  .correxit-corrector-spec-name {
-    font-family: var(--jp-code-font-family-default);
-  }
+td.correxit-corrector-pending {
+  position: relative;
 }
 
 td.correxit-corrector-pending > span {
   position: absolute;
   right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   align-items: center;
   display: flex;
   gap: 2px;

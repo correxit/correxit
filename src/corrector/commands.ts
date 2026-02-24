@@ -15,7 +15,6 @@ import { grader } from './grader';
 export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
-  export const count = 'correxit-corrector:count';
   export const launch = 'correxit-corrector:launch';
   export const scan = 'correxit-corrector:scan';
 }
@@ -24,6 +23,10 @@ type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
+
+export type Hollow = { hollow: true; context: { path: string } };
+
+export type Scanned = (Headless & { hollow?: undefined }) | Hollow;
 
 export function addCommands(
   app: JupyterFrontEnd,
@@ -114,14 +117,19 @@ export function addCommands(
           await save(commit ? workbook : null);
           return graded;
         };
-        const scanner = (): Promise<AsyncGenerator<Headless>> =>
-          commands.execute(CommandIDs.scan, credentials);
+        const scanner = async function* (): AsyncGenerator<Headless> {
+          const stream = await commands.execute(CommandIDs.scan, credentials);
+          for await (const workbook of stream as AsyncIterable<Scanned>) {
+            if (!workbook.hollow) {
+              yield workbook;
+            }
+          }
+        };
         const grades = async function* (): AsyncGenerator<Certified> {
           const cap = kernels.cap();
           const timeout = kernels.timeout();
           const retries = kernels.retries();
-          let source: Iterable<Headless> | AsyncIterable<Headless> =
-            await scanner();
+          let source: Iterable<Headless> | AsyncIterable<Headless> = scanner();
           for (let pass = 0; pass <= retries; pass++) {
             const failed: Headless[] = [];
             const certifier = grader(source, correct, recover, cap, timeout);
@@ -175,24 +183,6 @@ export function addCommands(
   );
 
   disposables.push(
-    commands.addCommand(CommandIDs.count, {
-      label: trans.__('Count Correxit workbooks in a directory'),
-      execute: async ({ path }: { path?: string }): Promise<number> => {
-        const directory = path || '.';
-        const notebook = ({ type }: Contents.IModel) => type === 'notebook';
-        try {
-          const response = await manager.contents.get(directory);
-          if (response.type !== 'directory') {
-            return 0;
-          }
-          return Array.from(filter(response.content, notebook)).length;
-        } catch {
-          return 0;
-        }
-      }
-    })
-  );
-  disposables.push(
     commands.addCommand(CommandIDs.launch, {
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
@@ -230,7 +220,7 @@ export function addCommands(
           }
         }
       },
-      execute: (handle: Partial<Credentials>): AsyncGenerator<Headless> =>
+      execute: (handle: Partial<Credentials>): AsyncGenerator<Scanned> =>
         (async function* (handle) {
           const directory = handle && handle.path;
           const notebook = ({ type }: Contents.IModel) => type === 'notebook';
@@ -250,8 +240,12 @@ export function addCommands(
             console.warn(CommandIDs.scan, directory, 'not a directory');
             return;
           }
+          const files = Array.from(filter(sort(response.content), notebook));
+          for (const { path } of files) {
+            yield { hollow: true, context: { path } };
+          }
           let prompted = false;
-          for (const { path } of filter(sort(response.content), notebook)) {
+          for (const { path } of files) {
             const fetched = await fetch({ ...handle, path }, prompted);
             prompted = true;
             if (fetched) {
