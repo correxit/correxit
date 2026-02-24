@@ -134,12 +134,7 @@ async function attempt(
   workbook: Workbook,
   key: string
 ): Promise<Rubric.Unlocked | null> {
-  return await Workbook.unlock(workbook, key).catch(error => {
-    if (error === Correxit.STRUCTURAL_ERROR) {
-      throw error;
-    }
-    return null;
-  });
+  return await Workbook.unlock(workbook, key).catch(() => null);
 }
 
 async function prompt(
