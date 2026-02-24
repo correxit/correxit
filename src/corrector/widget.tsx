@@ -128,13 +128,6 @@ class Content extends ReactWidget {
   protected props: Corrector.Props & { key?: string };
 }
 
-const MODES: { label: string; value: Corrector.Mode }[] = [
-  { value: 'scan', label: 'Scan' },
-  { value: 'unlock', label: 'Scan & Unlock' },
-  { value: 'grade', label: 'Grade' },
-  { value: 'certify', label: 'Grade & Certify' }
-];
-
 class ModeSelector extends ReactWidget {
   constructor(options: {
     go: (mode: Corrector.Mode) => void;
@@ -164,6 +157,12 @@ class ModeSelector extends ReactWidget {
 
   render() {
     const { go, mode, trans } = this;
+    const modes: { label: string; value: Corrector.Mode }[] = [
+      { value: 'scan', label: 'Scan' },
+      { value: 'unlock', label: 'Scan & Unlock' },
+      { value: 'grade', label: 'Grade' },
+      { value: 'certify', label: 'Grade & Certify' }
+    ];
     return (
       <>
         <span
@@ -171,7 +170,7 @@ class ModeSelector extends ReactWidget {
           role="group"
           aria-label={trans.__('Corrector mode')}
         >
-          {MODES.map(({ value, label }) => (
+          {modes.map(({ value, label }) => (
             <label key={value}>
               <input
                 type="radio"

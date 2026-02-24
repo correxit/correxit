@@ -213,7 +213,7 @@ export function Corrector(props: Corrector.Props) {
         {merged.map(workbook => {
           const { path } = workbook.context;
           const grade = resolve(workbook, collated, graded);
-          const select = (selection: string) => setSelection(selection);
+          const select = setSelection;
           const props = { commands, grade, graded, select, trans, workbook };
           return <Row key={path} selected={path === selection} {...props} />;
         })}
@@ -223,7 +223,8 @@ export function Corrector(props: Corrector.Props) {
 }
 
 export namespace Corrector {
-  export type Mode = 'scan' | 'unlock' | 'grade' | 'certify';
+  export type Mode = 'certify' | 'grade' | 'scan' | 'unlock';
+
   export type Props = {
     active: boolean;
     commands: CommandRegistry;
@@ -232,8 +233,11 @@ export namespace Corrector {
     path: string;
     trans: TranslationBundle;
   };
+
   export type Status = CorrectorStatus;
+
   export type Widget = CorrectorWidget;
+
   export const addCommands = ADD_COMMANDS;
   export const CommandIDs = COMMAND_IDS;
   export const Status = CorrectorStatus;
