@@ -26,7 +26,7 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
   }
   set path(path: string) {
     this.content.set({ path: PathExt.normalize(path) });
-    this.modes?.reset();
+    this.selector?.reset();
     this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
   }
 
@@ -37,22 +37,25 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
 
   protected commands: CommandRegistry;
   protected indicator: CorrectorStatus | null;
-  protected modes: ModeSelector | null = null;
+  protected selector: ModeSelector | null = null;
   protected trans: IRenderMime.TranslationBundle;
 
   protected async initialize() {
     const { commands, content, indicator, toolbar, trans } = this;
-    const notify = (updates: { graded: boolean; scanned: boolean }) =>
+    const go = (mode: Corrector.Mode) =>
+      content.set({ active: true, key: `${Date.now()}`, mode });
+    const interrupt = () => content.set({ active: false });
+    const selector = new ModeSelector({ go, interrupt, trans });
+    const notify = (updates: Corrector.Notification) => {
       indicator?.set(updates);
+      selector?.set(updates);
+    };
     const cd = new CommandToolbarButton({
       commands,
       id: Corrector.CommandIDs.cd,
       noFocusOnClick: true
     });
-    const go = (mode: Corrector.Mode) =>
-      content.set({ active: true, key: `${Date.now()}`, mode });
-    const selector = new ModeSelector({ go, trans });
-    this.modes = selector;
+    this.selector = selector;
     toolbar.addItem('cd', cd);
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
     toolbar.addItem('mode', selector);
@@ -131,10 +134,12 @@ class Content extends ReactWidget {
 class ModeSelector extends ReactWidget {
   constructor(options: {
     go: (mode: Corrector.Mode) => void;
+    interrupt: () => void;
     trans: IRenderMime.TranslationBundle;
   }) {
     super();
     this.go = options.go;
+    this.interrupt = options.interrupt;
     this.trans = options.trans;
     this.addClass('correxit-corrector-mode');
   }
@@ -156,38 +161,63 @@ class ModeSelector extends ReactWidget {
   }
 
   render() {
-    const { go, mode, trans } = this;
-    const modes: { label: string; value: Corrector.Mode }[] = [
-      { value: 'scan', label: 'Scan' },
-      { value: 'unlock', label: 'Scan & Unlock' },
-      { value: 'grade', label: 'Grade' },
-      { value: 'certify', label: 'Grade & Certify' }
+    const { busy, go, interrupt, mode, trans } = this;
+    const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
+      {
+        value: 'scan',
+        label: trans.__('Scan'),
+        tooltip: trans.__('Scan for workbooks, leave them locked')
+      },
+      {
+        value: 'unlock',
+        label: trans.__('Scan & Unlock'),
+        tooltip: trans.__('Scan for workbooks, unlock them')
+      },
+      {
+        value: 'grade',
+        label: trans.__('Grade'),
+        tooltip: trans.__('Unlock and grade workbooks (read-only, no save)')
+      },
+      {
+        value: 'certify',
+        label: trans.__('Grade & Certify'),
+        tooltip: trans.__('Unlock workbooks and collect grades, (save file)')
+      }
     ];
+
+    const action = busy ? interrupt : () => go(mode);
+    const label = busy ? trans.__('Interrupt') : trans.__('Go');
+    const className = `correxit-corrector-mode-go ${
+      busy ? 'jp-mod-warn' : 'jp-mod-accept'
+    }`;
+    const description = busy
+      ? trans.__('Interrupt the current operation')
+      : trans.__('Execute selected mode');
+
     return (
       <>
-        <span
+        <fieldset
           className="correxit-corrector-mode-options"
-          role="group"
           aria-label={trans.__('Corrector mode')}
+          style={{ border: 0, padding: 0, margin: 0 }}
         >
-          {modes.map(({ value, label }) => (
-            <label key={value}>
+          {modes.map(({ label, tooltip, value }) => (
+            <label key={value} title={tooltip}>
               <input
                 type="radio"
                 name="correxit-mode"
                 value={value}
                 checked={mode === value}
                 onChange={() => this.select(value)}
+                aria-label={label}
+                aria-description={tooltip}
               />
-              <span>{trans.__(label)}</span>
+              <span>{label}</span>
             </label>
           ))}
-        </span>
-        <button
-          className="correxit-corrector-mode-go jp-mod-accept"
-          onClick={() => go(mode)}
-        >
-          {trans.__('Go')}
+        </fieldset>
+        <button className={className} onClick={action} aria-label={description}>
+          {label}
         </button>
       </>
     );
@@ -197,12 +227,20 @@ class ModeSelector extends ReactWidget {
     this.select('scan');
   }
 
+  set(updates: Corrector.Notification) {
+    const idle = updates.graded && updates.scanned;
+    this.busy = !idle && updates.mode !== 'scan';
+    this.update();
+  }
+
   private select(mode: Corrector.Mode) {
     this.mode = mode;
     this.update();
   }
 
+  protected busy = false;
   protected go: (mode: Corrector.Mode) => void;
+  protected interrupt: () => void;
   protected mode: Corrector.Mode = 'scan';
   protected trans: IRenderMime.TranslationBundle;
 }

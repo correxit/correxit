@@ -196,7 +196,7 @@ export function Corrector(props: Corrector.Props) {
   const focus = workbook?.context.path || null;
   useEffect(() => () => dispose(Object.values(cached.current)), []);
   useEffect(() => inject(commands, workbook), [workbook]);
-  useEffect(() => notify({ graded, scanned }), [graded, scanned]);
+  useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
   useEffect(() => reconcile(cached.current, merged, focus), [focus, merged]);
   return (
     <>
@@ -217,11 +217,13 @@ export function Corrector(props: Corrector.Props) {
 export namespace Corrector {
   export type Mode = 'certify' | 'grade' | 'scan' | 'unlock';
 
+  export type Notification = { graded: boolean; scanned: boolean; mode: Mode };
+
   export type Props = {
     active: boolean;
     commands: CommandRegistry;
     mode: Mode;
-    notify: (updates: { graded: boolean; scanned: boolean }) => void;
+    notify: (updates: Notification) => void;
     path: string;
     trans: TranslationBundle;
   };
