@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/QuantStack/correxit/compare/v1.1.1...v1.2.0) (2026-02-25)
+
+
+### Features
+
+* better corrector ([#37](https://github.com/QuantStack/correxit/issues/37)) ([e91afc0](https://github.com/QuantStack/correxit/commit/e91afc0a9e169510b1009030d3c3d0ff07718b56))
+
 ## [1.1.1](https://github.com/QuantStack/correxit/compare/v1.1.0...v1.1.1) (2026-02-21)
 
 
