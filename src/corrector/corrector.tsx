@@ -179,15 +179,14 @@ const Progress: React.FC<{
 };
 
 export function Corrector(props: Corrector.Props) {
-  const { active, commands, mode, notify, path, trans } = props;
-  const grading = active && (mode === 'grade' || mode === 'certify');
+  const { active, commands, mode, notify, overwrite, path, trans } = props;
+  const certify = mode === 'certify';
+  const grading = active && (mode === 'grade' || certify);
+  const handle = { path, unlock: !grading && mode !== 'scan' };
+  const [workbooks, scanned] = useCommand<Scanned>(commands, scan, handle);
   const grade = grading ? batch : '';
-  const args = {
-    grade: { certify: mode === 'certify', path, unlock: mode !== 'scan' },
-    scan: { path, unlock: !grading && mode !== 'scan' }
-  };
-  const [workbooks, scanned] = useCommand<Scanned>(commands, scan, args.scan);
-  const [grades, graded] = useCommand<Batched>(commands, grade, args.grade);
+  const config = { certify, overwrite, path, unlock: mode !== 'scan' };
+  const [grades, graded] = useCommand<Batched>(commands, grade, config);
   const collated: Collated = new Map(grades);
   const merged = merge(workbooks, collated);
   const cached = useRef({} as { [path: string]: Headless });
@@ -224,6 +223,7 @@ export namespace Corrector {
     commands: CommandRegistry;
     mode: Mode;
     notify: (updates: Notification) => void;
+    overwrite: boolean;
     path: string;
     trans: TranslationBundle;
   };
@@ -234,6 +234,7 @@ export namespace Corrector {
 
   export const addCommands = ADD_COMMANDS;
   export const CommandIDs = COMMAND_IDS;
+  export const Modes: Readonly<Mode[]> = ['scan', 'unlock', 'grade', 'certify'];
   export const Status = CorrectorStatus;
   export const Widget = CorrectorWidget;
 }

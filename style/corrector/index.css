@@ -193,6 +193,31 @@ td.correxit-corrector-failed {
   gap: 4px;
 }
 
+.correxit-corrector-mode-options label input {
+  margin: 0;
+  vertical-align: middle;
+}
+
+.correxit-corrector-overwrite {
+  align-items: center;
+  color: var(--jp-ui-font-color1);
+  display: flex;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  gap: 4px;
+  margin-right: 4px;
+}
+
+.correxit-corrector-overwrite input {
+  margin: 0;
+  vertical-align: middle;
+}
+
+.correxit-corrector-mode:not(.cxt-mod-certify) .correxit-corrector-overwrite {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .correxit-corrector-mode-go {
   background-color: var(--jp-brand-color1);
   border: none;

@@ -98,9 +98,9 @@ export function addCommands(
     commands.addCommand(CommandIDs.batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
-        args: Partial<Credentials & { certify: boolean }>
+        args: Partial<Credentials & { certify: boolean; overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const commit = !!args.certify;
+        const { certify: commit, overwrite } = args;
         const handle: Partial<Workbook.Credentials> = normalize(args) || {};
         const auth = handle.key || handle.passphrase;
         const credentials = auth ? handle : { ...handle, unlock: true };
@@ -112,7 +112,7 @@ export function addCommands(
             return recover(workbook);
           }
           const existing = certified(workbook);
-          if (existing) {
+          if (existing && !overwrite) {
             return existing;
           }
 
