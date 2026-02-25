@@ -103,7 +103,6 @@ export function addCommands(
       }
     })
   );
-
   disposables.push(
     commands.addCommand(CommandIDs.launch, {
       label: trans.__('Launch Correxit Corrector'),
@@ -134,14 +133,6 @@ export function addCommands(
   disposables.push(
     commands.addCommand(CommandIDs.scan, {
       label: trans.__('Scan a directory for Correxit workbooks'),
-      describedBy: {
-        args: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', description: trans.__('Optional path') }
-          }
-        }
-      },
       execute: (handle: Partial<Credentials>): AsyncGenerator<Scanned> =>
         (async function* scanner(handle) {
           const directory = handle && handle.path;

@@ -337,26 +337,6 @@ export function addCommands(
   }));
   disposables.push(commands.addCommand(CommandIDs.fetch, {
     label: trans.__('Fetch a headless Correxit workbook for a given path'),
-    describedBy: {
-      args: {
-        type: 'object',
-        required: ['path'],
-        properties: {
-          key: {
-            type: 'string',
-            description: trans.__('Optional rubric key')
-          },
-          passphrase: {
-            type: 'string',
-            description: trans.__('Optional workbook passphrase')
-          },
-          path: {
-            type: 'string',
-            description: trans.__('Workbook path')
-          }
-        }
-      }
-    },
     execute: async (args: Partial<Credentials & { silent: boolean }>):
       Promise<Headless | null> => {
       const handle = normalize(args);
