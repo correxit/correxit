@@ -182,10 +182,9 @@ export function Corrector(props: Corrector.Props) {
   const { active, commands, mode, notify, overwrite, path, trans } = props;
   const certify = mode === 'certify';
   const grading = active && (mode === 'grade' || certify);
-  const handle = { path, unlock: !grading && mode !== 'scan' };
-  const [workbooks, scanned] = useCommand<Scanned>(commands, scan, handle);
+  const [workbooks, scanned] = useCommand<Scanned>(commands, scan, { path });
   const grade = grading ? batch : '';
-  const config = { certify, overwrite, path, unlock: mode !== 'scan' };
+  const config = { certify, overwrite, path, unlock: true };
   const [grades, graded] = useCommand<Batched>(commands, grade, config);
   const collated: Collated = new Map(grades);
   const merged = merge(workbooks, collated);
@@ -214,7 +213,7 @@ export function Corrector(props: Corrector.Props) {
 }
 
 export namespace Corrector {
-  export type Mode = 'certify' | 'grade' | 'scan' | 'unlock';
+  export type Mode = 'certify' | 'grade' | 'scan';
 
   export type Notification = { graded: boolean; scanned: boolean; mode: Mode };
 
@@ -234,7 +233,7 @@ export namespace Corrector {
 
   export const addCommands = ADD_COMMANDS;
   export const CommandIDs = COMMAND_IDS;
-  export const Modes: Readonly<Mode[]> = ['scan', 'unlock', 'grade', 'certify'];
+  export const Modes: Readonly<Mode[]> = ['scan', 'grade', 'certify'];
   export const Status = CorrectorStatus;
   export const Widget = CorrectorWidget;
 }

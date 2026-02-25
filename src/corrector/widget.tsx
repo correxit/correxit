@@ -171,11 +171,6 @@ class ModeSelector extends ReactWidget {
         tooltip: trans.__('Scan for workbooks, leave them locked')
       },
       {
-        value: 'unlock',
-        label: trans.__('Scan & Unlock'),
-        tooltip: trans.__('Scan for workbooks, unlock them')
-      },
-      {
         value: 'grade',
         label: trans.__('Grade'),
         tooltip: trans.__('Unlock and grade workbooks (read-only, no save)')

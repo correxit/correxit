@@ -193,7 +193,7 @@ td.correxit-corrector-failed {
   gap: 4px;
 }
 
-.correxit-corrector-mode-options label input {
+.correxit-corrector-mode-options input {
   margin: 0;
   vertical-align: middle;
 }
