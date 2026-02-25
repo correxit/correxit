@@ -232,9 +232,13 @@ export namespace Corrector {
   export type Widget = CorrectorWidget;
 
   export const addCommands = ADD_COMMANDS;
+
   export const CommandIDs = COMMAND_IDS;
+
   export const Modes: Readonly<Mode[]> = ['scan', 'grade', 'certify'];
+
   export const Status = CorrectorStatus;
+
   export const Widget = CorrectorWidget;
 }
 
