@@ -81,6 +81,7 @@ td.correxit-corrector-assignee {
 
 td.correxit-corrector-breakdown {
   overflow: hidden;
+  width: 100%;
 }
 
 .correxit-corrector-breakdown-bar {
@@ -107,16 +108,37 @@ td.correxit-corrector-breakdown {
   background-color: var(--jp-border-color2);
 }
 
-td.correxit-corrector-score-report {
+tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
+  animation: correxit-corrector-pending-pulse 1.4s infinite ease-in-out;
+  opacity: 0.6;
+}
+
+@keyframes correxit-corrector-pending-pulse {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+td.correxit-corrector-score-report,
+td.correxit-corrector-pending,
+td.correxit-corrector-failed {
   width: 60px;
   text-align: right;
 }
 
-td.correxit-corrector-pending {
+td.correxit-corrector-pending,
+td.correxit-corrector-failed {
   position: relative;
+  overflow: hidden;
 }
 
-td.correxit-corrector-pending > span {
+td.correxit-corrector-pending > span,
+td.correxit-corrector-failed > span {
   position: absolute;
   right: 0;
   top: 50%;

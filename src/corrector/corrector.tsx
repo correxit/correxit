@@ -243,8 +243,13 @@ const HollowRow: React.FC<{
   path: string;
 }> = ({ className, path }) => (
   <tr {...{ className }}>
-    <td colSpan={5}>{basename(path)}</td>
-    <Pending columns={2} />
+    <td className="correxit-corrector-open" />
+    <td className="correxit-corrector-lock" />
+    <td className="correxit-corrector-assignment" />
+    <td className="correxit-corrector-assignee">{basename(path)}</td>
+    <td className="correxit-corrector-breakdown" />
+    <td className="correxit-corrector-kernel" />
+    <Pending />
   </tr>
 );
 
@@ -284,7 +289,7 @@ const Breakdown: React.FC<{
   workbook: Workbook.Headless;
 }> = ({ failed, workbook }) => {
   if (failed) {
-    return <></>;
+    return <td className="correxit-corrector-breakdown" />;
   }
   const rubric = open(workbook);
   const notebook = workbook.context.model.sharedModel;
@@ -300,9 +305,10 @@ const Breakdown: React.FC<{
     <td className="correxit-corrector-breakdown">
       <span className="correxit-corrector-breakdown-bar">
         {breakdown.map(id => {
+          const status = scores[id]?.status || 'unscored';
           const className = [
             'correxit-corrector-breakdown-segment',
-            `correxit-corrector-breakdown-${scores[id]?.status ?? 'unscored'}`
+            `correxit-corrector-breakdown-${status}`
           ].join(' ');
           return <span key={id} className={className} />;
         })}
@@ -366,7 +372,7 @@ const Assignment: React.FC<{
 }> = ({ trans, workbook }) => {
   const rubric = open(workbook);
   if (!rubric) {
-    return <></>;
+    return <td className="correxit-corrector-assignment" />;
   }
 
   const { assignment, locked } = rubric;
@@ -398,25 +404,33 @@ const Score: React.FC<{
   const irrecoverable = trans.__('Grade manually');
   const recoverable = trans.__('(Retrying...)');
   if (grade === 'pending') {
-    return <Pending columns={2} />;
-  }
-  if (!grade.resolved) {
     return (
-      <td className="correxit-corrector-failed" colSpan={3}>
-        <span>{graded ? irrecoverable : recoverable}</span>
-      </td>
+      <>
+        <td className="correxit-corrector-kernel" />
+        <Pending />
+      </>
+    );
+  }
+  if (grade.resolved) {
+    return (
+      <>
+        <Kernel spec={grade.spec} />
+        <Report score={grade.score} trans={trans} />
+      </>
     );
   }
   return (
     <>
-      <Kernel spec={grade.spec} />
-      <Report score={grade.score} trans={trans} />
+      <td className="correxit-corrector-kernel" />
+      <td className="correxit-corrector-failed">
+        <span>{graded ? irrecoverable : recoverable}</span>
+      </td>
     </>
   );
 };
 
-const Pending: React.FC<{ columns: number }> = ({ columns }) => (
-  <td className="correxit-corrector-pending" colSpan={columns}>
+const Pending: React.FC = () => (
+  <td className="correxit-corrector-pending">
     <span>
       <span className="correxit-corrector-pending-dot"></span>
       <span className="correxit-corrector-pending-dot"></span>

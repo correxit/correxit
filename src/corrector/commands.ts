@@ -11,13 +11,6 @@ import * as kernels from '../correxit/kernels';
 import { Corrector } from '.';
 import { grader } from './grader';
 
-export namespace CommandIDs {
-  export const batch = 'correxit-corrector:batch';
-  export const cd = 'correxit-corrector:cd';
-  export const launch = 'correxit-corrector:launch';
-  export const scan = 'correxit-corrector:scan';
-}
-
 type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
 type Grade = Workbook.Grade;
@@ -26,6 +19,13 @@ type Headless = Workbook.Headless;
 export type Hollow = { hollow: true; context: { path: string } };
 
 export type Scanned = (Headless & { hollow?: undefined }) | Hollow;
+
+export namespace CommandIDs {
+  export const batch = 'correxit-corrector:batch';
+  export const cd = 'correxit-corrector:cd';
+  export const launch = 'correxit-corrector:launch';
+  export const scan = 'correxit-corrector:scan';
+}
 
 export function addCommands(
   app: JupyterFrontEnd,
