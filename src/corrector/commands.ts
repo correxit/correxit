@@ -241,7 +241,7 @@ function recover(workbook: Headless): Certified {
 }
 
 async function save(workbook: Workbook | null) {
-  workbook?.context.save();
+  await workbook?.context.save();
 }
 
 async function* scanner(
