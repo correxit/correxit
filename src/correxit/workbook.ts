@@ -176,16 +176,34 @@ export namespace Workbook {
       cell.transact(() => cell.setMetadata('editable', false));
     }
   };
+  /**
+   * Returns a stable signature payload containing all rubric cell IDs and
+   * only the source code for reference cells. No student answer code is
+   * included, allowing answers to be edited without invalidating the grading.
+   */
   const sources = (workbook: Workbook, rubric: Rubric): {
     [id: string]: string;
   } => {
     const notebook = workbook.context.model.sharedModel;
-    const configured = new Set(Object.keys(rubric.cells));
-    return Object.fromEntries(
-      notebook.cells.filter(cell => configured.has(cell.id))
-        .map(cell => [cell.id, cell.getSource()])
-    );
+    const ids = new Set(Object.keys(rubric.cells));
+    const references = new Set<string>();
+    for (const id of ids) {
+      const cell = rubric.cells[id];
+      for (const ref of cell.reference || []) {
+        references.add(ref);
+      }
+    }
+
+    const payload: { [id: string]: string } = {};
+    for (const cell of notebook.cells) {
+      const id = cell.id;
+      if (ids.has(id) || references.has(id)) {
+        payload[id] = references.has(id) ? cell.getSource() : '';
+      }
+    }
+    return payload;
   };
+
   const [get, set] = (pool => {
     const get = (workbook: Workbook) => pool.get(workbook) || null;
     const set = (workbook: Workbook, rubric: Rubric | null) =>
@@ -313,10 +331,13 @@ export namespace Workbook {
     const corrected = await correct(workbook);
     const grade = { ...corrected, path: workbook.context.path };
     const identifier = Workbook.identifier(workbook);
-    if (corrected.resolved) {
-      await lock(workbook);
-      freeze(workbook);
+    if (!corrected.resolved) {
+      const { status } = corrected.score;
+      throw new Error(`certify error: unresolved status ${status}`);
     }
+
+    await lock(workbook);
+    freeze(workbook);
     return { grade, identifier, timestamp: timestamp(workbook), workbook };
   }
 
@@ -691,8 +712,7 @@ export namespace Workbook {
     const unlocked = await Rubric.unlock(rubric, key);
     const decrypted = await decrypt(workbook, unlocked);
 
-    // Verify against the original rubric: the digest was computed before
-    // audit pruning, so sources must come from the original cell set.
+    // Verify against the stable rubric source payload.
     const cells = sources(workbook, unlocked);
     await Rubric.Assignment.verify(decrypted.assignment.report, cells, key);
     return decrypted;

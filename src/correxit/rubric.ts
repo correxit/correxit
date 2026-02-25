@@ -285,12 +285,12 @@ export namespace Rubric {
 
     /** @returns a digest of cell sources and scores. */
     export async function certify(
-      report: Omit<Report, 'digest'>,
+      { scores }: Omit<Report, 'digest' | 'timestamp'>,
       cells: { [id: string]: string },
       key: string
     ): Promise<string> {
       return security.digest(
-        JSON.stringify({ cells, scores: report.scores }).concat(key)
+        JSON.stringify({ cells, scores: sort(scores) }).concat(key)
       );
     }
 
@@ -316,7 +316,7 @@ export namespace Rubric {
         Omit<Assignment, 'confirmation' | 'signature' | 'submission'>,
       key: string
     ): Promise<string> {
-      const report = { scores };
+      const report = { scores: sort(scores) };
       const unsigned = { assignee, expiration, report, roster };
       return security.digest(JSON.stringify(unsigned).concat(key));
     }
@@ -588,6 +588,11 @@ export namespace Rubric {
     return { assignment, cells, id, key, locked, revised };
   }
 }
+
+/** @returns a sorted record of scores for deterministic hashing. */
+const sort = (scores: { [id: string]: Rubric.Score }) => Object.fromEntries(
+  Object.keys(scores).sort().map(id => [id, scores[id]])
+);
 
 /** @returns a list of strings with no duplicate values. */
 const unique = (list: string[]): string[] => Array.from(new Set(list));
