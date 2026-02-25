@@ -150,14 +150,14 @@ function evict(kernel: Kernel.IKernelConnection): void {
   dispose(kernel);
 }
 
-/** Caches an idle kernel with TTL eviction. Disposes overflow. */
+/** Caches an idle kernel with TTL eviction. Evicts oldest on overflow. */
 function keep(kernel: Kernel.IKernelConnection): void {
   const idle: Idle = { kernel, timer: setTimeout(() => evict(kernel), TTL) };
   const entries = shelf(kernel.name);
   if (entries.length >= workers) {
-    clearTimeout(idle.timer);
-    dispose(kernel);
-    return;
+    const oldest = entries.shift()!;
+    clearTimeout(oldest.timer);
+    dispose(oldest.kernel);
   }
   entries.push(idle);
 }
