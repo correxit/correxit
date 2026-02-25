@@ -13,9 +13,7 @@ const OVERLAY = 'correxit-overlay';
 
 const TARGET_CELL = 'correxit-target-cell';
 
-/**
- * @returns a promise that resolves to a user input cell or `null`.
- */
+/** @returns a user input cell or `null`. */
 export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
   let target: Cell<ICellModel> | null = null;
   const delegate = new PromiseDelegate<ICellModel | null>();
@@ -81,9 +79,7 @@ export function cell(workbook: Workbook.Headed): Promise<ICellModel | null> {
   return delegate.promise;
 }
 
-/**
- * @returns a promise that resolves with text input from the user.
- */
+/** @returns text input from the user. */
 export const text = async (options: InputDialog.ITextOptions) => {
   const { button, value } = await InputDialog.getText(options);
   return button.accept && value || '';

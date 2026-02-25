@@ -1,4 +1,4 @@
-import { lease } from '../correxit/kernels';
+import { drain, lease } from '../correxit/kernels';
 
 let serial = 0;
 
@@ -42,7 +42,10 @@ function create(
 }
 
 describe('kernels', () => {
-  beforeEach(() => jest.useFakeTimers());
+  beforeEach(() => {
+    jest.useFakeTimers();
+    drain();
+  });
   afterEach(() => jest.useRealTimers());
   const named = () => `python3-${serial++}`;
 
@@ -199,27 +202,31 @@ describe('kernels', () => {
       expect(mock.shutdown).not.toHaveBeenCalled();
     });
 
-    it('keeps at most five idle kernels per name', async () => {
+    it('limits outstanding leases to workers', async () => {
       const name = named();
-      const kernels = Array.from({ length: 6 }, () => spawn({ name }));
-      let calls = 0;
-      const workbook = create({
-        name,
-        kernelManager: {
-          startNew: jest.fn(async () => kernels[calls++])
-        }
+      const workbook = create({ name });
+
+      // workers = 3 (drain default); acquire all three slots
+      const first3 = [
+        lease(workbook, { async: true }),
+        lease(workbook, { async: true }),
+        lease(workbook, { async: true })
+      ];
+
+      // 4th lease must wait
+      const fourth = lease(workbook, { async: true });
+      let resolved = false;
+      void fourth.then(() => {
+        resolved = true;
       });
 
-      const leases = [] as Awaited<ReturnType<typeof lease>>[];
-      for (let i = 0; i < kernels.length; i++) {
-        leases.push(await lease(workbook, { async: true }));
-      }
+      await Promise.all(first3);
+      expect(resolved).toBe(false);
 
-      for (const started of leases) {
-        await started![1]();
-      }
-
-      expect(kernels[5].shutdown).toHaveBeenCalled();
+      // Release one slot; fourth should now unblock
+      await (await first3[0])![1]();
+      await fourth;
+      expect(resolved).toBe(true);
     });
   });
 });

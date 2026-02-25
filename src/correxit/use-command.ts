@@ -19,6 +19,9 @@ import { useEffect, useState } from 'react';
  * React UI, enabling real-time visualization of "streaming" data. The consuming
  * component should use memoization to render efficiently.
  *
+ * Command streams restart when `id` or serialized `args` changes.
+ * Cleanup marks the prior stream interrupted and drops subsequent emissions.
+ *
  * State updates are buffered and throttled to ~60fps (16ms).
  */
 export function useCommand<T>(
@@ -44,7 +47,7 @@ export function useCommand<T>(
       try {
         for await (const item of await (stream || [])) {
           if (interrupted) {
-            return void throttler.dispose();
+            return;
           }
           buffer.push(item);
           void throttler.invoke();

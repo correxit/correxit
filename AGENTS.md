@@ -66,7 +66,14 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 | `interface Config { key?: string }`     | `interface Config { key: string \mid null }` |
 | `reduce((acc, x) => ({...acc, x}), {})` | `Object.fromEntries(arr.map(x => [k, v]))`   |
 
-## 6. Key Module Map
+## 6. Testing Strategy
+
+- **Unit Tests (`src/__tests__/`)**: For pure logic and isolated modules. The following have Jest unit tests:
+  - `rubric.ts`, `state.ts`, `kernels.ts`, `unlocker.ts`, `grader.ts`
+- **Playwright Tests (`ui-tests/`)**: For modules that require a live JupyterLab environment. These serve as the effective unit tests for the followin. Do not attempt to Jest-mock them:
+  - `workbook.ts`, `commands.ts` (both `correxit/` and `corrector/`), `corrector.tsx`, `widget.tsx`
+
+## 7. Key Module Map
 
 - `rubric.ts`: Core immutable data model & scoring logic.
 - `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing.
@@ -75,6 +82,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `propagator.ts`: Async generator for assignment distribution to rosters.
 - `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
 - `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Registrar`, `Submitter`, `Unlocker`).
-- `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction.
+- `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, retries, timeout })`, `cap()`, `retries()`, and `timeout()` for settings-driven control.
+- `grader.ts`: Bounded-concurrency async generator for batch grading. Accepts a `recover` callback, `cap`, and `timeout` (ms). Scanner accepts `Iterable | AsyncIterable`; failures are recovered and yielded so nothing stalls the pipeline.
 - `state.ts`: In-memory cache for active workbook and cell scores (`Map` with FIFO eviction).
-- `use-command.ts`: React hook bridging async generators to component state at ~60fps.
+- `use-command.ts`: React hook bridging async generators to component state at ~60fps. Restarts the stream whenever `id` or serialized `args` changes; cleanup marks the prior stream interrupted.

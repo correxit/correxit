@@ -8,6 +8,14 @@
   width: 100%;
 }
 
+.correxit-corrector-widget-content > progress {
+  display: block;
+  position: sticky;
+  top: 0;
+  width: 100%;
+  z-index: 1;
+}
+
 table.correxit-corrector {
   border-collapse: collapse;
   table-layout: fixed;
@@ -64,22 +72,77 @@ td.correxit-corrector-open {
   }
 }
 
-td.correxit-corrector-score-report {
+td.correxit-corrector-assignee {
+  width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+td.correxit-corrector-breakdown {
+  overflow: hidden;
+  width: 100%;
+}
+
+.correxit-corrector-breakdown-bar {
+  display: flex;
+  gap: 1px;
+  height: 8px;
+  width: 100%;
+}
+
+.correxit-corrector-breakdown-segment {
+  flex: 1;
+  min-width: 2px;
+}
+
+.correxit-corrector-breakdown-correct {
+  background-color: var(--jp-success-color1);
+}
+
+.correxit-corrector-breakdown-incorrect {
+  background-color: var(--jp-error-color1);
+}
+
+.correxit-corrector-breakdown-unscored {
+  background-color: var(--jp-border-color2);
+}
+
+tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
+  animation: correxit-corrector-pending-pulse 1.4s infinite ease-in-out;
+  opacity: 0.6;
+}
+
+@keyframes correxit-corrector-pending-pulse {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+td.correxit-corrector-score-report,
+td.correxit-corrector-pending,
+td.correxit-corrector-failed {
   width: 60px;
   text-align: right;
 }
 
-td.correxit-corrector-spec {
-  width: 200px;
-
-  .correxit-corrector-spec-name {
-    font-family: var(--jp-code-font-family-default);
-  }
+td.correxit-corrector-pending,
+td.correxit-corrector-failed {
+  position: relative;
+  overflow: hidden;
 }
 
-td.correxit-corrector-pending > span {
+td.correxit-corrector-pending > span,
+td.correxit-corrector-failed > span {
   position: absolute;
   right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   align-items: center;
   display: flex;
   gap: 2px;
@@ -120,25 +183,81 @@ td.correxit-corrector-pending > span {
   }
 }
 
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='cd'],
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='correct'] {
-  .jp-ToolbarButtonComponent-label {
-    padding-left: 3px;
+table.correxit-corrector tr.cxt-mod-failed td {
+  opacity: 0.6;
+}
+
+td.correxit-corrector-failed {
+  text-align: right;
+
+  > span {
+    color: var(--jp-error-color1);
   }
 }
 
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='refresh'] {
-  padding-right: 5px;
+.correxit-corrector-mode {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
-.correxit-corrector-widget .jp-Toolbar-item[data-jp-item-name='status'] {
-  width: 100px;
+.correxit-corrector-mode-options {
+  display: flex;
+  gap: 6px;
+}
 
-  span {
-    padding-right: 10px;
-    text-align: right;
-    width: 100%;
-  }
+.correxit-corrector-mode-options label {
+  align-items: center;
+  color: var(--jp-ui-font-color1);
+  display: flex;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  gap: 4px;
+}
+
+.correxit-corrector-mode-options input {
+  margin: 0;
+  vertical-align: middle;
+}
+
+.correxit-corrector-overwrite {
+  align-items: center;
+  color: var(--jp-ui-font-color1);
+  display: flex;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  gap: 4px;
+  margin-right: 4px;
+}
+
+.correxit-corrector-overwrite input {
+  margin: 0;
+  vertical-align: middle;
+}
+
+.correxit-corrector-mode:not(.cxt-mod-certify) .correxit-corrector-overwrite {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.correxit-corrector-mode-go {
+  background-color: var(--jp-brand-color1);
+  border: none;
+  border-radius: var(--jp-border-radius);
+  color: var(--jp-ui-inverse-font-color1);
+  cursor: pointer;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  padding: 2px 10px;
+}
+
+.correxit-corrector-mode-go:hover {
+  background-color: var(--jp-brand-color0);
+}
+
+.correxit-corrector-mode-go:focus-visible {
+  outline: 1px solid var(--jp-brand-color1);
+  outline-offset: 2px;
 }
 
 .correxit-corrector-widget.cxt-mod-cd .jp-Dialog .jp-Dialog-content {

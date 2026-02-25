@@ -14,11 +14,13 @@ import {
   NotebookPanel
 } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
+import { IStatusBar } from '@jupyterlab/statusbar';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
 import { addCommands, Correxit, Unlocker, Workbook } from './correxit';
+import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
@@ -90,10 +92,12 @@ const corrector: JupyterFrontEndPlugin<void> = {
   description: Correxit.DESCRIPTION.CORRECTOR,
   requires: [Correxit.Collector, IDocumentManager],
   optional: [
-    IDefaultFileBrowser,
     ICommandPalette,
+    IDefaultFileBrowser,
     ILayoutRestorer,
     INotebookTree,
+    ISettingRegistry,
+    IStatusBar,
     ITranslator
   ],
   autoStart: true,
@@ -102,18 +106,38 @@ const corrector: JupyterFrontEndPlugin<void> = {
       app: JupyterFrontEnd,
       collector: Correxit.Collector,
       documents: IDocumentManager,
-      browser: IDefaultFileBrowser | null,
       palette: ICommandPalette | null,
+      browser: IDefaultFileBrowser | null,
       restorer: ILayoutRestorer | null,
       tree: INotebookTree | null,
+      registry: ISettingRegistry | null,
+      status: IStatusBar | null,
       translator: ITranslator | null
     ) => {
       const name = 'correxit-corrector';
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
+      const indicator = new Corrector.Status(trans);
+      const active = new Signal<typeof tracker, void>(tracker);
+      tracker.currentChanged.connect(() => active.emit(void 0));
       const { launch } = Corrector.CommandIDs;
-      const utilities = { browser, collector, documents, tracker, trans, tree };
-      const added = Corrector.addCommands(app, utilities);
+      const added = Corrector.addCommands(app, {
+        browser,
+        collector,
+        documents,
+        indicator,
+        tracker,
+        trans,
+        tree
+      });
+      if (status) {
+        status.registerStatusItem('correxit-corrector:indicator', {
+          item: indicator,
+          align: 'right',
+          isActive: () => !!tracker.currentWidget,
+          activeStateChanged: active
+        });
+      }
       if (palette) {
         palette.addItem({ category: 'correxit', command: launch });
       }
@@ -124,8 +148,17 @@ const corrector: JupyterFrontEndPlugin<void> = {
           args: ({ path }) => ({ path })
         });
       }
+      if (registry) {
+        void registry.load(Correxit.CORRECTOR).then(settings => {
+          const reconfigure = () =>
+            kernels.configure(settings.composite as kernels.Config);
+          reconfigure();
+          settings.changed.connect(reconfigure);
+        });
+      }
       deactivator = () => {
         added.forEach(command => command.dispose());
+        indicator.dispose();
         tracker.dispose();
       };
     },
@@ -302,7 +335,12 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
         translator: ITranslator | null
       ) => {
         const trans = (translator || nullTranslator).load('correxit');
-        const secrets = { manager, passphrases: new Set<string>(), token };
+        const secrets = {
+          manager,
+          passphrases: new Set<string>(),
+          pending: null as Promise<string | null> | null,
+          token
+        };
         return {
           store: (id: string, key: string) => Unlocker.store(id, key, secrets),
           unlock: async (workbook, credentials) =>

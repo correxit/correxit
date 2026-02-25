@@ -1,8 +1,6 @@
 import { Rubric, Workbook } from '.';
 
-/**
- * Upper bound for in-memory cache of cell scores.
- */
+/** Upper bound for in-memory cache of cell scores. */
 export const LIMIT = 500;
 
 const state: {
@@ -31,9 +29,7 @@ export function cache(workbook: Workbook, id: string, score: Rubric.Score) {
   state.report.set(key, score);
 }
 
-/**
- * @returns the resolved cell id from command arguments.
- */
+/** @returns the resolved cell id from command arguments. */
 export function cell(args: Partial<Rubric.Cell & Rubric.Cell.Toolbar>): string {
   const notebook = workbook()?.content;
   const toolbar = args[Rubric.Cell.TOOLBAR];
@@ -41,9 +37,7 @@ export function cell(args: Partial<Rubric.Cell & Rubric.Cell.Toolbar>): string {
 }
 
 
-/**
- * @returns the cached score for a cell or the persisted score when uncached.
- */
+/** @returns the cached or persisted score for a cell. */
 export function report(
   workbook: Workbook | null,
   id: string
@@ -66,9 +60,7 @@ export function report(
   return score;
 }
 
-/**
- * @returns the active workbook and updates cache if given a workbook.
- */
+/** @returns the active workbook; caches the update if given. */
 export function workbook(update?: Workbook | null): Workbook | null {
   state.workbook = update === undefined ? state.workbook : update;
   return state.workbook;

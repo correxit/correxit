@@ -4,20 +4,18 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import {
   CommandToolbarButton,
   ReactWidget,
-  Toolbar,
-  ToolbarButton,
-  ToolbarButtonComponent
+  Toolbar
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { ISignal, Signal } from '@lumino/signaling';
 import React from 'react';
-import { Correxit } from '..';
 import { Corrector } from '.';
+import { Message } from '@lumino/messaging';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
-  constructor({ commands, path, trans }: CorrectorWidget.IOptions) {
+  constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
     super({ content: new Content({ commands, path, trans }) });
     this.commands = commands;
+    this.indicator = indicator;
     this.trans = trans;
     this.addClass('correxit-corrector-widget');
     void this.initialize();
@@ -27,54 +25,41 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     return this.content.path;
   }
   set path(path: string) {
-    this.content.set({ correct: false, path: PathExt.normalize(path) });
+    this.content.set({ path: PathExt.normalize(path) });
+    this.selector?.reset();
     this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
   }
 
+  dispose() {
+    this.indicator?.set({ graded: true, scanned: true });
+    super.dispose();
+  }
+
   protected commands: CommandRegistry;
+  protected indicator: CorrectorStatus | null;
+  protected selector: ModeSelector | null = null;
   protected trans: IRenderMime.TranslationBundle;
 
   protected async initialize() {
-    const { commands, content, toolbar, trans } = this;
-    let status = ReactWidget.create(<></>);
-    const notify = (updates: { graded: boolean; scanned: boolean }) => {
-      const { graded, scanned } = updates;
-      const current = scanned
-        ? graded
-          ? trans.__('Idle')
-          : trans.__('Correcting...')
-        : trans.__('Scanning...');
-      status.dispose();
-      status = ReactWidget.create(<span>{current}</span>);
-      toolbar.insertItem(5, 'status', status);
+    const { commands, content, indicator, toolbar, trans } = this;
+    const go = (mode: Corrector.Mode, overwrite: boolean) =>
+      content.set({ active: true, key: `${Date.now()}`, mode, overwrite });
+    const interrupt = () =>
+      content.set({ active: false, key: `${Date.now()}` });
+    const selector = new ModeSelector({ go, interrupt, trans });
+    const notify = (updates: Corrector.Notification) => {
+      indicator?.set(updates);
+      selector?.set(updates);
     };
     const cd = new CommandToolbarButton({
       commands,
       id: Corrector.CommandIDs.cd,
       noFocusOnClick: true
     });
-    const correct = new ToolbarButton({
-      icon: Correxit.Icons.correct,
-      label: trans.__('Correct workbooks'),
-      tooltip: trans.__('Correct all workbooks in directory'),
-      noFocusOnClick: true,
-      onClick: () => content.set({ correct: true })
-    });
-    const refresh = new CommandToolbarButton({
-      args: { hard: true },
-      commands,
-      id: Corrector.CommandIDs.refresh,
-      noFocusOnClick: true
-    });
-    const toggle = (unlock: boolean) => content.set({ correct: false, unlock });
-    const passphrase = new UnlockButton({ toggle, trans });
-    content.toggled.connect((_, locked) => passphrase.set(locked));
+    this.selector = selector;
     toolbar.addItem('cd', cd);
-    toolbar.addItem('refresh', refresh);
-    toolbar.addItem('passphrase', passphrase);
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
-    toolbar.addItem('correct', correct);
-    toolbar.addItem('status', status);
+    toolbar.addItem('mode', selector);
     content.set({ notify });
   }
 }
@@ -82,15 +67,50 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
 export namespace CorrectorWidget {
   export interface IOptions {
     commands: CommandRegistry;
+    indicator: CorrectorStatus | null;
     path: string;
     trans: IRenderMime.TranslationBundle;
   }
 }
 
+export class CorrectorStatus extends ReactWidget {
+  constructor(trans: IRenderMime.TranslationBundle) {
+    super();
+    this.trans = trans;
+    this.addClass('correxit-corrector-status');
+  }
+
+  render() {
+    const { graded, scanned, trans } = this;
+    const label = !scanned
+      ? trans.__('Scanning...')
+      : !graded
+        ? trans.__('Grading...')
+        : trans.__('Idle');
+    return <span className="jp-StatusBar-TextItem">{label}</span>;
+  }
+
+  set(updates: { graded: boolean; scanned: boolean }) {
+    this.graded = updates.graded;
+    this.scanned = updates.scanned;
+    this.update();
+  }
+
+  protected graded = true;
+  protected scanned = true;
+  protected trans: IRenderMime.TranslationBundle;
+}
+
 class Content extends ReactWidget {
   constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
     super();
-    this.props = { ...props, correct: false, notify: () => {}, unlock: false };
+    this.props = {
+      ...props,
+      active: false,
+      mode: 'scan',
+      notify: () => {},
+      overwrite: false
+    };
     this.addClass('correxit-corrector-widget-content');
   }
 
@@ -98,18 +118,11 @@ class Content extends ReactWidget {
     return this.props.path || '';
   }
 
-  get toggled(): ISignal<Content, boolean> {
-    return this._toggled;
-  }
-
   set(updates: Partial<Corrector.Props & { key?: string }>) {
     if (updates.path !== undefined) {
-      updates = { ...updates, unlock: false, key: `${Date.now()}` };
+      updates = { ...updates, active: false, key: `${Date.now()}` };
     }
     this.props = { ...this.props, ...updates };
-    if (updates.unlock !== undefined) {
-      this._toggled.emit(!updates.unlock);
-    }
     this.update();
   }
 
@@ -118,41 +131,134 @@ class Content extends ReactWidget {
   }
 
   protected props: Corrector.Props & { key?: string };
-  private _toggled = new Signal<Content, boolean>(this);
 }
 
-class UnlockButton extends ReactWidget {
+class ModeSelector extends ReactWidget {
   constructor(options: {
-    toggle: (unlock: boolean) => void;
+    go: (mode: Corrector.Mode, overwrite: boolean) => void;
+    interrupt: () => void;
     trans: IRenderMime.TranslationBundle;
   }) {
     super();
-    this.toggle = options.toggle;
+    this.go = options.go;
+    this.interrupt = options.interrupt;
     this.trans = options.trans;
+    this.addClass('correxit-corrector-mode');
+  }
+
+  handleEvent(event: Event): void {
+    event.stopPropagation();
+  }
+
+  protected onBeforeAttach(msg: Message): void {
+    super.onBeforeAttach(msg);
+    this.node.addEventListener('click', this);
+    this.node.removeEventListener('pointerdown', this);
+  }
+
+  protected onAfterDetach(msg: Message): void {
+    super.onAfterDetach(msg);
+    this.node.removeEventListener('click', this);
+    this.node.removeEventListener('pointerdown', this);
   }
 
   render() {
-    const { locked, toggle, trans } = this;
+    const { busy, go, interrupt, mode, overwrite, trans } = this;
+    const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
+      {
+        value: 'scan',
+        label: trans.__('Scan'),
+        tooltip: trans.__('Scan for workbooks, leave them locked')
+      },
+      {
+        value: 'grade',
+        label: trans.__('Grade'),
+        tooltip: trans.__('Unlock and grade workbooks (read-only, no save)')
+      },
+      {
+        value: 'certify',
+        label: trans.__('Grade & Certify'),
+        tooltip: trans.__('Unlock workbooks and collect grades, (save file)')
+      }
+    ];
+    const action = busy ? interrupt : () => go(mode, overwrite);
+    const label = busy ? trans.__('Interrupt') : trans.__('Go');
+    const className = `correxit-corrector-mode-go ${
+      busy ? 'jp-mod-warn' : 'jp-mod-accept'
+    }`;
+    const description = busy
+      ? trans.__('Interrupt the current operation')
+      : trans.__('Execute selected mode');
+
     return (
-      <ToolbarButtonComponent
-        className="jp-Button jp-mod-minimal"
-        onClick={() => toggle(locked)}
-        icon={locked ? Correxit.Icons.key : Correxit.Icons.locked}
-        iconLabel={
-          locked ? trans.__('Unlock workbooks') : trans.__('Lock workbooks')
-        }
-      />
+      <>
+        <fieldset
+          className="correxit-corrector-mode-options"
+          aria-label={trans.__('Corrector mode')}
+          style={{ border: 0, padding: 0, margin: 0 }}
+        >
+          {modes.map(({ label, tooltip, value }) => (
+            <label key={value} title={tooltip}>
+              <input
+                type="radio"
+                name="correxit-mode"
+                value={value}
+                checked={mode === value}
+                onChange={() => this.select(value)}
+                aria-label={label}
+                aria-description={tooltip}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+        <label
+          className="correxit-corrector-overwrite"
+          title={trans.__('Re-certify already certified workbooks')}
+        >
+          <input
+            type="checkbox"
+            checked={overwrite}
+            disabled={mode !== 'certify'}
+            onChange={({ target }) => this.set({ overwrite: target.checked })}
+            aria-label={trans.__('Overwrite already certified workbooks')}
+          />
+          <span>{trans.__('Overwrite')}</span>
+        </label>
+        <button className={className} onClick={action} aria-label={description}>
+          {label}
+        </button>
+      </>
     );
   }
 
-  set(locked: boolean) {
-    if (locked !== this.locked) {
-      this.locked = locked;
-      this.update();
-    }
+  reset() {
+    this.select('scan');
+    this.overwrite = false;
+    this.update();
   }
 
-  protected locked = true;
-  protected toggle: (unlock: boolean) => void;
+  set(updates: Corrector.Notification | { overwrite: boolean }) {
+    if ('overwrite' in updates) {
+      this.overwrite = updates.overwrite;
+    } else {
+      const idle = updates.graded && updates.scanned;
+      this.busy = !idle && updates.mode !== 'scan';
+    }
+    this.update();
+  }
+
+  protected select(mode: Corrector.Mode) {
+    Corrector.Modes.forEach(mode => this.removeClass(`cxt-mod-${mode}`));
+    this.addClass(`cxt-mod-${mode}`);
+    this.mode = mode;
+    this.update();
+  }
+
+  protected busy = false;
+  protected go: (mode: Corrector.Mode, overwrite: boolean) => void;
+  protected overwrite = false;
+  protected interrupt: () => void;
+  protected mode: Corrector.Mode = 'scan';
   protected trans: IRenderMime.TranslationBundle;
 }

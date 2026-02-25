@@ -1,0 +1,29 @@
+{
+  "title": "Correxit Corrector",
+  "description": "Settings for the Correxit Corrector batch grading interface",
+  "type": "object",
+  "properties": {
+    "concurrency": {
+      "title": "Grading concurrency",
+      "description": "Maximum number of kernel connections active at any one time. This bounds running, restarting, and idle kernels combined.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 3
+    },
+    "timeout": {
+      "title": "Grading timeout",
+      "description": "Maximum seconds to wait for a single workbook to grade before abandoning it and freeing the kernel slot. Set to 0 to disable.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 60
+    },
+    "retries": {
+      "title": "Grading retries",
+      "description": "Number of additional passes over failed workbooks before giving up. Set to 0 for a single attempt with no retries.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 2
+    }
+  },
+  "additionalProperties": false
+}

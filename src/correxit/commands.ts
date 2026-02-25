@@ -7,7 +7,6 @@ import { ITranslator } from '@jupyterlab/translation';
 import { notebookIcon, saveIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '..';
-import { Corrector } from '../corrector';
 import * as input from './input';
 import * as io from './io';
 import { propagate } from './propagator';
@@ -64,12 +63,12 @@ export function addCommands(
 ) {
   const { commands, serviceManager: manager } = app;
   const { Icons } = Correxit;
-  const { collector, consumer, injector, registrar } = utilities;
-  const { submitter, translator, unlocker } = utilities;
-  const trans = translator.load('correxit');
+  const { collector, consumer, injector } = utilities;
+  const { registrar, submitter, unlocker } = utilities;
+  const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
-  const fetch = (handle: Credentials) =>
-    io.request(handle, factory, manager, unlocker);
+  const fetch = (handle: Credentials, silent = false) =>
+    io.request(handle, factory, manager, unlocker, silent);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
@@ -275,14 +274,14 @@ export function addCommands(
         : trans.__('Correct workbook...');
     },
     execute: async (args: Partial<Cell & Credentials & CellToolbar>) => {
-      const { workbook } = await reify(args);
-      if (!workbook) {
-        return { score: Rubric.Score.UNSCORED, spec: null };
+      const { rubric, workbook } = await reify(args);
+      if (!rubric) {
+        return { resolved: false, score: Rubric.Score.UNSCORED, spec: null };
       }
 
       const id = state.cell(args);
       if (args[Rubric.Cell.TOOLBAR] && !id) {
-        return { score: Rubric.Score.UNSCORED, spec: null };
+        return { resolved: true, score: Rubric.Score.UNSCORED, spec: null };
       }
 
       const result = await correct(workbook, id);
@@ -298,6 +297,11 @@ export function addCommands(
       });
       if (workbook.content.activeCell) {
         workbook.content.scrollToCell(workbook.content.activeCell);
+      }
+      // Manually trigger a refresh.
+      if (rubric.locked) {
+        injector(null);
+        injector(workbook);
       }
     }
   }));
@@ -333,31 +337,11 @@ export function addCommands(
   }));
   disposables.push(commands.addCommand(CommandIDs.fetch, {
     label: trans.__('Fetch a headless Correxit workbook for a given path'),
-    describedBy: {
-      args: {
-        type: 'object',
-        required: ['path'],
-        properties: {
-          key: {
-            type: 'string',
-            description: trans.__('Optional rubric key')
-          },
-          passphrase: {
-            type: 'string',
-            description: trans.__('Optional workbook passphrase')
-          },
-          path: {
-            type: 'string',
-            description: trans.__('Workbook path')
-          }
-        }
-      }
-    },
-    execute: async (args: Partial<Credentials>):
+    execute: async (args: Partial<Credentials & { silent: boolean }>):
       Promise<Headless | null> => {
       const handle = normalize(args);
       try {
-        return handle && await fetch(handle);
+        return handle && await fetch(handle, !!args.silent);
       } catch (error) {
         console.warn(CommandIDs.fetch, error);
         return null;
@@ -491,9 +475,6 @@ export function addCommands(
         notebook.clearUndoHistory();
       }
       await workbook.context.save();
-      if (commands.hasCommand(Corrector.CommandIDs.refresh)) {
-        await commands.execute(Corrector.CommandIDs.refresh);
-      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.submit, {

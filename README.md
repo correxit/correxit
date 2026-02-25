@@ -6,8 +6,9 @@ Correxit is a kernel-agnostic Jupyter extension for grading Jupyter notebooks.
 It is also the third-person singular perfect active indicative conjugation of
 the Latin verb _corrigere_, to correct.
 
-This extension is composed of a Python package named `correxit` and an NPM
-package named `correxit`.
+The Python package delivers the extension to JupyterLab and bundles the
+schemas that register settings and toolbar contributions. All grading logic
+runs in the browser; there is no server component.
 
 ## Design principles
 
@@ -25,6 +26,9 @@ into a gradable workbook.
   field in its metadata. There is no other data store.
 - The author converts a Jupyter notebook into a workbook by configuring which
   cells to grade and encrypting the grading logic with a passphrase.
+- A grader uses the Correxit Corrector panel to scan a directory of submitted
+  workbooks, optionally unlock them, and batch-grade them, with configurable
+  concurrency and a per-workbook timeout to handle hung kernels.
 
 This video shows an example, a SQL (`xeus-sql`) Jupyter notebook that loads the
 Chinook database in SQLite and runs some queries and renders a Vega graph of the
@@ -35,7 +39,7 @@ https://github.com/user-attachments/assets/04c5218e-772d-4e94-afca-2af2e15864d1
 
 ## Requirements
 
-- JupyterLab >= 4.0.0
+- JupyterLab >= 4.0.0 or Jupyter Notebook >= 7.0.0
 
 ## Install
 
@@ -79,8 +83,6 @@ The `jlpm` command is JupyterLab's pinned version of
 pip install -e ".[test]"
 # Link your development version of the extension with JupyterLab
 jupyter labextension develop . --overwrite
-# Server extension must be manually installed in develop mode
-jupyter server extension enable correxit
 # Rebuild extension Typescript source after making changes
 jlpm build
 ```
@@ -113,8 +115,6 @@ jupyter lab build --minimize=False
 ### Development uninstall
 
 ```bash
-# Server extension must be manually disabled in develop mode
-jupyter server extension disable correxit
 pip uninstall correxit
 ```
 

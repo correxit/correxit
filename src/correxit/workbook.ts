@@ -12,15 +12,11 @@ import * as kernels from './kernels';
 import * as security from './security';
 import * as state from './state';
 
-/**
- * A headed or headless Correxit workbook.
- */
+/** A headed or headless Correxit workbook. */
 export type Workbook = Workbook.Headed | Workbook.Headless;
 
 export namespace Workbook {
-  /**
-   * The result of an audit on a workbook's rubric.
-   */
+  /** The result of an audit on a workbook's rubric. */
   export type Audit = Audit.Pass | Audit.Fail;
 
   namespace Audit {
@@ -63,6 +59,7 @@ export namespace Workbook {
 
   export type Grade = {
     path: string;
+    resolved: boolean;
     score: Rubric.Score;
     spec: KernelSpec.ISpecModel | null;
   };
@@ -77,23 +74,15 @@ export namespace Workbook {
     readonly context: DocumentRegistry.IContext<INotebookModel>;
   };
 
-  /**
-   * A type for plugins to identify a workbook/assignment/assignee match.
-   */
+  /** A type for plugins to identify a workbook/assignment/assignee match. */
   export type Identifier = {
-    /**
-     * The assignee (typically an email address) or `null` if unassigned.
-     */
+    /** The assignee (typically an email address) or `null` if unassigned. */
     assignee: string | null;
 
-    /**
-     * The workbook/assignment id, i.e. the rubric id of the workbook.
-     */
+    /** The workbook/assignment id, i.e. the rubric id of the workbook. */
     assignment: string;
 
-    /**
-     * The workbook/assignment signature for the assignee/roster/report.
-     */
+    /** The workbook/assignment signature for the assignee/roster/report. */
     signature: string | null;
   }
 
@@ -187,6 +176,34 @@ export namespace Workbook {
       cell.transact(() => cell.setMetadata('editable', false));
     }
   };
+  /**
+   * Returns a stable signature payload containing all rubric cell IDs and
+   * only the source code for reference cells. No student answer code is
+   * included, allowing answers to be edited without invalidating the grading.
+   */
+  const sources = (workbook: Workbook, rubric: Rubric): {
+    [id: string]: string;
+  } => {
+    const notebook = workbook.context.model.sharedModel;
+    const ids = new Set(Object.keys(rubric.cells));
+    const references = new Set<string>();
+    for (const id of ids) {
+      const cell = rubric.cells[id];
+      for (const ref of cell.reference || []) {
+        references.add(ref);
+      }
+    }
+
+    const payload: { [id: string]: string } = {};
+    for (const cell of notebook.cells) {
+      const id = cell.id;
+      if (ids.has(id) || references.has(id)) {
+        payload[id] = references.has(id) ? cell.getSource() : '';
+      }
+    }
+    return payload;
+  };
+
   const [get, set] = (pool => {
     const get = (workbook: Workbook) => pool.get(workbook) || null;
     const set = (workbook: Workbook, rubric: Rubric | null) =>
@@ -214,9 +231,7 @@ export namespace Workbook {
     signature !== assignment.signature
   );
 
-  /**
-   * Add a cell to a workbook's rubric.
-   */
+  /** Add a cell to a workbook's rubric. */
   export async function add(
     workbook: Workbook,
     cell: Rubric.Cell
@@ -259,6 +274,11 @@ export namespace Workbook {
    *
    * #### Notes
    * If the rubric is locked, it is left unmodified.
+   *
+   * Headed workbooks tolerate missing cells: the pruned rubric is returned
+   * with `ok: true` so the instructor can still interact with what remains.
+   * Headless workbooks fail immediately. Batch grading cannot recover from
+   * a structurally incomplete notebook.
    */
   export function audit(workbook: Workbook, rubric: Rubric | null): Audit {
     if (!rubric) {
@@ -287,17 +307,22 @@ export namespace Workbook {
     }
     if (pruned.length) {
       console.warn('audit pruned these rubric cells', pruned);
-      const modified: Rubric = pruned.reduce((rubric, { cell: { id } }) =>
-        Rubric.remove(rubric, id), rubric);
+      if (!workbook.content) {
+        return { ok: false, error: 'missing cells', rubric };
+      }
+      const modified: Rubric = pruned.reduce(
+        (rubric, { cell: { id } }) => Rubric.remove(rubric, id),
+        rubric
+      );
       return { ok: true, pruned, rubric: modified };
     }
     return { ok: true, pruned: [], rubric };
   }
 
-  /**
-   * Certify a workbook: correct, lock, and freeze.
-   */
-  export async function certify(workbook: Workbook): Promise<Certified> {
+  /** Certify a workbook: correct, lock, and freeze. */
+  export async function certify(
+    workbook: Workbook
+  ): Promise<Certified> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
       throw new Error('certify error');
@@ -306,15 +331,17 @@ export namespace Workbook {
     const corrected = await correct(workbook);
     const grade = { ...corrected, path: workbook.context.path };
     const identifier = Workbook.identifier(workbook);
-    const timestamp = Workbook.timestamp(workbook);
+    if (!corrected.resolved) {
+      const { status } = corrected.score;
+      throw new Error(`certify error: unresolved status ${status}`);
+    }
+
     await lock(workbook);
     freeze(workbook);
-    return { grade, identifier, timestamp, workbook };
+    return { grade, identifier, timestamp: timestamp(workbook), workbook };
   }
 
-  /**
-   * Convert a plain notebook into a workbook and return its rubric.
-   */
+  /** Convert a plain notebook into a workbook and return its rubric. */
   export async function convert(
     workbook: Workbook,
     passphrase: string,
@@ -348,18 +375,37 @@ export namespace Workbook {
    */
   export async function correct(
     workbook: Workbook,
-    id?:string
+    id?: string
   ): Promise<Omit<Grade, 'path'>> {
-    const rubric = open(workbook, quiet);
-    if (!rubric) {
-      const code: Rubric.Score.Code = 'missing-rubric';
-      return { spec: null, score: { ...Rubric.Score.UNSCORED, code }};
+    const opened = open(workbook, quiet);
+    if (!opened) {
+      return {
+        resolved: false,
+        score: { ...Rubric.Score.UNSCORED, code: 'missing-rubric' },
+        spec: null
+      };
     }
 
+    // Re-audit to get the pruned rubric: headed workbooks tolerate
+    // missing cells (they are pruned), headless ones fail outright.
+    const audited = audit(workbook, opened);
+    if (!audited.ok) {
+      return {
+        resolved: false,
+        score: { ...Rubric.Score.UNSCORED, code: '' },
+        spec: null
+      };
+    }
+
+    const rubric = audited.rubric;
     const result = await execute(workbook, rubric, id);
     if (!result) {
       const code: Rubric.Score.Code = 'error-execute';
-      return { spec: null, score: { ...Rubric.Score.UNSCORED, code }};
+      return {
+        resolved: false,
+        score: { ...Rubric.Score.UNSCORED, code },
+        spec: null
+      };
     }
 
     const { score, summary } = Rubric.Assignment;
@@ -367,10 +413,27 @@ export namespace Workbook {
     const report = await score(rubric, outputs, id);
     const scored = Object.entries(report.scores);
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
-    if (!rubric.locked) {
-      await update(workbook, await Rubric.sign(rubric, report));
+
+    const final = id ? report.scores[id] : summary(report);
+    const missing = (cell: Rubric.Cell) => {
+      const { id, is, reference } = cell;
+      if (!outputs.has(id)) {
+        return true;
+      }
+      if ((is === 'comparable' || is === 'correctable') && reference) {
+        return reference.some(id => !outputs.has(id));
+      }
+      return false;
+    };
+    const { status } = final;
+    const resolved = id
+      ? status !== 'unscored'
+      : !Object.values(rubric.cells).some(missing) && status !== 'unscored';
+    if (resolved && !rubric.locked) {
+      const cells = sources(workbook, rubric);
+      await update(workbook, await Rubric.sign(rubric, report, cells));
     }
-    return { spec, score: id ? report.scores[id] : summary(report) };
+    return { resolved, spec, score: final };
   }
 
    /**
@@ -393,19 +456,23 @@ export namespace Workbook {
 
     const { report: kept } = rubric.assignment;
     const scores = { ...kept.scores, [id]: { ...kept.scores[id], comment } };
-    return update(workbook, await Rubric.sign(rubric, { ...kept, scores }));
+    const cells = sources(workbook, rubric);
+    const signed = await Rubric.sign(rubric, { ...kept, scores }, cells);
+    return update(workbook, signed);
   }
 
-  /**
-   * Decrypts workbook content.
-   */
+  /** Decrypts workbook content. */
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
-    const audit = Workbook.audit(workbook, rubric);
-    if (!audit.ok) {
-      throw new Error(`decrypt error: ${audit.error}`);
+    const audited = Workbook.audit(workbook, rubric);
+    if (!audited.ok) {
+      throw new Error(`decrypt error: ${audited.error}`);
+    }
+    if (audited.pruned.length) {
+      console.warn('decrypt: workbook has missing cells', audited.pruned);
     }
 
-    const { cells, key } = audit.rubric as Rubric.Unlocked;
+    // Decrypt only the cells that survived the audit.
+    const { cells, key } = audited.rubric as Rubric.Unlocked;
     for (const [, cell] of Object.entries(cells)) {
       if (cell.shared) {
         continue;
@@ -415,12 +482,12 @@ export namespace Workbook {
         await Cell.decrypt(workbook, reference, key);
       }
     };
-    return update(workbook, rubric, audit);
+    // Cache the original (un-pruned) rubric so downstream audit can
+    // still detect the missing cells.
+    return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
-  /**
-   * Revert a submission to draft, restoring cell editability.
-   */
+  /** Revert a submission to draft, restoring cell editability. */
   export async function draft(workbook: Workbook): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked || !rubric.assignment.submission) {
@@ -459,7 +526,7 @@ export namespace Workbook {
       1 + findIndex(cells, ({ id }) => id === target);
     const scan = (cell: Rubric.Cell) =>
       cell.is === 'correctable' || cell.is === 'comparable'
-        ? Math.max(position(cell.id), position(cell.reference[0]))
+        ? Math.max(position(cell.id), ...cell.reference.map(position))
         : position(cell.id);
     const cell = id && Rubric.get(rubric, id);
     if (id && !cell) {
@@ -473,19 +540,23 @@ export namespace Workbook {
     }
 
     const [kernel, release] = leased;
-    const spec = await kernel.spec || null;
-    for (const index of range(cell ? scan(cell) : cells.length)) {
-      const cell = cells.get(index);
-      if (cell.type === 'code') {
+    try {
+      const spec = await kernel.spec || null;
+      for (const index of range(cell ? scan(cell) : cells.length)) {
+        const cell = cells.get(index) as ICodeCellModel;
+        if (cells.get(index).type !== 'code') {
+          continue;
+        }
         try {
-          outputs.set(cell.id, await execute(cell as ICodeCellModel, kernel));
+          outputs.set(cell.id, await execute(cell, kernel));
         } catch (error) {
           console.warn('cell execute error', cell, error);
         }
       }
+      return { outputs, spec };
+    } finally {
+      release();
     }
-    release();
-    return { outputs, spec };
   }
 
   export function identifier(workbook: Workbook): Identifier {
@@ -499,9 +570,7 @@ export namespace Workbook {
     return { assignee, assignment, signature };
   }
 
-  /**
-   * Lock a workbook if its rubric is unlocked.
-   */
+  /** Lock a workbook if its rubric is unlocked. */
   export async function lock(workbook: Workbook): Promise<void> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
@@ -569,9 +638,7 @@ export namespace Workbook {
     }
   }
 
-  /**
-   * Remove a cell from a workbook's rubric.
-   */
+  /** Remove a cell from a workbook's rubric. */
   export function remove(workbook: Workbook, id: string): void {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
@@ -580,9 +647,7 @@ export namespace Workbook {
     update(workbook, Rubric.remove(rubric, id));
   }
 
-  /**
-   * Reset a workbook back to a plain Jupyter notebook.
-   */
+  /** Reset a workbook back to a plain Jupyter notebook. */
   export async function reset(workbook: Workbook) {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
@@ -591,9 +656,7 @@ export namespace Workbook {
     update(workbook, null);
   }
 
-  /**
-   * Submit an assignment, locking all cells to read-only.
-   */
+  /** Submit an assignment, locking all cells to read-only. */
   export async function submit(
     workbook: Workbook,
     confirmation: string | null = null
@@ -622,9 +685,7 @@ export namespace Workbook {
     return timestamp;
   };
 
-  /**
-   * Toggle a workbook cell's `shared` flag.
-   */
+  /** Toggle a workbook cell's `shared` flag. */
   export async function toggle(
     workbook: Workbook, id: string
   ): Promise<Rubric.Unlocked> {
@@ -635,9 +696,7 @@ export namespace Workbook {
     return update(workbook, Rubric.toggle(rubric, id));
   }
 
-  /**
-   * Unlocks a workbook's rubric, decrypts its contents, and returns the rubric.
-   */
+  /** Unlocks a workbook's rubric and decrypts its contents. */
   export async function unlock(
     workbook: Workbook,
     key: string
@@ -646,10 +705,17 @@ export namespace Workbook {
     if (!rubric) {
       throw new Error('unlock error');
     }
-    if (rubric.locked) {
-      return decrypt(workbook, await Rubric.unlock(rubric, key));
+    if (!rubric.locked) {
+      return rubric;
     }
-    return rubric;
+
+    const unlocked = await Rubric.unlock(rubric, key);
+    const decrypted = await decrypt(workbook, unlocked);
+
+    // Verify against the stable rubric source payload.
+    const cells = sources(workbook, unlocked);
+    await Rubric.Assignment.verify(decrypted.assignment.report, cells, key);
+    return decrypted;
   }
 
   /**

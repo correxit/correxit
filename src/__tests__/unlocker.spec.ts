@@ -81,7 +81,7 @@ describe('Unlocker', () => {
     Unlocker.unlock(
       workbook,
       credentials,
-      { manager, passphrases, token },
+      { manager, passphrases, pending: null, token },
       trans
     );
 
