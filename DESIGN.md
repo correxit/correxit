@@ -204,7 +204,6 @@ stateDiagram-v2
   IdlePool --> [*] : TTL expires (dispose)
 ```
 
-
 ## Style
 
 Correxit is built with functions, namespaces, and pure data. Classes appear only
