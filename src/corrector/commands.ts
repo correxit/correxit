@@ -162,8 +162,10 @@ export function addCommands(
           let prompted = false;
           for (const { path } of notebooks) {
             const fetched = await fetch({ ...handle, path }, prompted);
-            prompted = true;
             if (fetched) {
+              const locked = Workbook.open(fetched, true)?.locked;
+              const unauthenticated = !handle.key && !handle.passphrase;
+              prompted ||= !locked || !handle.unlock || !unauthenticated;
               yield fetched as Headless;
             }
           }
