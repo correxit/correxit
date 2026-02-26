@@ -186,21 +186,21 @@ export function Corrector(props: Corrector.Props) {
   const grade = grading ? batch : '';
   const config = { certify, overwrite, path, unlock: true };
   const [grades, graded] = useCommand<Batched>(commands, grade, config);
-  const collated: Collated = new Map(grades);
-  const merged = merge(workbooks, collated);
+  const collated = useMemo(() => new Map(grades) as Collated, [grades]);
+  const memo = useMemo(() => merge(workbooks, collated), [workbooks, collated]);
   const cached = useRef({} as { [path: string]: Headless });
   const [selection, setSelection] = useState('');
-  const workbook = useMemo(() => match(merged, selection), [merged, selection]);
+  const workbook = useMemo(() => match(memo, selection), [memo, selection]);
   const focus = workbook?.context.path || null;
   useEffect(() => () => dispose(Object.values(cached.current)), []);
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
-  useEffect(() => reconcile(cached.current, merged, focus), [focus, merged]);
+  useEffect(() => reconcile(cached.current, memo, focus), [focus, memo]);
   return (
     <>
-      <Progress {...{ collated, graded, grading, max: merged.length, trans }} />
+      <Progress {...{ collated, graded, grading, max: memo.length, trans }} />
       <table className="correxit-corrector">
-        {merged.map(workbook => {
+        {memo.map(workbook => {
           const { path } = workbook.context;
           const grade = resolve(workbook, collated, graded);
           const select = setSelection;
@@ -425,8 +425,7 @@ const Score: React.FC<{
   }
   return (
     <>
-      <td className="correxit-corrector-kernel" />
-      <td className="correxit-corrector-failed">
+      <td className="correxit-corrector-failed" colSpan={2}>
         <span>{graded ? irrecoverable : recoverable}</span>
       </td>
     </>

@@ -1,7 +1,7 @@
 import {
   createMessage,
-  decrypt as _decrypt,
-  encrypt as _encrypt,
+  decrypt as DECRYPT,
+  encrypt as ENCRYPT,
   readMessage
 } from 'openpgp';
 
@@ -19,7 +19,7 @@ export async function decrypt(text: string, password: string): Promise<string> {
   } catch (_) {
     return text;
   }
-  return (await _decrypt({ message, passwords: [password] })).data;
+  return (await DECRYPT({ message, passwords: [password] })).data;
 }
 
 export async function digest(text: string): Promise<string> {
@@ -31,7 +31,7 @@ export async function digest(text: string): Promise<string> {
 
 export async function encrypt(text: string, password: string): Promise<string> {
   const message = await createMessage({ text });
-  return _encrypt({ message, passwords: [password] }) as Promise<string>;
+  return ENCRYPT({ message, passwords: [password] }) as Promise<string>;
 }
 
 export async function keygen(
