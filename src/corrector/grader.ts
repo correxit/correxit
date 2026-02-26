@@ -49,7 +49,7 @@ export async function* grader(
   let inflight = 0;
   const max = Math.max(1, cap);
   const queue: Settled[] = [];
-  const attempts = new Map<Headless, number>();
+  const attempts = new WeakMap<Headless, number>();
   const sleep = () => new Promise<void>(resolve => void (next = resolve));
   const wake = () => {
     next?.();
