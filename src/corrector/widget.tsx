@@ -35,11 +35,6 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     super.dispose();
   }
 
-  protected commands: CommandRegistry;
-  protected indicator: CorrectorStatus | null;
-  protected selector: ModeSelector | null = null;
-  protected trans: IRenderMime.TranslationBundle;
-
   protected async initialize() {
     const { commands, content, indicator, toolbar, trans } = this;
     const go = (mode: Corrector.Mode, overwrite: boolean) =>
@@ -62,6 +57,11 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
     toolbar.addItem('mode', selector);
     content.set({ notify });
   }
+
+  protected commands: CommandRegistry;
+  protected indicator: CorrectorStatus | null;
+  protected selector: ModeSelector | null = null;
+  protected trans: IRenderMime.TranslationBundle;
 }
 
 export namespace CorrectorWidget {
@@ -163,7 +163,7 @@ class ModeSelector extends ReactWidget {
   }
 
   render() {
-    const { busy, go, interrupt, mode, overwrite, trans } = this;
+    const { busy, mode, overwrite, trans } = this;
     const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
       {
         value: 'scan',
@@ -181,7 +181,9 @@ class ModeSelector extends ReactWidget {
         tooltip: trans.__('Unlock workbooks and collect grades, (save file)')
       }
     ];
-    const action = busy ? interrupt : () => go(mode, overwrite);
+    const action = busy
+      ? () => this.abort()
+      : () => this.start(mode, overwrite);
     const label = busy ? trans.__('Interrupt') : trans.__('Go');
     const className = `correxit-corrector-mode-go ${
       busy ? 'jp-mod-warn' : 'jp-mod-accept'
@@ -234,6 +236,7 @@ class ModeSelector extends ReactWidget {
 
   reset() {
     this.select('scan');
+    this.busy = false;
     this.overwrite = false;
     this.update();
   }
@@ -243,9 +246,22 @@ class ModeSelector extends ReactWidget {
       this.overwrite = updates.overwrite;
     } else {
       const idle = updates.graded && updates.scanned;
-      this.busy = !idle && updates.mode !== 'scan';
+      if (idle || updates.mode === 'scan') {
+        this.busy = false;
+      }
     }
     this.update();
+  }
+
+  protected abort() {
+    this.busy = false;
+    this.interrupt();
+  }
+
+  protected start(mode: Corrector.Mode, overwrite: boolean) {
+    this.busy = true;
+    this.update();
+    this.go(mode, overwrite);
   }
 
   protected select(mode: Corrector.Mode) {
