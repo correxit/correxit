@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/QuantStack/correxit/compare/v1.2.0...v1.2.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* follow on to corrector PR, fix modes, certification resumption, docs ([#41](https://github.com/QuantStack/correxit/issues/41)) ([adc8252](https://github.com/QuantStack/correxit/commit/adc825272be78cf00ec9d9d98409edf6899b97cb))
+
 # [1.2.0](https://github.com/QuantStack/correxit/compare/v1.1.1...v1.2.0) (2026-02-25)
 
 
