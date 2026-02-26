@@ -4,6 +4,11 @@ import { grader } from '../corrector/grader';
 
 type Certified = Workbook.Certified;
 type Headless = Workbook.Headless;
+type Actions = {
+  correct: (workbook: Headless) => Promise<Certified>;
+  recover: (workbook: Headless) => Certified;
+  skip: (workbook: Headless) => Certified | null;
+};
 
 const workbook = (path: string): Headless =>
   ({ context: { path } }) as unknown as Headless;
@@ -42,12 +47,22 @@ const source = async function* (paths: string[]): AsyncGenerator<Headless> {
   }
 };
 
+const actions = (
+  correct: (workbook: Headless) => Promise<Certified>,
+  recover: (workbook: Headless) => Certified,
+  skip: (workbook: Headless) => Certified | null = () => null
+): Actions => ({ correct, recover, skip });
+
 describe('grader', () => {
   it('yields nothing for an empty scan', async () => {
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
     const recover = jest.fn((workbook: Headless) => failed(workbook));
-    for await (const graded of grader(source([]), correct, recover, 5)) {
+    for await (const graded of grader(
+      source([]),
+      actions(correct, recover),
+      5
+    )) {
       collected.push(graded.grade.path);
     }
     expect(collected).toEqual([]);
@@ -58,7 +73,8 @@ describe('grader', () => {
     const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
     const collected: string[] = [];
     const correct = jest.fn(async (workbook: Headless) => grade(workbook));
-    const stream = grader(source(paths), correct, jest.fn(), 5);
+    const recover = jest.fn((workbook: Headless) => failed(workbook));
+    const stream = grader(source(paths), actions(correct, recover), 5);
     for await (const graded of stream) {
       collected.push(graded.grade.path);
     }
@@ -78,7 +94,7 @@ describe('grader', () => {
     const recover = jest.fn((workbook: Headless) => failed(workbook));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const stream = grader(source(paths), correct, recover, 2);
+      const stream = grader(source(paths), actions(correct, recover), 2);
       for await (const graded of stream) {
         collected.push(graded);
       }
@@ -110,7 +126,8 @@ describe('grader', () => {
     });
     const pending = (async () => {
       const collected: string[] = [];
-      const stream = grader(source(paths), correct, jest.fn(), 0);
+      const recover = jest.fn((workbook: Headless) => failed(workbook));
+      const stream = grader(source(paths), actions(correct, recover), 0);
       for await (const graded of stream) {
         collected.push(graded.grade.path);
       }
@@ -148,7 +165,8 @@ describe('grader', () => {
     });
     const pending = (async () => {
       const collected: string[] = [];
-      const stream = grader(source(paths), correct, jest.fn(), 2);
+      const recover = jest.fn((workbook: Headless) => failed(workbook));
+      const stream = grader(source(paths), actions(correct, recover), 2);
       for await (const graded of stream) {
         collected.push(graded.grade.path);
       }
@@ -180,7 +198,7 @@ describe('grader', () => {
     const recover = jest.fn((workbook: Headless) => failed(workbook));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const stream = grader(source(paths), correct, recover, 3);
+      const stream = grader(source(paths), actions(correct, recover), 3);
       for await (const graded of stream) {
         collected.push(graded);
       }
@@ -210,7 +228,8 @@ describe('grader', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const collected: Certified[] = [];
     try {
-      const stream = grader(source(paths), correct, jest.fn(), 3, 2);
+      const recover = jest.fn((workbook: Headless) => failed(workbook));
+      const stream = grader(source(paths), actions(correct, recover), 3, 2);
       for await (const graded of stream) {
         collected.push(graded);
       }
@@ -235,7 +254,7 @@ describe('grader', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const collected: Certified[] = [];
     try {
-      const stream = grader(source(paths), correct, recover, 2, 2);
+      const stream = grader(source(paths), actions(correct, recover), 2, 2);
       for await (const graded of stream) {
         collected.push(graded);
       }
@@ -247,5 +266,26 @@ describe('grader', () => {
     expect(
       collected.find(c => c.grade.path === 'b.ipynb')!.grade.resolved
     ).toBe(false);
+  });
+
+  it('emits skipped workbooks immediately without grading them', async () => {
+    const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
+    const collected: string[] = [];
+    const correct = jest.fn(async (workbook: Headless) => grade(workbook));
+    const recover = jest.fn((workbook: Headless) => failed(workbook));
+    const skip = jest.fn((workbook: Headless) =>
+      workbook.context.path === 'a.ipynb' ? grade(workbook) : null
+    );
+
+    const stream = grader(source(paths), actions(correct, recover, skip), 2);
+    for await (const graded of stream) {
+      collected.push(graded.grade.path);
+    }
+
+    expect(collected).toContain('a.ipynb');
+    expect(correct).toHaveBeenCalledTimes(2);
+    expect(correct).not.toHaveBeenCalledWith(
+      expect.objectContaining({ context: { path: 'a.ipynb' } })
+    );
   });
 });

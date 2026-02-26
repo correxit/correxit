@@ -9,7 +9,7 @@ import { folderIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
 import * as kernels from '../correxit/kernels';
 import { Corrector } from '.';
-import { grader } from './grader';
+import { Actions, grader } from './grader';
 
 type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
@@ -63,9 +63,13 @@ export function addCommands(
         const cap = kernels.cap();
         const retries = kernels.retries();
         const grades = async function* (): AsyncGenerator<Certified> {
-          const rules = { commit, overwrite };
-          const corrector = (workbook: Headless) => correct(workbook, rules);
-          yield* grader(scanner(app, handle), corrector, recover, cap, retries);
+          const preserve = commit && !overwrite;
+          const actions: Actions = {
+            correct: workbook => correct(workbook, { commit, overwrite }),
+            recover: workbook => recover(workbook),
+            skip: workbook => (preserve ? certified(workbook) : null)
+          };
+          yield* grader(scanner({ commands }, handle), actions, cap, retries);
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
           for await (const { grade, workbook } of stream) {
@@ -205,11 +209,6 @@ async function correct(
   const rubric = Workbook.open(workbook, true);
   if (!rubric || rubric.locked) {
     return recover(workbook);
-  }
-
-  const existing = certified(workbook);
-  if (commit && existing && !overwrite) {
-    return existing;
   }
 
   const graded = await (commit ? Workbook.certify(workbook) : grade(workbook));
