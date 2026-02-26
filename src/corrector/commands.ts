@@ -9,12 +9,13 @@ import { folderIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
 import * as kernels from '../correxit/kernels';
 import { Corrector } from '.';
-import { grader } from './grader';
+import { Actions, grader } from './grader';
 
 type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
+type Rules = { commit: boolean; overwrite: boolean };
 
 export type Hollow = { hollow: true; context: { path: string } };
 
@@ -52,7 +53,7 @@ export function addCommands(
       execute: (
         args: Partial<Credentials & { certify: boolean; overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const { certify: commit, overwrite } = args;
+        const rules = { commit: !!args.certify, overwrite: !!args.overwrite };
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
@@ -63,9 +64,12 @@ export function addCommands(
         const cap = kernels.cap();
         const retries = kernels.retries();
         const grades = async function* (): AsyncGenerator<Certified> {
-          const rules = { commit, overwrite };
-          const corrector = (workbook: Headless) => correct(workbook, rules);
-          yield* grader(scanner(app, handle), corrector, recover, cap, retries);
+          const actions: Actions = {
+            correct: workbook => correct(workbook, rules),
+            recover: workbook => recover(workbook),
+            skip: workbook => skip(workbook, rules)
+          };
+          yield* grader(scanner({ commands }, handle), actions, cap, retries);
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
           for await (const { grade, workbook } of stream) {
@@ -162,8 +166,10 @@ export function addCommands(
           let prompted = false;
           for (const { path } of notebooks) {
             const fetched = await fetch({ ...handle, path }, prompted);
-            prompted = true;
             if (fetched) {
+              const locked = Workbook.open(fetched, true)?.locked;
+              const unauthenticated = !handle.key && !handle.passphrase;
+              prompted ||= !locked || !handle.unlock || !unauthenticated;
               yield fetched as Headless;
             }
           }
@@ -173,7 +179,7 @@ export function addCommands(
   return disposables;
 }
 
-function certified(workbook: Workbook): Certified | null {
+function certified(workbook: Headless): Certified | null {
   const rubric = Workbook.open(workbook, true);
   if (!rubric) {
     return null;
@@ -198,16 +204,11 @@ function certified(workbook: Workbook): Certified | null {
 
 async function correct(
   workbook: Headless,
-  { commit, overwrite }: { commit?: boolean; overwrite?: boolean }
+  { commit }: Rules
 ): Promise<Certified> {
   const rubric = Workbook.open(workbook, true);
   if (!rubric || rubric.locked) {
     return recover(workbook);
-  }
-
-  const existing = certified(workbook);
-  if (commit && existing && !overwrite) {
-    return existing;
   }
 
   const graded = await (commit ? Workbook.certify(workbook) : grade(workbook));
@@ -215,7 +216,7 @@ async function correct(
   return graded;
 }
 
-async function grade(workbook: Workbook): Promise<Certified> {
+async function grade(workbook: Headless): Promise<Certified> {
   const corrected = await Workbook.correct(workbook);
   const grade = { ...corrected, path: workbook.context.path };
   const identifier = Workbook.identifier(workbook);
@@ -225,12 +226,8 @@ async function grade(workbook: Workbook): Promise<Certified> {
 
 function recover(workbook: Headless): Certified {
   const path = workbook.context.path;
-  const grade: Grade = {
-    path,
-    resolved: false,
-    score: Rubric.Score.UNSCORED,
-    spec: null
-  };
+  const unscored = { ...Rubric.Score.UNSCORED };
+  const grade: Grade = { path, resolved: false, score: unscored, spec: null };
   let identifier: Workbook.Identifier;
   try {
     identifier = Workbook.identifier(workbook);
@@ -240,7 +237,7 @@ function recover(workbook: Headless): Certified {
   return { grade, identifier, timestamp: 0, workbook };
 }
 
-async function save(workbook: Workbook | null) {
+async function save(workbook: Headless | null) {
   await workbook?.context.save();
 }
 
@@ -254,4 +251,8 @@ async function* scanner(
       yield workbook;
     }
   }
+}
+
+function skip(workbook: Headless, rules: Rules): Certified | null {
+  return rules.commit && !rules.overwrite ? certified(workbook) : null;
 }

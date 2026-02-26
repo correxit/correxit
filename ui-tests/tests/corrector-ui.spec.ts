@@ -171,6 +171,58 @@ test('scan yields nothing for a missing directory', async ({ page }) => {
   await dispose();
 });
 
+test('scan does not silence next fetch after first fetch failure', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  await cd(page, '.');
+
+  const silentCalls = await page.evaluate(async (directory: string) => {
+    const app = (window as any).jupyterapp;
+    const execute = app.commands.execute.bind(app.commands);
+    const calls: boolean[] = [];
+    let fetches = 0;
+
+    app.commands.execute = async (id: string, args: any) => {
+      if (id === 'correxit:fetch') {
+        calls.push(!!args?.silent);
+        fetches += 1;
+        if (fetches === 1) {
+          return null;
+        }
+      }
+      return execute(id, args);
+    };
+
+    try {
+      const stream: AsyncGenerator<any> = await execute(
+        'correxit-corrector:scan',
+        { path: directory }
+      );
+      for await (const workbook of stream) {
+        if (!workbook.hollow) {
+          workbook.context.dispose();
+        }
+      }
+      return calls;
+    } finally {
+      app.commands.execute = execute;
+    }
+  }, propagated.directory);
+
+  expect(silentCalls).toEqual([false, false]);
+
+  await cleanup(page, propagated);
+  await dispose();
+});
+
 test('batch grades scanned workbooks without certifying', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'print(42)' },

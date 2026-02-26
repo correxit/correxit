@@ -63,7 +63,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 | --------------------------------------- | -------------------------------------------- |
 | Mutating `rubric` object                | Return new `rubric` via `Rubric.*` functions |
 | Accessing `notebook.model` in UI        | Execute a Command instead                    |
-| `interface Config { key?: string }`     | `interface Config { key: string \mid null }` |
+| `interface Config { key?: string }`     | `interface Config { key: string \| null }`   |
 | `reduce((acc, x) => ({...acc, x}), {})` | `Object.fromEntries(arr.map(x => [k, v]))`   |
 
 ## 6. Testing Strategy

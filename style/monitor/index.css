@@ -9,16 +9,20 @@
 }
 
 .correxit-target-cell {
-  outline: none;
+  --correxit-target-ring-width: 3px;
+
   border: none;
   border-radius: 2px;
-  box-shadow: 0 0 0 3px transparent;
+  box-shadow: 0 0 0 var(--correxit-target-ring-width) transparent;
+  outline: none;
 }
 
 .correxit-target-cell.cxt-mod-include {
-  box-shadow: 0 0 0 3px var(--jp-accept-color-active);
+  box-shadow: 0 0 0 var(--correxit-target-ring-width)
+    var(--jp-accept-color-active);
 }
 
 .correxit-target-cell.cxt-mod-exclude {
-  box-shadow: 0 0 0 3px var(--jp-reject-color-active);
+  box-shadow: 0 0 0 var(--correxit-target-ring-width)
+    var(--jp-reject-color-active);
 }

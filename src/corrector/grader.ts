@@ -6,14 +6,21 @@ type Settled =
   | { ok: true; grade: Certified }
   | { ok: false; error: unknown; workbook: Headless };
 
+export type Actions = {
+  correct: (workbook: Headless) => Promise<Certified>;
+  recover: (workbook: Headless) => Certified;
+  skip: (workbook: Headless) => Certified | null;
+};
+
 /**
  * Grade scanned workbooks with bounded in-flight concurrency.
  *
  * @param scanner - Cold async iterable of headless workbooks to grade.
- * @param correct - Async function that grades a single workbook and returns
- *   the certified result. Errors thrown here are caught and recovered.
- * @param recover - Function that converts a failed workbook into a synthetic
- *   certified result for the consumer. The error is logged before recovery.
+ * @param actions - Functions orchestrated by the grader.
+ *   - `correct`: async grading function.
+ *   - `recover`: fallback result for failures after retries.
+ *   - `skip`: synchronous fast path that returns a certified result when the
+ *     workbook should be emitted immediately without grading.
  * @param cap - Maximum number of workbooks being graded simultaneously.
  *   Values less than 1 are clamped to 1.
  * @param retries - How many times to retry a workbook where `correct` throws
@@ -34,8 +41,7 @@ type Settled =
  */
 export async function* grader(
   scanner: Iterable<Headless> | AsyncIterable<Headless>,
-  correct: (workbook: Headless) => Promise<Certified>,
-  recover: (workbook: Headless) => Certified,
+  actions: Actions,
   cap: number,
   retries: number = 0
 ): AsyncGenerator<Certified> {
@@ -50,6 +56,7 @@ export async function* grader(
     next = null;
   };
   const start = (workbook: Headless) => {
+    const { correct } = actions;
     inflight++;
     correct(workbook)
       .then(grade => queue.push({ ok: true, grade }))
@@ -85,10 +92,15 @@ export async function* grader(
     }
     attempts.delete(item.workbook);
     console.warn('grader error', item.workbook.context.path, item.error);
-    return recover(item.workbook);
+    return actions.recover(item.workbook);
   };
 
   for await (const workbook of scanner) {
+    const cached = actions.skip(workbook);
+    if (cached) {
+      yield cached;
+      continue;
+    }
     while (inflight >= max) {
       const grade = await emit();
       if (grade) {

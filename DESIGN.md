@@ -177,6 +177,33 @@ switches tabs. It is backed by a Lumino `Stream`.
 its output via `for await`, buffers results, and flushes to component state at
 ~60fps via a `Throttler`. It handles cleanup on unmount.
 
+## Kernel pool concurrency model
+
+The kernel pool (`kernels.ts`) manages bounded concurrency for batch grading. It uses a semaphore-like `acquire()` mechanism to limit the number of active and recycling kernels. Released kernels are restarted and cached with a time-to-live (TTL) to avoid the overhead of starting new kernels for subsequent workbooks.
+
+```mermaid
+stateDiagram-v2
+  state "Wait Queue" as WaitQueue
+  state "Active Lease" as ActiveLease
+  state "Idle Pool" as IdlePool
+  state "Recycling" as Recycling
+
+  [*] --> WaitQueue : lease()
+
+  WaitQueue --> ActiveLease : slot available (start new)
+  WaitQueue --> ActiveLease : slot available (take idle)
+
+  IdlePool --> ActiveLease : take idle
+
+  ActiveLease --> Recycling : release()
+  ActiveLease --> [*] : timeout (dispose)
+
+  Recycling --> IdlePool : restart success
+  Recycling --> [*] : restart fail (dispose)
+
+  IdlePool --> [*] : TTL expires (dispose)
+```
+
 ## Style
 
 Correxit is built with functions, namespaces, and pure data. Classes appear only

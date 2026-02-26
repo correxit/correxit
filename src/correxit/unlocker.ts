@@ -91,10 +91,12 @@ async function resolve(
   secrets: Secrets
 ): Promise<Rubric.Unlocked | null> {
   for await (const key of candidates(id, handle, secrets)) {
-    const unlocked = await attempt(workbook, key);
-    if (unlocked) {
+    try {
+      const unlocked = await attempt(workbook, key);
       await Unlocker.store(id, key, secrets);
       return unlocked;
+    } catch {
+      continue;
     }
   }
   return null;
@@ -121,20 +123,18 @@ async function inquire(
     return null;
   }
 
+  secrets.passphrases.add(passphrase);
   const key = await security.keygen(passphrase, id);
   const unlocked = await attempt(workbook, key);
-  if (unlocked) {
-    secrets.passphrases.add(passphrase);
-    await Unlocker.store(id, key, secrets);
-  }
+  await Unlocker.store(id, key, secrets);
   return unlocked;
 }
 
 async function attempt(
   workbook: Workbook,
   key: string
-): Promise<Rubric.Unlocked | null> {
-  return await Workbook.unlock(workbook, key).catch(() => null);
+): Promise<Rubric.Unlocked> {
+  return Workbook.unlock(workbook, key);
 }
 
 async function prompt(

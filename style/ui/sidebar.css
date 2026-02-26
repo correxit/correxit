@@ -3,23 +3,27 @@
 }
 
 .correxit-sidebar {
+  --correxit-sidebar-control-width: 95%;
+  --correxit-sidebar-font-size: var(--jp-ui-font-size1);
+  --correxit-sidebar-section-padding: 5px;
+
   display: flex;
   flex-flow: column;
 }
 
 .correxit-sidebar h4 {
+  font-size: var(--correxit-sidebar-font-size);
   font-weight: 600;
-  font-size: var(--jp-ui-font-size1);
 }
 
 .correxit-sidebar h5 {
+  font-size: var(--correxit-sidebar-font-size);
   margin: 0;
   font-weight: 300 !important;
-  font-size: var(--jp-ui-font-size1);
 }
 
 .correxit-sidebar > section {
-  padding: 5px;
+  padding: var(--correxit-sidebar-section-padding);
 }
 
 .correxit-sidebar > section.correxit-sidebar-body {
@@ -27,23 +31,23 @@
 }
 
 .correxit-sidebar-body > textarea {
+  background-color: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color2);
   display: block;
+  font-size: var(--correxit-sidebar-font-size);
   justify-content: center;
   height: 35px;
+  margin: 0 auto 10px;
   overflow-y: auto;
   width: 85%;
-  margin: 0 auto 10px;
-  font-size: var(--jp-ui-font-size1);
-  color: var(--jp-ui-font-color2);
-  background-color: var(--jp-layout-color2);
 }
 
 .correxit-sidebar .correxit-monospace {
   background-color: var(--jp-layout-color2);
   font-family: var(--jp-code-font-family);
-  font-size: var(--jp-ui-font-size1);
-  overflow: hidden;
+  font-size: var(--correxit-sidebar-font-size);
   margin: 2px 0;
+  overflow: hidden;
   padding: 5px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -72,8 +76,8 @@
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent > span {
-  font-size: var(--jp-ui-font-size1);
   color: var(--jp-inverse-layout-color);
+  font-size: var(--correxit-sidebar-font-size);
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent svg {
@@ -89,10 +93,10 @@
 }
 
 .correxit-sidebar-inner-header {
+  align-items: center;
   display: flex;
   justify-content: space-between;
   margin: 5px 15px;
-  align-items: center;
 
   .jp-ToolbarButtonComponent:hover {
     background-color: transparent;
@@ -101,11 +105,11 @@
 
 .correxit-sidebar p {
   background-color: var(--jp-layout-color4);
+  border-radius: 3px;
   border-color: var(--jp-border-color4);
   border-width: 2px;
-  border-radius: 3px;
   color: var(--jp-ui-font-color4);
-  font-size: var(--jp-ui-font-size1);
+  font-size: var(--correxit-sidebar-font-size);
   margin: 25px 10px 5px;
   padding: 8px;
 }
@@ -122,11 +126,11 @@
 }
 
 .correxit-assignment {
-  border-color: var(--jp-border-color2);
-  border-width: 2px;
-  border-style: solid;
-  border-radius: 3px;
   background-color: var(--jp-layout-color2);
+  border-radius: 3px;
+  border-color: var(--jp-border-color2);
+  border-style: solid;
+  border-width: 2px;
   margin: 0 2px;
   padding: 2px 0;
 }
@@ -147,7 +151,7 @@
   select,
   textarea {
     min-height: 28px;
-    width: 95%;
+    width: var(--correxit-sidebar-control-width);
   }
 
   select {
@@ -170,9 +174,9 @@
   }
 
   input[type='datetime-local'] {
-    font-size: var(--jp-ui-font-size1);
+    font-size: var(--correxit-sidebar-font-size);
     height: 28px;
-    width: 95%;
+    width: var(--correxit-sidebar-control-width);
   }
 }
 
@@ -184,15 +188,15 @@
     color: var(--jp-ui-font-color2);
     font-size: var(--jp-ui-font-size0);
     height: 250px;
-    width: 95%;
-    padding: 2px;
     overflow: hidden auto;
+    padding: 2px;
     text-overflow: ellipsis;
     white-space: nowrap;
+    width: var(--correxit-sidebar-control-width);
   }
 
   progress {
-    width: 95%;
+    width: var(--correxit-sidebar-control-width);
   }
 }
 

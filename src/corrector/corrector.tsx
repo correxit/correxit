@@ -179,28 +179,29 @@ const Progress: React.FC<{
 };
 
 export function Corrector(props: Corrector.Props) {
-  const { active, commands, mode, notify, overwrite, path, trans } = props;
+  const { commands, mode, notify, overwrite, path, trans } = props;
   const certify = mode === 'certify';
-  const grading = active && (mode === 'grade' || certify);
+  const grading = mode === 'grade' || certify;
   const [workbooks, scanned] = useCommand<Scanned>(commands, scan, { path });
   const grade = grading ? batch : '';
   const config = { certify, overwrite, path, unlock: true };
   const [grades, graded] = useCommand<Batched>(commands, grade, config);
-  const collated: Collated = new Map(grades);
-  const merged = merge(workbooks, collated);
+  const collated = useMemo(() => new Map(grades) as Collated, [grades]);
+  const memo = useMemo(() => merge(workbooks, collated), [workbooks, collated]);
   const cached = useRef({} as { [path: string]: Headless });
   const [selection, setSelection] = useState('');
-  const workbook = useMemo(() => match(merged, selection), [merged, selection]);
+  const workbook = useMemo(() => match(memo, selection), [memo, selection]);
   const focus = workbook?.context.path || null;
   useEffect(() => () => dispose(Object.values(cached.current)), []);
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
-  useEffect(() => reconcile(cached.current, merged, focus), [focus, merged]);
+  useEffect(() => reconcile(cached.current, memo, focus), [focus, memo]);
   return (
     <>
-      <Progress {...{ collated, graded, grading, max: merged.length, trans }} />
+      <Progress {...{ collated, graded, grading, max: memo.length, trans }} />
       <table className="correxit-corrector">
-        {merged.map(workbook => {
+        <Columns />
+        {memo.map(workbook => {
           const { path } = workbook.context;
           const grade = resolve(workbook, collated, graded);
           const select = setSelection;
@@ -218,7 +219,6 @@ export namespace Corrector {
   export type Notification = { graded: boolean; scanned: boolean; mode: Mode };
 
   export type Props = {
-    active: boolean;
     commands: CommandRegistry;
     mode: Mode;
     notify: (updates: Notification) => void;
@@ -241,6 +241,18 @@ export namespace Corrector {
 
   export const Widget = CorrectorWidget;
 }
+
+const Columns: React.FC = () => (
+  <colgroup>
+    <col className="correxit-corrector-col-open" />
+    <col className="correxit-corrector-col-lock" />
+    <col className="correxit-corrector-col-assignment" />
+    <col className="correxit-corrector-col-assignee" />
+    <col className="correxit-corrector-col-breakdown" />
+    <col className="correxit-corrector-col-kernel" />
+    <col className="correxit-corrector-col-score" />
+  </colgroup>
+);
 
 const HollowRow: React.FC<{
   className: string;
@@ -425,8 +437,7 @@ const Score: React.FC<{
   }
   return (
     <>
-      <td className="correxit-corrector-kernel" />
-      <td className="correxit-corrector-failed">
+      <td className="correxit-corrector-failed" colSpan={2}>
         <span>{graded ? irrecoverable : recoverable}</span>
       </td>
     </>
@@ -434,7 +445,7 @@ const Score: React.FC<{
 };
 
 const Pending: React.FC = () => (
-  <td className="correxit-corrector-pending">
+  <td className="correxit-corrector-pending correxit-corrector-score-report">
     <span>
       <span className="correxit-corrector-pending-dot"></span>
       <span className="correxit-corrector-pending-dot"></span>
