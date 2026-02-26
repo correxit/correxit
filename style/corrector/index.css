@@ -64,6 +64,22 @@ table.correxit-corrector tr td {
   padding: 5px;
 }
 
+table.correxit-corrector tr.correxit-corrector-progress {
+  background-color: var(--jp-layout-color2);
+}
+
+table.correxit-corrector tr.correxit-corrector-progress td {
+  background-color: var(--jp-layout-color2);
+  height: 16px;
+  padding: 0;
+}
+
+table.correxit-corrector tr.correxit-corrector-progress td > progress {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
 table.correxit-corrector tr.cxt-mod-pending td {
   border-color: var(--jp-border-color0) transparent var(--jp-border-color0)
     transparent;
@@ -213,6 +229,12 @@ td.correxit-corrector-failed > span {
 
 table.correxit-corrector tr.cxt-mod-failed td {
   opacity: 0.6;
+}
+
+table.correxit-corrector tr.correxit-corrector-progress.cxt-mod-active td {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .correxit-corrector-mode {
