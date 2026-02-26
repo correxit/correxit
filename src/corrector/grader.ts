@@ -8,8 +8,8 @@ type Settled =
 
 export type Actions = {
   correct: (workbook: Headless) => Promise<Certified>;
+  exclude: (workbook: Headless) => Certified | null;
   recover: (workbook: Headless) => Certified;
-  skip: (workbook: Headless) => Certified | null;
 };
 
 /**
@@ -18,9 +18,9 @@ export type Actions = {
  * @param scanner - Cold async iterable of headless workbooks to grade.
  * @param actions - Functions orchestrated by the grader.
  *   - `correct`: async grading function.
- *   - `recover`: fallback result for failures after retries.
- *   - `skip`: synchronous fast path that returns a certified result when the
+ *   - `exclude`: synchronous fast path that returns a certified result when the
  *     workbook should be emitted immediately without grading.
+ *   - `recover`: fallback result for failures after retries.
  * @param cap - Maximum number of workbooks being graded simultaneously.
  *   Values less than 1 are clamped to 1.
  * @param retries - How many times to retry a workbook where `correct` throws
@@ -96,7 +96,7 @@ export async function* grader(
   };
 
   for await (const workbook of scanner) {
-    const cached = actions.skip(workbook);
+    const cached = actions.exclude(workbook);
     if (cached) {
       yield cached;
       continue;

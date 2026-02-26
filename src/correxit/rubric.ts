@@ -289,9 +289,8 @@ export namespace Rubric {
       cells: { [id: string]: string },
       key: string
     ): Promise<string> {
-      return security.digest(
-        JSON.stringify({ cells, scores: sort(scores) }).concat(key)
-      );
+      const plain = JSON.stringify({ cells, scores: sort(scores) }).concat(key);
+      return security.digest(plain);
     }
 
     /**

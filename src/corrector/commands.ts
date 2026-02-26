@@ -66,8 +66,8 @@ export function addCommands(
         const grades = async function* (): AsyncGenerator<Certified> {
           const actions: Actions = {
             correct: workbook => correct(workbook, rules),
-            recover: workbook => recover(workbook),
-            skip: workbook => skip(workbook, rules)
+            exclude: workbook => exclude(workbook, rules),
+            recover: workbook => recover(workbook)
           };
           yield* grader(scanner({ commands }, handle), actions, cap, retries);
         };
@@ -216,6 +216,10 @@ async function correct(
   return graded;
 }
 
+function exclude(workbook: Headless, rules: Rules): Certified | null {
+  return rules.commit && !rules.overwrite ? certified(workbook) : null;
+}
+
 async function grade(workbook: Headless): Promise<Certified> {
   const corrected = await Workbook.correct(workbook);
   const grade = { ...corrected, path: workbook.context.path };
@@ -251,8 +255,4 @@ async function* scanner(
       yield workbook;
     }
   }
-}
-
-function skip(workbook: Headless, rules: Rules): Certified | null {
-  return rules.commit && !rules.overwrite ? certified(workbook) : null;
 }
