@@ -200,6 +200,7 @@ export function Corrector(props: Corrector.Props) {
     <>
       <Progress {...{ collated, graded, grading, max: memo.length, trans }} />
       <table className="correxit-corrector">
+        <Columns />
         {memo.map(workbook => {
           const { path } = workbook.context;
           const grade = resolve(workbook, collated, graded);
@@ -241,6 +242,18 @@ export namespace Corrector {
 
   export const Widget = CorrectorWidget;
 }
+
+const Columns: React.FC = () => (
+  <colgroup>
+    <col className="correxit-corrector-col-open" />
+    <col className="correxit-corrector-col-lock" />
+    <col className="correxit-corrector-col-assignment" />
+    <col className="correxit-corrector-col-assignee" />
+    <col className="correxit-corrector-col-breakdown" />
+    <col className="correxit-corrector-col-kernel" />
+    <col className="correxit-corrector-col-score" />
+  </colgroup>
+);
 
 const HollowRow: React.FC<{
   className: string;
@@ -433,7 +446,7 @@ const Score: React.FC<{
 };
 
 const Pending: React.FC = () => (
-  <td className="correxit-corrector-pending">
+  <td className="correxit-corrector-pending correxit-corrector-score-report">
     <span>
       <span className="correxit-corrector-pending-dot"></span>
       <span className="correxit-corrector-pending-dot"></span>

@@ -22,6 +22,21 @@ table.correxit-corrector {
   width: 100%;
 }
 
+table.correxit-corrector col.correxit-corrector-col-open,
+table.correxit-corrector col.correxit-corrector-col-lock,
+table.correxit-corrector col.correxit-corrector-col-assignment,
+table.correxit-corrector col.correxit-corrector-col-kernel {
+  width: 32px;
+}
+
+table.correxit-corrector col.correxit-corrector-col-assignee {
+  width: 150px;
+}
+
+table.correxit-corrector col.correxit-corrector-col-score {
+  width: 100px;
+}
+
 table.correxit-corrector img,
 table.correxit-corrector svg {
   height: 16px;
@@ -62,7 +77,7 @@ td.correxit-corrector-assignment,
 td.correxit-corrector-kernel,
 td.correxit-corrector-lock,
 td.correxit-corrector-open {
-  width: 20px;
+  width: 32px;
 
   .correxit-corrector-icon {
     align-items: center;
@@ -124,11 +139,19 @@ tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
   }
 }
 
-td.correxit-corrector-score-report,
 td.correxit-corrector-pending,
 td.correxit-corrector-failed {
   width: 60px;
   text-align: right;
+}
+
+td.correxit-corrector-failed {
+  width: 120px;
+}
+
+td.correxit-corrector-score-report {
+  text-align: right;
+  width: 100px;
 }
 
 td.correxit-corrector-pending,
