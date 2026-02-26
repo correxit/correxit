@@ -245,10 +245,7 @@ class ModeSelector extends ReactWidget {
     if ('overwrite' in updates) {
       this.overwrite = updates.overwrite;
     } else {
-      const idle = updates.graded && updates.scanned;
-      if (idle || updates.mode === 'scan') {
-        this.busy = false;
-      }
+      this.busy = !(updates.graded && updates.scanned);
     }
     this.update();
   }
