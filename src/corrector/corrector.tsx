@@ -179,9 +179,9 @@ const Progress: React.FC<{
 };
 
 export function Corrector(props: Corrector.Props) {
-  const { active, commands, mode, notify, overwrite, path, trans } = props;
+  const { commands, mode, notify, overwrite, path, trans } = props;
   const certify = mode === 'certify';
-  const grading = active && (mode === 'grade' || certify);
+  const grading = mode === 'grade' || certify;
   const [workbooks, scanned] = useCommand<Scanned>(commands, scan, { path });
   const grade = grading ? batch : '';
   const config = { certify, overwrite, path, unlock: true };
@@ -219,7 +219,6 @@ export namespace Corrector {
   export type Notification = { graded: boolean; scanned: boolean; mode: Mode };
 
   export type Props = {
-    active: boolean;
     commands: CommandRegistry;
     mode: Mode;
     notify: (updates: Notification) => void;

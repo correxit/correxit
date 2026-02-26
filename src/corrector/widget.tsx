@@ -38,10 +38,8 @@ export class CorrectorWidget extends MainAreaWidget<Content> {
   protected async initialize() {
     const { commands, content, indicator, toolbar, trans } = this;
     const go = (mode: Corrector.Mode, overwrite: boolean) =>
-      content.set({ active: true, key: `${Date.now()}`, mode, overwrite });
-    const interrupt = () =>
-      content.set({ active: false, key: `${Date.now()}` });
-    const selector = new ModeSelector({ go, interrupt, trans });
+      content.set({ key: `${Date.now()}`, mode, overwrite });
+    const selector = new ModeSelector({ go, trans });
     const notify = (updates: Corrector.Notification) => {
       indicator?.set(updates);
       selector?.set(updates);
@@ -106,7 +104,6 @@ class Content extends ReactWidget {
     super();
     this.props = {
       ...props,
-      active: false,
       mode: 'scan',
       notify: () => {},
       overwrite: false
@@ -120,7 +117,7 @@ class Content extends ReactWidget {
 
   set(updates: Partial<Corrector.Props & { key?: string }>) {
     if (updates.path !== undefined) {
-      updates = { ...updates, active: false, key: `${Date.now()}` };
+      updates = { ...updates, mode: 'scan', key: `${Date.now()}` };
     }
     this.props = { ...this.props, ...updates };
     this.update();
@@ -136,12 +133,10 @@ class Content extends ReactWidget {
 class ModeSelector extends ReactWidget {
   constructor(options: {
     go: (mode: Corrector.Mode, overwrite: boolean) => void;
-    interrupt: () => void;
     trans: IRenderMime.TranslationBundle;
   }) {
     super();
     this.go = options.go;
-    this.interrupt = options.interrupt;
     this.trans = options.trans;
     this.addClass('correxit-corrector-mode');
   }
@@ -181,9 +176,7 @@ class ModeSelector extends ReactWidget {
         tooltip: trans.__('Unlock workbooks and collect grades, (save file)')
       }
     ];
-    const action = busy
-      ? () => this.abort()
-      : () => this.start(mode, overwrite);
+    const action = () => this.go(mode, overwrite);
     const label = busy ? trans.__('Interrupt') : trans.__('Go');
     const className = `correxit-corrector-mode-go ${
       busy ? 'jp-mod-warn' : 'jp-mod-accept'
@@ -250,16 +243,11 @@ class ModeSelector extends ReactWidget {
     this.update();
   }
 
-  protected abort() {
-    this.busy = false;
-    this.interrupt();
-  }
-
-  protected start(mode: Corrector.Mode, overwrite: boolean) {
-    this.busy = true;
-    this.update();
-    this.go(mode, overwrite);
-  }
+  protected busy = false;
+  protected go: (mode: Corrector.Mode, overwrite: boolean) => void;
+  protected overwrite = false;
+  protected mode: Corrector.Mode = 'scan';
+  protected trans: IRenderMime.TranslationBundle;
 
   protected select(mode: Corrector.Mode) {
     Corrector.Modes.forEach(mode => this.removeClass(`cxt-mod-${mode}`));
@@ -267,11 +255,4 @@ class ModeSelector extends ReactWidget {
     this.mode = mode;
     this.update();
   }
-
-  protected busy = false;
-  protected go: (mode: Corrector.Mode, overwrite: boolean) => void;
-  protected overwrite = false;
-  protected interrupt: () => void;
-  protected mode: Corrector.Mode = 'scan';
-  protected trans: IRenderMime.TranslationBundle;
 }
