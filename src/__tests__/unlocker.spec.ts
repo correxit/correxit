@@ -203,7 +203,9 @@ describe('Unlocker', () => {
     it('caches prompted passphrase even if unlock attempt fails', async () => {
       manager.get.mockResolvedValue(undefined);
       (input.text as jest.Mock).mockResolvedValue('passphrase');
-      (Workbook.unlock as jest.Mock).mockRejectedValue(new Error('missing cells'));
+      (Workbook.unlock as jest.Mock).mockRejectedValue(
+        new Error('missing cells')
+      );
       const passphrases = new Set<string>();
 
       await expect(unlock(null, passphrases)).rejects.toThrow('missing cells');
