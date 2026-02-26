@@ -153,23 +153,25 @@ const resolve = (
   return { path, resolved: true, score, spec: null };
 };
 
+/** @returns the number of resolved grades in a collation of workbooks. */
 const resolutions = (collated: Collated) =>
   Array.from(collated.values()).filter(({ grade }) => grade.resolved).length;
 
 const Progress: React.FC<{
   graded: boolean;
   grading: boolean;
-  scanning: boolean;
   loaded: number;
-  collated: Collated;
-  max: number;
+  resolved: number;
+  scanned: boolean;
+  total: number;
   trans: TranslationBundle;
-}> = ({ collated, graded, grading, loaded, max, scanning, trans }) => {
+}> = ({ graded, grading, loaded, resolved, scanned, total, trans }) => {
+  const active = !!total && (!scanned || (grading && !graded));
   const peak = useRef(0);
-  const active = !!max && (scanning || (grading && !graded));
-  const resolved = grading ? resolutions(collated) : loaded;
-  const value = active ? (peak.current = Math.max(peak.current, resolved)) : 0;
-  const text = trans.__('%1 of %2', value, max);
+  peak.current = Math.max(peak.current, grading ? resolved : loaded);
+
+  const progress = active ? peak.current : 0;
+  const text = trans.__('%1 of %2', progress, total);
   const className = active
     ? 'correxit-corrector-progress cxt-mod-active'
     : 'correxit-corrector-progress';
@@ -177,7 +179,7 @@ const Progress: React.FC<{
     <tr className={className}>
       <td colSpan={7}>
         {active ? (
-          <progress max={max} value={value}>
+          <progress max={total} value={progress}>
             {text}
           </progress>
         ) : null}
@@ -191,19 +193,19 @@ export function Corrector(props: Corrector.Props) {
   const certify = mode === 'certify';
   const grading = mode === 'grade' || certify;
   const [workbooks, scanned] = useCommand<Scanned>(commands, scan, { path });
-  const scanning = !scanned;
   const grade = grading ? batch : '';
   const config = { certify, overwrite, path, unlock: true };
   const [grades, graded] = useCommand<Batched>(commands, grade, config);
   const loaded = useMemo(() => workbooks.filter(reified).length, [workbooks]);
   const collated = useMemo(() => new Map(grades) as Collated, [grades]);
+  const resolved = useMemo(() => resolutions(collated), [collated]);
   const memo = useMemo(() => merge(workbooks, collated), [workbooks, collated]);
   const cached = useRef({} as { [path: string]: Headless });
   const [selection, setSelection] = useState('');
   const workbook = useMemo(() => match(memo, selection), [memo, selection]);
   const focus = workbook?.context.path || null;
-  const max = memo.length;
-  const progress = { collated, graded, grading, loaded, max, scanning };
+  const total = memo.length;
+  const progress = { graded, grading, loaded, resolved, scanned, total };
   useEffect(() => () => dispose(Object.values(cached.current)), []);
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
