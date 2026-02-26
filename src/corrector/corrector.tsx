@@ -305,7 +305,7 @@ const Row: React.FC<{
       <Notebook {...{ commands, trans, workbook }} />
       <Lock {...{ trans, workbook }} />
       <Assignment {...{ trans, workbook }} />
-      <Assignee {...{ trans, workbook }} />
+      <Assignee {...{ workbook }} />
       <Breakdown {...{ failed, workbook }} />
       <Score {...{ grade, graded, trans }} />
     </tr>
@@ -345,10 +345,7 @@ const Breakdown: React.FC<{
   );
 };
 
-const Assignee: React.FC<{
-  trans: TranslationBundle;
-  workbook: Workbook.Headless;
-}> = ({ trans, workbook }) => {
+const Assignee: React.FC<{ workbook: Workbook.Headless }> = ({ workbook }) => {
   const path = basename(workbook.context.path);
   const rubric = open(workbook);
   return (

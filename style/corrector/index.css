@@ -74,12 +74,6 @@ table.correxit-corrector tr.correxit-corrector-progress td {
   padding: 0;
 }
 
-table.correxit-corrector tr.correxit-corrector-progress.cxt-mod-active td {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
 table.correxit-corrector tr.correxit-corrector-progress td > progress {
   display: block;
   height: 100%;
@@ -235,6 +229,12 @@ td.correxit-corrector-failed > span {
 
 table.correxit-corrector tr.cxt-mod-failed td {
   opacity: 0.6;
+}
+
+table.correxit-corrector tr.correxit-corrector-progress.cxt-mod-active td {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .correxit-corrector-mode {
