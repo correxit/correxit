@@ -200,6 +200,17 @@ describe('Unlocker', () => {
       );
     });
 
+    it('caches prompted passphrase even if unlock attempt fails', async () => {
+      manager.get.mockResolvedValue(undefined);
+      (input.text as jest.Mock).mockResolvedValue('passphrase');
+      (Workbook.unlock as jest.Mock).mockRejectedValue(new Error('missing cells'));
+      const passphrases = new Set<string>();
+
+      await expect(unlock(null, passphrases)).rejects.toThrow('missing cells');
+      expect(passphrases.has('passphrase')).toBe(true);
+      expect(manager.set).not.toHaveBeenCalled();
+    });
+
     it('retries with prompt if provided key is incorrect', async () => {
       const wrong = 'wrong';
       (input.text as jest.Mock).mockResolvedValue('passphrase');

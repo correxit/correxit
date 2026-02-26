@@ -123,10 +123,10 @@ async function inquire(
     return null;
   }
 
+  secrets.passphrases.add(passphrase);
   const key = await security.keygen(passphrase, id);
   const unlocked = await attempt(workbook, key);
   if (unlocked) {
-    secrets.passphrases.add(passphrase);
     await Unlocker.store(id, key, secrets);
   }
   return unlocked;
