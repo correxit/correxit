@@ -17,6 +17,11 @@
 }
 
 table.correxit-corrector {
+  --correxit-corrector-assignee-width: 150px;
+  --correxit-corrector-icon-size: 16px;
+  --correxit-corrector-icon-width: 32px;
+  --correxit-corrector-score-width: 100px;
+
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
@@ -26,21 +31,21 @@ table.correxit-corrector col.correxit-corrector-col-open,
 table.correxit-corrector col.correxit-corrector-col-lock,
 table.correxit-corrector col.correxit-corrector-col-assignment,
 table.correxit-corrector col.correxit-corrector-col-kernel {
-  width: 32px;
+  width: var(--correxit-corrector-icon-width);
 }
 
 table.correxit-corrector col.correxit-corrector-col-assignee {
-  width: 150px;
+  width: var(--correxit-corrector-assignee-width);
 }
 
 table.correxit-corrector col.correxit-corrector-col-score {
-  width: 100px;
+  width: var(--correxit-corrector-score-width);
 }
 
 table.correxit-corrector img,
 table.correxit-corrector svg {
-  height: 16px;
-  width: 16px;
+  height: var(--correxit-corrector-icon-size);
+  width: var(--correxit-corrector-icon-size);
 }
 
 table.correxit-corrector tr {
@@ -77,7 +82,7 @@ td.correxit-corrector-assignment,
 td.correxit-corrector-kernel,
 td.correxit-corrector-lock,
 td.correxit-corrector-open {
-  width: 32px;
+  width: var(--correxit-corrector-icon-width);
 
   .correxit-corrector-icon {
     align-items: center;
@@ -88,7 +93,7 @@ td.correxit-corrector-open {
 }
 
 td.correxit-corrector-assignee {
-  width: 150px;
+  width: var(--correxit-corrector-assignee-width);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -141,8 +146,10 @@ tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
 
 td.correxit-corrector-pending,
 td.correxit-corrector-failed {
-  width: 60px;
+  overflow: hidden;
+  position: relative;
   text-align: right;
+  width: 60px;
 }
 
 td.correxit-corrector-failed {
@@ -151,13 +158,7 @@ td.correxit-corrector-failed {
 
 td.correxit-corrector-score-report {
   text-align: right;
-  width: 100px;
-}
-
-td.correxit-corrector-pending,
-td.correxit-corrector-failed {
-  position: relative;
-  overflow: hidden;
+  width: var(--correxit-corrector-score-width);
 }
 
 td.correxit-corrector-pending > span,
@@ -170,6 +171,10 @@ td.correxit-corrector-failed > span {
   display: flex;
   gap: 2px;
   padding: 2px 4px;
+}
+
+td.correxit-corrector-failed > span {
+  color: var(--jp-error-color1);
 }
 
 .correxit-corrector-pending-dot {
@@ -210,14 +215,6 @@ table.correxit-corrector tr.cxt-mod-failed td {
   opacity: 0.6;
 }
 
-td.correxit-corrector-failed {
-  text-align: right;
-
-  > span {
-    color: var(--jp-error-color1);
-  }
-}
-
 .correxit-corrector-mode {
   align-items: center;
   display: flex;
@@ -229,20 +226,7 @@ td.correxit-corrector-failed {
   gap: 6px;
 }
 
-.correxit-corrector-mode-options label {
-  align-items: center;
-  color: var(--jp-ui-font-color1);
-  display: flex;
-  font-family: var(--jp-ui-font-family);
-  font-size: var(--jp-ui-font-size1);
-  gap: 4px;
-}
-
-.correxit-corrector-mode-options input {
-  margin: 0;
-  vertical-align: middle;
-}
-
+.correxit-corrector-mode-options label,
 .correxit-corrector-overwrite {
   align-items: center;
   color: var(--jp-ui-font-color1);
@@ -250,9 +234,13 @@ td.correxit-corrector-failed {
   font-family: var(--jp-ui-font-family);
   font-size: var(--jp-ui-font-size1);
   gap: 4px;
+}
+
+.correxit-corrector-overwrite {
   margin-right: 4px;
 }
 
+.correxit-corrector-mode-options input,
 .correxit-corrector-overwrite input {
   margin: 0;
   vertical-align: middle;
