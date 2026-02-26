@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/QuantStack/correxit/compare/v1.2.1...v1.3.0) (2026-02-26)
+
+
+### Features
+
+* improved progress bar ([#42](https://github.com/QuantStack/correxit/issues/42)) ([dc46fce](https://github.com/QuantStack/correxit/commit/dc46fcecfeca3783a1586f0afa2334acd0895402))
+
 ## [1.2.1](https://github.com/QuantStack/correxit/compare/v1.2.0...v1.2.1) (2026-02-26)
 
 
