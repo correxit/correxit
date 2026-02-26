@@ -24,6 +24,7 @@ import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
+import { DisposableDelegate } from '@lumino/disposable';
 
 /**
  * The default (file-based) Correxit assignment propagation consumer.
@@ -149,12 +150,21 @@ const corrector: JupyterFrontEndPlugin<void> = {
         });
       }
       if (registry) {
-        void registry.load(Correxit.CORRECTOR).then(settings => {
-          const reconfigure = () =>
-            kernels.configure(settings.composite as kernels.Config);
-          reconfigure();
-          settings.changed.connect(reconfigure);
-        });
+        void registry
+          .load(Correxit.CORRECTOR)
+          .then(settings => {
+            const reconfigure = () =>
+              kernels.configure(settings.composite as kernels.Config);
+            const disconnect = new DisposableDelegate(() =>
+              settings.changed.disconnect(reconfigure)
+            );
+            settings.changed.connect(reconfigure);
+            added.push(disconnect);
+            reconfigure();
+          })
+          .catch(reason =>
+            console.warn(Correxit.CORRECTOR, 'settings error', reason)
+          );
       }
       deactivator = () => {
         added.forEach(command => command.dispose());

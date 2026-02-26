@@ -121,22 +121,20 @@ const prune = (
   }
 };
 
-/**
- * Reconcile cached workbooks with the current merged list.
- */
+/** Reconcile cached workbooks with the current merged list. */
 const reconcile = (
   cached: { [path: string]: Headless },
   workbooks: Scanned[],
   focus: string | null
 ) => {
-  const headless = (item: Scanned): item is Headless => !item.hollow;
   prune(cached, paths(workbooks), focus);
-  cache(cached, workbooks.filter(headless));
+  cache(cached, workbooks.filter(reified));
 };
 
-/**
- * @returns the grade for a workbook given current batch and scan state.
- */
+/** A filter function that filters out hollow workbooks. */
+const reified = (workbook: Scanned): workbook is Headless => !workbook.hollow;
+
+/** @returns the grade for a workbook given current batch and scan state. */
 const resolve = (
   workbook: Scanned,
   collated: Collated,
@@ -155,26 +153,36 @@ const resolve = (
   return { path, resolved: true, score, spec: null };
 };
 
+const resolutions = (collated: Collated) =>
+  Array.from(collated.values()).filter(({ grade }) => grade.resolved).length;
+
 const Progress: React.FC<{
   graded: boolean;
   grading: boolean;
+  scanning: boolean;
+  loaded: number;
   collated: Collated;
   max: number;
   trans: TranslationBundle;
-}> = ({ collated, graded, grading, max, trans }) => {
+}> = ({ collated, graded, grading, loaded, max, scanning, trans }) => {
   const peak = useRef(0);
-  if (!grading || !max || graded) {
-    return <></>;
-  }
-  const resolved = Array.from(collated.values()).filter(
-    ({ grade }) => grade.resolved
-  ).length;
-  const value = (peak.current = Math.max(peak.current, resolved));
+  const active = !!max && (scanning || (grading && !graded));
+  const resolved = grading ? resolutions(collated) : loaded;
+  const value = active ? (peak.current = Math.max(peak.current, resolved)) : 0;
   const text = trans.__('%1 of %2', value, max);
+  const className = active
+    ? 'correxit-corrector-progress cxt-mod-active'
+    : 'correxit-corrector-progress';
   return (
-    <progress max={max} value={value}>
-      {text}
-    </progress>
+    <tr className={className}>
+      <td colSpan={7}>
+        {active ? (
+          <progress max={max} value={value}>
+            {text}
+          </progress>
+        ) : null}
+      </td>
+    </tr>
   );
 };
 
@@ -183,33 +191,35 @@ export function Corrector(props: Corrector.Props) {
   const certify = mode === 'certify';
   const grading = mode === 'grade' || certify;
   const [workbooks, scanned] = useCommand<Scanned>(commands, scan, { path });
+  const scanning = !scanned;
   const grade = grading ? batch : '';
   const config = { certify, overwrite, path, unlock: true };
   const [grades, graded] = useCommand<Batched>(commands, grade, config);
+  const loaded = useMemo(() => workbooks.filter(reified).length, [workbooks]);
   const collated = useMemo(() => new Map(grades) as Collated, [grades]);
   const memo = useMemo(() => merge(workbooks, collated), [workbooks, collated]);
   const cached = useRef({} as { [path: string]: Headless });
   const [selection, setSelection] = useState('');
   const workbook = useMemo(() => match(memo, selection), [memo, selection]);
   const focus = workbook?.context.path || null;
+  const max = memo.length;
+  const progress = { collated, graded, grading, loaded, max, scanning };
   useEffect(() => () => dispose(Object.values(cached.current)), []);
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
   useEffect(() => reconcile(cached.current, memo, focus), [focus, memo]);
   return (
-    <>
-      <Progress {...{ collated, graded, grading, max: memo.length, trans }} />
-      <table className="correxit-corrector">
-        <Columns />
-        {memo.map(workbook => {
-          const { path } = workbook.context;
-          const grade = resolve(workbook, collated, graded);
-          const select = setSelection;
-          const props = { commands, grade, graded, select, trans, workbook };
-          return <Row key={path} selected={path === selection} {...props} />;
-        })}
-      </table>
-    </>
+    <table className="correxit-corrector">
+      <Columns />
+      <Progress {...{ ...progress, trans }} />
+      {memo.map(workbook => {
+        const { path } = workbook.context;
+        const grade = resolve(workbook, collated, graded);
+        const select = setSelection;
+        const props = { commands, grade, graded, select, trans, workbook };
+        return <Row key={path} selected={path === selection} {...props} />;
+      })}
+    </table>
   );
 }
 

@@ -28,7 +28,6 @@ let live = 0;
 let recycling = 0;
 let workers = 3;
 
-
 /** Kernel pool configuration. */
 export type Config = { concurrency: number; retries: number; timeout: number };
 
