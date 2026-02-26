@@ -54,7 +54,6 @@ export function addCommands(
         args: Partial<Credentials & { certify: boolean; overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const rules = { commit: !!args.certify, overwrite: !!args.overwrite };
-        const { commit, overwrite } = rules;
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
@@ -66,7 +65,7 @@ export function addCommands(
         const retries = kernels.retries();
         const grades = async function* (): AsyncGenerator<Certified> {
           const actions: Actions = {
-            correct: workbook => correct(workbook, { commit, overwrite }),
+            correct: workbook => correct(workbook, rules),
             recover: workbook => recover(workbook),
             skip: workbook => skip(workbook, rules)
           };
@@ -205,7 +204,7 @@ function certified(workbook: Headless): Certified | null {
 
 async function correct(
   workbook: Headless,
-  { commit, overwrite }: { commit?: boolean; overwrite?: boolean }
+  { commit }: Rules
 ): Promise<Certified> {
   const rubric = Workbook.open(workbook, true);
   if (!rubric || rubric.locked) {
