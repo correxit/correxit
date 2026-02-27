@@ -436,6 +436,7 @@ export function addCommands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
+    className: 'correxit-remove',
     isEnabled: (args: Partial<Cell>) => {
       const id = state.cell(args);
       const rubric = open(state.workbook());

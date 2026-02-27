@@ -72,6 +72,13 @@
     padding: 0 1px;
     width: auto;
   }
+
+  .correxit-remove {
+    margin: 4px 0;
+    min-width: 90%;
+    padding: 0 1px;
+    width: auto;
+  }
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent > span {

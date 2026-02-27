@@ -204,6 +204,11 @@ const Body: React.FC<{
           {...{ commands, id: configure, args: { id, is: 'correctable' } }}
         />
       </div>
+      <div className="correxit-sidebar-cell-config">
+        <CommandToolbarButtonComponent
+          {...{ commands, id: remove, args: { id } }}
+        />
+      </div>
       {hint && <p className="correxit-sidebar-cell-hint">{hints[hint]}</p>}
       <div className="correxit-sidebar-cell-operations">
         {operations.map((props, i) => (
