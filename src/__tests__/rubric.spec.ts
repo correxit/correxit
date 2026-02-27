@@ -72,6 +72,7 @@ describe('Rubric', () => {
       });
       const report: Rubric.Assignment.Report = {
         digest: '',
+        interventions: {},
         scores: { [id]: Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
@@ -96,6 +97,7 @@ describe('Rubric', () => {
 
       const report: Rubric.Assignment.Report = {
         digest: '',
+        interventions: {},
         scores: { c1: Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
@@ -257,6 +259,7 @@ describe('Rubric', () => {
       let rubric = create();
       const report: Rubric.Assignment.Report = {
         digest: '',
+        interventions: {},
         scores: { 'cell-1': Rubric.Score.CORRECT },
         timestamp: Date.now()
       };
@@ -492,6 +495,65 @@ describe('Rubric', () => {
         expect(score.status).toBe('incorrect');
       });
     });
+
+    describe('Reviewable (Manual Intervention)', () => {
+      const populate = (id: string) => {
+        const cell: Rubric.Cell = {
+          id,
+          is: 'reviewable',
+          payload: null,
+          points: 5,
+          reference: null,
+          shared: false
+        };
+        return Rubric.add(create(), cell);
+      };
+
+      it('returns unscored with intervene code when no intervention', async () => {
+        const id = 'q1';
+        const rubric = populate(id);
+        const outputs = new Map([[id, [output('anything')]]]);
+        const score = await Rubric.Cell.score(rubric, id, outputs);
+        expect(score.status).toBe('unscored');
+        expect(score.code).toBe('intervene');
+        expect(score.id).toBe(id);
+        expect(score.possible).toBe(5);
+      });
+
+      it('returns unscored even when outputs are empty', async () => {
+        const id = 'q1';
+        const rubric = populate(id);
+        const outputs: Rubric.Outputs = new Map();
+        const score = await Rubric.Cell.score(rubric, id, outputs);
+        expect(score.status).toBe('unscored');
+        expect(score.code).toBe('intervene');
+      });
+
+      it('resolves to the intervention score when one exists', async () => {
+        const id = 'q1';
+        const intervention: Rubric.Score = {
+          ...Rubric.Score.CORRECT,
+          id,
+          points: 5,
+          possible: 5
+        };
+        const rubric = {
+          ...populate(id),
+          assignment: {
+            ...populate(id).assignment,
+            report: {
+              ...populate(id).assignment.report,
+              interventions: { [id]: intervention }
+            }
+          }
+        };
+        const outputs: Rubric.Outputs = new Map();
+        const score = await Rubric.Cell.score(rubric, id, outputs);
+        expect(score.status).toBe('correct');
+        expect(score.points).toBe(5);
+        expect(score.id).toBe(id);
+      });
+    });
   });
 
   describe('Rubric.Assignment', () => {
@@ -598,6 +660,7 @@ describe('Rubric', () => {
 
       const report: Rubric.Assignment.Report = {
         digest: '',
+        interventions: {},
         scores: {
           c1: Rubric.Score.CORRECT,
           c2: Rubric.Score.CORRECT,
@@ -617,6 +680,7 @@ describe('Rubric', () => {
     it('summarizes a report correctly', () => {
       const report: Rubric.Assignment.Report = {
         digest: '',
+        interventions: {},
         scores: {
           c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
           c2: { ...Rubric.Score.INCORRECT, points: 0, possible: 10 }
@@ -634,6 +698,7 @@ describe('Rubric', () => {
       const cells = { c1: 'print(1)' };
       const scores = { c1: Rubric.Score.CORRECT };
       const base: Omit<Rubric.Assignment.Report, 'digest'> = {
+        interventions: {},
         scores,
         timestamp: null
       };
@@ -669,7 +734,7 @@ describe('Rubric', () => {
         const report: Rubric.Assignment.Report = { ...base, digest };
         await expect(
           Rubric.Assignment.verify(report, { c1: 'tampered' }, key)
-        ).rejects.toThrow('report cell digest mismatch');
+        ).rejects.toThrow('verify error, cell digest mismatch');
       });
 
       it('verify is a no-op when digest is empty string (unsigned)', async () => {

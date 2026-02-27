@@ -180,7 +180,8 @@ const Body: React.FC<{
     answerable: trans.__('Expected output has been set.'),
     comparable: trans.__('Cell output is compared against a reference.'),
     correctable: trans.__('Cell is corrected by a reference cell.'),
-    reference: trans.__('Selected cell is a reference cell.')
+    reference: trans.__('Selected cell is a reference cell.'),
+    reviewable: trans.__('Cell is manually reviewed by an instructor.')
   };
   const hint = get(rubric, id)?.is || (has(rubric, id, true) && 'reference');
   return (

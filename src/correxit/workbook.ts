@@ -176,34 +176,6 @@ export namespace Workbook {
       cell.transact(() => cell.setMetadata('editable', false));
     }
   };
-  /**
-   * Returns a stable signature payload containing all rubric cell IDs and
-   * only the source code for reference cells. No student answer code is
-   * included, allowing answers to be edited without invalidating the grading.
-   */
-  const sources = (workbook: Workbook, rubric: Rubric): {
-    [id: string]: string;
-  } => {
-    const notebook = workbook.context.model.sharedModel;
-    const ids = new Set(Object.keys(rubric.cells));
-    const references = new Set<string>();
-    for (const id of ids) {
-      const cell = rubric.cells[id];
-      for (const ref of cell.reference || []) {
-        references.add(ref);
-      }
-    }
-
-    const payload: { [id: string]: string } = {};
-    for (const cell of notebook.cells) {
-      const id = cell.id;
-      if (ids.has(id) || references.has(id)) {
-        payload[id] = references.has(id) ? cell.getSource() : '';
-      }
-    }
-    return payload;
-  };
-
   const [get, set] = (pool => {
     const get = (workbook: Workbook) => pool.get(workbook) || null;
     const set = (workbook: Workbook, rubric: Rubric | null) =>
@@ -297,7 +269,9 @@ export namespace Workbook {
       const cell = rubric.cells[id];
       const { is, payload } = cell;
       const reference = cell.reference?.[0] ?? '';
-      const valid = is === 'answerable' ? !!payload.length : known[reference];
+      const valid = is === 'answerable' ? !!payload.length
+        : is === 'reviewable' ? true
+        : known[reference];
       if (known[id] && valid) {
         continue;
       }
@@ -430,8 +404,8 @@ export namespace Workbook {
       ? status !== 'unscored'
       : !Object.values(rubric.cells).some(missing) && status !== 'unscored';
     if (resolved && !rubric.locked) {
-      const cells = sources(workbook, rubric);
-      await update(workbook, await Rubric.sign(rubric, report, cells));
+      const sources = Workbook.sources(workbook, rubric);
+      await update(workbook, await Rubric.sign(rubric, report, sources));
     }
     return { resolved, spec, score: final };
   }
@@ -654,6 +628,34 @@ export namespace Workbook {
       throw new Error('reset error');
     }
     update(workbook, null);
+  }
+
+  /**
+   * @returns a stable signature payload containing all rubric cell IDs and
+   * only the source code for reference cells. No student answer code is
+   * included, allowing answers to be edited without invalidating the grading.
+   */
+  export function sources(workbook: Workbook, rubric: Rubric): {
+    [id: string]: string;
+  } {
+    const notebook = workbook.context.model.sharedModel;
+    const ids = new Set(Object.keys(rubric.cells));
+    const references = new Set<string>();
+    for (const id of ids) {
+      const cell = rubric.cells[id];
+      for (const ref of cell.reference || []) {
+        references.add(ref);
+      }
+    }
+
+    const payload: { [id: string]: string } = {};
+    for (const cell of notebook.cells) {
+      const id = cell.id;
+      if (ids.has(id) || references.has(id)) {
+        payload[id] = references.has(id) ? cell.getSource() : '';
+      }
+    }
+    return payload;
   }
 
   /** Submit an assignment, locking all cells to read-only. */
