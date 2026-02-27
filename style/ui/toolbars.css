@@ -1,6 +1,5 @@
 .correxit-cell-toolbar {
   --correxit-cell-toolbar-button-size: 32px;
-  --correxit-cell-toolbar-gap: 2px;
 
   background-color: transparent;
   border-bottom: inherit;
@@ -15,7 +14,7 @@
   z-index: 6;
 }
 
-.correxit-add {
+.correxit-configure {
   background-color: var(--jp-inverse-layout-color3);
   border-radius: 0;
   display: inline-block;
@@ -29,10 +28,4 @@
     background-color: var(--md-blue-400);
     box-shadow: none;
   }
-}
-
-/* The middle cell config button spaces out the correction config. */
-.jp-Toolbar-item[data-jp-item-name='correxit-add-comparable'] {
-  margin-left: var(--correxit-cell-toolbar-gap);
-  margin-right: var(--correxit-cell-toolbar-gap);
 }

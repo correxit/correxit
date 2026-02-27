@@ -15,10 +15,10 @@ import { SidebarWidget } from './widget';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const { CommandIDs } = Correxit;
+const { CommandIDs, Icons } = Correxit;
 const { get, has } = Rubric;
-const { add, certify, comment, convert, correct, draft, lock } = CommandIDs;
-const { remove, reset, submit, toggle, unlock } = Correxit.CommandIDs;
+const { certify, configure, comment, convert, correct, draft } = CommandIDs;
+const { lock, remove, reset, submit, share, unlock } = CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Sidebar(props: Sidebar.Props) {
@@ -75,7 +75,7 @@ const Header: React.FC<{
   const subheading =
     score === null || score.status === 'unscored'
       ? trans.__('Unscored')
-      : trans.__('Workbook Grade %1 out of %2', score.points, score.possible);
+      : trans.__('%1 of %2', score.points, score.possible);
   const submission = rubric?.assignment.submission
     ? trans.__('Submitted %1', date(rubric.assignment.submission))
     : trans.__('Unsubmitted');
@@ -83,17 +83,23 @@ const Header: React.FC<{
     <section className="correxit-sidebar-header">
       <div className="correxit-sidebar-inner-header">
         <h4>{workbook ? heading : idle}</h4>
-        <CommandToolbarButtonComponent commands={commands} id={lock} />
-        <CommandToolbarButtonComponent commands={commands} id={unlock} />
+        <div className="correxit-sidebar-lock-controls">
+          <CommandToolbarButtonComponent commands={commands} id={lock} />
+          <CommandToolbarButtonComponent commands={commands} id={unlock} />
+        </div>
       </div>
       {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
-      <p>{subheading}</p>
       <CommandToolbarButtonComponent commands={commands} id={convert} />
-      <CommandToolbarButtonComponent commands={commands} id={correct} />
-      <CommandToolbarButtonComponent commands={commands} id={certify} />
-      <p>{submission}</p>
-      <CommandToolbarButtonComponent commands={commands} id={submit} />
-      <CommandToolbarButtonComponent commands={commands} id={draft} />
+      <p className="correxit-sidebar-score">{subheading}</p>
+      <div className="correxit-sidebar-workbook-actions">
+        <CommandToolbarButtonComponent commands={commands} id={correct} />
+        <CommandToolbarButtonComponent commands={commands} id={certify} />
+      </div>
+      <p className="correxit-sidebar-submission">{submission}</p>
+      <div className="correxit-sidebar-submission-actions">
+        <CommandToolbarButtonComponent commands={commands} id={submit} />
+        <CommandToolbarButtonComponent commands={commands} id={draft} />
+      </div>
     </section>
   );
 };
@@ -117,9 +123,9 @@ const CellReport: React.FC<{
     return <></>;
   }
 
-  const icon = editable ? checkIcon : Correxit.Icons.comment;
+  const icon = editable ? checkIcon : Icons.comment;
   const { points, possible } = report;
-  const heading = trans.__('Cell Score %1 out of %2', points, possible);
+  const heading = trans.__('%1 of %2', points, possible);
   const title = trans.__('Cell Report');
   const placeholder = trans.__('Cell report...');
   const toggle = () => {
@@ -166,14 +172,9 @@ const Body: React.FC<{
   }
 
   const { id } = cell;
-  const configuration: CommandToolbarButtonComponent.IProps[] = [
-    { commands, id: add, args: { id, is: 'answerable' } },
-    { commands, id: add, args: { id, is: 'comparable' } },
-    { commands, id: add, args: { id, is: 'correctable' } }
-  ];
   const operations: CommandToolbarButtonComponent.IProps[] = [
     { commands, id: correct, args: { id } },
-    { commands, id: toggle, args: { id } },
+    { commands, id: share, args: { id } },
     { commands, id: remove, args: { id } }
   ];
   const hints = {
@@ -183,25 +184,30 @@ const Body: React.FC<{
     reference: trans.__('Selected cell is a reference cell.'),
     reviewable: trans.__('Cell is manually reviewed by an instructor.')
   };
-  const hint = get(rubric, id)?.is || (has(rubric, id, true) && 'reference');
+  const hint = get(rubric, id)?.is ?? (has(rubric, id, true) && 'reference');
   return (
     <section className="correxit-sidebar-body">
-      <CellReport
-        commands={commands}
-        id={id}
-        rubric={rubric}
-        trans={trans}
-        workbook={workbook}
-      />
+      <CellReport {...{ commands, id, rubric, trans, workbook }} />
       <div className="correxit-sidebar-cell-config">
-        {configuration.map((props, index) => (
-          <CommandToolbarButtonComponent key={index} {...props} />
-        ))}
+        <CommandToolbarButtonComponent
+          {...{ commands, id: configure, args: { id, is: 'answerable' } }}
+        />
+        <CommandToolbarButtonComponent
+          {...{ commands, id: configure, args: { id, is: 'reviewable' } }}
+        />
       </div>
-      {hint && <p>{hints[hint]}</p>}
+      <div className="correxit-sidebar-cell-config">
+        <CommandToolbarButtonComponent
+          {...{ commands, id: configure, args: { id, is: 'comparable' } }}
+        />
+        <CommandToolbarButtonComponent
+          {...{ commands, id: configure, args: { id, is: 'correctable' } }}
+        />
+      </div>
+      {hint && <p className="correxit-sidebar-cell-hint">{hints[hint]}</p>}
       <div className="correxit-sidebar-cell-operations">
-        {operations.map((props, index) => (
-          <CommandToolbarButtonComponent key={index} {...props} />
+        {operations.map((props, i) => (
+          <CommandToolbarButtonComponent key={i} {...props} />
         ))}
       </div>
     </section>

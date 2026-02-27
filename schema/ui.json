@@ -14,21 +14,27 @@
   "jupyter.lab.toolbars": {
     "Cell": [
       {
-        "name": "correxit-add-answerable",
-        "command": "correxit:add",
+        "name": "correxit-configure-answerable",
+        "command": "correxit:configure",
         "args": { "correxit:cell-toolbar": true, "is": "answerable" },
         "label": ""
       },
       {
-        "name": "correxit-add-comparable",
-        "command": "correxit:add",
+        "name": "correxit-configure-comparable",
+        "command": "correxit:configure",
         "args": { "correxit:cell-toolbar": true, "is": "comparable" },
         "label": ""
       },
       {
-        "name": "correxit-add-correctable",
-        "command": "correxit:add",
+        "name": "correxit-configure-correctable",
+        "command": "correxit:configure",
         "args": { "correxit:cell-toolbar": true, "is": "correctable" },
+        "label": ""
+      },
+      {
+        "name": "correxit-configure-reviewable",
+        "command": "correxit:configure",
+        "args": { "correxit:cell-toolbar": true, "is": "reviewable" },
         "label": ""
       },
       {

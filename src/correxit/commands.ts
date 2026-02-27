@@ -14,10 +14,10 @@ import * as security from './security';
 import * as state from './state';
 
 export namespace CommandIDs {
-  export const add = 'correxit:add';
   export const assign = 'correxit:assign';
   export const certify = 'correxit:certify';
   export const comment = 'correxit:comment';
+  export const configure = 'correxit:configure';
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const draft = 'correxit:draft';
@@ -29,8 +29,8 @@ export namespace CommandIDs {
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
   export const save = 'correxit:save';
+  export const share = 'correxit:share';
   export const submit = 'correxit:submit';
-  export const toggle = 'correxit:toggle';
   export const unlock = 'correxit:unlock';
 }
 
@@ -77,108 +77,6 @@ export function addCommands(
     return { handle, rubric, workbook } as Reified;
   };
   const disposables = [];
-  disposables.push(commands.addCommand(CommandIDs.add, {
-    className: 'correxit-add',
-    icon: ({ is }: Partial<Cell>) =>
-      Rubric.Cell.types.some(type => is === type) ? Icons[is!] : void 0,
-    isEnabled: (args: Partial<Cell & CellToolbar>) => {
-      const notebook = state.workbook()?.context.model.sharedModel;
-      const id = state.cell(args);
-      const cell = find(notebook?.cells || [], cell => cell.id === id);
-      const reference = args.reference;
-      const rubric = open(state.workbook());
-      if (!cell || !rubric || rubric.locked || !id || id === reference?.[0]) {
-        return false;
-      }
-
-      const code = cell.cell_type === 'code';
-      return code && !has(rubric, id, true) || has(rubric, id);
-    },
-    isToggled: (args: Partial<Cell>) => {
-      const id = state.cell(args);
-      const rubric = open(state.workbook());
-      return !!rubric && !!id && get(rubric, id)?.is === args.is;
-    },
-    isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
-    label: (cell: Partial<Cell>) => {
-      if (!commands.isEnabled(CommandIDs.add, cell)) {
-        return '';
-      }
-      if (cell.is === 'answerable') {
-        return trans.__('Answer');
-      }
-      if (cell.is === 'comparable') {
-        return trans.__('Compare');
-      }
-      if (cell.is === 'correctable') {
-        return trans.__('Correct');
-      }
-      return '';
-    },
-    execute: async (args: Partial<Cell & Credentials>) => {
-      const { rubric, workbook } = await reify(args);
-      const id = state.cell(args);
-      const is = args.is;
-      if (!rubric || !id || !is) {
-        return;
-      }
-
-      const confirm = () => showDialog({
-        title: trans.__('Reset cell configuration?'),
-        body: trans.__('Do you want to replace the existing configuration?'),
-        buttons: [
-          Dialog.cancelButton({ label: trans.__('No') }),
-          Dialog.okButton({ label: trans.__('Yes') })
-        ]
-      });
-      if (has(rubric, id)) {
-        if (!(await confirm()).button.accept) {
-          return;
-        }
-        remove(workbook, id);
-      }
-      if (is === 'answerable') {
-        const expected = await input.text({
-          title: trans.__('Enter expected cell output'),
-          label: commands.label(CommandIDs.add, args)
-        });
-        if (!expected) {
-          return;
-        }
-
-        const payload = [await security.digest(expected)];
-        const points = 1;
-        const reference = null;
-        const shared = false;
-        await add(workbook, { id, is, payload, points, reference, shared });
-        return;
-      }
-      if (is !== 'comparable' && is !== 'correctable') {
-        return;
-      }
-
-      let reference: string[] | null = args.reference || null;
-      if (!reference) {
-        const selected = workbook.content && await input.cell(workbook);
-        reference = selected && [selected.id];
-      }
-      if (!reference || id === reference[0]) {
-        return;
-      }
-      if (workbook.content) {
-        const { widgets } = workbook.content;
-        const original = find(widgets, ({ model }) => model.id === id);
-        if (original) {
-          await workbook.content.scrollToCell(original);
-        }
-      }
-
-      const payload = null;
-      const points = 1;
-      const shared = false;
-      await add(workbook, { id, is, payload, points, reference, shared });
-    }
-  }));
   disposables.push(commands.addCommand(CommandIDs.assign, {
     icon: Icons.assignment,
     isEnabled: () => open(state.workbook())?.locked === false,
@@ -222,6 +120,119 @@ export function addCommands(
       if (workbook && id) {
         await comment(workbook, id, args.comment || '');
       }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.configure, {
+    className: 'correxit-configure',
+    icon: ({ is }: Partial<Cell>) =>
+      Rubric.Cell.types.some(type => is === type) ? Icons[is!] : void 0,
+    isEnabled: (args: Partial<Cell & CellToolbar>) => {
+      const notebook = state.workbook()?.context.model.sharedModel;
+      const id = state.cell(args);
+      const cell = find(notebook?.cells || [], cell => cell.id === id);
+      const reference = args.reference;
+      const rubric = open(state.workbook());
+      if (!cell || !rubric || rubric.locked || !id || id === reference?.[0]) {
+        return false;
+      }
+
+      const code = cell.cell_type === 'code';
+      return code && !has(rubric, id, true) || has(rubric, id);
+    },
+    isToggled: (args: Partial<Cell>) => {
+      const id = state.cell(args);
+      const rubric = open(state.workbook());
+      return !!rubric && !!id && get(rubric, id)?.is === args.is;
+    },
+    isVisible: cell => commands.isEnabled(CommandIDs.configure, cell),
+    label: (cell: Partial<Cell>) => {
+      if (!commands.isEnabled(CommandIDs.configure, cell)) {
+        return '';
+      }
+      if (cell.is === 'answerable') {
+        return trans.__('Answer');
+      }
+      if (cell.is === 'comparable') {
+        return trans.__('Compare');
+      }
+      if (cell.is === 'correctable') {
+        return trans.__('Correct');
+      }
+      if (cell.is === 'reviewable') {
+        return trans.__('Manual');
+      }
+      return '';
+    },
+    execute: async (args: Partial<Cell & Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      const id = state.cell(args);
+      const is = args.is;
+      if (!rubric || !id || !is) {
+        return;
+      }
+
+      const confirm = () => showDialog({
+        title: trans.__('Reset cell configuration?'),
+        body: trans.__('Do you want to replace the existing configuration?'),
+        buttons: [
+          Dialog.cancelButton({ label: trans.__('No') }),
+          Dialog.okButton({ label: trans.__('Yes') })
+        ]
+      });
+      if (has(rubric, id)) {
+        if (!(await confirm()).button.accept) {
+          return;
+        }
+        remove(workbook, id);
+      }
+      if (is === 'answerable') {
+        const expected = await input.text({
+          title: trans.__('Enter expected cell output'),
+          label: commands.label(CommandIDs.configure, args)
+        });
+        if (!expected) {
+          return;
+        }
+
+        const payload = [await security.digest(expected)];
+        const points = 1;
+        const reference = null;
+        const shared = false;
+        await add(workbook, { id, is, payload, points, reference, shared });
+        return;
+      }
+      if (is === 'reviewable') {
+        const payload = null;
+        const points = 1;
+        const reference = null;
+        const shared = false;
+        await add(workbook, { id, is, payload, points, reference, shared });
+        return;
+      }
+      if (is !== 'comparable' && is !== 'correctable') {
+        return;
+      }
+
+      let reference: string[] | null = args.reference || null;
+      if (!reference) {
+        const selected = workbook.content && await input.cell(workbook);
+        reference = selected && [selected.id];
+      }
+      if (!reference || id === reference[0]) {
+        return;
+      }
+      if (workbook.content) {
+        const { widgets } = workbook.content;
+        const original = find(widgets, ({ model }) => model.id === id);
+        if (original) {
+          await workbook.content.scrollToCell(original);
+        }
+      }
+
+      const payload = null;
+      const points = 1;
+      const shared = false;
+      await add(workbook, { id, is, payload, points, reference, shared });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.convert, {
@@ -477,6 +488,39 @@ export function addCommands(
       await workbook.context.save();
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.share, {
+    icon: (args: Partial<Cell & CellToolbar>) => {
+      if (!commands.isEnabled(CommandIDs.share, args)) {
+        return void 0;
+      }
+
+      const { shared } = get(open(state.workbook())!, state.cell(args))!;
+      return shared ? Icons.shared : Icons.secret;
+    },
+    isEnabled: (args: Partial<Cell & CellToolbar>) => {
+      const rubric = open(state.workbook());
+      const id = state.cell(args);
+      return !!id && !!rubric && !rubric.locked && has(rubric, id);
+    },
+    isVisible: (args: Partial<Cell & CellToolbar>) => {
+      return commands.isEnabled(CommandIDs.share, args);
+    },
+    label: (args: Partial<Cell & CellToolbar>) => {
+      if (!commands.isEnabled(CommandIDs.share, args)) {
+        return '';
+      }
+
+      const { shared } = get(open(state.workbook())!, state.cell(args))!;
+      return shared
+        ? trans.__('Allow correction only in grader mode')
+        : trans.__('Allow correction in all modes');
+    },
+    execute: async (args: Partial<Cell>) => {
+      if (commands.isEnabled(CommandIDs.share, args)) {
+        toggle(state.workbook()!, state.cell(args));
+      }
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.submit, {
     isEnabled: () => {
       const rubric = open(state.workbook());
@@ -515,39 +559,6 @@ export function addCommands(
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);
-      }
-    }
-  }));
-  disposables.push(commands.addCommand(CommandIDs.toggle, {
-    icon: (args: Partial<Cell & CellToolbar>) => {
-      if (!commands.isEnabled(CommandIDs.toggle, args)) {
-        return void 0;
-      }
-
-      const { shared } = get(open(state.workbook())!, state.cell(args))!;
-      return shared ? Icons.shared : Icons.secret;
-    },
-    isEnabled: (args: Partial<Cell & CellToolbar>) => {
-      const rubric = open(state.workbook());
-      const id = state.cell(args);
-      return !!id && !!rubric && !rubric.locked && has(rubric, id);
-    },
-    isVisible: (args: Partial<Cell & CellToolbar>) => {
-      return commands.isEnabled(CommandIDs.toggle, args);
-    },
-    label: (args: Partial<Cell & CellToolbar>) => {
-      if (!commands.isEnabled(CommandIDs.toggle, args)) {
-        return '';
-      }
-
-      const { shared } = get(open(state.workbook())!, state.cell(args))!;
-      return shared
-        ? trans.__('Allow correction only in grader mode')
-        : trans.__('Allow correction in all modes');
-    },
-    execute: async (args: Partial<Cell>) => {
-      if (commands.isEnabled(CommandIDs.toggle, args)) {
-        toggle(state.workbook()!, state.cell(args));
       }
     }
   }));

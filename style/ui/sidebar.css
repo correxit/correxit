@@ -62,14 +62,13 @@
 }
 
 .correxit-sidebar-cell-config {
-  height: 21px;
   justify-content: center;
   text-align: center;
   color: var(--jp-ui-font-color3);
 
-  .correxit-add {
-    margin: 0 1px;
-    min-width: 30%;
+  .correxit-configure {
+    margin: 2px;
+    min-width: 45%;
     padding: 0 1px;
     width: auto;
   }
@@ -215,7 +214,8 @@
 
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after,
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after,
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after,
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-reviewable::after {
   --cxt-annotate-size: 28px;
   --cxt-annotate-icon: 16px 16px;
 
@@ -246,6 +246,10 @@
 
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
   background-image: url('../monitor/icons/correctable.svg');
+}
+
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-reviewable::after {
+  background-image: url('../monitor/icons/reviewable.svg');
 }
 
 .jp-Notebook
