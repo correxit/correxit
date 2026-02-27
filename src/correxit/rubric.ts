@@ -251,8 +251,8 @@ export namespace Rubric {
     };
 
     /**
-     * @param id - if the cell is not specified, all cells are scored.
      * @returns an amended copy of the assignment report with new scores added.
+     * @param id - if the cell is not specified, all cells are scored.
      *
      * #### Notes
      * If `id` is not provided, every cell in the rubric is scored. Cells that
@@ -268,9 +268,8 @@ export namespace Rubric {
       const { assignment: { report } } = rubric;
       const valid = (id: string) => has(rubric, id);
       const subset = (id ? [id] : Array.from(outputs.keys())).filter(valid);
-      const missing = id ? [] : Object.keys(rubric.cells).filter(
-        id => !subset.includes(id) && valid(id)
-      );
+      const transient = (id: string) => !subset.includes(id) && valid(id);
+      const missing = id ? [] : Object.keys(rubric.cells).filter(transient);
       const all = [...subset, ...missing];
       if (!all.length) {
         return report;
