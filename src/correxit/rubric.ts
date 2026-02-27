@@ -261,15 +261,21 @@ export namespace Rubric {
       timestamp: number | null;
     }>;
 
-    export const EMPTY: Assignment = {
+    export namespace Report {
+      export const EMPTY: Report = Object.freeze({
+        digest: '', interventions: {}, scores: {}, timestamp: null
+      });
+    }
+
+    export const EMPTY: Assignment = Object.freeze({
       assignee: '',
       confirmation: null,
       expiration: null,
-      report: { digest: '', interventions: {}, scores: {}, timestamp: null },
+      report: Report.EMPTY,
       roster: [],
       signature: '',
       submission: null
-    };
+    });
 
     /**
      * @returns an amended copy of the assignment report with new scores added.
@@ -349,7 +355,7 @@ export namespace Rubric {
     }
 
     export function summary(report: Report): Score {
-      const { interventions, scores } = report;
+      const { interventions, scores } = { ...Report.EMPTY, ...report };
       const ids = new Set([
         ...Object.keys(interventions),
         ...Object.keys(scores)

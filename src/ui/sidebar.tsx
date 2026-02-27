@@ -172,11 +172,6 @@ const Body: React.FC<{
   }
 
   const { id } = cell;
-  const operations: CommandToolbarButtonComponent.IProps[] = [
-    { commands, id: correct, args: { id } },
-    { commands, id: share, args: { id } },
-    { commands, id: remove, args: { id } }
-  ];
   const hints = {
     answerable: trans.__('Expected output has been set.'),
     comparable: trans.__('Cell output is compared against a reference.'),
@@ -211,9 +206,12 @@ const Body: React.FC<{
       </div>
       {hint && <p className="correxit-sidebar-cell-hint">{hints[hint]}</p>}
       <div className="correxit-sidebar-cell-operations">
-        {operations.map((props, i) => (
-          <CommandToolbarButtonComponent key={i} {...props} />
-        ))}
+        <CommandToolbarButtonComponent
+          {...{ commands, id: correct, args: { id } }}
+        />
+        <CommandToolbarButtonComponent
+          {...{ commands, id: share, args: { id } }}
+        />
       </div>
     </section>
   );
