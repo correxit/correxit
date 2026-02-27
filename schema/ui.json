@@ -44,8 +44,8 @@
         "label": ""
       },
       {
-        "name": "correxit-toggle",
-        "command": "correxit:toggle",
+        "name": "correxit-share",
+        "command": "correxit:share",
         "args": { "correxit:cell-toolbar": true },
         "label": ""
       }
