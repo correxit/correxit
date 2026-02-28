@@ -160,18 +160,16 @@ const CellScore: React.FC<{
   }
 
   const actual = report && report.status !== 'unscored' ? report.points : '-';
-  const heading = trans.__('Cell configuration');
+  const heading = rubric.locked
+    ? trans.__('Cell score')
+    : trans.__('Cell configuration');
   const subheading = trans.__('%1 of %2', actual, cell.points);
   const ids = {
     comment: `correxit-sidebar-cell-score-comment-${id}`,
-    guide: `correxit-sidebar-cell-score-guide-${id}`,
     heading: `correxit-sidebar-cell-score-heading-${id}`,
     points: `correxit-sidebar-cell-score-points-${id}`,
     score: `correxit-sidebar-cell-score-value-${id}`
   };
-  const guide = trans.__(
-    'Values save on blur. Decimals are rounded down to integers.'
-  );
   const placeholder = trans.__('Cell comment...');
   const note = async () => {
     if (comment !== seed.comment) {
@@ -179,22 +177,33 @@ const CellScore: React.FC<{
     }
   };
   const reweight = async () => {
-    const invalid = typeof points !== 'number' || Number.isNaN(points);
-    if (rubric.locked || invalid || points === cell.points) {
+    const possible = points;
+    const scored = score;
+    const invalid = typeof possible !== 'number' || Number.isNaN(possible);
+    if (rubric.locked || invalid || possible === cell.points) {
       return;
     }
-    await commands.execute(CommandIDs.reweight, { id, points });
-    if (typeof score === 'number' && !Number.isNaN(score)) {
-      const update = { comment, points: score, possible: points };
+    await commands.execute(CommandIDs.reweight, {
+      id,
+      points: possible
+    });
+    if (typeof scored === 'number' && !Number.isNaN(scored)) {
+      const update = { comment, points: scored, possible };
       const intervention = Rubric.Score.intervene(id, update);
       await commands.execute(CommandIDs.intervene, { id, intervention });
     }
   };
 
   const intervene = async () => {
-    if (typeof score === 'number' && !Number.isNaN(score)) {
-      const possible = typeof points === 'number' ? points : cell.points;
-      const update = { comment, points: score, possible };
+    const scored = score;
+    const possible = points;
+    if (rubric.locked) {
+      return;
+    }
+
+    if (typeof scored === 'number' && !Number.isNaN(scored)) {
+      const max = typeof possible === 'number' ? possible : cell.points;
+      const update = { comment, points: scored, possible: max };
       const intervention = Rubric.Score.intervene(id, update);
       await commands.execute(CommandIDs.intervene, { id, intervention });
       return;
@@ -227,25 +236,28 @@ const CellScore: React.FC<{
         role="group"
         aria-labelledby={ids.heading}
       >
-        <label
-          className="correxit-sidebar-cell-score-field"
-          htmlFor={ids.score}
-        >
-          {trans.__('Points scored')}
-          <input
-            className="correxit-sidebar-cell-score-input"
-            id={ids.score}
-            aria-describedby={ids.guide}
-            inputMode="numeric"
-            step="1"
-            type="number"
-            min="0"
-            placeholder={trans.__('Auto')}
-            value={score}
-            onBlur={() => void intervene()}
-            onChange={({ target: { value } }) => setScore(whole(value))}
-          />
-        </label>
+        {!rubric.locked && (
+          <label
+            className="correxit-sidebar-cell-score-field"
+            htmlFor={ids.score}
+          >
+            {trans.__('Points scored')}
+            <input
+              className="correxit-sidebar-cell-score-input"
+              id={ids.score}
+              inputMode="numeric"
+              step="1"
+              type="number"
+              min="0"
+              placeholder={trans.__('Auto')}
+              value={score}
+              onBlur={() => void intervene()}
+              onChange={({ target: { value } }) => {
+                setScore(whole(value));
+              }}
+            />
+          </label>
+        )}
         {!rubric.locked && (
           <label
             className="correxit-sidebar-cell-score-field"
@@ -255,14 +267,15 @@ const CellScore: React.FC<{
             <input
               className="correxit-sidebar-cell-score-input"
               id={ids.points}
-              aria-describedby={ids.guide}
               inputMode="numeric"
               step="1"
               type="number"
               min="0"
               value={points}
               onBlur={() => void reweight()}
-              onChange={({ target: { value } }) => setPoints(whole(value))}
+              onChange={({ target: { value } }) => {
+                setPoints(whole(value));
+              }}
             />
           </label>
         )}
@@ -275,7 +288,6 @@ const CellScore: React.FC<{
         <textarea
           className="correxit-sidebar-cell-score-textarea"
           id={ids.comment}
-          aria-describedby={ids.guide}
           data-lm-suppress-shortcuts="true"
           name="correxit-sidebar-cell-score-comment"
           onBlur={() => void sync()}
@@ -285,9 +297,6 @@ const CellScore: React.FC<{
           rows={4}
           value={comment}
         />
-        <div className="correxit-sidebar-cell-score-guide" id={ids.guide}>
-          {guide}
-        </div>
       </div>
     </>
   );
