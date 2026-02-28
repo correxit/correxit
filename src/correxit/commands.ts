@@ -25,11 +25,11 @@ export namespace CommandIDs {
   export const inject = 'correxit:inject';
   export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
-  export const points = 'correxit:points';
   export const propagate = 'correxit:propagate';
   export const registrar = 'correxit:registrar';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
+  export const reweight = 'correxit:reweight';
   export const save = 'correxit:save';
   export const share = 'correxit:share';
   export const submit = 'correxit:submit';
@@ -48,7 +48,7 @@ type Reified =
 
 const { get, has, size } = Rubric;
 const { add, assign, certify, comment, convert, correct, draft } = Workbook;
-const { intervene, lock, points, remove, reset, submit, toggle } = Workbook;
+const { intervene, lock, remove, reset, reweight, submit, toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
@@ -115,7 +115,7 @@ export function addCommands(
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
     label: trans.__('Comment on cell'),
-    execute: async (args: Partial<Cell> & { comment?: string; }) => {
+    execute: async (args: Partial<Cell & { comment: string; }>) => {
       const workbook = state.workbook();
       const id = state.cell(args);
       if (workbook && id) {
@@ -350,17 +350,6 @@ export function addCommands(
       }
     }
   }));
-  disposables.push(commands.addCommand(CommandIDs.points, {
-    label: trans.__('Edit cell maximum possible points'),
-    execute: async (args: Partial<Cell>) => {
-      const workbook = state.workbook();
-      const id = state.cell(args);
-      const value = args.points;
-      if (workbook && id && typeof value === 'number') {
-        await points(workbook, id, value);
-      }
-    }
-  }));
   disposables.push(commands.addCommand(CommandIDs.fetch, {
     label: trans.__('Fetch a headless Correxit workbook for a given path'),
     execute: async (args: Partial<Credentials & { silent: boolean }>):
@@ -389,7 +378,7 @@ export function addCommands(
   disposables.push(commands.addCommand(CommandIDs.intervene, {
     label: trans.__('Intervene on cell score'),
     execute: async (
-      args: Partial<Cell> & { intervention?: Rubric.Score | null; }
+      args: Partial<Cell & { intervention: Rubric.Score | null }>
     ) => {
       const workbook = state.workbook();
       const id = state.cell(args);
@@ -497,6 +486,16 @@ export function addCommands(
       if (button.accept) {
         await reset(workbook);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.reweight, {
+    label: trans.__('Update maximum possible points for a cell'),
+    execute: async (args: Partial<Cell & { points: number }>) => {
+      const workbook = state.workbook();
+      const id = state.cell(args);
+      if (workbook && id && typeof args.points === 'number') {
+        await reweight(workbook, id, args.points);
       }
     }
   }));

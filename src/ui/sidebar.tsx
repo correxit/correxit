@@ -154,7 +154,6 @@ const CellScore: React.FC<{
     points: `correxit-sidebar-cell-score-points-${id}`,
     score: `correxit-sidebar-cell-score-value-${id}`
   };
-  const commentLabel = trans.__('Comment');
   const guide = trans.__(
     'Values save on blur. Decimals are rounded down to integers.'
   );
@@ -164,13 +163,12 @@ const CellScore: React.FC<{
       await commands.execute(CommandIDs.comment, { id, comment });
     }
   };
-
-  const rescale = async () => {
+  const reweight = async () => {
     const invalid = typeof points !== 'number' || Number.isNaN(points);
     if (rubric.locked || invalid || points === cell.points) {
       return;
     }
-    await commands.execute(CommandIDs.points, { id, points });
+    await commands.execute(CommandIDs.reweight, { id, points });
     if (typeof score === 'number' && !Number.isNaN(score)) {
       const update = { comment, points: score, possible: points };
       const intervention = Rubric.Score.intervene(id, update);
@@ -248,7 +246,7 @@ const CellScore: React.FC<{
               type="number"
               min="0"
               value={points}
-              onBlur={() => void rescale()}
+              onBlur={() => void reweight()}
               onChange={({ target: { value } }) => setPoints(whole(value))}
             />
           </label>
@@ -257,7 +255,7 @@ const CellScore: React.FC<{
           className="correxit-sidebar-cell-score-label"
           htmlFor={ids.comment}
         >
-          {commentLabel}
+          {trans.__('Comment')}
         </label>
         <textarea
           className="correxit-sidebar-cell-score-textarea"

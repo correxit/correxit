@@ -215,19 +215,6 @@ export namespace Workbook {
     return update(workbook, Rubric.add(rubric, cell));
   }
 
-  /** Update the maximum points for a cell in a workbook's rubric. */
-  export async function points(
-    workbook: Workbook,
-    id: string,
-    value: number
-  ): Promise<Rubric.Unlocked> {
-    const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      throw new Error('points error, invalid rubric');
-    }
-    return update(workbook, Rubric.points(rubric, id, value));
-  }
-
   /**
    * Update a workbook's assignment metadata.
    *
@@ -448,41 +435,6 @@ export namespace Workbook {
     return update(workbook, signed);
   }
 
-  /**
-   * Intervenes with a manual score for a cell.
-   *
-   * @param workbook - the workbook to modify the report for.
-   * @param id - the id of the cell to intervene on.
-   * @param intervention - the manual score intervention.
-   *
-   * @returns a promise that resolves when the workbook has been updated.
-   */
-  export async function intervene(
-    workbook: Workbook,
-    id: string,
-    intervention: Rubric.Score | null
-  ) {
-    const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      return null;
-    }
-
-    const { report: kept } = rubric.assignment;
-    const interventions = { ...kept.interventions };
-    if (intervention) {
-      interventions[id] = intervention;
-    } else {
-      delete interventions[id];
-    }
-    const cells = sources(workbook, rubric);
-    const signed = await Rubric.sign(
-      rubric,
-      { ...kept, interventions },
-      cells
-    );
-    return update(workbook, signed);
-  }
-
   /** Decrypts workbook content. */
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
     const audited = Workbook.audit(workbook, rubric);
@@ -612,6 +564,38 @@ export namespace Workbook {
   }
 
   /**
+   * Intervenes with a manual score for a cell.
+   *
+   * @param workbook - the workbook to modify the report for.
+   * @param id - the id of the cell to intervene on.
+   * @param intervention - the manual score intervention.
+   *
+   * @returns a promise that resolves when the workbook has been updated.
+   */
+  export async function intervene(
+    workbook: Workbook,
+    id: string,
+    intervention: Rubric.Score | null
+  ) {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked) {
+      return null;
+    }
+
+    const { report: kept } = rubric.assignment;
+    const interventions = { ...kept.interventions };
+    if (intervention) {
+      interventions[id] = intervention;
+    } else {
+      delete interventions[id];
+    }
+
+    const report = { ...kept, interventions };
+    const sources = Workbook.sources(workbook, rubric);
+    return update(workbook, await Rubric.sign(rubric, report, sources));
+  }
+
+  /**
    * Synchronously returns a workbook's rubric or `null` from notebook metadata.
    *
    * @param workbook - The current workbook. May be `null`.
@@ -676,6 +660,20 @@ export namespace Workbook {
       throw new Error('reset error');
     }
     update(workbook, null);
+  }
+
+
+  /** Update the maximum points for a cell in a workbook's rubric. */
+  export async function reweight(
+    workbook: Workbook,
+    id: string,
+    value: number
+  ): Promise<Rubric.Unlocked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked) {
+      throw new Error('points error, invalid rubric');
+    }
+    return update(workbook, Rubric.Cell.reweight(rubric, id, value));
   }
 
   /**

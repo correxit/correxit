@@ -185,6 +185,24 @@ export namespace Rubric {
       return intervention ?? { ...Score.UNSCORED, code: 'intervene' };
     }
 
+
+    /** @returns a rubric with the possible points for a given cell updated. */
+    export function reweight(
+      rubric: Unlocked,
+      id: string,
+      points: number
+    ): Unlocked {
+      const cell = get(rubric, id);
+      if (!cell) {
+        throw new Error(`points error, rubric does not have cell id ${id}`);
+      }
+      return {
+        ...rubric,
+        revised: Date.now(),
+        cells: { ...rubric.cells, [id]: { ...cell, points } }
+      };
+    }
+
     /**
      * Get the score for a single cell.
      *
@@ -528,22 +546,6 @@ export namespace Rubric {
     const submission = null;
     const assignment = { ...rubric.assignment, confirmation, submission };
     return { ...rubric, assignment, revised: Date.now() };
-  }
-
-  /** Update the maximum points for a cell. */
-  export function points(
-    rubric: Unlocked,
-    id: string,
-    points: number
-  ): Unlocked {
-    const cell = get(rubric, id);
-    if (!cell) {
-      throw new Error(`points error, rubric does not have cell id ${id}`);
-    }
-    return {
-      ...rubric,
-      cells: { ...rubric.cells, [id]: { ...cell, points } }
-    };
   }
 
   /** @returns the cell for `id`, or `null`. */
