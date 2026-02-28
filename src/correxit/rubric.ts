@@ -605,6 +605,10 @@ export namespace Rubric {
   /** @returns a normalized locked rubric or throws. */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
     const { assignment, cells, id, key, locked, revised } = rubric;
+    const object = (value: unknown): value is object =>
+      typeof value === 'object' && value !== null;
+    const record = (value: unknown): value is { [key: string]: unknown } =>
+      object(value) && !Array.isArray(value);
     if (!revised) {
       throw new Error('invalid rubric, missing revised');
     }
@@ -622,6 +626,23 @@ export namespace Rubric {
     }
     if (!assignment) {
       throw new Error('invalid rubric, missing assignment');
+    }
+    if (!record(assignment.report)) {
+      throw new Error('invalid rubric, missing assignment report');
+    }
+
+    const { digest, interventions, scores, timestamp } = assignment.report;
+    if (typeof digest !== 'string') {
+      throw new Error('invalid rubric, missing assignment report digest');
+    }
+    if (!record(interventions)) {
+      throw new Error('invalid rubric, missing assignment interventions');
+    }
+    if (!record(scores)) {
+      throw new Error('invalid rubric, missing assignment scores');
+    }
+    if (timestamp !== null && typeof timestamp !== 'number') {
+      throw new Error('invalid rubric, assignment timestamp mismatch');
     }
     return { assignment, cells, id, key, locked, revised };
   }

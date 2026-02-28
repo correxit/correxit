@@ -160,6 +160,38 @@ describe('Rubric', () => {
     it('throws when normalizing invalid rubric', () => {
       expect(() => Rubric.normalize({})).toThrow('invalid rubric');
     });
+
+    it('throws when report misses interventions', async () => {
+      const rubric = await Rubric.lock(create());
+      const invalid = {
+        ...rubric,
+        assignment: {
+          ...rubric.assignment,
+          report: {
+            digest: '',
+            scores: {},
+            timestamp: null
+          }
+        }
+      };
+      expect(() => Rubric.normalize(invalid as any)).toThrow(
+        'missing assignment interventions'
+      );
+    });
+
+    it('throws when report shape is invalid', async () => {
+      const rubric = await Rubric.lock(create());
+      const invalid = {
+        ...rubric,
+        assignment: {
+          ...rubric.assignment,
+          report: null
+        }
+      };
+      expect(() => Rubric.normalize(invalid as any)).toThrow(
+        'missing assignment report'
+      );
+    });
   });
 
   describe('Assignment Flow', () => {
