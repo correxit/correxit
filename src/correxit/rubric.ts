@@ -488,28 +488,24 @@ export namespace Rubric {
     /** @returns a copy of a cell's score that has been manually updated. */
     export function intervene(
       id: string,
-      intervention: Pick<Score, 'comment' | 'points' | 'possible'>
+      score: Pick<Score, 'comment' | 'points' | 'possible'>
     ): Score {
-      const { comment, points, possible } = intervention;
-      const integer = (value: number, name: string): number => {
-        if (!Number.isFinite(value) || !Number.isInteger(value)) {
-          throw new TypeError(`intervene: ${name} invalid`);
-        }
-        return value;
-      };
-
-      const scored = integer(points, 'points');
-      const maximum = integer(possible, 'possible');
-      if (maximum < 1) {
+      const { comment, points, possible } = score;
+      if (!Number.isInteger(points)) {
+        throw new TypeError('intervene: points invalid');
+      }
+      if (!Number.isInteger(possible)) {
+        throw new TypeError('intervene: possible invalid');
+      }
+      if (possible < 1) {
         throw new RangeError('intervene: possible < 1');
       }
-      if (scored < 0 || scored > maximum) {
+      if (points < 0 || points > possible) {
         throw new RangeError('intervene: points out of range');
       }
 
-      const code = 'intervene';
-      const status = scored === maximum ? 'correct' : 'incorrect';
-      return { code, comment, id, points: scored, possible: maximum, status };
+      const status = points === possible ? 'correct' : 'incorrect';
+      return { code: 'intervene', comment, id, points, possible, status };
     }
 
     /**
