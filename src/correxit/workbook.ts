@@ -671,7 +671,7 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) {
-      throw new Error('points error, invalid rubric');
+      throw new Error('reweight error, invalid rubric');
     }
     return update(workbook, Rubric.Cell.reweight(rubric, id, value));
   }

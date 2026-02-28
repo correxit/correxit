@@ -252,9 +252,7 @@ const CellScore: React.FC<{
               placeholder={trans.__('Auto')}
               value={score}
               onBlur={() => void intervene()}
-              onChange={({ target: { value } }) => {
-                setScore(whole(value));
-              }}
+              onChange={({ target: { value } }) => setScore(whole(value))}
             />
           </label>
         )}
@@ -273,9 +271,7 @@ const CellScore: React.FC<{
               min="0"
               value={points}
               onBlur={() => void reweight()}
-              onChange={({ target: { value } }) => {
-                setPoints(whole(value));
-              }}
+              onChange={({ target: { value } }) => setPoints(whole(value))}
             />
           </label>
         )}

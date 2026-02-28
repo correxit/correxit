@@ -45,7 +45,7 @@ describe('Rubric', () => {
 
     it('toggles a cell between shared and secret', () => {
       const id = 'cell-1';
-      const secret = Rubric.add(create(), {
+      const base = Rubric.add(create(), {
         id,
         is: 'answerable',
         points: 1,
@@ -53,11 +53,25 @@ describe('Rubric', () => {
         shared: false,
         payload: []
       });
+      const report: Rubric.Assignment.Report = {
+        digest: '',
+        interventions: {},
+        scores: { [id]: Rubric.Score.CORRECT },
+        timestamp: Date.now()
+      };
+      const secret = {
+        ...base,
+        assignment: {
+          ...base.assignment,
+          report
+        }
+      };
       const shared = Rubric.toggle(secret, id);
       expect(secret.cells[id]).toBeDefined();
       expect(secret.cells[id].shared).toBe(false);
       expect(shared.cells[id]).toBeDefined();
       expect(shared.cells[id].shared).toBe(true);
+      expect(shared.assignment.report.scores).toEqual({});
     });
 
     it('removes a cell from the rubric and report', async () => {
@@ -80,11 +94,12 @@ describe('Rubric', () => {
       const removed = Rubric.remove(signed, id);
       expect(signed.assignment.report.scores[id]).toBeDefined();
       expect(Rubric.has(removed, id)).toBe(false);
-      // Report scores are NOT cleaned up by remove()
-      expect(removed.assignment.report.scores[id]).toBeDefined();
+      expect(removed.assignment.report.scores).toEqual({});
+      expect(removed.assignment.report.interventions).toEqual({});
+      expect(removed.assignment.report.timestamp).toBeNull();
     });
 
-    it('preserves report when removing a cell', () => {
+    it('invalidates report when removing a cell', () => {
       let rubric = create();
       rubric = Rubric.add(rubric, {
         id: 'c1',
@@ -104,7 +119,7 @@ describe('Rubric', () => {
       rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
 
       const removed = Rubric.remove(rubric, 'c1');
-      expect(removed.assignment.report.scores.c1).toBeDefined();
+      expect(removed.assignment.report.scores).toEqual({});
     });
 
     it('calculates size correctly', () => {
@@ -131,7 +146,7 @@ describe('Rubric', () => {
 
     it('reweights points for an existing cell', () => {
       const id = 'cell-1';
-      const rubric = Rubric.add(create(), {
+      const base = Rubric.add(create(), {
         id,
         is: 'reviewable',
         payload: null,
@@ -139,15 +154,29 @@ describe('Rubric', () => {
         reference: null,
         shared: false
       });
+      const report: Rubric.Assignment.Report = {
+        digest: '',
+        interventions: {},
+        scores: { [id]: Rubric.Score.CORRECT },
+        timestamp: Date.now()
+      };
+      const rubric = {
+        ...base,
+        assignment: {
+          ...base.assignment,
+          report
+        }
+      };
 
       const reweighted = Rubric.Cell.reweight(rubric, id, 7);
       expect(Rubric.get(reweighted, id)?.points).toBe(7);
       expect(Rubric.get(rubric, id)?.points).toBe(1);
+      expect(reweighted.assignment.report.scores).toEqual({});
     });
 
     it('throws when reweighting unknown cell id', () => {
       expect(() => Rubric.Cell.reweight(create(), 'missing', 2)).toThrow(
-        'points error'
+        'reweight error'
       );
     });
 
@@ -247,6 +276,12 @@ describe('Rubric', () => {
       const roster = ['assignee@example.com'];
       const initial = Date.now() + 86400000;
       const updated = Date.now() + 172800000;
+      const report: Rubric.Assignment.Report = {
+        digest: '',
+        interventions: {},
+        scores: { c1: Rubric.Score.CORRECT },
+        timestamp: Date.now()
+      };
 
       let rubric = await Rubric.assign(create(), {
         assignee: '',
@@ -254,6 +289,13 @@ describe('Rubric', () => {
         expiration: initial,
         submission: null
       });
+      rubric = {
+        ...rubric,
+        assignment: {
+          ...rubric.assignment,
+          report
+        }
+      };
       expect(rubric.assignment.expiration).toBe(initial);
 
       rubric = await Rubric.assign(rubric, {
@@ -263,6 +305,7 @@ describe('Rubric', () => {
         submission: null
       });
       expect(rubric.assignment.expiration).toBe(updated);
+      expect(rubric.assignment.report.scores).toEqual({});
     });
 
     it('includes expiration and submission in signature', async () => {
@@ -290,6 +333,12 @@ describe('Rubric', () => {
     it('allows updating submission timestamp', async () => {
       const roster = ['assignee@example.com'];
       const expiration = Date.now() + 86400000;
+      const report: Rubric.Assignment.Report = {
+        digest: '',
+        interventions: {},
+        scores: { c1: Rubric.Score.CORRECT },
+        timestamp: Date.now()
+      };
 
       let rubric = await Rubric.assign(create(), {
         assignee: 'assignee@example.com',
@@ -297,6 +346,13 @@ describe('Rubric', () => {
         expiration,
         submission: null
       });
+      rubric = {
+        ...rubric,
+        assignment: {
+          ...rubric.assignment,
+          report
+        }
+      };
       expect(rubric.assignment.submission).toBe(null);
 
       const timestamp = Date.now();
@@ -307,6 +363,7 @@ describe('Rubric', () => {
       });
       expect(rubric.assignment.submission).toBe(timestamp);
       expect(rubric.assignment.expiration).toBe(expiration);
+      expect(rubric.assignment.report.scores).toEqual({});
     });
 
     it('resets report if assignee changes', async () => {

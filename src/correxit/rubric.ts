@@ -190,17 +190,19 @@ export namespace Rubric {
     export function reweight(
       rubric: Unlocked,
       id: string,
-      points: number
+      possible: number
     ): Unlocked {
       const cell = get(rubric, id);
       if (!cell) {
-        throw new Error(`points error, rubric does not have cell id ${id}`);
+        throw new Error(`reweight error, rubric does not have cell id ${id}`);
       }
-      return {
-        ...rubric,
-        revised: Date.now(),
-        cells: { ...rubric.cells, [id]: { ...cell, points } }
+
+      const assignment = {
+        ...rubric.assignment,
+        report: Assignment.Report.empty()
       };
+      const cells = { ...rubric.cells, [id]: { ...cell, points: possible } };
+      return { ...rubric, assignment, cells, revised: Date.now() };
     }
 
     /**
@@ -286,20 +288,27 @@ export namespace Rubric {
     }>;
 
     export namespace Report {
-      export const EMPTY: Report = Object.freeze({
-        digest: '', interventions: {}, scores: {}, timestamp: null
-      });
+      export function empty(): Report {
+        return Object.freeze({
+          digest: '',
+          interventions: {},
+          scores: {},
+          timestamp: null
+        });
+      }
     }
 
-    export const EMPTY: Assignment = Object.freeze({
-      assignee: '',
-      confirmation: null,
-      expiration: null,
-      report: Report.EMPTY,
-      roster: [],
-      signature: '',
-      submission: null
-    });
+    export function empty(): Assignment {
+      return Object.freeze({
+        assignee: '',
+        confirmation: null,
+        expiration: null,
+        report: Report.empty(),
+        roster: [],
+        signature: '',
+        submission: null
+      });
+    }
 
     /**
      * @returns an amended copy of the assignment report with new scores added.
@@ -379,7 +388,7 @@ export namespace Rubric {
     }
 
     export function summary(report: Report): Score {
-      const { interventions, scores } = { ...Report.EMPTY, ...report };
+      const { interventions, scores } = { ...Report.empty(), ...report };
       const ids = new Set([
         ...Object.keys(interventions),
         ...Object.keys(scores)
@@ -521,8 +530,13 @@ export namespace Rubric {
     if (has(rubric, cell.id, true)) {
       throw new Error(`add error, rubric already has cell id ${cell.id}`);
     }
+    const assignment = {
+      ...rubric.assignment,
+      report: Assignment.Report.empty()
+    };
     return {
       ...rubric,
+      assignment,
       cells: { ...rubric.cells, [cell.id]: cell }
     };
   }
@@ -539,9 +553,15 @@ export namespace Rubric {
   ): Promise<Unlocked> {
     roster = unique(roster);
 
-    const report = assignee === rubric.assignment.assignee
-      ? rubric.assignment.report // Keep report if assignee is unchanged.
-      : { digest: '', interventions: {}, scores: {}, timestamp: Date.now() };
+    const stale =
+      assignee !== rubric.assignment.assignee ||
+      confirmation !== rubric.assignment.confirmation ||
+      expiration !== rubric.assignment.expiration ||
+      JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster) ||
+      submission !== rubric.assignment.submission;
+    const report = stale
+      ? Assignment.Report.empty()
+      : rubric.assignment.report;
     const unsigned = { assignee, expiration, report, roster };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = {
@@ -557,7 +577,7 @@ export namespace Rubric {
    */
   export function create(): Omit<Unlocked, 'key'> {
     const revised = Date.now();
-    const assignment = { ...Assignment.EMPTY };
+    const assignment = { ...Assignment.empty() };
     const encoded = revised.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
     return { assignment, cells: {}, id, locked: false, revised };
@@ -653,15 +673,19 @@ export namespace Rubric {
     return { assignment, cells, id, key, locked, revised };
   }
 
-  /** Remove a cell from a rubric. Report scores are left intact. */
+  /** Remove a cell from a rubric and invalidate report. */
   export function remove(rubric: Unlocked, id: string): Unlocked {
     if (!get(rubric, id)) {
       return rubric;
     }
 
+    const assignment = {
+      ...rubric.assignment,
+      report: Assignment.Report.empty()
+    };
     const { [id]: _, ...cells } = rubric.cells;
     void _; // This is the removed cell.
-    return { ...rubric, cells };
+    return { ...rubric, assignment, cells };
   }
 
   export async function sign(
@@ -697,8 +721,12 @@ export namespace Rubric {
       throw new Error(`toggle: cell ${id} not found in rubric`);
     }
 
+    const assignment = {
+      ...rubric.assignment,
+      report: Assignment.Report.empty()
+    };
     const cells = { ...rubric.cells, [id]: { ...cell, shared: !cell.shared } };
-    return { ...rubric, cells };
+    return { ...rubric, assignment, cells };
   }
 
   /** @returns an unlocked rubric after decrypting the roster. */
