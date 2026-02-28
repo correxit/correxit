@@ -114,8 +114,16 @@ const CellScore: React.FC<{
   const persisted = Rubric.Score.resolve(rubric.assignment.report, id);
   const report = rubric.locked ? (cached ?? persisted) : (persisted ?? cached);
   const intervened = !!rubric.assignment.report.interventions[id];
-  const mode = rubric.locked ? 'locked' : 'unlocked';
-  const view = `${rubric.id}:${rubric.assignment.assignee}:${id}:${mode}`;
+  const scored: number | '' =
+    report && report.status !== 'unscored' ? report.points : '';
+  const seed = {
+    comment: report ? report.comment : '',
+    points: cell ? cell.points : 1,
+    possible: report ? report.possible : '',
+    score: scored,
+    status: report ? report.status : 'unscored',
+    value: report ? report.points : ''
+  };
   const whole = (value: string): number | '' => {
     if (value === '') {
       return '';
@@ -128,17 +136,24 @@ const CellScore: React.FC<{
     return Math.max(0, Math.floor(parsed));
   };
 
-  const [comment, setComment] = useState(report?.comment || '');
-  const [points, setPoints] = useState<number | ''>(cell?.points ?? 1);
-  const [score, setScore] = useState<number | ''>(
-    report && report.status !== 'unscored' ? report.points : ''
-  );
-
+  const [comment, setComment] = useState(seed.comment);
+  const [points, setPoints] = useState<number | ''>(seed.points);
+  const [score, setScore] = useState<number | ''>(seed.score);
   useEffect(() => {
-    setComment(report?.comment || '');
-    setPoints(cell?.points ?? 1);
-    setScore(report && report.status !== 'unscored' ? report.points : '');
-  }, [view]);
+    setComment(seed.comment);
+    setPoints(seed.points);
+    setScore(seed.score);
+  }, [
+    id,
+    rubric.id,
+    rubric.assignment.assignee,
+    rubric.locked,
+    seed.comment,
+    seed.points,
+    seed.possible,
+    seed.status,
+    seed.value
+  ]);
 
   if (!cell) {
     return <></>;
@@ -159,7 +174,7 @@ const CellScore: React.FC<{
   );
   const placeholder = trans.__('Cell comment...');
   const note = async () => {
-    if (comment !== (report?.comment || '')) {
+    if (comment !== seed.comment) {
       await commands.execute(CommandIDs.comment, { id, comment });
     }
   };
