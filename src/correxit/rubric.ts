@@ -443,6 +443,25 @@ export namespace Rubric {
       status: 'incorrect'
     });
 
+    export const UNSCORED: Score = Object.freeze({
+      code: '',
+      comment: '',
+      id: '',
+      points: -1,
+      possible: -1,
+      status: 'unscored'
+    });
+
+    /** @returns a copy of a cell's score that has been manually updated. */
+    export function intervene(
+      id: string,
+      intervention: Pick<Score, 'comment' | 'points' | 'possible'>
+    ): Score {
+      const { comment, points, possible } = intervention;
+      const status = points === possible ? 'correct' : 'incorrect';
+      return { code: 'intervene', comment, id, points, possible, status };
+    }
+
     /**
      * @returns the effective score for a cell, preferring any manual
      * intervention over the computed score.
@@ -453,15 +472,6 @@ export namespace Rubric {
     ): Score | null {
       return interventions[id] ?? scores[id] ?? null;
     }
-
-    export const UNSCORED: Score = Object.freeze({
-      code: '',
-      comment: '',
-      id: '',
-      points: -1,
-      possible: -1,
-      status: 'unscored'
-    });
   }
 
   export function add(rubric: Unlocked, cell: Cell): Unlocked {
@@ -516,6 +526,18 @@ export namespace Rubric {
     const submission = null;
     const assignment = { ...rubric.assignment, confirmation, submission };
     return { ...rubric, assignment, revised: Date.now() };
+  }
+
+  /** Update the maximum points for a cell. */
+  export function points(rubric: Unlocked, id: string, points: number): Unlocked {
+    const cell = get(rubric, id);
+    if (!cell) {
+      throw new Error(`points error, rubric does not have cell id ${id}`);
+    }
+    return {
+      ...rubric,
+      cells: { ...rubric.cells, [id]: { ...cell, points } }
+    };
   }
 
   /** @returns the cell for `id`, or `null`. */

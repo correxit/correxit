@@ -53,7 +53,7 @@ export function report(
     return cached;
   }
 
-  const score = rubric.assignment.report.scores[id] || null;
+  const score = Rubric.Score.resolve(rubric.assignment.report, id);
   if (score) {
     cache(workbook, id, score);
   }

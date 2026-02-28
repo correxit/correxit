@@ -23,7 +23,9 @@ export namespace CommandIDs {
   export const draft = 'correxit:draft';
   export const fetch = 'correxit:fetch';
   export const inject = 'correxit:inject';
+  export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
+  export const points = 'correxit:points';
   export const propagate = 'correxit:propagate';
   export const registrar = 'correxit:registrar';
   export const remove = 'correxit:remove';
@@ -45,8 +47,8 @@ type Reified =
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
 const { get, has, size } = Rubric;
-const { add, assign, certify, comment, convert, correct } = Workbook;
-const { draft, lock, remove, reset, submit, toggle } = Workbook;
+const { add, assign, certify, comment, convert, correct, draft } = Workbook;
+const { intervene, lock, points, remove, reset, submit, toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
@@ -100,7 +102,6 @@ export function addCommands(
       const assigned = !!rubric?.assignment.assignee;
       return assigned && !rubric.locked;
     },
-    isVisible: () => commands.isEnabled(CommandIDs.certify),
     label: trans.__('Certify workbook...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
@@ -321,7 +322,10 @@ export function addCommands(
       const rubric = open(state.workbook());
       return !!rubric?.locked && !!rubric.assignment.submission;
     },
-    isVisible: () => commands.isEnabled(CommandIDs.draft),
+    isVisible: () => {
+      const rubric = open(state.workbook());
+      return !!rubric?.assignment.submission;
+    },
     label: trans.__('Revert to draft...'),
     execute: async (args: Partial<Credentials>) => {
       const { workbook } = await reify(args);
@@ -343,6 +347,17 @@ export function addCommands(
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not revert'), error as Error);
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.points, {
+    label: trans.__('Edit cell maximum possible points'),
+    execute: async (args: Partial<Cell>) => {
+      const workbook = state.workbook();
+      const id = state.cell(args);
+      const value = args.points;
+      if (workbook && id && typeof value === 'number') {
+        await points(workbook, id, value);
       }
     }
   }));
@@ -370,8 +385,16 @@ export function addCommands(
         injector(emission);
       };
     })(false)
-  }));
-  disposables.push(commands.addCommand(CommandIDs.lock, {
+  }));  disposables.push(commands.addCommand(CommandIDs.intervene, {
+    label: trans.__('Intervene on cell score'),
+    execute: async (args: Partial<Cell> & { intervention?: Rubric.Score | null }) => {
+      const workbook = state.workbook();
+      const id = state.cell(args);
+      if (workbook && id && args.intervention !== undefined) {
+        await intervene(workbook, id, args.intervention);
+      }
+    }
+  }));  disposables.push(commands.addCommand(CommandIDs.lock, {
     icon: Icons.locked,
     isEnabled: () => {
       const workbook = state.workbook();
@@ -444,7 +467,7 @@ export function addCommands(
     },
     isVisible: args => commands.isEnabled(CommandIDs.remove, args),
     icon: Icons.reset,
-    label: trans.__('Reset cell configuration'),
+    label: trans.__('Reset configuration'),
     execute: async (args: Partial<Cell>) => {
       const workbook = state.workbook();
       const id = state.cell(args);
@@ -513,8 +536,8 @@ export function addCommands(
 
       const { shared } = get(open(state.workbook())!, state.cell(args))!;
       return shared
-        ? trans.__('Allow correction only in grader mode')
-        : trans.__('Allow correction in all modes');
+        ? trans.__('Mode: shared')
+        : trans.__('Mode: secret');
     },
     execute: async (args: Partial<Cell>) => {
       if (commands.isEnabled(CommandIDs.share, args)) {
@@ -530,7 +553,10 @@ export function addCommands(
       const submitted = !!rubric?.assignment.submission;
       return locked && assigned && !submitted;
     },
-    isVisible: () => commands.isEnabled(CommandIDs.submit),
+    isVisible: () => {
+      const rubric = open(state.workbook());
+      return !!rubric && !rubric.assignment.submission;
+    },
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
