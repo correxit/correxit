@@ -231,7 +231,13 @@ export namespace Rubric {
         score.status === 'correct' ? possible : 0;
       if (cell.is === 'reviewable') {
         const score = await review(intervention ?? null);
-        return { ...score, id, points: points(score), possible };
+        if (score.status === 'unscored') {
+          return { ...score, id, possible };
+        }
+
+        const capped = Math.max(0, Math.min(score.points, possible));
+        const status = capped === possible ? 'correct' : 'incorrect';
+        return { ...score, id, points: capped, possible, status };
       }
       if (!given) {
         return { ...Score.INCORRECT, code: 'missing-given', id, possible };

@@ -607,6 +607,30 @@ describe('Rubric', () => {
         expect(score.points).toBe(5);
         expect(score.id).toBe(id);
       });
+
+      it('preserves partial points from intervention', async () => {
+        const id = 'q1';
+        const intervention = Rubric.Score.intervene(id, {
+          comment: 'partial credit',
+          points: 3,
+          possible: 5
+        });
+        const rubric = {
+          ...populate(id),
+          assignment: {
+            ...populate(id).assignment,
+            report: {
+              ...populate(id).assignment.report,
+              interventions: { [id]: intervention }
+            }
+          }
+        };
+        const outputs: Rubric.Outputs = new Map();
+        const score = await Rubric.Cell.score(rubric, id, outputs);
+        expect(score.status).toBe('incorrect');
+        expect(score.points).toBe(3);
+        expect(score.possible).toBe(5);
+      });
     });
   });
 
