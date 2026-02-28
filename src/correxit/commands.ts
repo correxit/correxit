@@ -385,16 +385,20 @@ export function addCommands(
         injector(emission);
       };
     })(false)
-  }));  disposables.push(commands.addCommand(CommandIDs.intervene, {
+  }));
+  disposables.push(commands.addCommand(CommandIDs.intervene, {
     label: trans.__('Intervene on cell score'),
-    execute: async (args: Partial<Cell> & { intervention?: Rubric.Score | null }) => {
+    execute: async (
+      args: Partial<Cell> & { intervention?: Rubric.Score | null; }
+    ) => {
       const workbook = state.workbook();
       const id = state.cell(args);
       if (workbook && id && args.intervention !== undefined) {
         await intervene(workbook, id, args.intervention);
       }
     }
-  }));  disposables.push(commands.addCommand(CommandIDs.lock, {
+  }));
+  disposables.push(commands.addCommand(CommandIDs.lock, {
     icon: Icons.locked,
     isEnabled: () => {
       const workbook = state.workbook();

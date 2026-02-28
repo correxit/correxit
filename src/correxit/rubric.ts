@@ -467,9 +467,11 @@ export namespace Rubric {
      * intervention over the computed score.
      */
     export function resolve(
-      { interventions, scores }: Assignment.Report,
+      report: Partial<Assignment.Report>,
       id: string
     ): Score | null {
+      const interventions = report.interventions || {};
+      const scores = report.scores || {};
       return interventions[id] ?? scores[id] ?? null;
     }
   }
@@ -529,7 +531,11 @@ export namespace Rubric {
   }
 
   /** Update the maximum points for a cell. */
-  export function points(rubric: Unlocked, id: string, points: number): Unlocked {
+  export function points(
+    rubric: Unlocked,
+    id: string,
+    points: number
+  ): Unlocked {
     const cell = get(rubric, id);
     if (!cell) {
       throw new Error(`points error, rubric does not have cell id ${id}`);

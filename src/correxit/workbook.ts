@@ -452,8 +452,8 @@ export namespace Workbook {
    * Intervenes with a manual score for a cell.
    *
    * @param workbook - the workbook to modify the report for.
-   * @param cell - the cell to intervene on.
-   * @param score - the manual score intervention.
+   * @param id - the id of the cell to intervene on.
+   * @param intervention - the manual score intervention.
    *
    * @returns a promise that resolves when the workbook has been updated.
    */
@@ -475,7 +475,11 @@ export namespace Workbook {
       delete interventions[id];
     }
     const cells = sources(workbook, rubric);
-    const signed = await Rubric.sign(rubric, { ...kept, interventions }, cells);
+    const signed = await Rubric.sign(
+      rubric,
+      { ...kept, interventions },
+      cells
+    );
     return update(workbook, signed);
   }
 

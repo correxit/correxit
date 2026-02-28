@@ -306,14 +306,24 @@ const Body: React.FC<{
   const hint = get(rubric, id)?.is ?? (has(rubric, id, true) && 'reference');
   return (
     <section className="correxit-sidebar-body">
-      <div className="correxit-sidebar-cell-config correxit-sidebar-cell-actions">
+      <div
+        className={[
+          'correxit-sidebar-cell-config',
+          'correxit-sidebar-cell-actions'
+        ].join(' ')}
+      >
         <CommandToolbarButtonComponent {...{ commands, id: correct }} />
         <CommandToolbarButtonComponent
           {...{ commands, id: correct, args: { id } }}
         />
       </div>
       <CellScore {...{ commands, id, rubric, trans, workbook }} />
-      <div className="correxit-sidebar-cell-config correxit-sidebar-cell-pair">
+      <div
+        className={[
+          'correxit-sidebar-cell-config',
+          'correxit-sidebar-cell-pair'
+        ].join(' ')}
+      >
         <CommandToolbarButtonComponent
           {...{ commands, id: configure, args: { id, is: 'answerable' } }}
         />
@@ -321,7 +331,12 @@ const Body: React.FC<{
           {...{ commands, id: configure, args: { id, is: 'reviewable' } }}
         />
       </div>
-      <div className="correxit-sidebar-cell-config correxit-sidebar-cell-pair">
+      <div
+        className={[
+          'correxit-sidebar-cell-config',
+          'correxit-sidebar-cell-pair'
+        ].join(' ')}
+      >
         <CommandToolbarButtonComponent
           {...{ commands, id: configure, args: { id, is: 'comparable' } }}
         />
@@ -329,7 +344,12 @@ const Body: React.FC<{
           {...{ commands, id: configure, args: { id, is: 'correctable' } }}
         />
       </div>
-      <div className="correxit-sidebar-cell-config correxit-sidebar-cell-actions">
+      <div
+        className={[
+          'correxit-sidebar-cell-config',
+          'correxit-sidebar-cell-actions'
+        ].join(' ')}
+      >
         <CommandToolbarButtonComponent
           {...{ commands, id: share, args: { id } }}
         />
