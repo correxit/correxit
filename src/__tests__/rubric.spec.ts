@@ -804,5 +804,85 @@ describe('Rubric', () => {
       expect(resolved?.code).toBe('intervene');
       expect(resolved?.points).toBe(4);
     });
+
+    it('rejects negative points', () => {
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: -1,
+          possible: 5
+        })
+      ).toThrow(RangeError);
+
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: -1,
+          possible: 5
+        })
+      ).toThrow('points out of range');
+    });
+
+    it('rejects points greater than possible', () => {
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: 6,
+          possible: 5
+        })
+      ).toThrow(RangeError);
+
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: 6,
+          possible: 5
+        })
+      ).toThrow('points out of range');
+    });
+
+    it('rejects non-positive possible', () => {
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: 0,
+          possible: 0
+        })
+      ).toThrow(RangeError);
+
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: 0,
+          possible: 0
+        })
+      ).toThrow('possible < 1');
+    });
+
+    it('rejects non-finite and non-integer values', () => {
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: Number.NaN,
+          possible: 5
+        })
+      ).toThrow(TypeError);
+
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: Number.NaN,
+          possible: 5
+        })
+      ).toThrow('points invalid');
+
+      expect(() =>
+        Rubric.Score.intervene('c1', {
+          comment: '',
+          points: 2.5,
+          possible: 5
+        })
+      ).toThrow(TypeError);
+    });
   });
 });

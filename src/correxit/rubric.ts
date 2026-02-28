@@ -476,8 +476,25 @@ export namespace Rubric {
       intervention: Pick<Score, 'comment' | 'points' | 'possible'>
     ): Score {
       const { comment, points, possible } = intervention;
-      const status = points === possible ? 'correct' : 'incorrect';
-      return { code: 'intervene', comment, id, points, possible, status };
+      const integer = (value: number, name: string): number => {
+        if (!Number.isFinite(value) || !Number.isInteger(value)) {
+          throw new TypeError(`intervene: ${name} invalid`);
+        }
+        return value;
+      };
+
+      const scored = integer(points, 'points');
+      const maximum = integer(possible, 'possible');
+      if (maximum < 1) {
+        throw new RangeError('intervene: possible < 1');
+      }
+      if (scored < 0 || scored > maximum) {
+        throw new RangeError('intervene: points out of range');
+      }
+
+      const code = 'intervene';
+      const status = scored === maximum ? 'correct' : 'incorrect';
+      return { code, comment, id, points: scored, possible: maximum, status };
     }
 
     /**
