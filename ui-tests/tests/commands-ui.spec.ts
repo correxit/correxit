@@ -216,6 +216,78 @@ test('sets a comment on a rubric cell', async ({ page }) => {
   await dispose();
 });
 
+test('reweights cell points via command', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
+    await app.commands.execute('correxit:configure', {
+      id: 'cell',
+      is: 'reviewable'
+    });
+    await app.commands.execute('correxit:reweight', {
+      id: 'cell',
+      points: 9
+    });
+
+    const metadata = panel.context.model.sharedModel.getMetadata('correxit');
+    return {
+      points: metadata?.cells?.['cell']?.points ?? null
+    };
+  });
+
+  expect(result.points).toBe(9);
+  await dispose();
+});
+
+test('sets and clears intervention via command', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
+    await app.commands.execute('correxit:configure', {
+      id: 'cell',
+      is: 'reviewable'
+    });
+
+    const intervention = Rubric.Score.intervene('cell', {
+      comment: 'manual override',
+      points: 2,
+      possible: 1
+    });
+    await app.commands.execute('correxit:intervene', {
+      id: 'cell',
+      intervention
+    });
+
+    const first = Workbook.open(panel)?.assignment.report.interventions.cell;
+    await app.commands.execute('correxit:intervene', {
+      id: 'cell',
+      intervention: null
+    });
+    const second = Workbook.open(panel)?.assignment.report.interventions.cell;
+
+    return {
+      cleared: second === undefined,
+      code: first?.code ?? null,
+      points: first?.points ?? null
+    };
+  });
+
+  expect(result.code).toBe('intervene');
+  expect(result.points).toBe(2);
+  expect(result.cleared).toBe(true);
+  await dispose();
+});
+
 test('locks workbook and encrypts reference cells', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'answer' },

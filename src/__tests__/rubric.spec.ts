@@ -129,6 +129,28 @@ describe('Rubric', () => {
       expect(Rubric.size(rubric)).toBe(2);
     });
 
+    it('reweights points for an existing cell', () => {
+      const id = 'cell-1';
+      const rubric = Rubric.add(create(), {
+        id,
+        is: 'reviewable',
+        payload: null,
+        points: 1,
+        reference: null,
+        shared: false
+      });
+
+      const reweighted = Rubric.Cell.reweight(rubric, id, 7);
+      expect(Rubric.get(reweighted, id)?.points).toBe(7);
+      expect(Rubric.get(rubric, id)?.points).toBe(1);
+    });
+
+    it('throws when reweighting unknown cell id', () => {
+      expect(() => Rubric.Cell.reweight(create(), 'missing', 2)).toThrow(
+        'points error'
+      );
+    });
+
     it('normalizes a locked rubric', async () => {
       const rubric = await Rubric.lock(create());
       const normalized = Rubric.normalize(rubric);
@@ -743,6 +765,44 @@ describe('Rubric', () => {
           Rubric.Assignment.verify(report, cells, key)
         ).resolves.toBeUndefined();
       });
+    });
+  });
+
+  describe('Rubric.Score', () => {
+    it('creates manual intervention score', () => {
+      const intervention = Rubric.Score.intervene('c1', {
+        comment: 'manual override',
+        points: 3,
+        possible: 5
+      });
+
+      expect(intervention.id).toBe('c1');
+      expect(intervention.code).toBe('intervene');
+      expect(intervention.comment).toBe('manual override');
+      expect(intervention.points).toBe(3);
+      expect(intervention.possible).toBe(5);
+      expect(intervention.status).toBe('incorrect');
+    });
+
+    it('resolves intervention over computed score', () => {
+      const report: Rubric.Assignment.Report = {
+        digest: '',
+        interventions: {
+          c1: Rubric.Score.intervene('c1', {
+            comment: 'manual override',
+            points: 4,
+            possible: 5
+          })
+        },
+        scores: {
+          c1: { ...Rubric.Score.CORRECT, id: 'c1', points: 5, possible: 5 }
+        },
+        timestamp: null
+      };
+
+      const resolved = Rubric.Score.resolve(report, 'c1');
+      expect(resolved?.code).toBe('intervene');
+      expect(resolved?.points).toBe(4);
     });
   });
 });
