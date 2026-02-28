@@ -260,7 +260,7 @@ test('sets and clears intervention via command', async ({ page }) => {
 
     const intervention = Rubric.Score.intervene('cell', {
       comment: 'manual override',
-      points: 2,
+      points: 1,
       possible: 1
     });
     await app.commands.execute('correxit:intervene', {
@@ -283,7 +283,7 @@ test('sets and clears intervention via command', async ({ page }) => {
   });
 
   expect(result.code).toBe('intervene');
-  expect(result.points).toBe(2);
+  expect(result.points).toBe(1);
   expect(result.cleared).toBe(true);
   await dispose();
 });
