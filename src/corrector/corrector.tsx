@@ -436,19 +436,17 @@ const Score: React.FC<{
       </>
     );
   }
-  if (grade.resolved) {
+  if (!grade.resolved) {
     return (
-      <>
-        <Kernel spec={grade.spec} />
-        <Report score={grade.score} trans={trans} />
-      </>
+      <td className="correxit-corrector-failed" colSpan={2}>
+        <span>{graded ? irrecoverable : recoverable}</span>
+      </td>
     );
   }
   return (
     <>
-      <td className="correxit-corrector-failed" colSpan={2}>
-        <span>{graded ? irrecoverable : recoverable}</span>
-      </td>
+      <Kernel spec={grade.spec} />
+      <Report score={grade.score} trans={trans} />
     </>
   );
 };

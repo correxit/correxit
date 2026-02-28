@@ -120,7 +120,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const indicator = new Corrector.Status(trans);
       const active = new Signal<typeof tracker, void>(tracker);
-      tracker.currentChanged.connect(() => active.emit(void 0));
+      tracker.currentChanged.connect(() => active.emit(undefined));
       const { launch } = Corrector.CommandIDs;
       const added = Corrector.addCommands(app, {
         browser,

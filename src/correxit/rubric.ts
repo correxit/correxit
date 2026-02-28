@@ -520,8 +520,8 @@ export namespace Rubric {
       report: Partial<Assignment.Report>,
       id: string
     ): Score | null {
-      const interventions = report.interventions || {};
-      const scores = report.scores || {};
+      const { Report } = Assignment;
+      const { interventions, scores } = { ...Report.empty(), ...report };
       return interventions[id] ?? scores[id] ?? null;
     }
   }

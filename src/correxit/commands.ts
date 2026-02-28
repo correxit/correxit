@@ -126,7 +126,7 @@ export function addCommands(
   disposables.push(commands.addCommand(CommandIDs.configure, {
     className: 'correxit-configure',
     icon: ({ is }: Partial<Cell>) =>
-      Rubric.Cell.types.some(type => is === type) ? Icons[is!] : void 0,
+      Rubric.Cell.types.some(type => is === type) ? Icons[is!] : undefined,
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const notebook = state.workbook()?.context.model.sharedModel;
       const id = state.cell(args);
@@ -376,7 +376,7 @@ export function addCommands(
     })(false)
   }));
   disposables.push(commands.addCommand(CommandIDs.intervene, {
-    label: trans.__('Intervene on cell score'),
+    label: trans.__('Manually set cell score'),
     execute: async (
       args: Partial<Cell & { intervention: Rubric.Score | null }>
     ) => {
@@ -518,7 +518,7 @@ export function addCommands(
   disposables.push(commands.addCommand(CommandIDs.share, {
     icon: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) {
-        return void 0;
+        return undefined;
       }
 
       const { shared } = get(open(state.workbook())!, state.cell(args))!;
