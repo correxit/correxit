@@ -175,6 +175,89 @@ test('assign short-circuits when no fields changed', async ({ page }) => {
   await dispose();
 });
 
+test('reweights a configured cell', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const rubric = Rubric.add(
+      { ...Rubric.create(), key: 'secret' },
+      {
+        id: 'cell',
+        is: 'reviewable',
+        payload: null,
+        points: 1,
+        reference: null,
+        shared: false
+      }
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.reweight(workbook, 'cell', 7);
+
+    const opened = Workbook.open(workbook);
+    const metadata = panel.context.model.sharedModel.getMetadata('correxit');
+    return {
+      points: Rubric.get(opened, 'cell')?.points ?? null,
+      stored: metadata?.cells?.['cell']?.points ?? null
+    };
+  });
+
+  expect(result.points).toBe(7);
+  expect(result.stored).toBe(7);
+  await dispose();
+});
+
+test('sets and clears a cell intervention score', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const rubric = Rubric.add(
+      { ...Rubric.create(), key: 'secret' },
+      {
+        id: 'cell',
+        is: 'reviewable',
+        payload: null,
+        points: 5,
+        reference: null,
+        shared: false
+      }
+    );
+    await Workbook.update(workbook, rubric);
+
+    const intervention = Rubric.Score.intervene('cell', {
+      comment: 'manual',
+      points: 3,
+      possible: 5
+    });
+    await Workbook.intervene(workbook, 'cell', intervention);
+
+    const set = Workbook.open(workbook)?.assignment.report.interventions.cell;
+    await Workbook.intervene(workbook, 'cell', null);
+    const cleared =
+      Workbook.open(workbook)?.assignment.report.interventions.cell;
+
+    return {
+      cleared: cleared === undefined,
+      comment: set?.comment ?? null,
+      points: set?.points ?? null,
+      status: set?.status ?? null
+    };
+  });
+
+  expect(result.points).toBe(3);
+  expect(result.comment).toBe('manual');
+  expect(result.status).toBe('incorrect');
+  expect(result.cleared).toBe(true);
+  await dispose();
+});
+
 test('submits a workbook and sets cells to read-only', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'a', source: 'x = 1' },

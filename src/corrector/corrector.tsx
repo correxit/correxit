@@ -61,7 +61,7 @@ const inject = (commands: CommandRegistry, workbook: Workbook | null) =>
     (await commands.execute(Correxit.CommandIDs.inject))?.(workbook))(workbook);
 
 /**
- * @returns The logo of a kernel in order of preference.
+ * @returns the logo of a kernel in order of preference.
  */
 const logo = (spec: Exclude<Workbook.Grade['spec'], null>) => {
   const { resources } = spec;
@@ -71,7 +71,7 @@ const logo = (spec: Exclude<Workbook.Grade['spec'], null>) => {
 };
 
 /**
- * @returns A workbook or `null` if path matches workbook context.
+ * @returns a workbook or `null` if path matches workbook context.
  */
 const match = (workbooks: Scanned[], path = ''): Headless | null =>
   (find(workbooks, workbook => {
@@ -79,7 +79,7 @@ const match = (workbooks: Scanned[], path = ''): Headless | null =>
   }) || null) as Headless | null;
 
 /**
- * @returns A merged list workbooks that prioritizes the graded collection.
+ * @returns a merged list workbooks that prioritizes the graded collection.
  */
 const merge = (scanned: Scanned[], grades: Collated) => {
   const latest = new Map<string, Scanned>();
@@ -436,19 +436,17 @@ const Score: React.FC<{
       </>
     );
   }
-  if (grade.resolved) {
+  if (!grade.resolved) {
     return (
-      <>
-        <Kernel spec={grade.spec} />
-        <Report score={grade.score} trans={trans} />
-      </>
+      <td className="correxit-corrector-failed" colSpan={2}>
+        <span>{graded ? irrecoverable : recoverable}</span>
+      </td>
     );
   }
   return (
     <>
-      <td className="correxit-corrector-failed" colSpan={2}>
-        <span>{graded ? irrecoverable : recoverable}</span>
-      </td>
+      <Kernel spec={grade.spec} />
+      <Report score={grade.score} trans={trans} />
     </>
   );
 };

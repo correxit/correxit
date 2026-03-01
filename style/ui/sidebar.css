@@ -3,12 +3,22 @@
 }
 
 .correxit-sidebar {
-  --correxit-sidebar-control-width: 95%;
+  --correxit-sidebar-content-inset: 6px;
+  --correxit-sidebar-control-width: 100%;
   --correxit-sidebar-font-size: var(--jp-ui-font-size1);
-  --correxit-sidebar-section-padding: 5px;
+  --correxit-sidebar-section-padding: 6px;
 
   display: flex;
   flex-flow: column;
+  min-height: 0;
+  overflow: hidden auto;
+}
+
+.correxit-sidebar input,
+.correxit-sidebar select,
+.correxit-sidebar textarea {
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .correxit-sidebar h4 {
@@ -37,9 +47,9 @@
   font-size: var(--correxit-sidebar-font-size);
   justify-content: center;
   height: 35px;
-  margin: 0 auto 10px;
+  margin: 0 var(--correxit-sidebar-content-inset) 10px;
   overflow-y: auto;
-  width: 85%;
+  width: calc(100% - (2 * var(--correxit-sidebar-content-inset)));
 }
 
 .correxit-sidebar .correxit-monospace {
@@ -54,25 +64,65 @@
 }
 
 .correxit-sidebar-cell-report {
+  align-items: center;
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  align-items: center;
-  margin: 2px 20px 8px;
+  margin: 6px var(--correxit-sidebar-content-inset) 8px;
 }
 
 .correxit-sidebar-cell-config {
-  height: 21px;
   justify-content: center;
   text-align: center;
   color: var(--jp-ui-font-color3);
 
-  .correxit-add {
-    margin: 0 1px;
-    min-width: 30%;
+  .correxit-configure {
+    margin: 2px;
+    min-width: 45%;
     padding: 0 1px;
     width: auto;
   }
+
+  .correxit-remove {
+    margin: 4px 0;
+    min-width: 90%;
+    padding: 0 1px;
+    width: auto;
+  }
+}
+
+.correxit-sidebar-cell-actions .jp-ToolbarButtonComponent {
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.correxit-sidebar-cell-actions {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.correxit-sidebar-cell-pair {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.correxit-sidebar-cell-pair + .correxit-sidebar-cell-pair {
+  margin-top: 4px;
+}
+
+.correxit-sidebar-cell-pair .jp-ToolbarButtonComponent {
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.correxit-sidebar-submission-actions .jp-ToolbarButtonComponent {
+  margin: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent > span {
@@ -92,11 +142,32 @@
   margin: 5px 0;
 }
 
+.correxit-sidebar-footer {
+  margin-top: 6px;
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent {
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-warn-color2);
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent:hover {
+  background-color: var(--jp-layout-color3);
+  border-color: var(--jp-warn-color1);
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent > span {
+  color: var(--jp-warn-color0);
+}
+
 .correxit-sidebar-inner-header {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  margin: 5px 15px;
+  margin: 6px var(--correxit-sidebar-content-inset);
 
   .jp-ToolbarButtonComponent:hover {
     background-color: transparent;
@@ -110,12 +181,33 @@
   border-width: 2px;
   color: var(--jp-ui-font-color4);
   font-size: var(--correxit-sidebar-font-size);
-  margin: 25px 10px 5px;
+  margin: 10px var(--correxit-sidebar-content-inset) 0;
   padding: 8px;
 }
 
 .correxit-sidebar-header p {
-  margin: 5px 6px 0;
+  margin: 6px var(--correxit-sidebar-content-inset) 0;
+}
+
+.correxit-sidebar-submission-actions {
+  align-items: stretch;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+  margin: 6px var(--correxit-sidebar-content-inset) 0;
+}
+
+.correxit-sidebar-submission-chip {
+  background-color: var(--jp-layout-color4);
+  border: 1px solid var(--jp-border-color3);
+  border-radius: 3px;
+  color: var(--jp-ui-font-color2);
+  display: flex;
+  font-size: var(--jp-ui-font-size0);
+  justify-content: center;
+  line-height: 1.2;
+  padding: 4px 6px;
+  white-space: nowrap;
 }
 
 .correxit-sidebar-additional-operations {
@@ -131,8 +223,8 @@
   border-color: var(--jp-border-color2);
   border-style: solid;
   border-width: 2px;
-  margin: 0 2px;
-  padding: 2px 0;
+  margin: 0 var(--correxit-sidebar-content-inset);
+  padding: 4px 0;
 }
 
 .correxit-assignment-assignee,
@@ -165,7 +257,7 @@
 }
 
 .correxit-assignment-expiration {
-  padding: 2px 0 2px 26px;
+  padding: 2px 0 2px 24px;
 
   label {
     display: inline-block;
@@ -215,7 +307,8 @@
 
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after,
 .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after,
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after,
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-reviewable::after {
   --cxt-annotate-size: 28px;
   --cxt-annotate-icon: 16px 16px;
 
@@ -223,7 +316,7 @@
   border-bottom-right-radius: var(--jp-border-radius);
   content: '';
   position: absolute;
-  top: 5px;
+  top: 6px;
   right: 5px;
   z-index: 10;
   background-color: var(--md-blue-400);
@@ -248,6 +341,10 @@
   background-image: url('../monitor/icons/correctable.svg');
 }
 
+.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-reviewable::after {
+  background-image: url('../monitor/icons/reviewable.svg');
+}
+
 .jp-Notebook
   .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correct
   .jp-InputArea-editor {
@@ -260,4 +357,49 @@
   .jp-InputArea-editor {
   border: 1px solid var(--md-red-300);
   border-radius: 6px;
+}
+
+.correxit-sidebar-cell-score-edit {
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 var(--correxit-sidebar-content-inset) 10px;
+  padding: 8px 10px;
+}
+
+.correxit-sidebar-cell-score-field {
+  color: var(--jp-ui-font-color2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0;
+}
+
+.correxit-sidebar-cell-score-input {
+  font-size: var(--correxit-sidebar-font-size);
+  min-height: 24px;
+  text-align: right;
+  width: 72px;
+}
+
+.correxit-sidebar-cell-score-label {
+  color: var(--jp-ui-font-color2);
+  font-size: var(--correxit-sidebar-font-size);
+  margin-top: 2px;
+}
+
+.correxit-sidebar-cell-score-textarea {
+  font-size: var(--correxit-sidebar-font-size);
+  resize: vertical;
+  width: 100%;
+}
+
+.correxit-sidebar-cell-score-guide {
+  color: var(--jp-ui-font-color3);
+  font-size: var(--jp-ui-font-size0);
+  line-height: 1.3;
+  margin: 0;
 }

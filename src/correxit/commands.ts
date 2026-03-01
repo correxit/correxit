@@ -14,23 +14,25 @@ import * as security from './security';
 import * as state from './state';
 
 export namespace CommandIDs {
-  export const add = 'correxit:add';
   export const assign = 'correxit:assign';
   export const certify = 'correxit:certify';
   export const comment = 'correxit:comment';
+  export const configure = 'correxit:configure';
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const draft = 'correxit:draft';
   export const fetch = 'correxit:fetch';
   export const inject = 'correxit:inject';
+  export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
   export const registrar = 'correxit:registrar';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
+  export const reweight = 'correxit:reweight';
   export const save = 'correxit:save';
+  export const share = 'correxit:share';
   export const submit = 'correxit:submit';
-  export const toggle = 'correxit:toggle';
   export const unlock = 'correxit:unlock';
 }
 
@@ -45,8 +47,8 @@ type Reified =
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
 const { get, has, size } = Rubric;
-const { add, assign, certify, comment, convert, correct } = Workbook;
-const { draft, lock, remove, reset, submit, toggle } = Workbook;
+const { add, assign, certify, comment, convert, correct, draft } = Workbook;
+const { intervene, lock, remove, reset, reweight, submit, toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
@@ -77,10 +79,54 @@ export function addCommands(
     return { handle, rubric, workbook } as Reified;
   };
   const disposables = [];
-  disposables.push(commands.addCommand(CommandIDs.add, {
-    className: 'correxit-add',
+  disposables.push(commands.addCommand(CommandIDs.assign, {
+    icon: Icons.assignment,
+    isEnabled: () => open(state.workbook())?.locked === false,
+    isVisible: () => commands.isEnabled(CommandIDs.assign),
+    label: trans.__('Assign workbook...'),
+    execute: async (args: Partial<Credentials & Assignment>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric) {
+        return;
+      }
+
+      const identifier = Workbook.identifier(workbook);
+      const roster = await registrar(workbook, identifier) || args.roster;
+      await assign(workbook, { ...args, roster });
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.certify, {
+    icon: Icons.certify,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      const assigned = !!rubric?.assignment.assignee;
+      return assigned && !rubric.locked;
+    },
+    label: trans.__('Certify workbook...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || rubric.locked || !rubric.assignment.assignee) {
+        return;
+      }
+      for await (const _ of collector([await certify(workbook)])) {
+        void _; // Exhaust the generator that collector returns.
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.comment, {
+    label: trans.__('Comment on cell'),
+    execute: async (args: Partial<Cell & { comment: string; }>) => {
+      const workbook = state.workbook();
+      const id = state.cell(args);
+      if (workbook && id) {
+        await comment(workbook, id, args.comment || '');
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.configure, {
+    className: 'correxit-configure',
     icon: ({ is }: Partial<Cell>) =>
-      Rubric.Cell.types.some(type => is === type) ? Icons[is!] : void 0,
+      Rubric.Cell.types.some(type => is === type) ? Icons[is!] : undefined,
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const notebook = state.workbook()?.context.model.sharedModel;
       const id = state.cell(args);
@@ -99,9 +145,9 @@ export function addCommands(
       const rubric = open(state.workbook());
       return !!rubric && !!id && get(rubric, id)?.is === args.is;
     },
-    isVisible: cell => commands.isEnabled(CommandIDs.add, cell),
+    isVisible: cell => commands.isEnabled(CommandIDs.configure, cell),
     label: (cell: Partial<Cell>) => {
-      if (!commands.isEnabled(CommandIDs.add, cell)) {
+      if (!commands.isEnabled(CommandIDs.configure, cell)) {
         return '';
       }
       if (cell.is === 'answerable') {
@@ -112,6 +158,9 @@ export function addCommands(
       }
       if (cell.is === 'correctable') {
         return trans.__('Correct');
+      }
+      if (cell.is === 'reviewable') {
+        return trans.__('Manual');
       }
       return '';
     },
@@ -140,13 +189,21 @@ export function addCommands(
       if (is === 'answerable') {
         const expected = await input.text({
           title: trans.__('Enter expected cell output'),
-          label: commands.label(CommandIDs.add, args)
+          label: commands.label(CommandIDs.configure, args)
         });
         if (!expected) {
           return;
         }
 
         const payload = [await security.digest(expected)];
+        const points = 1;
+        const reference = null;
+        const shared = false;
+        await add(workbook, { id, is, payload, points, reference, shared });
+        return;
+      }
+      if (is === 'reviewable') {
+        const payload = null;
         const points = 1;
         const reference = null;
         const shared = false;
@@ -177,51 +234,6 @@ export function addCommands(
       const points = 1;
       const shared = false;
       await add(workbook, { id, is, payload, points, reference, shared });
-    }
-  }));
-  disposables.push(commands.addCommand(CommandIDs.assign, {
-    icon: Icons.assignment,
-    isEnabled: () => open(state.workbook())?.locked === false,
-    isVisible: () => commands.isEnabled(CommandIDs.assign),
-    label: trans.__('Assign workbook...'),
-    execute: async (args: Partial<Credentials & Assignment>) => {
-      const { rubric, workbook } = await reify(args);
-      if (!rubric) {
-        return;
-      }
-
-      const identifier = Workbook.identifier(workbook);
-      const roster = await registrar(workbook, identifier) || args.roster;
-      await assign(workbook, { ...args, roster });
-    }
-  }));
-  disposables.push(commands.addCommand(CommandIDs.certify, {
-    icon: Icons.certify,
-    isEnabled: () => {
-      const rubric = open(state.workbook());
-      const assigned = !!rubric?.assignment.assignee;
-      return assigned && !rubric.locked;
-    },
-    isVisible: () => commands.isEnabled(CommandIDs.certify),
-    label: trans.__('Certify workbook...'),
-    execute: async (args: Partial<Credentials>) => {
-      const { rubric, workbook } = await reify(args);
-      if (!rubric || rubric.locked || !rubric.assignment.assignee) {
-        return;
-      }
-      for await (const _ of collector([await certify(workbook)])) {
-        void _; // Exhaust the generator that collector returns.
-      }
-    }
-  }));
-  disposables.push(commands.addCommand(CommandIDs.comment, {
-    label: trans.__('Comment on cell'),
-    execute: async (args: Partial<Cell> & { comment?: string; }) => {
-      const workbook = state.workbook();
-      const id = state.cell(args);
-      if (workbook && id) {
-        await comment(workbook, id, args.comment || '');
-      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.convert, {
@@ -310,7 +322,10 @@ export function addCommands(
       const rubric = open(state.workbook());
       return !!rubric?.locked && !!rubric.assignment.submission;
     },
-    isVisible: () => commands.isEnabled(CommandIDs.draft),
+    isVisible: () => {
+      const rubric = open(state.workbook());
+      return !!rubric?.assignment.submission;
+    },
     label: trans.__('Revert to draft...'),
     execute: async (args: Partial<Credentials>) => {
       const { workbook } = await reify(args);
@@ -359,6 +374,18 @@ export function addCommands(
         injector(emission);
       };
     })(false)
+  }));
+  disposables.push(commands.addCommand(CommandIDs.intervene, {
+    label: trans.__('Manually set cell score'),
+    execute: async (
+      args: Partial<Cell & { intervention: Rubric.Score | null }>
+    ) => {
+      const workbook = state.workbook();
+      const id = state.cell(args);
+      if (workbook && id && args.intervention !== undefined) {
+        await intervene(workbook, id, args.intervention);
+      }
+    }
   }));
   disposables.push(commands.addCommand(CommandIDs.lock, {
     icon: Icons.locked,
@@ -425,6 +452,7 @@ export function addCommands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
+    className: 'correxit-remove',
     isEnabled: (args: Partial<Cell>) => {
       const id = state.cell(args);
       const rubric = open(state.workbook());
@@ -432,7 +460,7 @@ export function addCommands(
     },
     isVisible: args => commands.isEnabled(CommandIDs.remove, args),
     icon: Icons.reset,
-    label: trans.__('Reset cell configuration'),
+    label: trans.__('Reset configuration'),
     execute: async (args: Partial<Cell>) => {
       const workbook = state.workbook();
       const id = state.cell(args);
@@ -461,6 +489,16 @@ export function addCommands(
       }
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.reweight, {
+    label: trans.__('Update maximum possible points for a cell'),
+    execute: async (args: Partial<Cell & { points: number }>) => {
+      const workbook = state.workbook();
+      const id = state.cell(args);
+      if (workbook && id && typeof args.points === 'number') {
+        await reweight(workbook, id, args.points);
+      }
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.save, {
     icon: saveIcon,
     label: trans.__('Save workbook metadata'),
@@ -477,6 +515,39 @@ export function addCommands(
       await workbook.context.save();
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.share, {
+    icon: (args: Partial<Cell & CellToolbar>) => {
+      if (!commands.isEnabled(CommandIDs.share, args)) {
+        return undefined;
+      }
+
+      const { shared } = get(open(state.workbook())!, state.cell(args))!;
+      return shared ? Icons.shared : Icons.secret;
+    },
+    isEnabled: (args: Partial<Cell & CellToolbar>) => {
+      const rubric = open(state.workbook());
+      const id = state.cell(args);
+      return !!id && !!rubric && !rubric.locked && has(rubric, id);
+    },
+    isVisible: (args: Partial<Cell & CellToolbar>) => {
+      return commands.isEnabled(CommandIDs.share, args);
+    },
+    label: (args: Partial<Cell & CellToolbar>) => {
+      if (!commands.isEnabled(CommandIDs.share, args)) {
+        return '';
+      }
+
+      const { shared } = get(open(state.workbook())!, state.cell(args))!;
+      return shared
+        ? trans.__('Mode: shared')
+        : trans.__('Mode: secret');
+    },
+    execute: async (args: Partial<Cell>) => {
+      if (commands.isEnabled(CommandIDs.share, args)) {
+        toggle(state.workbook()!, state.cell(args));
+      }
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.submit, {
     isEnabled: () => {
       const rubric = open(state.workbook());
@@ -485,7 +556,10 @@ export function addCommands(
       const submitted = !!rubric?.assignment.submission;
       return locked && assigned && !submitted;
     },
-    isVisible: () => commands.isEnabled(CommandIDs.submit),
+    isVisible: () => {
+      const rubric = open(state.workbook());
+      return !!rubric && !rubric.assignment.submission;
+    },
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
@@ -515,39 +589,6 @@ export function addCommands(
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);
-      }
-    }
-  }));
-  disposables.push(commands.addCommand(CommandIDs.toggle, {
-    icon: (args: Partial<Cell & CellToolbar>) => {
-      if (!commands.isEnabled(CommandIDs.toggle, args)) {
-        return void 0;
-      }
-
-      const { shared } = get(open(state.workbook())!, state.cell(args))!;
-      return shared ? Icons.shared : Icons.secret;
-    },
-    isEnabled: (args: Partial<Cell & CellToolbar>) => {
-      const rubric = open(state.workbook());
-      const id = state.cell(args);
-      return !!id && !!rubric && !rubric.locked && has(rubric, id);
-    },
-    isVisible: (args: Partial<Cell & CellToolbar>) => {
-      return commands.isEnabled(CommandIDs.toggle, args);
-    },
-    label: (args: Partial<Cell & CellToolbar>) => {
-      if (!commands.isEnabled(CommandIDs.toggle, args)) {
-        return '';
-      }
-
-      const { shared } = get(open(state.workbook())!, state.cell(args))!;
-      return shared
-        ? trans.__('Allow correction only in grader mode')
-        : trans.__('Allow correction in all modes');
-    },
-    execute: async (args: Partial<Cell>) => {
-      if (commands.isEnabled(CommandIDs.toggle, args)) {
-        toggle(state.workbook()!, state.cell(args));
       }
     }
   }));

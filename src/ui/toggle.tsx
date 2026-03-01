@@ -10,7 +10,7 @@ export const Toggle: React.FC<{
   <Button
     className="jp-mod-minimal correxit-toggle"
     disabled={disabled || false}
-    onClick={toggle ? event => (event.preventDefault(), toggle()) : void 0}
+    onClick={toggle ? event => (event.preventDefault(), toggle()) : undefined}
     title={title}
   >
     <icon.react title={title} tag="span" />

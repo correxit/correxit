@@ -9,7 +9,7 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
   const result = await page.evaluate(() => {
     const app = (window as any).jupyterapp;
     return {
-      add: app.commands.isEnabled('correxit:add', {
+      add: app.commands.isEnabled('correxit:configure', {
         id: 'cell',
         is: 'comparable'
       }),
@@ -18,7 +18,7 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
       lock: app.commands.isEnabled('correxit:lock'),
       propagate: app.commands.isEnabled('correxit:propagate'),
       remove: app.commands.isEnabled('correxit:remove', { id: 'cell' }),
-      toggle: app.commands.isEnabled('correxit:toggle', { id: 'cell' })
+      toggle: app.commands.isEnabled('correxit:share', { id: 'cell' })
     };
   });
 
@@ -43,7 +43,7 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
     await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
-    await app.commands.execute('correxit:add', {
+    await app.commands.execute('correxit:configure', {
       id: 'cell',
       is: 'comparable',
       reference: ['ref']
@@ -56,7 +56,7 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
       points: cell?.points ?? null,
       reference: cell?.reference ?? null,
       shared: cell?.shared ?? null,
-      toggled: app.commands.isToggled('correxit:add', {
+      toggled: app.commands.isToggled('correxit:configure', {
         id: 'cell',
         is: 'comparable'
       })
@@ -82,7 +82,7 @@ test('adds a correctable cell to the rubric', async ({ page }) => {
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
     await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
-    await app.commands.execute('correxit:add', {
+    await app.commands.execute('correxit:configure', {
       id: 'cell',
       is: 'correctable',
       reference: ['ref']
@@ -93,7 +93,7 @@ test('adds a correctable cell to the rubric', async ({ page }) => {
     return {
       is: cell?.is ?? null,
       reference: cell?.reference ?? null,
-      toggled: app.commands.isToggled('correxit:add', {
+      toggled: app.commands.isToggled('correxit:configure', {
         id: 'cell',
         is: 'correctable'
       })
@@ -167,7 +167,7 @@ test('toggles shared flag on a rubric cell', async ({ page }) => {
     await Workbook.update(panel, rubric);
 
     const before = Rubric.get(Workbook.open(panel)!, 'cell')!.shared;
-    await app.commands.execute('correxit:toggle', { id: 'cell' });
+    await app.commands.execute('correxit:share', { id: 'cell' });
 
     const after = Rubric.get(Workbook.open(panel)!, 'cell')!.shared;
     return { before, after };
@@ -213,6 +213,78 @@ test('sets a comment on a rubric cell', async ({ page }) => {
   });
 
   expect(result.comment).toBe('Good work!');
+  await dispose();
+});
+
+test('reweights cell points via command', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
+    await app.commands.execute('correxit:configure', {
+      id: 'cell',
+      is: 'reviewable'
+    });
+    await app.commands.execute('correxit:reweight', {
+      id: 'cell',
+      points: 9
+    });
+
+    const metadata = panel.context.model.sharedModel.getMetadata('correxit');
+    return {
+      points: metadata?.cells?.['cell']?.points ?? null
+    };
+  });
+
+  expect(result.points).toBe(9);
+  await dispose();
+});
+
+test('sets and clears intervention via command', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
+    await app.commands.execute('correxit:configure', {
+      id: 'cell',
+      is: 'reviewable'
+    });
+
+    const intervention = Rubric.Score.intervene('cell', {
+      comment: 'manual override',
+      points: 1,
+      possible: 1
+    });
+    await app.commands.execute('correxit:intervene', {
+      id: 'cell',
+      intervention
+    });
+
+    const first = Workbook.open(panel)?.assignment.report.interventions.cell;
+    await app.commands.execute('correxit:intervene', {
+      id: 'cell',
+      intervention: null
+    });
+    const second = Workbook.open(panel)?.assignment.report.interventions.cell;
+
+    return {
+      cleared: second === undefined,
+      code: first?.code ?? null,
+      points: first?.points ?? null
+    };
+  });
+
+  expect(result.code).toBe('intervene');
+  expect(result.points).toBe(1);
+  expect(result.cleared).toBe(true);
   await dispose();
 });
 
@@ -284,25 +356,25 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
     await Workbook.update(panel, rubric);
 
     const unlocked = {
-      add: app.commands.isEnabled('correxit:add', {
+      add: app.commands.isEnabled('correxit:configure', {
         id: 'cell',
         is: 'comparable'
       }),
       lock: app.commands.isEnabled('correxit:lock'),
       remove: app.commands.isEnabled('correxit:remove', { id: 'cell' }),
-      toggle: app.commands.isEnabled('correxit:toggle', { id: 'cell' }),
+      toggle: app.commands.isEnabled('correxit:share', { id: 'cell' }),
       unlock: app.commands.isEnabled('correxit:unlock')
     };
     await Workbook.lock(panel);
 
     const locked = {
-      add: app.commands.isEnabled('correxit:add', {
+      add: app.commands.isEnabled('correxit:configure', {
         id: 'cell',
         is: 'comparable'
       }),
       lock: app.commands.isEnabled('correxit:lock'),
       remove: app.commands.isEnabled('correxit:remove', { id: 'cell' }),
-      toggle: app.commands.isEnabled('correxit:toggle', { id: 'cell' }),
+      toggle: app.commands.isEnabled('correxit:share', { id: 'cell' }),
       unlock: app.commands.isEnabled('correxit:unlock')
     };
     return { unlocked, locked };

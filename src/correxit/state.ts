@@ -33,9 +33,8 @@ export function cache(workbook: Workbook, id: string, score: Rubric.Score) {
 export function cell(args: Partial<Rubric.Cell & Rubric.Cell.Toolbar>): string {
   const notebook = workbook()?.content;
   const toolbar = args[Rubric.Cell.TOOLBAR];
-  return args.id || toolbar && notebook?.activeCell?.model.id || '';
+  return args.id || (toolbar && notebook?.activeCell?.model.id) || '';
 }
-
 
 /** @returns the cached or persisted score for a cell. */
 export function report(
@@ -53,7 +52,7 @@ export function report(
     return cached;
   }
 
-  const score = rubric.assignment.report.scores[id] || null;
+  const score = Rubric.Score.resolve(rubric.assignment.report, id);
   if (score) {
     cache(workbook, id, score);
   }

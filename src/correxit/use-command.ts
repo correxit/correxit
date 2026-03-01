@@ -58,7 +58,7 @@ export function useCommand<T>(
         setIdle(true);
       }
 
-    })(commands.hasCommand(id) ? commands.execute(id, args) : void 0);
+    })(commands.hasCommand(id) ? commands.execute(id, args) : undefined);
     return () => void (interrupted = true);
   }, [id, JSON.stringify(args)]);
   return [list, idle];

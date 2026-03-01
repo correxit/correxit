@@ -1,24 +1,20 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import {
-  checkIcon,
-  CommandToolbarButtonComponent
-} from '@jupyterlab/ui-components';
+import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { Annotate } from './annotate';
 import { Assignment } from './assignment';
-import { Toggle } from './toggle';
 import { SidebarWidget } from './widget';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const { CommandIDs } = Correxit;
 const { get, has } = Rubric;
-const { add, certify, comment, convert, correct, draft, lock } = CommandIDs;
-const { remove, reset, submit, toggle, unlock } = Correxit.CommandIDs;
+const { certify, configure, convert, correct, draft } = CommandIDs;
+const { lock, remove, reset, submit, share, unlock } = CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Sidebar(props: Sidebar.Props) {
@@ -71,81 +67,233 @@ const Header: React.FC<{
     : null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   const idle = trans.__('Correxit: idle');
-  const date = (timestamp: number) => new Date(timestamp).toLocaleString();
-  const subheading =
-    score === null || score.status === 'unscored'
-      ? trans.__('Unscored')
-      : trans.__('Workbook Grade %1 out of %2', score.points, score.possible);
-  const submission = rubric?.assignment.submission
-    ? trans.__('Submitted %1', date(rubric.assignment.submission))
-    : trans.__('Unsubmitted');
+  const date = (timestamp: number | null) =>
+    timestamp ? new Date(timestamp).toLocaleString() : '';
+  const scored = !!score && score.status !== 'unscored';
+  const titled = scored
+    ? trans.__('%1 (%2 of %3)', heading, score!.points, score!.possible)
+    : heading;
+  const submitted = !!rubric?.assignment.submission;
+  const status = submitted ? trans.__('Submitted') : trans.__('Unsubmitted');
+  const submission = date(rubric?.assignment.submission ?? null);
+  const unlocked = !!rubric && !rubric.locked;
+  const action = unlocked ? certify : submitted ? draft : submit;
   return (
     <section className="correxit-sidebar-header">
       <div className="correxit-sidebar-inner-header">
-        <h4>{workbook ? heading : idle}</h4>
-        <CommandToolbarButtonComponent commands={commands} id={lock} />
-        <CommandToolbarButtonComponent commands={commands} id={unlock} />
+        <h4>{workbook ? titled : idle}</h4>
+        <div className="correxit-sidebar-lock-controls">
+          <CommandToolbarButtonComponent commands={commands} id={lock} />
+          <CommandToolbarButtonComponent commands={commands} id={unlock} />
+        </div>
       </div>
       {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
-      <p>{subheading}</p>
       <CommandToolbarButtonComponent commands={commands} id={convert} />
-      <CommandToolbarButtonComponent commands={commands} id={correct} />
-      <CommandToolbarButtonComponent commands={commands} id={certify} />
-      <p>{submission}</p>
-      <CommandToolbarButtonComponent commands={commands} id={submit} />
-      <CommandToolbarButtonComponent commands={commands} id={draft} />
+      <div className="correxit-sidebar-submission-actions">
+        <span
+          className="correxit-sidebar-submission-chip"
+          title={submission || status}
+        >
+          {status}
+        </span>
+        <CommandToolbarButtonComponent commands={commands} id={action} />
+      </div>
     </section>
   );
 };
 
-const CellReport: React.FC<{
+const CellScore: React.FC<{
   commands: CommandRegistry;
   id: string;
   rubric: Rubric;
   trans: TranslationBundle;
   workbook: Workbook;
 }> = ({ commands, rubric, trans, workbook, id }) => {
-  const report = state.report(workbook, id);
-  const [value, setValue] = useState(report?.comment || '');
-  const [editable, setEditable] = useState(false);
+  const cell = get(rubric, id);
+  const cached = state.report(workbook, id);
+  const persisted = Rubric.Score.resolve(rubric.assignment.report, id);
+  const report = rubric.locked ? (cached ?? persisted) : (persisted ?? cached);
+  const intervened = !!rubric.assignment.report.interventions[id];
+  const scored: number | '' =
+    report && report.status !== 'unscored' ? report.points : '';
+  const seed = {
+    comment: report ? report.comment : '',
+    points: cell ? cell.points : 1,
+    possible: report ? report.possible : '',
+    score: scored,
+    status: report ? report.status : 'unscored',
+    value: report ? report.points : ''
+  };
+  const whole = (value: string): number | '' => {
+    if (value === '') {
+      return '';
+    }
 
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) {
+      return '';
+    }
+    return Math.max(0, Math.floor(parsed));
+  };
+
+  const [comment, setComment] = useState(seed.comment);
+  const [points, setPoints] = useState<number | ''>(seed.points);
+  const [score, setScore] = useState<number | ''>(seed.score);
   useEffect(() => {
-    setValue(report?.comment || '');
-    setEditable(false);
-  }, [report]);
-  if (!report) {
+    setComment(seed.comment);
+    setPoints(seed.points);
+    setScore(seed.score);
+  }, [
+    id,
+    rubric.id,
+    rubric.assignment.assignee,
+    rubric.locked,
+    seed.comment,
+    seed.points,
+    seed.possible,
+    seed.status,
+    seed.value
+  ]);
+
+  if (!cell) {
     return <></>;
   }
 
-  const icon = editable ? checkIcon : Correxit.Icons.comment;
-  const { points, possible } = report;
-  const heading = trans.__('Cell Score %1 out of %2', points, possible);
-  const title = trans.__('Cell Report');
-  const placeholder = trans.__('Cell report...');
-  const toggle = () => {
-    if (editable) {
-      void commands.execute(comment, { id, comment: value });
-    }
-    setEditable(prev => !prev);
+  const actual = report && report.status !== 'unscored' ? report.points : '-';
+  const heading = rubric.locked
+    ? trans.__('Cell score')
+    : trans.__('Cell configuration');
+  const subheading = trans.__('%1 of %2', actual, cell.points);
+  const ids = {
+    comment: `correxit-sidebar-cell-score-comment-${id}`,
+    heading: `correxit-sidebar-cell-score-heading-${id}`,
+    points: `correxit-sidebar-cell-score-points-${id}`,
+    score: `correxit-sidebar-cell-score-value-${id}`
   };
+  const placeholder = trans.__('Cell comment...');
+  const note = async () => {
+    if (comment !== seed.comment) {
+      await commands.execute(CommandIDs.comment, { id, comment });
+    }
+  };
+  const reweight = async () => {
+    const possible = points;
+    const scored = score;
+    const invalid = typeof possible !== 'number' || Number.isNaN(possible);
+    if (rubric.locked || invalid || possible === cell.points) {
+      return;
+    }
+    await commands.execute(CommandIDs.reweight, {
+      id,
+      points: possible
+    });
+    if (typeof scored === 'number' && !Number.isNaN(scored)) {
+      const update = { comment, points: scored, possible };
+      const intervention = Rubric.Score.intervene(id, update);
+      await commands.execute(CommandIDs.intervene, { id, intervention });
+    }
+  };
+
+  const intervene = async () => {
+    const scored = score;
+    const possible = points;
+    if (rubric.locked) {
+      return;
+    }
+
+    if (typeof scored === 'number' && !Number.isNaN(scored)) {
+      const max = typeof possible === 'number' ? possible : cell.points;
+      const update = { comment, points: scored, possible: max };
+      const intervention = Rubric.Score.intervene(id, update);
+      await commands.execute(CommandIDs.intervene, { id, intervention });
+      return;
+    }
+    if (intervened) {
+      await commands.execute(CommandIDs.intervene, {
+        id,
+        intervention: null
+      });
+    }
+  };
+
+  const sync = async () => {
+    await note();
+    await intervene();
+  };
+
   return (
     <>
-      <div className="correxit-sidebar-cell-report">
+      <div
+        className="correxit-sidebar-cell-report"
+        id={ids.heading}
+        aria-live="polite"
+      >
         <h5>{heading}</h5>
-        <Toggle {...{ icon, title, toggle }} />
+        <h5>{subheading}</h5>
       </div>
-      {editable && (
+      <div
+        className="correxit-sidebar-cell-score-edit"
+        role="group"
+        aria-labelledby={ids.heading}
+      >
+        {!rubric.locked && (
+          <label
+            className="correxit-sidebar-cell-score-field"
+            htmlFor={ids.score}
+          >
+            {trans.__('Points scored')}
+            <input
+              className="correxit-sidebar-cell-score-input"
+              id={ids.score}
+              inputMode="numeric"
+              step="1"
+              type="number"
+              min="0"
+              placeholder={trans.__('Auto')}
+              value={score}
+              onBlur={() => void intervene()}
+              onChange={({ target: { value } }) => setScore(whole(value))}
+            />
+          </label>
+        )}
+        {!rubric.locked && (
+          <label
+            className="correxit-sidebar-cell-score-field"
+            htmlFor={ids.points}
+          >
+            {trans.__('Points possible')}
+            <input
+              className="correxit-sidebar-cell-score-input"
+              id={ids.points}
+              inputMode="numeric"
+              step="1"
+              type="number"
+              min="0"
+              value={points}
+              onBlur={() => void reweight()}
+              onChange={({ target: { value } }) => setPoints(whole(value))}
+            />
+          </label>
+        )}
+        <label
+          className="correxit-sidebar-cell-score-label"
+          htmlFor={ids.comment}
+        >
+          {trans.__('Comment')}
+        </label>
         <textarea
+          className="correxit-sidebar-cell-score-textarea"
+          id={ids.comment}
           data-lm-suppress-shortcuts="true"
-          key={id}
-          name="correxit-sidebar-cell-report-comment"
-          onChange={({ target: { value } }) => setValue(value)}
+          name="correxit-sidebar-cell-score-comment"
+          onBlur={() => void sync()}
+          onChange={({ target: { value } }) => setComment(value)}
           placeholder={placeholder}
           readOnly={rubric.locked}
-          rows={8}
-          value={value}
+          rows={4}
+          value={comment}
         />
-      )}
+      </div>
     </>
   );
 };
@@ -166,43 +314,68 @@ const Body: React.FC<{
   }
 
   const { id } = cell;
-  const configuration: CommandToolbarButtonComponent.IProps[] = [
-    { commands, id: add, args: { id, is: 'answerable' } },
-    { commands, id: add, args: { id, is: 'comparable' } },
-    { commands, id: add, args: { id, is: 'correctable' } }
-  ];
-  const operations: CommandToolbarButtonComponent.IProps[] = [
-    { commands, id: correct, args: { id } },
-    { commands, id: toggle, args: { id } },
-    { commands, id: remove, args: { id } }
-  ];
   const hints = {
     answerable: trans.__('Expected output has been set.'),
     comparable: trans.__('Cell output is compared against a reference.'),
     correctable: trans.__('Cell is corrected by a reference cell.'),
-    reference: trans.__('Selected cell is a reference cell.')
+    reference: trans.__('Selected cell is a reference cell.'),
+    reviewable: trans.__('Cell is manually reviewed by an instructor.')
   };
-  const hint = get(rubric, id)?.is || (has(rubric, id, true) && 'reference');
+  const hint = get(rubric, id)?.is ?? (has(rubric, id, true) && 'reference');
   return (
     <section className="correxit-sidebar-body">
-      <CellReport
-        commands={commands}
-        id={id}
-        rubric={rubric}
-        trans={trans}
-        workbook={workbook}
-      />
-      <div className="correxit-sidebar-cell-config">
-        {configuration.map((props, index) => (
-          <CommandToolbarButtonComponent key={index} {...props} />
-        ))}
+      <div
+        className={[
+          'correxit-sidebar-cell-config',
+          'correxit-sidebar-cell-actions'
+        ].join(' ')}
+      >
+        <CommandToolbarButtonComponent {...{ commands, id: correct }} />
+        <CommandToolbarButtonComponent
+          {...{ commands, id: correct, args: { id } }}
+        />
       </div>
-      {hint && <p>{hints[hint]}</p>}
-      <div className="correxit-sidebar-cell-operations">
-        {operations.map((props, index) => (
-          <CommandToolbarButtonComponent key={index} {...props} />
-        ))}
+      <CellScore {...{ commands, id, rubric, trans, workbook }} />
+      <div
+        className={[
+          'correxit-sidebar-cell-config',
+          'correxit-sidebar-cell-pair'
+        ].join(' ')}
+      >
+        <CommandToolbarButtonComponent
+          {...{ commands, id: configure, args: { id, is: 'answerable' } }}
+        />
+        <CommandToolbarButtonComponent
+          {...{ commands, id: configure, args: { id, is: 'reviewable' } }}
+        />
       </div>
+      <div
+        className={[
+          'correxit-sidebar-cell-config',
+          'correxit-sidebar-cell-pair'
+        ].join(' ')}
+      >
+        <CommandToolbarButtonComponent
+          {...{ commands, id: configure, args: { id, is: 'comparable' } }}
+        />
+        <CommandToolbarButtonComponent
+          {...{ commands, id: configure, args: { id, is: 'correctable' } }}
+        />
+      </div>
+      <div
+        className={[
+          'correxit-sidebar-cell-config',
+          'correxit-sidebar-cell-actions'
+        ].join(' ')}
+      >
+        <CommandToolbarButtonComponent
+          {...{ commands, id: share, args: { id } }}
+        />
+        <CommandToolbarButtonComponent
+          {...{ commands, id: remove, args: { id } }}
+        />
+      </div>
+      {hint && <p className="correxit-sidebar-cell-hint">{hints[hint]}</p>}
     </section>
   );
 };

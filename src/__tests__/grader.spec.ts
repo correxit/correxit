@@ -6,8 +6,8 @@ type Certified = Workbook.Certified;
 type Headless = Workbook.Headless;
 type Actions = {
   correct: (workbook: Headless) => Promise<Certified>;
+  exclude: (workbook: Headless) => Certified | null;
   recover: (workbook: Headless) => Certified;
-  skip: (workbook: Headless) => Certified | null;
 };
 
 const workbook = (path: string): Headless =>
@@ -50,8 +50,8 @@ const source = async function* (paths: string[]): AsyncGenerator<Headless> {
 const actions = (
   correct: (workbook: Headless) => Promise<Certified>,
   recover: (workbook: Headless) => Certified,
-  skip: (workbook: Headless) => Certified | null = () => null
-): Actions => ({ correct, recover, skip });
+  exclude: (workbook: Headless) => Certified | null = () => null
+): Actions => ({ correct, exclude, recover });
 
 describe('grader', () => {
   it('yields nothing for an empty scan', async () => {

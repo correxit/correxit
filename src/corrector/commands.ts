@@ -54,6 +54,11 @@ export function addCommands(
         args: Partial<Credentials & { certify: boolean; overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const rules = { commit: !!args.certify, overwrite: !!args.overwrite };
+        const actions: Actions = {
+          correct: workbook => correct(workbook, rules),
+          exclude: workbook => exclude(workbook, rules),
+          recover
+        };
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
@@ -64,11 +69,6 @@ export function addCommands(
         const cap = kernels.cap();
         const retries = kernels.retries();
         const grades = async function* (): AsyncGenerator<Certified> {
-          const actions: Actions = {
-            correct: workbook => correct(workbook, rules),
-            recover: workbook => recover(workbook),
-            skip: workbook => skip(workbook, rules)
-          };
           yield* grader(scanner({ commands }, handle), actions, cap, retries);
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
@@ -202,18 +202,20 @@ function certified(workbook: Headless): Certified | null {
   return { grade, identifier, timestamp: report.timestamp, workbook };
 }
 
-async function correct(
-  workbook: Headless,
-  { commit }: Rules
-): Promise<Certified> {
+async function correct(workbook: Headless, rules: Rules): Promise<Certified> {
   const rubric = Workbook.open(workbook, true);
   if (!rubric || rubric.locked) {
     return recover(workbook);
   }
 
-  const graded = await (commit ? Workbook.certify(workbook) : grade(workbook));
-  await save(commit ? workbook : null);
+  const { certify } = Workbook;
+  const graded = await (rules.commit ? certify(workbook) : grade(workbook));
+  await save(rules.commit ? workbook : null);
   return graded;
+}
+
+function exclude(workbook: Headless, rules: Rules): Certified | null {
+  return rules.commit && !rules.overwrite ? certified(workbook) : null;
 }
 
 async function grade(workbook: Headless): Promise<Certified> {
@@ -251,8 +253,4 @@ async function* scanner(
       yield workbook;
     }
   }
-}
-
-function skip(workbook: Headless, rules: Rules): Certified | null {
-  return rules.commit && !rules.overwrite ? certified(workbook) : null;
 }

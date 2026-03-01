@@ -120,7 +120,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
       const indicator = new Corrector.Status(trans);
       const active = new Signal<typeof tracker, void>(tracker);
-      tracker.currentChanged.connect(() => active.emit(void 0));
+      tracker.currentChanged.connect(() => active.emit(undefined));
       const { launch } = Corrector.CommandIDs;
       const added = Corrector.addCommands(app, {
         browser,
@@ -221,17 +221,20 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       translator ||= nullTranslator;
 
       const { commands, shell } = app;
-      const { CommandIDs } = Correxit;
-      const notify = () => {
-        // The sidebar can rely on metadata changes, but the native toolbar
-        // buttons only change when their respective command has changed.
-        const { add, convert, correct, draft, lock, submit, toggle, unlock } =
-          CommandIDs;
-        const ui = [add, convert, correct, draft, lock, submit, toggle, unlock];
-        for (const command of ui) {
-          commands.notifyCommandChanged(command);
-        }
-      };
+      // The sidebar can rely on metadata changes, but the native toolbar
+      // buttons only change when their respective command has changed.
+      const ui = [
+        Correxit.CommandIDs.configure,
+        Correxit.CommandIDs.convert,
+        Correxit.CommandIDs.correct,
+        Correxit.CommandIDs.draft,
+        Correxit.CommandIDs.lock,
+        Correxit.CommandIDs.share,
+        Correxit.CommandIDs.submit,
+        Correxit.CommandIDs.unlock
+      ];
+      const notify = () =>
+        ui.forEach(command => commands.notifyCommandChanged(command));
       const monitor = new Stream<null, Workbook | null>(null);
       const { open } = Workbook;
       const quiet = true;
