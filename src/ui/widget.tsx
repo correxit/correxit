@@ -27,9 +27,7 @@ export class SidebarWidget extends ReactWidget {
   }
   protected set workbook(workbook: Workbook | null) {
     const previous = this.workbook;
-    if (workbook === previous) {
-      return;
-    }
+    if (workbook === previous) return;
     this._workbook = workbook;
     if (workbook) {
       const notebook = workbook.context.model.sharedModel;
@@ -64,9 +62,7 @@ export class SidebarWidget extends ReactWidget {
 
   protected async subscribe(monitor: Correxit.Monitor) {
     for await (const workbook of monitor) {
-      if (this.isDisposed) {
-        return;
-      }
+      if (this.isDisposed) return;
       this.workbook = workbook;
     }
   }

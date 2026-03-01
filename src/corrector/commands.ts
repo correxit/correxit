@@ -62,9 +62,8 @@ export function addCommands(
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
-        if (!handle) {
+        if (!handle)
           throw new Error(`batch failed, args: ${JSON.stringify(args)}`);
-        }
 
         const cap = kernels.cap();
         const retries = kernels.retries();
@@ -72,9 +71,8 @@ export function addCommands(
           yield* grader(scanner({ commands }, handle), actions, cap, retries);
         };
         return (async function* (stream: AsyncGenerator<Certified>) {
-          for await (const { grade, workbook } of stream) {
+          for await (const { grade, workbook } of stream)
             yield [grade.path, { grade, workbook: workbook as Headless }];
-          }
         })(args.certify ? collector(grades()) : grades());
       }
     })
@@ -85,9 +83,7 @@ export function addCommands(
       caption: () => trans.__('Change directory - current: %1', widget?.path),
       label: () => `/ ${widget?.path.split('/').join(' / ')} /`,
       execute: async ({ path }: { path?: string }) => {
-        if (!widget || widget.isDisposed) {
-          return;
-        }
+        if (!widget || widget.isDisposed) return;
 
         widget.addClass('cxt-mod-cd');
         if (typeof path !== 'string') {
@@ -100,9 +96,7 @@ export function addCommands(
           const pending = await FileDialog.getExistingDirectory(options);
           path = pending.value?.[0].path;
         }
-        if (typeof path === 'string') {
-          widget.path = path || '.';
-        }
+        if (typeof path === 'string') widget.path = path || '.';
         widget.removeClass('cxt-mod-cd');
       }
     })
@@ -119,13 +113,9 @@ export function addCommands(
           widget.title.closable = true;
           disposables.push(widget);
         }
-        if (!tracker.has(widget)) {
-          tracker.add(widget);
-        }
+        if (!tracker.has(widget)) tracker.add(widget);
         if (tree) {
-          if (!widget.isAttached) {
-            tree.addWidget(widget);
-          }
+          if (!widget.isAttached) tree.addWidget(widget);
           tree.currentWidget = widget;
         } else if (!widget.isAttached) {
           shell.add(widget, 'main');
@@ -141,9 +131,7 @@ export function addCommands(
         (async function* scanner(handle) {
           const directory = handle && handle.path;
           let response: Contents.IModel;
-          if (!directory) {
-            return;
-          }
+          if (!directory) return;
           try {
             response = await manager.contents.get(directory);
           } catch (error) {
@@ -159,9 +147,8 @@ export function addCommands(
           const lexical = (a: { name: string }, b: { name: string }) =>
             a.name.localeCompare(b.name);
           const notebooks = response.content.filter(notebook).sort(lexical);
-          for (const { path } of notebooks) {
+          for (const { path } of notebooks)
             yield { hollow: true, context: { path } };
-          }
 
           let prompted = false;
           for (const { path } of notebooks) {
@@ -181,9 +168,7 @@ export function addCommands(
 
 function certified(workbook: Headless): Certified | null {
   const rubric = Workbook.open(workbook, true);
-  if (!rubric) {
-    return null;
-  }
+  if (!rubric) return null;
 
   const { report } = rubric.assignment;
   const score = Rubric.Assignment.summary(report);
@@ -192,9 +177,7 @@ function certified(workbook: Headless): Certified | null {
   const partial = Object.values(report.scores).some(transient);
   const incomplete = Object.keys(rubric.cells).some(id => !report.scores[id]);
   const unscored = score.status === 'unscored';
-  if (!report.timestamp || unscored || partial || incomplete) {
-    return null;
-  }
+  if (!report.timestamp || unscored || partial || incomplete) return null;
 
   const path = workbook.context.path;
   const grade: Grade = { path, resolved: true, score, spec: null };
@@ -204,9 +187,7 @@ function certified(workbook: Headless): Certified | null {
 
 async function correct(workbook: Headless, rules: Rules): Promise<Certified> {
   const rubric = Workbook.open(workbook, true);
-  if (!rubric || rubric.locked) {
-    return recover(workbook);
-  }
+  if (!rubric || rubric.locked) return recover(workbook);
 
   const { certify } = Workbook;
   const graded = await (rules.commit ? certify(workbook) : grade(workbook));
@@ -248,9 +229,6 @@ async function* scanner(
   credentials: Partial<Credentials>
 ): AsyncGenerator<Headless> {
   const stream = await commands.execute(CommandIDs.scan, credentials);
-  for await (const workbook of stream as AsyncIterable<Scanned>) {
-    if (!workbook.hollow) {
-      yield workbook;
-    }
-  }
+  for await (const workbook of stream as AsyncIterable<Scanned>)
+    if (!workbook.hollow) yield workbook;
 }

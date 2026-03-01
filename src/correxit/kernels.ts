@@ -41,9 +41,7 @@ export function configure({ concurrency, retries, timeout }: Config): void {
   attempts = Math.max(0, retries);
   lifespan = Math.max(0, timeout);
   workers = Math.max(1, concurrency);
-  while (live + recycling < workers && waiters.length) {
-    waiters.shift()!();
-  }
+  while (live + recycling < workers && waiters.length) waiters.shift()!();
 }
 
 /** @internal Resets all module state for tests. */
@@ -90,9 +88,7 @@ export async function lease(
 
   let released = false;
   const expire = () => {
-    if (released) {
-      return;
-    }
+    if (released) return;
     released = true;
     kernel.interrupt().catch(() => {});
     dispose(kernel);
@@ -102,13 +98,9 @@ export async function lease(
   const deadline = lifespan > 0 ? setTimeout(expire, lifespan * 1000) : null;
 
   const reclaim = async () => {
-    if (released) {
-      return;
-    }
+    if (released) return;
     released = true;
-    if (deadline) {
-      clearTimeout(deadline);
-    }
+    if (deadline) clearTimeout(deadline);
     await recycle(kernel);
   };
 
@@ -128,17 +120,14 @@ export function timeout(): number {
 
 /** Blocks until a slot opens, then claims it. */
 async function acquire(): Promise<void> {
-  while (live + recycling >= workers) {
+  while (live + recycling >= workers)
     await new Promise<void>(resolve => waiters.push(resolve));
-  }
   live++;
 }
 
 /** Shuts down and disposes a kernel. Idempotent. */
 function dispose(kernel: Kernel.IKernelConnection): void {
-  if (kernel.isDisposed) {
-    return;
-  }
+  if (kernel.isDisposed) return;
   kernel.shutdown().catch(() => {}).finally(() => kernel.dispose());
 }
 
@@ -193,9 +182,7 @@ function revive(idle: Idle | null): Kernel.IKernelConnection | null {
 /** @returns the idle-kernel list for `name`, creating it on first access. */
 function shelf(name: string): Idle[] {
   let entries = pool.get(name);
-  if (!entries) {
-    pool.set(name, entries = []);
-  }
+  if (!entries) pool.set(name, entries = []);
   return entries;
 }
 
@@ -220,8 +207,6 @@ async function start(
 /** Pops the most recently cached kernel for `name`. */
 function take(name: string): Idle | null {
   const idle = shelf(name).pop() ?? null;
-  if (idle) {
-    clearTimeout(idle.timer);
-  }
+  if (idle) clearTimeout(idle.timer);
   return idle;
 }

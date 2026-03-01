@@ -35,9 +35,7 @@ const cache = (cached: { [path: string]: Headless }, workbooks: Headless[]) => {
   for (const workbook of workbooks) {
     const path = workbook.context.path;
     const kept = cached[path];
-    if (kept && kept !== workbook) {
-      kept.context.dispose();
-    }
+    if (kept && kept !== workbook) kept.context.dispose();
     cached[path] = workbook;
   }
 };
@@ -83,12 +81,8 @@ const match = (workbooks: Scanned[], path = ''): Headless | null =>
  */
 const merge = (scanned: Scanned[], grades: Collated) => {
   const latest = new Map<string, Scanned>();
-  for (const workbook of scanned) {
-    latest.set(workbook.context.path, workbook);
-  }
-  for (const [path, file] of grades) {
-    latest.set(path, file.workbook);
-  }
+  for (const workbook of scanned) latest.set(workbook.context.path, workbook);
+  for (const [path, file] of grades) latest.set(path, file.workbook);
   return Array.from(latest.values());
 };
 
@@ -113,9 +107,7 @@ const prune = (
   active: string | null
 ) => {
   for (const [path, workbook] of Object.entries(cached)) {
-    if (live.has(path) || path === active) {
-      continue;
-    }
+    if (live.has(path) || path === active) continue;
     workbook.context.dispose();
     delete cached[path];
   }
@@ -141,12 +133,8 @@ const resolve = (
   graded: boolean
 ): Grade | 'pending' => {
   const { path } = workbook.context;
-  if (collated.has(path)) {
-    return collated.get(path)!.grade;
-  }
-  if (workbook.hollow || !graded) {
-    return 'pending';
-  }
+  if (collated.has(path)) return collated.get(path)!.grade;
+  if (workbook.hollow || !graded) return 'pending';
   const rubric = open(workbook);
   const summary = rubric && Rubric.Assignment.summary(rubric.assignment.report);
   const score = summary || Rubric.Score.UNSCORED;
@@ -297,9 +285,7 @@ const Row: React.FC<{
   const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');
-  if (workbook.hollow) {
-    return <HollowRow {...{ className, path }} />;
-  }
+  if (workbook.hollow) return <HollowRow {...{ className, path }} />;
   return (
     <tr className={className} onClick={() => select(selected ? '' : path)}>
       <Notebook {...{ commands, trans, workbook }} />
@@ -316,14 +302,10 @@ const Breakdown: React.FC<{
   failed: boolean;
   workbook: Workbook.Headless;
 }> = ({ failed, workbook }) => {
-  if (failed) {
-    return <td className="correxit-corrector-breakdown" />;
-  }
+  if (failed) return <td className="correxit-corrector-breakdown" />;
   const rubric = open(workbook);
   const notebook = workbook.context.model.sharedModel;
-  if (!rubric) {
-    return <td className="correxit-corrector-breakdown" />;
-  }
+  if (!rubric) return <td className="correxit-corrector-breakdown" />;
   const { cells } = rubric;
   const { scores } = rubric.assignment.report;
   const breakdown = Array.from(notebook.cells)
@@ -396,9 +378,7 @@ const Assignment: React.FC<{
   workbook: Workbook.Headless;
 }> = ({ trans, workbook }) => {
   const rubric = open(workbook);
-  if (!rubric) {
-    return <td className="correxit-corrector-assignment" />;
-  }
+  if (!rubric) return <td className="correxit-corrector-assignment" />;
 
   const { assignment, locked } = rubric;
   const { assignee, roster } = assignment;
@@ -462,9 +442,7 @@ const Pending: React.FC = () => (
 );
 
 const Kernel: React.FC<{ spec: Workbook.Grade['spec'] }> = ({ spec }) => {
-  if (!spec) {
-    return <td className="correxit-corrector-kernel"></td>;
-  }
+  if (!spec) return <td className="correxit-corrector-kernel"></td>;
 
   const src = logo(spec);
   return (

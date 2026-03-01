@@ -46,9 +46,7 @@ export function useCommand<T>(
       setIdle(false);
       try {
         for await (const item of await (stream || [])) {
-          if (interrupted) {
-            return;
-          }
+          if (interrupted) return;
           buffer.push(item);
           void throttler.invoke();
         }

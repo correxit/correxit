@@ -43,11 +43,11 @@ export namespace Workbook {
     { path: string; unlock: boolean; key: null; passphrase: null; };
 
   export namespace Credentials {
-    export function normalize (credentials: Partial<Credentials> | null) {
+    export function normalize(
+      credentials: Partial<Credentials> | null
+    ): Credentials | null {
       const { key, passphrase, path, unlock } = credentials || {};
-      if (key && unlock || !path) {
-        return null;
-      }
+      if (key && unlock || !path) return null;
       return {
         path,
         key: key || null,
@@ -98,9 +98,7 @@ export namespace Workbook {
     ): Promise<void> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, ({ id }) => id === reference);
-      if (!key || index === -1) {
-        throw new Error('decrypt error');
-      }
+      if (!key || index === -1) throw new Error('decrypt error');
 
       const cell = notebook.cells[index];
       const decrypted = await security.decrypt(cell.getSource(), key);
@@ -118,9 +116,7 @@ export namespace Workbook {
         notebook.deleteCell(index);
         notebook.insertCell(index, code);
       }, false);
-      if (workbook.content) {
-        NotebookActions.deselectAll(workbook.content);
-      }
+      if (workbook.content) NotebookActions.deselectAll(workbook.content);
     }
 
     /**
@@ -134,9 +130,7 @@ export namespace Workbook {
     ): Promise<void> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, ({ id }) => id === reference);
-      if (!key || index === -1) {
-        throw new Error('encrypt error');
-      }
+      if (!key || index === -1) throw new Error('encrypt error');
 
       const cell = notebook.cells[index];
       const encrypted = await security.encrypt(cell.getSource(), key);
@@ -153,9 +147,7 @@ export namespace Workbook {
         notebook.deleteCell(index);
         notebook.insertCell(index, raw);
       }, false);
-      if (workbook.content) {
-        NotebookActions.deselectAll(workbook.content);
-      }
+      if (workbook.content) NotebookActions.deselectAll(workbook.content);
     }
   }
 
@@ -164,17 +156,15 @@ export namespace Workbook {
     const notebook = workbook.context.model.sharedModel;
     for (const cell of notebook.cells) {
       const jupyter = cell.getMetadata('jupyter') as any;
-      if (jupyter?.source_hidden) {
-        continue;
-      }
+      if (jupyter?.source_hidden) continue;
       cell.transact(() => cell.deleteMetadata('editable'));
     }
   };
   const freeze = (workbook: Workbook) => {
     const notebook = workbook.context.model.sharedModel;
-    for (const cell of notebook.cells) {
+    for (const cell of notebook.cells)
       cell.transact(() => cell.setMetadata('editable', false));
-    }
+
   };
   const [get, set] = (pool => {
     const get = (workbook: Workbook) => pool.get(workbook) || null;
@@ -209,9 +199,7 @@ export namespace Workbook {
     cell: Rubric.Cell
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      throw new Error('add error, invalid rubric');
-    }
+    if (!rubric || rubric.locked) throw new Error('add error, invalid rubric');
     return update(workbook, Rubric.add(rubric, cell));
   }
 
@@ -233,9 +221,7 @@ export namespace Workbook {
     assignment: Partial<Rubric.Assignment> = {}
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      throw new Error('assign error');
-    }
+    if (!rubric || rubric.locked) throw new Error('assign error');
     return stale(rubric.assignment, assignment)
       ? update(workbook, await Rubric.assign(rubric, assignment))
       : rubric;
@@ -253,12 +239,8 @@ export namespace Workbook {
    * a structurally incomplete notebook.
    */
   export function audit(workbook: Workbook, rubric: Rubric | null): Audit {
-    if (!rubric) {
-      return { ok: false, error: 'null rubric', rubric };
-    }
-    if (rubric.locked) {
-      return { ok: true, pruned: [], rubric };
-    }
+    if (!rubric) return { ok: false, error: 'null rubric', rubric };
+    if (rubric.locked) return { ok: true, pruned: [], rubric };
 
     const notebook = workbook.context.model.sharedModel;
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
@@ -272,18 +254,16 @@ export namespace Workbook {
       const valid = is === 'answerable' ? !!payload.length
         : is === 'reviewable' ? true
         : known[reference];
-      if (known[id] && valid) {
-        continue;
-      }
+      if (known[id] && valid) continue;
 
       const reason = known[id] ? 'invalid cell' : 'unknown cell';
       pruned.push({ cell: { ...cell }, reason });
     }
     if (pruned.length) {
       console.warn('audit pruned these rubric cells', pruned);
-      if (!workbook.content) {
+      if (!workbook.content)
         return { ok: false, error: 'missing cells', rubric };
-      }
+
       const modified: Rubric = pruned.reduce(
         (rubric, { cell: { id } }) => Rubric.remove(rubric, id),
         rubric
@@ -298,9 +278,7 @@ export namespace Workbook {
     workbook: Workbook
   ): Promise<Certified> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      throw new Error('certify error');
-    }
+    if (!rubric || rubric.locked) throw new Error('certify error');
 
     const corrected = await correct(workbook);
     const grade = { ...corrected, path: workbook.context.path };
@@ -391,13 +369,10 @@ export namespace Workbook {
     const final = id ? report.scores[id] : summary(report);
     const missing = (cell: Rubric.Cell) => {
       const { id, is, reference } = cell;
-      if (!outputs.has(id)) {
-        return true;
-      }
-      if ((is === 'comparable' || is === 'correctable') && reference) {
-        return reference.some(id => !outputs.has(id));
-      }
-      return false;
+      return !outputs.has(id) ||
+        ((is === 'comparable' || is === 'correctable') && reference
+          ? reference.some(id => !outputs.has(id))
+          : false);
     };
     const { status } = final;
     const resolved = id
@@ -424,9 +399,7 @@ export namespace Workbook {
     comment: string
   ) {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      return null;
-    }
+    if (!rubric || rubric.locked) return null;
 
     const { report: kept } = rubric.assignment;
     const scores = { ...kept.scores, [id]: { ...kept.scores[id], comment } };
@@ -438,19 +411,14 @@ export namespace Workbook {
   /** Decrypts workbook content. */
   export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
     const audited = Workbook.audit(workbook, rubric);
-    if (!audited.ok) {
-      throw new Error(`decrypt error: ${audited.error}`);
-    }
-    if (audited.pruned.length) {
+    if (!audited.ok) throw new Error(`decrypt error: ${audited.error}`);
+    if (audited.pruned.length)
       console.warn('decrypt: workbook has missing cells', audited.pruned);
-    }
 
     // Decrypt only the cells that survived the audit.
     const { cells, key } = audited.rubric as Rubric.Unlocked;
     for (const [, cell] of Object.entries(cells)) {
-      if (cell.shared) {
-        continue;
-      }
+      if (cell.shared) continue;
       if (cell.is === 'comparable' || cell.is === 'correctable') {
         const [reference] = cell.reference;
         await Cell.decrypt(workbook, reference, key);
@@ -464,9 +432,8 @@ export namespace Workbook {
   /** Revert a submission to draft, restoring cell editability. */
   export async function draft(workbook: Workbook): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
-    if (!rubric?.locked || !rubric.assignment.submission) {
+    if (!rubric?.locked || !rubric.assignment.submission)
       throw new Error('draft error');
-    }
     defrost(workbook);
     return update(workbook, Rubric.draft(rubric));
   }
@@ -503,24 +470,18 @@ export namespace Workbook {
         ? Math.max(position(cell.id), ...cell.reference.map(position))
         : position(cell.id);
     const cell = id && Rubric.get(rubric, id);
-    if (id && !cell) {
-      return null;
-    }
+    if (id && !cell) return null;
 
     const outputs: Rubric.Outputs = new Map();
     const leased = await kernels.lease(workbook);
-    if (!leased) {
-      return null;
-    }
+    if (!leased) return null;
 
     const [kernel, release] = leased;
     try {
       const spec = await kernel.spec || null;
       for (const index of range(cell ? scan(cell) : cells.length)) {
         const cell = cells.get(index) as ICodeCellModel;
-        if (cells.get(index).type !== 'code') {
-          continue;
-        }
+        if (cells.get(index).type !== 'code') continue;
         try {
           outputs.set(cell.id, await execute(cell, kernel));
         } catch (error) {
@@ -535,9 +496,7 @@ export namespace Workbook {
 
   export function identifier(workbook: Workbook): Identifier {
     const rubric = open(workbook, quiet);
-    if (!rubric) {
-      throw new Error('identifier error');
-    }
+    if (!rubric) throw new Error('identifier error');
     const assignee = rubric.assignment.assignee || null;
     const assignment = rubric.id;
     const signature = rubric.assignment.signature || null;
@@ -547,14 +506,10 @@ export namespace Workbook {
   /** Lock a workbook if its rubric is unlocked. */
   export async function lock(workbook: Workbook): Promise<void> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      return;
-    }
+    if (!rubric || rubric.locked) return;
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
-      if (cell.shared) {
-        continue;
-      }
+      if (cell.shared) continue;
       if (cell.is === 'comparable' || cell.is === 'correctable') {
         const [reference] = cell.reference;
         await Cell.encrypt(workbook, reference, rubric.key);
@@ -578,17 +533,12 @@ export namespace Workbook {
     intervention: Rubric.Score | null
   ) {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      return null;
-    }
+    if (!rubric || rubric.locked) return null;
 
     const { report: kept } = rubric.assignment;
     const interventions = { ...kept.interventions };
-    if (intervention) {
-      interventions[id] = intervention;
-    } else {
-      delete interventions[id];
-    }
+    if (intervention) interventions[id] = intervention;
+    else delete interventions[id];
 
     const report = { ...kept, interventions };
     const sources = Workbook.sources(workbook, rubric);
@@ -614,32 +564,22 @@ export namespace Workbook {
     quiet = false
   ): Rubric | null {
     if (!workbook) {
-      if (quiet) {
-        return null;
-      }
+      if (quiet) return null;
       throw new TypeError('open error');
     }
-    if (get(workbook)) {
-      return get(workbook);
-    }
+    if (get(workbook)) return get(workbook);
 
     const notebook = workbook.context.model.sharedModel;
     const metadata = notebook.getMetadata('correxit');
     try {
-      if (!metadata) {
-        throw Correxit.NO_CORREXIT_METADATA;
-      }
+      if (!metadata) throw Correxit.NO_CORREXIT_METADATA;
       const rubric = Rubric.normalize(metadata as Partial<Rubric.Locked>);
       const audit = Workbook.audit(workbook, rubric);
-      if (!audit.ok) {
-        throw new Error(`open error: ${audit.error}`);
-      }
+      if (!audit.ok) throw new Error(`open error: ${audit.error}`);
       set(workbook, audit.rubric);
       return audit.rubric;
     } catch (error) {
-      if (quiet) {
-        return null;
-      }
+      if (quiet) return null;
       throw error;
     }
   }
@@ -647,21 +587,18 @@ export namespace Workbook {
   /** Remove a cell from a workbook's rubric. */
   export function remove(workbook: Workbook, id: string): void {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
+    if (!rubric || rubric.locked)
       throw new Error('remove error, invalid rubric');
-    }
+
     update(workbook, Rubric.remove(rubric, id));
   }
 
   /** Reset a workbook back to a plain Jupyter notebook. */
   export async function reset(workbook: Workbook) {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
-      throw new Error('reset error');
-    }
+    if (!rubric || rubric.locked) throw new Error('reset error');
     update(workbook, null);
   }
-
 
   /** Update the maximum points for a cell in a workbook's rubric. */
   export async function reweight(
@@ -670,9 +607,9 @@ export namespace Workbook {
     value: number
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) {
+    if (!rubric || rubric.locked)
       throw new Error('reweight error, invalid rubric');
-    }
+
     return update(workbook, Rubric.Cell.reweight(rubric, id, value));
   }
 
@@ -689,17 +626,17 @@ export namespace Workbook {
     const references = new Set<string>();
     for (const id of ids) {
       const cell = rubric.cells[id];
-      for (const ref of cell.reference || []) {
+      for (const ref of cell.reference || [])
         references.add(ref);
-      }
+
     }
 
     const payload: { [id: string]: string } = {};
     for (const cell of notebook.cells) {
       const id = cell.id;
-      if (ids.has(id) || references.has(id)) {
+      if (ids.has(id) || references.has(id))
         payload[id] = references.has(id) ? cell.getSource() : '';
-      }
+
     }
     return payload;
   }
@@ -710,9 +647,7 @@ export namespace Workbook {
     confirmation: string | null = null
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
-    if (!rubric?.locked) {
-      throw new Error('submit error');
-    }
+    if (!rubric?.locked) throw new Error('submit error');
     freeze(workbook);
     return update(workbook, Rubric.submit(rubric, confirmation));
   }
@@ -727,9 +662,7 @@ export namespace Workbook {
   export function timestamp(workbook: Workbook): number {
     const rubric = open(workbook, quiet);
     const timestamp = rubric?.assignment.report.timestamp;
-    if (!timestamp) {
-      throw new Error('timestamp error');
-    }
+    if (!timestamp) throw new Error('timestamp error');
     return timestamp;
   };
 
@@ -738,9 +671,8 @@ export namespace Workbook {
     workbook: Workbook, id: string
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked || !Rubric.has(rubric, id)) {
+    if (!rubric || rubric.locked || !Rubric.has(rubric, id))
       throw new Error('toggle error');
-    }
     return update(workbook, Rubric.toggle(rubric, id));
   }
 
@@ -750,12 +682,8 @@ export namespace Workbook {
     key: string
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric) {
-      throw new Error('unlock error');
-    }
-    if (!rubric.locked) {
-      return rubric;
-    }
+    if (!rubric) throw new Error('unlock error');
+    if (!rubric.locked) return rubric;
 
     const unlocked = await Rubric.unlock(rubric, key);
     const decrypted = await decrypt(workbook, unlocked);
@@ -806,9 +734,7 @@ export namespace Workbook {
       notebook.clearUndoHistory();
       return null;
     }
-    if (!audited.ok) {
-      throw new Error(`update error: ${audited.error}`);
-    }
+    if (!audited.ok) throw new Error(`update error: ${audited.error}`);
     set(workbook, audited.rubric);
     notebook.setMetadata('correxit', await Rubric.lock(audited.rubric));
     return audited.rubric;

@@ -7,9 +7,8 @@ import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
 
 export async function cd(commands: CommandRegistry, path: string) {
-  if (commands.hasCommand('filebrowser:go-to-path')) {
-    commands.execute('filebrowser:go-to-path', { path });
-  }
+  const command = 'filebrowser:go-to-path';
+  if (commands.hasCommand(command)) commands.execute(command, { path });;
 }
 
 /** @returns a headless workbook or null. */
@@ -48,17 +47,14 @@ export async function folder(
   seed: string
 ): Promise<string> {
   const response = await contents.get(pwd);
-  if (response.type !== 'directory') {
-    throw new Error(`not a folder(${pwd}, ${seed})`);
-  }
+  if (response.type !== 'directory')
+    throw new Error(`not a directory(${pwd}, ${seed})`);
 
   const paths = (response.content as Contents.IModel[]).map(({ path }) => path);
   const parent = new Set(paths);
   for (let suffix = 0; ; suffix++) {
     const name = PathExt.join(pwd, suffix ? `${seed}-${suffix}` : seed);
-    if (parent.has(name)) {
-      continue;
-    }
+    if (parent.has(name)) continue;
     return name;
   }
 }

@@ -77,9 +77,7 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   ...((deactivator?: () => void) => ({
     activate: (): Correxit.Collector =>
       async function* collector(grades) {
-        for await (const grade of grades) {
-          yield grade;
-        }
+        for await (const grade of grades) yield grade;
       },
     deactivate: () => deactivator?.()
   }))()
@@ -139,9 +137,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
           activeStateChanged: active
         });
       }
-      if (palette) {
-        palette.addItem({ category: 'correxit', command: launch });
-      }
+      if (palette) palette.addItem({ category: 'correxit', command: launch });
       if (restorer) {
         restorer.restore(tracker, {
           command: launch,
@@ -274,9 +270,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       shell.currentChanged?.connect(slots.shell);
       tracker.currentChanged.connect(slots.tracker);
       deactivator = () => {
-        for (const command of added) {
-          command.dispose();
-        }
+        for (const command of added) command.dispose();
         shell.currentChanged?.disconnect(slots.shell);
         monitor.stop();
         Signal.clearData(monitor);
@@ -324,9 +318,7 @@ const ui: JupyterFrontEndPlugin<void> = {
       widget.title.caption = 'Correxit';
       widget.title.icon = Correxit.Icons.correct;
       shell.add(widget, 'right', {});
-      if (restorer) {
-        restorer.add(widget, widget.id);
-      }
+      if (restorer) restorer.add(widget, widget.id);
       deactivator = () => widget.dispose();
     },
     deactivate: () => deactivator?.()

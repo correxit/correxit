@@ -199,7 +199,8 @@
             ],
             "curly": [
                 "error",
-                "all"
+                "multi-or-nest",
+                "consistent"
             ],
             "eqeqeq": "error",
             "prefer-arrow-callback": "error"
