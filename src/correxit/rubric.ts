@@ -89,15 +89,9 @@ export namespace Rubric {
       given: Output[]
     ): Promise<Score> {
       const { error, stdout, stream, text } = Output;
-      if (!expected) {
-        return { ...Score.UNSCORED, code: 'empty-expected' };
-      }
-      if (!given.length) {
-        return { ...Score.INCORRECT, code: 'empty-given' };
-      }
-      if (find(given, error)) {
-        return { ...Score.INCORRECT, code: 'error-given' };
-      }
+      if (!expected) return { ...Score.UNSCORED, code: 'empty-expected' };
+      if (!given.length) return { ...Score.INCORRECT, code: 'empty-given' };
+      if (find(given, error)) return { ...Score.INCORRECT, code: 'error-given' };
       if (find(given, stream)) {
         const answered = given.filter(stdout).map(text).join('').trim();
         if (answered) {
@@ -115,20 +109,15 @@ export namespace Rubric {
       expected: Output[],
       given: Output[]
     ): Promise<Score> {
-      if (!expected.length) {
-        return { ...Score.UNSCORED, code: 'empty-expected' };
-      }
-      if (!given.length) {
-        return { ...Score.INCORRECT, code: 'empty-given' };
-      }
+      if (!expected.length) return { ...Score.UNSCORED, code: 'empty-expected' };
+      if (!given.length) return { ...Score.INCORRECT, code: 'empty-given' };
 
       const shape = (content: Output['content']) =>
         Object.keys(content).sort().join('');
       const [{ content: x }] = expected.slice(-1);
       const [{ content: y }] = given.slice(-1);
-      if (shape(x) !== shape(y)) {
+      if (shape(x) !== shape(y))
         return { ...Score.INCORRECT, code: 'mismatch-congruence' };
-      }
       if ('data' in x && 'data' in y) {
         const equal = JSON.stringify(x.data) === JSON.stringify(y.data);
         const error: Score = { ...Score.INCORRECT, code: 'mismatch-data' };
@@ -161,9 +150,7 @@ export namespace Rubric {
     ): Promise<Output[]> {
       const outputs: Output[] = [];
       const code = cell.getSource();
-      if (!code.length) {
-        return outputs;
-      }
+      if (!code.length) return outputs;
 
       const dispose = true;
       const future = kernel.requestExecute({ code }, dispose);
@@ -171,9 +158,8 @@ export namespace Rubric {
         if (message.header.msg_type === 'execute_result' ||
             message.header.msg_type === 'display_data' ||
             message.header.msg_type === 'stream' ||
-            message.header.msg_type === 'error') {
+            message.header.msg_type === 'error')
           outputs.push(message as Output);
-        }
       };
       await future.done;
       return outputs;
@@ -185,7 +171,6 @@ export namespace Rubric {
       return intervention ?? { ...Score.UNSCORED, code: 'intervene' };
     }
 
-
     /** @returns a rubric with the possible points for a given cell updated. */
     export function reweight(
       rubric: Unlocked,
@@ -193,9 +178,8 @@ export namespace Rubric {
       possible: number
     ): Unlocked {
       const cell = get(rubric, id);
-      if (!cell) {
+      if (!cell)
         throw new Error(`reweight error, rubric does not have cell id ${id}`);
-      }
 
       const assignment = {
         ...rubric.assignment,
@@ -224,33 +208,27 @@ export namespace Rubric {
       const reference = cell?.reference?.[0] ?? '';
       const expected = outputs.get(reference);
       const intervention = rubric.assignment.report.interventions[id];
-      if (!cell) {
-        return { ...Score.UNSCORED, code: 'missing-cell-given', id };
-      }
+      if (!cell) return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
       const possible = cell.points;
       const points = (score: Score) =>
         score.status === 'correct' ? possible : 0;
       if (cell.is === 'reviewable') {
         const score = await review(intervention ?? null);
-        if (score.status === 'unscored') {
-          return { ...score, id, possible };
-        }
+        if (score.status === 'unscored') return { ...score, id, possible };
 
         const capped = Math.max(0, Math.min(score.points, possible));
         const status = capped === possible ? 'correct' : 'incorrect';
         return { ...score, id, points: capped, possible, status };
       }
-      if (!given) {
+      if (!given)
         return { ...Score.INCORRECT, code: 'missing-given', id, possible };
-      }
       if (cell.is === 'answerable') {
         const score = await answer(cell.payload, given);
         return { ...score, id, points: points(score), possible };
       }
-      if (!expected) {
+      if (!expected)
         return { ...Score.INCORRECT, code: 'missing-reference', id, possible };
-      }
       if (cell.is === 'comparable') {
         const score = await compare(expected, given);
         return { ...score, id, points: points(score), possible };
@@ -331,9 +309,7 @@ export namespace Rubric {
       const transient = (id: string) => !subset.includes(id) && valid(id);
       const missing = id ? [] : Object.keys(rubric.cells).filter(transient);
       const all = [...subset, ...missing];
-      if (!all.length) {
-        return report;
-      }
+      if (!all.length) return report;
 
       const current = Object.entries(report.scores).filter(([id]) => valid(id));
       const pending = all.map(id => Cell.score(rubric, id, outputs));
@@ -366,12 +342,9 @@ export namespace Rubric {
       sources: { [id: string]: string },
       key: string
     ): Promise<void> {
-      if (report.digest === '') {
-        return;
-      }
-      if (report.digest !== await certify(report, sources, key)) {
+      if (report.digest === '') return;
+      if (report.digest !== await certify(report, sources, key))
         throw new Error('verify error, cell digest mismatch');
-      }
     }
 
     export async function sign(
@@ -394,12 +367,8 @@ export namespace Rubric {
         ...Object.keys(scores)
       ]);
       const sum = (a: Score, b: Score): Score => {
-        if (a.status === 'unscored') {
-          return b;
-        }
-        if (b.status === 'unscored') {
-          return a;
-        }
+        if (a.status === 'unscored') return b;
+        if (b.status === 'unscored') return a;
 
         const points = a.points + b.points;
         const possible = a.possible + b.possible;
@@ -415,18 +384,18 @@ export namespace Rubric {
       { assignment, key }: Pick<Unlocked, 'assignment' | 'key'>
     ) {
       const { assignee, roster, signature } = assignment;
-      if (assignee && !signature) {
+      if (assignee && !signature)
         throw new Error('missing signature for assignee');
-      }
-      if (assignee && signature !== await sign(assignment, key)) {
+
+      if (assignee && signature !== await sign(assignment, key))
         throw new Error('assignee signature mismatch');
-      }
-      if (assignee && !find(roster, record => record === assignee)) {
+
+      if (assignee && !find(roster, record => record === assignee))
         throw new Error('assignee does not exist in roster');
-      }
-      if (roster.length && !signature) {
+
+      if (roster.length && !signature)
         throw new Error('missing signature for roster');
-      }
+
     }
   }
 
@@ -491,18 +460,13 @@ export namespace Rubric {
       score: Pick<Score, 'comment' | 'points' | 'possible'>
     ): Score {
       const { comment, points, possible } = score;
-      if (!Number.isInteger(points)) {
+      if (!Number.isInteger(points))
         throw new TypeError('intervene: points invalid');
-      }
-      if (!Number.isInteger(possible)) {
+      if (!Number.isInteger(possible))
         throw new TypeError('intervene: possible invalid');
-      }
-      if (possible < 1) {
-        throw new RangeError('intervene: possible < 1');
-      }
-      if (points < 0 || points > possible) {
+      if (possible < 1) throw new RangeError('intervene: possible < 1');
+      if (points < 0 || points > possible)
         throw new RangeError('intervene: points out of range');
-      }
 
       const status = points === possible ? 'correct' : 'incorrect';
       return { code: 'intervene', comment, id, points, possible, status };
@@ -523,9 +487,9 @@ export namespace Rubric {
   }
 
   export function add(rubric: Unlocked, cell: Cell): Unlocked {
-    if (has(rubric, cell.id, true)) {
+    if (has(rubric, cell.id, true))
       throw new Error(`add error, rubric already has cell id ${cell.id}`);
-    }
+
     const assignment = {
       ...rubric.assignment,
       report: Assignment.Report.empty()
@@ -597,9 +561,7 @@ export namespace Rubric {
    * @returns whether a rubric has or references a given id.
    */
   export function has(rubric: Rubric, id: string, deep = false): boolean {
-    if (get(rubric, id)) {
-      return true;
-    }
+    if (get(rubric, id)) return true;
     if (deep) {
       const reference = id;
       const entries = Object.entries(rubric.cells);
@@ -610,9 +572,7 @@ export namespace Rubric {
 
   /** @returns the given rubric, locked. */
   export async function lock(rubric: Rubric): Promise<Locked> {
-    if (rubric.locked) {
-      return rubric;
-    }
+    if (rubric.locked) return rubric;
     await Assignment.validate(rubric);
 
     const locked = true;
@@ -631,49 +591,33 @@ export namespace Rubric {
       typeof value === 'object' && value !== null;
     const record = (value: unknown): value is { [key: string]: unknown } =>
       object(value) && !Array.isArray(value);
-    if (!revised) {
-      throw new Error('invalid rubric, missing revised');
-    }
-    if (typeof id !== 'string' || !id) {
+    if (!revised) throw new Error('invalid rubric, missing revised');
+    if (typeof id !== 'string' || !id)
       throw new Error('invalid rubric, missing id');
-    }
-    if (key !== null) {
-      throw new Error('invalid rubric, missing (null) key');
-    }
-    if (locked !== true) {
-      throw new Error('invalid rubric, must be locked');
-    }
-    if (!cells || typeof cells !== 'object' || Array.isArray(cells)) {
+
+    if (key !== null) throw new Error('invalid rubric, missing (null) key');
+    if (locked !== true) throw new Error('invalid rubric, must be locked');
+    if (!cells || typeof cells !== 'object' || Array.isArray(cells))
       throw new Error('invalid rubric, missing cells');
-    }
-    if (!assignment) {
-      throw new Error('invalid rubric, missing assignment');
-    }
-    if (!record(assignment.report)) {
+    if (!assignment) throw new Error('invalid rubric, missing assignment');
+    if (!record(assignment.report))
       throw new Error('invalid rubric, missing assignment report');
-    }
 
     const { digest, interventions, scores, timestamp } = assignment.report;
-    if (typeof digest !== 'string') {
+    if (typeof digest !== 'string')
       throw new Error('invalid rubric, missing assignment report digest');
-    }
-    if (!record(interventions)) {
+    if (!record(interventions))
       throw new Error('invalid rubric, missing assignment interventions');
-    }
-    if (!record(scores)) {
+    if (!record(scores))
       throw new Error('invalid rubric, missing assignment scores');
-    }
-    if (timestamp !== null && typeof timestamp !== 'number') {
+    if (timestamp !== null && typeof timestamp !== 'number')
       throw new Error('invalid rubric, assignment timestamp mismatch');
-    }
     return { assignment, cells, id, key, locked, revised };
   }
 
   /** Remove a cell from a rubric and invalidate report. */
   export function remove(rubric: Unlocked, id: string): Unlocked {
-    if (!get(rubric, id)) {
-      return rubric;
-    }
+    if (!get(rubric, id)) return rubric;
 
     const assignment = {
       ...rubric.assignment,
@@ -713,9 +657,7 @@ export namespace Rubric {
   /** @returns a rubric with the cell's shared flag toggled. */
   export function toggle(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
-    if (!cell) {
-      throw new Error(`toggle: cell ${id} not found in rubric`);
-    }
+    if (!cell) throw new Error(`toggle: cell ${id} not found in rubric`);
 
     const assignment = {
       ...rubric.assignment,

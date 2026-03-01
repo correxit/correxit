@@ -18,14 +18,11 @@ const state: {
  */
 export function cache(workbook: Workbook, id: string, score: Rubric.Score) {
   const rubric = Workbook.open(workbook, true);
-  if (!rubric) {
-    return;
-  }
+  if (!rubric) return;
 
   const key = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
-  if (!state.report.has(key) && state.report.size >= LIMIT) {
+  if (!state.report.has(key) && state.report.size >= LIMIT)
     state.report.delete(state.report.keys().next().value!); // FIFO eviction
-  }
   state.report.set(key, score);
 }
 
@@ -42,20 +39,14 @@ export function report(
   id: string
 ): Rubric.Score | null {
   const rubric = Workbook.open(workbook, true);
-  if (!rubric || !workbook) {
-    return null;
-  }
+  if (!rubric || !workbook) return null;
 
   const key = `${rubric.id}:${rubric.assignment.assignee || ''}:${id}`;
   const cached = state.report.get(key);
-  if (cached) {
-    return cached;
-  }
+  if (cached) return cached;
 
   const score = Rubric.Score.resolve(rubric.assignment.report, id);
-  if (score) {
-    cache(workbook, id, score);
-  }
+  if (score) cache(workbook, id, score);
   return score;
 }
 

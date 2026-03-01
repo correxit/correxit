@@ -156,8 +156,8 @@ const Roster: React.FC<{
   registered: string[] | null;
   toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
   trans: TranslationBundle;
-}> = ({ locked, registered, toggle, trans, ...props }) => {
-  const [assignment, setAssignment] = useState<Assignment>(props.assignment);
+}> = ({ assignment: seed, locked, registered, toggle, trans }) => {
+  const [assignment, setAssignment] = useState<Assignment>(seed);
   const [value, setValue] = useState<string>(assignment.roster.join('\n'));
   const roster = value.split('\n').filter(value => !!value);
   const freeze = (roster: string[]) => setValue(roster.join('\n'));
@@ -170,9 +170,7 @@ const Roster: React.FC<{
       }),
     [roster]
   );
-  if (locked) {
-    return <></>;
-  }
+  if (locked) return <></>;
 
   const id = 'correxit-assignment-roster';
   return (
@@ -216,7 +214,7 @@ const Propagate: React.FC<{
     .filter(([, { type }]) => type !== 'progress')
     .map(([message]) => message);
   const [value, max]: [number, number] = log.reduce(
-    (progress, [_, { type, slots }]) =>
+    (progress, [, { type, slots }]) =>
       type === 'progress' ? (slots as [number, number]) : progress,
     [0, 1]
   );
@@ -243,9 +241,7 @@ const Propagate: React.FC<{
 
 const Log: React.FC<{ done: boolean; messages: string[] }> = props => {
   const { done, messages } = props;
-  if (done && !messages.length) {
-    return <></>;
-  }
+  if (done && !messages.length) return <></>;
   const ref = useRef<HTMLPreElement | null>(null);
   const scroll = () =>
     void (ref.current && (ref.current.scrollTop = ref.current.scrollHeight));

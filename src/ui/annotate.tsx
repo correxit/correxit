@@ -10,25 +10,18 @@ const decorations = Rubric.Cell.types
   .concat(correct, incorrect);
 
 function clear({ content }: Workbook) {
-  if (content && !content.isDisposed) {
-    content.widgets.forEach(reset);
-  }
+  if (content && !content.isDisposed) content.widgets.forEach(reset);
 }
 
 function decorate(workbook: Workbook, cell: Rubric.Cell, widget: Widget) {
   const report = state.report(workbook, cell.id);
   widget.addClass(`cxt-mod-${cell.is}`);
-  if (report?.status === 'correct') {
-    widget.addClass(correct);
-  } else if (report?.status === 'incorrect') {
-    widget.addClass(incorrect);
-  }
+  if (report?.status === 'correct') widget.addClass(correct);
+  else if (report?.status === 'incorrect') widget.addClass(incorrect);
 }
 
 function reset(widget: Widget) {
-  for (const decoration of decorations) {
-    widget.removeClass(decoration);
-  }
+  for (const decoration of decorations) widget.removeClass(decoration);
 }
 
 /**
@@ -47,18 +40,14 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
   const rubric = Workbook.open(workbook, true);
   useEffect(() => {
     const notebook = workbook?.content;
-    if (!notebook || !rubric || notebook.isDisposed) {
-      return;
-    }
+    if (!notebook || !rubric || notebook.isDisposed) return;
 
     let remaining = Rubric.size(rubric);
     for (const widget of notebook.widgets) {
       const cell = Rubric.get(rubric, widget.model.id);
       if (cell) {
         decorate(workbook, cell, widget);
-        if (--remaining === 0) {
-          break;
-        }
+        if (--remaining === 0) break;
       }
     }
     return () => clear(workbook);

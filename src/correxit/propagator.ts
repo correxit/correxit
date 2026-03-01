@@ -17,9 +17,8 @@ export async function* propagate({ consumer, workbook }: {
     const { assignment: { roster }, key } = rubric;
     const path = workbook.context.path;
     const { encrypted, notebook: content } = await template(workbook, rubric);
-    for (const reference of encrypted) {
+    for (const reference of encrypted)
       yield { type: 'encrypted', slots: [reference] };
-    }
 
     const loop = async function* (location: { base: string; pwd: string }) {
       const { base, pwd } = location;
@@ -45,9 +44,7 @@ async function encrypt(
   key: string
 ): Promise<void> {
   const index = findIndex(notebook.cells, ({ id }) => id === reference);
-  if (!key || index === -1) {
-    throw new Error('encrypt error');
-  }
+  if (!key || index === -1) throw new Error('encrypt error');
 
   const cell = notebook.cells[index];
   const source = Array.isArray(cell.source)
@@ -95,9 +92,7 @@ async function template(
   const notebook = workbook.context.model.sharedModel.toJSON();
   for (const id in rubric.cells) {
     const cell = rubric.cells[id];
-    if (cell.shared) {
-      continue;
-    }
+    if (cell.shared) continue;
     if (cell.is === 'comparable' || cell.is === 'correctable') {
       const [reference] = cell.reference;
       await encrypt(notebook, reference, rubric.key);

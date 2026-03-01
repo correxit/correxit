@@ -116,9 +116,8 @@ class Content extends ReactWidget {
   }
 
   set(updates: Partial<Corrector.Props & { key?: string }>) {
-    if (updates.path !== undefined) {
+    if (updates.path !== undefined)
       updates = { ...updates, mode: 'scan', key: `${Date.now()}` };
-    }
     this.props = { ...this.props, ...updates };
     this.update();
   }
@@ -235,11 +234,8 @@ class ModeSelector extends ReactWidget {
   }
 
   set(updates: Corrector.Notification | { overwrite: boolean }) {
-    if ('overwrite' in updates) {
-      this.overwrite = updates.overwrite;
-    } else {
-      this.busy = !(updates.graded && updates.scanned);
-    }
+    if ('overwrite' in updates) this.overwrite = updates.overwrite;
+    else this.busy = !(updates.graded && updates.scanned);
     this.update();
   }
 

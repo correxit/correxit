@@ -69,21 +69,16 @@ export async function* grader(
 
   const take = async (): Promise<Settled | null> => {
     while (!queue.length) {
-      if (!inflight) {
-        return null;
-      }
+      if (!inflight) return null;
       await sleep();
     }
     return queue.shift()!;
   };
   const emit = async (): Promise<Certified | null> => {
     const item = await take();
-    if (!item) {
-      return null;
-    }
-    if (item.ok) {
-      return item.grade;
-    }
+    if (!item) return null;
+    if (item.ok) return item.grade;
+
     const tried = (attempts.get(item.workbook) ?? 0) + 1;
     if (tried <= retries) {
       attempts.set(item.workbook, tried);
@@ -103,17 +98,13 @@ export async function* grader(
     }
     while (inflight >= max) {
       const grade = await emit();
-      if (grade) {
-        yield grade;
-      }
+      if (grade) yield grade;
     }
     start(workbook);
   }
 
   while (inflight || queue.length) {
     const grade = await emit();
-    if (grade) {
-      yield grade;
-    }
+    if (grade) yield grade;
   }
 }

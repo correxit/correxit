@@ -125,14 +125,10 @@ const CellScore: React.FC<{
     value: report ? report.points : ''
   };
   const whole = (value: string): number | '' => {
-    if (value === '') {
-      return '';
-    }
+    if (value === '') return '';
 
     const parsed = Number(value);
-    if (Number.isNaN(parsed)) {
-      return '';
-    }
+    if (Number.isNaN(parsed)) return '';
     return Math.max(0, Math.floor(parsed));
   };
 
@@ -154,10 +150,7 @@ const CellScore: React.FC<{
     seed.status,
     seed.value
   ]);
-
-  if (!cell) {
-    return <></>;
-  }
+  if (!cell) return <></>;
 
   const actual = report && report.status !== 'unscored' ? report.points : '-';
   const heading = rubric.locked
@@ -172,24 +165,17 @@ const CellScore: React.FC<{
   };
   const placeholder = trans.__('Cell comment...');
   const note = async () => {
-    if (comment !== seed.comment) {
+    if (comment !== seed.comment)
       await commands.execute(CommandIDs.comment, { id, comment });
-    }
   };
   const reweight = async () => {
-    const possible = points;
     const scored = score;
-    const invalid = typeof possible !== 'number' || Number.isNaN(possible);
-    if (rubric.locked || invalid || possible === cell.points) {
-      return;
-    }
-    await commands.execute(CommandIDs.reweight, {
-      id,
-      points: possible
-    });
+    const invalid = typeof points !== 'number' || Number.isNaN(points);
+    if (rubric.locked || invalid || points === cell.points) return;
+    await commands.execute(CommandIDs.reweight, { id, points });
     if (typeof scored === 'number' && !Number.isNaN(scored)) {
-      const update = { comment, points: scored, possible };
-      const intervention = Rubric.Score.intervene(id, update);
+      const manual = { comment, points: scored, possible: points };
+      const intervention = Rubric.Score.intervene(id, manual);
       await commands.execute(CommandIDs.intervene, { id, intervention });
     }
   };
@@ -197,9 +183,7 @@ const CellScore: React.FC<{
   const intervene = async () => {
     const scored = score;
     const possible = points;
-    if (rubric.locked) {
-      return;
-    }
+    if (rubric.locked) return;
 
     if (typeof scored === 'number' && !Number.isNaN(scored)) {
       const max = typeof possible === 'number' ? possible : cell.points;
@@ -305,13 +289,11 @@ const Body: React.FC<{
 }> = ({ commands, trans, workbook }) => {
   const rubric = open(workbook);
   const headed = !!workbook?.content;
-  if (!rubric || !headed || !workbook.content.activeCell) {
+  if (!rubric || !headed || !workbook.content.activeCell)
     return <section className="correxit-sidebar-body"></section>;
-  }
+
   const cell = (workbook.content.activeCell.model as ICodeCellModel) || null;
-  if (!cell || cell.type !== 'code') {
-    return <></>;
-  }
+  if (!cell || cell.type !== 'code') return <></>;
 
   const { id } = cell;
   const hints = {

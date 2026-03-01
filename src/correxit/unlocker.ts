@@ -39,9 +39,7 @@ export namespace Unlocker {
     trans: IRenderMime.TranslationBundle
   ): Promise<Rubric.Unlocked | null> {
     const rubric = Workbook.open(workbook, true);
-    if (!rubric) {
-      return null;
-    }
+    if (!rubric) return null;
 
     const { id } = rubric;
     if (rubric.key) {
@@ -51,9 +49,7 @@ export namespace Unlocker {
 
     const handle = Workbook.Credentials.normalize(credentials);
     const unlocked = await resolve(workbook, id, handle, secrets);
-    if (unlocked || credentials?.silent) {
-      return unlocked;
-    }
+    if (unlocked || credentials?.silent) return unlocked;
     return inquire(workbook, id, secrets, trans);
   }
 }
@@ -64,23 +60,16 @@ async function* candidates(
   handle: Workbook.Credentials | null,
   secrets: Secrets
 ): AsyncGenerator<string> {
-  if (handle?.key) {
-    yield handle.key;
-  }
+  if (handle?.key) yield handle.key;
 
   const { manager, token } = secrets;
   if (manager && token) {
     const stored = await manager.get(token, Correxit.UNLOCKER, id);
-    if (stored?.value) {
-      yield stored.value;
-    }
+    if (stored?.value) yield stored.value;
   }
-  if (handle?.passphrase) {
-    yield await security.keygen(handle.passphrase, id);
-  }
-  for (const passphrase of secrets.passphrases) {
+  if (handle?.passphrase) yield await security.keygen(handle.passphrase, id);
+  for (const passphrase of secrets.passphrases)
     yield await security.keygen(passphrase, id);
-  }
 }
 
 /** Iterates candidate keys, returning on first successful unlock. */
@@ -115,15 +104,12 @@ async function inquire(
 ): Promise<Rubric.Unlocked | null> {
   const pending = secrets.pending || prompt(workbook, trans);
   secrets.pending = pending;
-  const passphrase = await pending;
-  if (secrets.pending === pending) {
-    secrets.pending = null;
-  }
-  if (!passphrase) {
-    return null;
-  }
 
+  const passphrase = await pending;
+  if (secrets.pending === pending) secrets.pending = null;
+  if (!passphrase) return null;
   secrets.passphrases.add(passphrase);
+
   const key = await security.keygen(passphrase, id);
   const unlocked = await attempt(workbook, key);
   await Unlocker.store(id, key, secrets);
