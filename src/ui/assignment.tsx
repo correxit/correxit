@@ -23,7 +23,7 @@ export const Assignment: React.FC<{
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
   const toggle = (to: 'assignee' | 'roster', updated: Assignment) => {
     setAssignment(updated);
-    setView(to || view);
+    setView(to);
   };
   const reassign = async (assignment: Assignment, locked: boolean) =>
     void (!locked && commands.execute(assign, assignment).catch(_ => {}));
@@ -157,9 +157,10 @@ const Roster: React.FC<{
   toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
   trans: TranslationBundle;
 }> = ({ assignment: seed, locked, registered, toggle, trans }) => {
+  const id = 'correxit-assignment-roster';
   const [assignment, setAssignment] = useState<Assignment>(seed);
   const [value, setValue] = useState<string>(assignment.roster.join('\n'));
-  const roster = value.split('\n').filter(value => !!value);
+  const roster = value.split('\n').filter(Boolean);
   const freeze = (roster: string[]) => setValue(roster.join('\n'));
   useEffect(() => void (registered && freeze(registered)), [registered]);
   useEffect(
@@ -171,8 +172,6 @@ const Roster: React.FC<{
     [roster]
   );
   if (locked) return <></>;
-
-  const id = 'correxit-assignment-roster';
   return (
     <div className="correxit-assignment-roster">
       <Toggle
