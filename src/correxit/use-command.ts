@@ -55,7 +55,6 @@ export function useCommand<T>(
         throttler.dispose();
         setIdle(true);
       }
-
     })(commands.hasCommand(id) ? commands.execute(id, args) : undefined);
     return () => void (interrupted = true);
   }, [id, JSON.stringify(args)]);
