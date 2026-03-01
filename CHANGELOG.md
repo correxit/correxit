@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/QuantStack/correxit/compare/v1.3.0...v1.4.0) (2026-03-01)
+
+
+### Features
+
+* `reviewable` (manually corrected) cells ([#43](https://github.com/QuantStack/correxit/issues/43)) ([337848d](https://github.com/QuantStack/correxit/commit/337848da9b8d6d6bdca687ee1fe82e07e6b0e73a))
+
 # [1.3.0](https://github.com/QuantStack/correxit/compare/v1.2.1...v1.3.0) (2026-02-26)
 
 
