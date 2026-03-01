@@ -45,7 +45,6 @@
   color: var(--jp-ui-font-color2);
   display: block;
   font-size: var(--correxit-sidebar-font-size);
-  justify-content: center;
   height: 35px;
   margin: 0 var(--correxit-sidebar-content-inset) 10px;
   overflow-y: auto;
@@ -219,10 +218,8 @@
 
 .correxit-assignment {
   background-color: var(--jp-layout-color2);
+  border: 2px solid var(--jp-border-color2);
   border-radius: 3px;
-  border-color: var(--jp-border-color2);
-  border-style: solid;
-  border-width: 2px;
   margin: 0 var(--correxit-sidebar-content-inset);
   padding: 4px 0;
 }
@@ -275,8 +272,7 @@
 .correxit-assignment-propagate {
   pre {
     background-color: var(--jp-layout-color2);
-    border: 1px solid;
-    border-color: var(--jp-border-color2);
+    border: 1px solid var(--jp-border-color2);
     color: var(--jp-ui-font-color2);
     font-size: var(--jp-ui-font-size0);
     height: 250px;
