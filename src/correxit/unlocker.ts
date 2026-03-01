@@ -39,7 +39,7 @@ export namespace Unlocker {
     trans: IRenderMime.TranslationBundle
   ): Promise<Rubric.Unlocked | null> {
     const rubric = Workbook.open(workbook, true);
-    if (!rubric)  return null;
+    if (!rubric) return null;
 
     const { id } = rubric;
     if (rubric.key) {
