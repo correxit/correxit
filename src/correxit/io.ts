@@ -8,7 +8,7 @@ import { Correxit, Workbook } from '..';
 
 export async function cd(commands: CommandRegistry, path: string) {
   const command = 'filebrowser:go-to-path';
-  if (commands.hasCommand(command)) commands.execute(command, { path });;
+  if (commands.hasCommand(command)) commands.execute(command, { path });
 }
 
 /** @returns a headless workbook or null. */
