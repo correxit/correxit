@@ -219,7 +219,10 @@ export namespace Rubric {
         if (score.status === 'unscored') return { ...score, id, possible };
 
         const capped = Math.max(0, Math.min(score.points, possible));
-        const status = capped === possible ? 'correct' : 'incorrect';
+        const status: Score.Status =
+          capped === possible ? 'correct'
+          : capped === 0 ? 'incorrect'
+          : 'partial';
         return { ...score, id, points: capped, possible, status };
       }
       if (!given)
@@ -454,6 +457,7 @@ export namespace Rubric {
     export type Status =
       | 'correct'
       | 'incorrect'
+      | 'partial'
       | 'summary'
       | 'unscored';
 
@@ -498,8 +502,14 @@ export namespace Rubric {
       if (points < 0 || points > possible)
         throw new RangeError('intervene: points out of range');
 
-      const status = points === possible ? 'correct' : 'incorrect';
-      return { code: 'intervene', comment, id, points, possible, status };
+      const status: Status =
+        points === possible ? 'correct'
+        : points === 0 ? 'incorrect'
+        : 'partial';
+      return {
+        code: 'intervene', comment, id,
+        points, possible, status
+      };
     }
 
     /**

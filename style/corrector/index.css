@@ -133,15 +133,40 @@ td.correxit-corrector-breakdown {
 }
 
 .correxit-corrector-breakdown-correct {
-  background-color: var(--jp-success-color1);
+  background-color: var(--correxit-correct-color);
+  background-image: none;
 }
 
 .correxit-corrector-breakdown-incorrect {
-  background-color: var(--jp-error-color1);
+  background-color: var(--correxit-incorrect-color);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 2px,
+    rgb(0 0 0 / 15%) 2px,
+    rgb(0 0 0 / 15%) 4px
+  );
+}
+
+.correxit-corrector-breakdown-partial {
+  background-color: var(--correxit-partial-color);
+  background-image: none;
+}
+
+.correxit-corrector-breakdown-review {
+  background-color: var(--correxit-insistent-color);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 2px,
+    rgb(255 255 255 / 30%) 2px,
+    rgb(255 255 255 / 30%) 4px
+  );
 }
 
 .correxit-corrector-breakdown-unscored {
-  background-color: var(--jp-border-color2);
+  background-color: var(--correxit-unscored-color);
+  background-image: none;
 }
 
 tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
@@ -180,7 +205,7 @@ td.correxit-corrector-review {
 }
 
 td.correxit-corrector-review > span {
-  color: var(--jp-warn-color1);
+  color: var(--correxit-insistent-color);
   position: absolute;
   right: 0;
   top: 50%;

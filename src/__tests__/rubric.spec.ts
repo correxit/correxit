@@ -684,7 +684,7 @@ describe('Rubric', () => {
         };
         const outputs: Rubric.Outputs = new Map();
         const score = await Rubric.Cell.score(rubric, id, outputs);
-        expect(score.status).toBe('incorrect');
+        expect(score.status).toBe('partial');
         expect(score.points).toBe(3);
         expect(score.possible).toBe(5);
       });
@@ -894,7 +894,7 @@ describe('Rubric', () => {
       expect(intervention.comment).toBe('manual override');
       expect(intervention.points).toBe(3);
       expect(intervention.possible).toBe(5);
-      expect(intervention.status).toBe('incorrect');
+      expect(intervention.status).toBe('partial');
     });
 
     it('resolves intervention over computed score', () => {

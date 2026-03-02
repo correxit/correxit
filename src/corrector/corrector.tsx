@@ -300,7 +300,7 @@ const Row: React.FC<{
       <Lock {...{ trans, workbook }} />
       <Assignment {...{ trans, workbook }} />
       <Assignee {...{ workbook }} />
-      <Breakdown {...{ failed, workbook }} />
+      <Breakdown {...{ failed, trans, workbook }} />
       <Score {...{ grade, graded, review, trans }} />
     </tr>
   );
@@ -308,27 +308,56 @@ const Row: React.FC<{
 
 const Breakdown: React.FC<{
   failed: boolean;
+  trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = ({ failed, workbook }) => {
+}> = ({ failed, trans, workbook }) => {
   if (failed) return <td className="correxit-corrector-breakdown" />;
   const rubric = open(workbook);
   const notebook = workbook.context.model.sharedModel;
   if (!rubric) return <td className="correxit-corrector-breakdown" />;
   const { cells } = rubric;
-  const { scores } = rubric.assignment.report;
+  const { interventions, scores } = rubric.assignment.report;
   const breakdown = Array.from(notebook.cells)
     .map(cell => cell.id)
     .filter(id => id in cells);
+  const label = (id: string, kind: string) => {
+    const { points = 0, possible = 0 } = scores[id] ?? {};
+    const { is: type } = cells[id];
+    if (kind === 'review') return trans.__('%1: needs review', type);
+    if (kind === 'unscored') return trans.__('%1: unscored', type);
+    return trans.__('%1: %2 of %3', type, points, possible);
+  };
+  const aria = breakdown
+    .map(id => {
+      const scored = !!scores[id]?.status;
+      const intervened = !!interventions[id];
+      const awaiting = cells[id].is === 'reviewable' && !scored && !intervened;
+      return label(id, awaiting ? 'review' : scores[id]?.status || 'unscored');
+    })
+    .join(', ');
   return (
     <td className="correxit-corrector-breakdown">
-      <span className="correxit-corrector-breakdown-bar">
+      <span
+        aria-label={aria}
+        className="correxit-corrector-breakdown-bar"
+        role="img"
+      >
         {breakdown.map(id => {
-          const status = scores[id]?.status || 'unscored';
+          const { status = 'unscored' } = scores[id] ?? {};
+          const review = cells[id].is === 'reviewable' && status === 'unscored';
+          const kind = review ? 'review' : status;
           const className = [
             'correxit-corrector-breakdown-segment',
-            `correxit-corrector-breakdown-${status}`
+            `correxit-corrector-breakdown-${kind}`
           ].join(' ');
-          return <span key={id} className={className} />;
+          return (
+            <span
+              aria-hidden="true"
+              className={className}
+              key={id}
+              title={label(id, kind)}
+            />
+          );
         })}
       </span>
     </td>

@@ -5,9 +5,10 @@ import * as state from '../correxit/state';
 
 const correct = 'cxt-mod-correct';
 const incorrect = 'cxt-mod-incorrect';
+const partial = 'cxt-mod-partial';
 const decorations = Rubric.Cell.types
   .map(type => `cxt-mod-${type}`)
-  .concat(correct, incorrect);
+  .concat(correct, incorrect, partial);
 
 function clear({ content }: Workbook) {
   if (content && !content.isDisposed) content.widgets.forEach(reset);
@@ -17,6 +18,7 @@ function decorate(workbook: Workbook, cell: Rubric.Cell, widget: Widget) {
   const report = state.report(workbook, cell.id);
   widget.addClass(`cxt-mod-${cell.is}`);
   if (report?.status === 'correct') widget.addClass(correct);
+  else if (report?.status === 'partial') widget.addClass(partial);
   else if (report?.status === 'incorrect') widget.addClass(incorrect);
 }
 
