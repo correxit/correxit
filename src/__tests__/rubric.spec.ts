@@ -54,7 +54,6 @@ describe('Rubric', () => {
         payload: []
       });
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: { [id]: Rubric.Score.CORRECT }
       };
@@ -84,7 +83,6 @@ describe('Rubric', () => {
         payload: []
       });
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: { [id]: Rubric.Score.CORRECT }
       };
@@ -108,7 +106,6 @@ describe('Rubric', () => {
       });
 
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: { c1: Rubric.Score.CORRECT }
       };
@@ -151,7 +148,6 @@ describe('Rubric', () => {
         shared: false
       });
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: { [id]: Rubric.Score.CORRECT }
       };
@@ -192,7 +188,6 @@ describe('Rubric', () => {
         assignment: {
           ...rubric.assignment,
           report: {
-            digest: '',
             scores: {}
           }
         }
@@ -271,7 +266,6 @@ describe('Rubric', () => {
       const initial = Date.now() + 86400000;
       const updated = Date.now() + 172800000;
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: { c1: Rubric.Score.CORRECT }
       };
@@ -327,7 +321,6 @@ describe('Rubric', () => {
       const roster = ['assignee@example.com'];
       const expiration = Date.now() + 86400000;
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: { c1: Rubric.Score.CORRECT }
       };
@@ -361,7 +354,6 @@ describe('Rubric', () => {
     it('resets report if assignee changes', async () => {
       let rubric = create();
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: { 'cell-1': Rubric.Score.CORRECT }
       };
@@ -836,7 +828,6 @@ describe('Rubric', () => {
       add('c2');
 
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: {
           c1: Rubric.Score.CORRECT,
@@ -855,7 +846,6 @@ describe('Rubric', () => {
 
     it('summarizes a report correctly', () => {
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {},
         scores: {
           c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
@@ -866,57 +856,6 @@ describe('Rubric', () => {
       expect(summary.points).toBe(5);
       expect(summary.possible).toBe(15);
       expect(summary.status).toBe('summary');
-    });
-
-    describe('certify / verify', () => {
-      const key = 'test-key';
-      const cells = { c1: 'print(1)' };
-      const scores = { c1: Rubric.Score.CORRECT };
-      const base: Omit<Rubric.Assignment.Report, 'digest'> = {
-        interventions: {},
-        scores
-      };
-
-      it('digest produces a stable hex digest', async () => {
-        const d1 = await Rubric.Assignment.digest(base, cells, key);
-        const d2 = await Rubric.Assignment.digest(base, cells, key);
-        expect(d1).toBe(d2);
-        expect(typeof d1).toBe('string');
-        expect(d1.length).toBeGreaterThan(0);
-      });
-
-      it('digest changes when cell source changes', async () => {
-        const d1 = await Rubric.Assignment.digest(base, cells, key);
-        const d2 = await Rubric.Assignment.digest(
-          base,
-          { c1: 'print(2)' },
-          key
-        );
-        expect(d1).not.toBe(d2);
-      });
-
-      it('verify passes when digest matches', async () => {
-        const digest = await Rubric.Assignment.digest(base, cells, key);
-        const report: Rubric.Assignment.Report = { ...base, digest };
-        await expect(
-          Rubric.Assignment.verify(report, cells, key)
-        ).resolves.toBeUndefined();
-      });
-
-      it('verify throws on digest mismatch', async () => {
-        const digest = await Rubric.Assignment.digest(base, cells, key);
-        const report: Rubric.Assignment.Report = { ...base, digest };
-        await expect(
-          Rubric.Assignment.verify(report, { c1: 'tampered' }, key)
-        ).rejects.toThrow('verify error, cell digest mismatch');
-      });
-
-      it('verify is a no-op when digest is empty string (unsigned)', async () => {
-        const report: Rubric.Assignment.Report = { ...base, digest: '' };
-        await expect(
-          Rubric.Assignment.verify(report, cells, key)
-        ).resolves.toBeUndefined();
-      });
     });
   });
 
@@ -938,7 +877,6 @@ describe('Rubric', () => {
 
     it('resolves intervention over computed score', () => {
       const report: Rubric.Assignment.Report = {
-        digest: '',
         interventions: {
           c1: Rubric.Score.intervene('c1', {
             comment: 'manual override',

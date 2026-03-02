@@ -404,10 +404,8 @@ export namespace Workbook {
     const resolved = id
       ? final.status !== 'unscored'
       : !cells.some(missing) && !cells.some(unresolved);
-    if (resolved && !rubric.locked) {
-      const sources = Workbook.sources(workbook, rubric);
-      await update(workbook, await Rubric.sign(rubric, report, sources));
-    }
+    if (resolved && !rubric.locked)
+      await update(workbook, await Rubric.sign(rubric, report));
     return { resolved, spec, score: final };
   }
 
@@ -429,8 +427,7 @@ export namespace Workbook {
 
     const { report: kept } = rubric.assignment;
     const scores = { ...kept.scores, [id]: { ...kept.scores[id], comment } };
-    const cells = sources(workbook, rubric);
-    const signed = await Rubric.sign(rubric, { ...kept, scores }, cells);
+    const signed = await Rubric.sign(rubric, { ...kept, scores });
     return update(workbook, signed);
   }
 
@@ -567,8 +564,7 @@ export namespace Workbook {
     else delete interventions[id];
 
     const report = { ...kept, interventions };
-    const sources = Workbook.sources(workbook, rubric);
-    return update(workbook, await Rubric.sign(rubric, report, sources));
+    return update(workbook, await Rubric.sign(rubric, report));
   }
 
   /**
@@ -639,34 +635,6 @@ export namespace Workbook {
     return update(workbook, Rubric.Cell.reweight(rubric, id, value));
   }
 
-  /**
-   * @returns a stable signature payload containing all rubric cell IDs and
-   * only the source code for reference cells. No student answer code is
-   * included, allowing answers to be edited without invalidating the grading.
-   */
-  export function sources(workbook: Workbook, rubric: Rubric): {
-    [id: string]: string;
-  } {
-    const notebook = workbook.context.model.sharedModel;
-    const ids = new Set(Object.keys(rubric.cells));
-    const references = new Set<string>();
-    for (const id of ids) {
-      const cell = rubric.cells[id];
-      for (const ref of cell.reference || [])
-        references.add(ref);
-
-    }
-
-    const payload: { [id: string]: string } = {};
-    for (const cell of notebook.cells) {
-      const id = cell.id;
-      if (ids.has(id) || references.has(id))
-        payload[id] = references.has(id) ? cell.getSource() : '';
-
-    }
-    return payload;
-  }
-
   /** Submit an assignment, locking all cells to read-only. */
   export async function submit(
     workbook: Workbook,
@@ -698,12 +666,7 @@ export namespace Workbook {
     if (!rubric.locked) return rubric;
 
     const unlocked = await Rubric.unlock(rubric, key);
-    const decrypted = await decrypt(workbook, unlocked);
-
-    // Verify against the stable rubric source payload.
-    const cells = sources(workbook, unlocked);
-    await Rubric.Assignment.verify(decrypted.assignment.report, cells, key);
-    return decrypted;
+    return decrypt(workbook, unlocked);
   }
 
   /**
