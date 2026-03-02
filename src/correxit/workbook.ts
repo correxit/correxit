@@ -300,11 +300,12 @@ export namespace Workbook {
     const corrected = await correct(workbook);
     const grade = { ...corrected, path: workbook.context.path };
     const identifier = Workbook.identifier(workbook);
-    if (!corrected.resolved) {
-      const { status } = corrected.score;
-      throw new Error(`certify error: unresolved status ${status}`);
-    }
-    await update(workbook, Rubric.certify(rubric));
+    if (!corrected.resolved)
+      throw new Error(`certify error: unresolved ${corrected.score.status}`);
+
+    const scored = open(workbook, quiet);
+    if (!scored || scored.locked) throw new Error('certify error');
+    await update(workbook, Rubric.certify(scored));
     await lock(workbook);
     freeze(workbook);
     return { grade, identifier, workbook };

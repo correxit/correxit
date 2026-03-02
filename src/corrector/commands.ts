@@ -227,22 +227,45 @@ async function correct(workbook: Headless): Promise<Certified> {
   const pending = Object.values(rubric.cells)
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
-  const commit = !pending;
-  const graded = await (commit ? Workbook.certify(workbook) : grade(workbook));
-  await save(commit ? workbook : null);
-  return graded;
+  if (!pending) {
+    const result = await Workbook.certify(workbook);
+    await save(workbook);
+    return result;
+  }
+
+  const corrected = await Workbook.correct(workbook);
+  const grade = { ...corrected, path: workbook.context.path };
+  const identifier = Workbook.identifier(workbook);
+  await save(workbook);
+  return { grade, identifier, workbook };
 }
 
 function exclude(workbook: Headless, overwrite: boolean): Certified | null {
-  return !overwrite ? certified(workbook) : null;
-}
+  const rubric = Workbook.open(workbook, true);
+  if (!rubric) return null;
+  if (overwrite) return null;
+  if (rubric.locked) return certified(workbook);
 
-async function grade(workbook: Headless): Promise<Certified> {
-  const corrected = await Workbook.correct(workbook);
-  const grade = {
-    ...corrected,
-    path: workbook.context.path
-  };
+  const { interventions, scores } = rubric.assignment.report;
+  const ids = Object.keys(rubric.cells);
+  const transient = ({ code }: Rubric.Score) =>
+    code === 'missing-given' || code === 'missing-reference';
+  const complete =
+    ids.length > 0 &&
+    ids.every(id => {
+      const score = scores[id];
+      return score && !transient(score);
+    });
+  if (!complete) return null;
+
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  if (!pending) return null;
+
+  const path = workbook.context.path;
+  const summary = Rubric.Assignment.summary(rubric.assignment.report);
+  const grade: Grade = { path, resolved: true, score: summary, spec: null };
   const identifier = Workbook.identifier(workbook);
   return { grade, identifier, workbook };
 }
@@ -250,21 +273,12 @@ async function grade(workbook: Headless): Promise<Certified> {
 function recover(workbook: Headless): Certified {
   const path = workbook.context.path;
   const unscored = { ...Rubric.Score.UNSCORED };
-  const grade: Grade = {
-    path,
-    resolved: false,
-    score: unscored,
-    spec: null
-  };
+  const grade: Grade = { path, resolved: false, score: unscored, spec: null };
   let identifier: Workbook.Identifier;
   try {
     identifier = Workbook.identifier(workbook);
   } catch {
-    identifier = {
-      assignee: null,
-      assignment: '',
-      signature: null
-    };
+    identifier = { assignee: null, assignment: '', signature: null };
   }
   return { grade, identifier, workbook };
 }
