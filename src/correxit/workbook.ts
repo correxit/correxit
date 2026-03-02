@@ -288,8 +288,7 @@ export namespace Workbook {
     workbook: Workbook
   ): Promise<Certified> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked)
-      throw new Error('certify error');
+    if (!rubric || rubric.locked) throw new Error('certify error');
 
     const { interventions } = rubric.assignment.report;
     const pending = Object.values(rubric.cells)
@@ -297,11 +296,10 @@ export namespace Workbook {
       .some(({ id }) => !interventions[id]);
     if (pending) throw new Error('certify error: pending review');
 
-    const corrected = await correct(workbook);
-    const grade = { ...corrected, path: workbook.context.path };
+    const grade = await correct(workbook);
     const identifier = Workbook.identifier(workbook);
-    if (!corrected.resolved)
-      throw new Error(`certify error: unresolved ${corrected.score.status}`);
+    if (!grade.resolved)
+      throw new Error(`certify error: unresolved (${grade.score.status})`);
 
     const scored = open(workbook, quiet);
     if (!scored || scored.locked) throw new Error('certify error');
@@ -346,10 +344,12 @@ export namespace Workbook {
   export async function correct(
     workbook: Workbook,
     id?: string
-  ): Promise<Omit<Grade, 'path'>> {
+  ): Promise<Grade> {
+    const path = workbook.context.path;
     const opened = open(workbook, quiet);
     if (!opened) {
       return {
+        path,
         resolved: false,
         score: { ...Rubric.Score.UNSCORED, code: 'missing-rubric' },
         spec: null
@@ -361,7 +361,7 @@ export namespace Workbook {
     const audited = audit(workbook, opened);
     if (!audited.ok) {
       const score = { ...Rubric.Score.UNSCORED, comment: audited.error };
-      return { resolved: false, score, spec: null };
+      return { path, resolved: false, score, spec: null };
     }
 
     const rubric = audited.rubric;
@@ -373,6 +373,7 @@ export namespace Workbook {
       : await execute(workbook, rubric, id);
     if (!result) {
       return {
+        path,
         resolved: false,
         score: { ...Rubric.Score.UNSCORED, code: 'error-execute' },
         spec: null
@@ -403,7 +404,7 @@ export namespace Workbook {
       : !cells.some(missing) && !cells.some(unresolved);
     if (resolved && !rubric.locked)
       await update(workbook, await Rubric.sign(rubric, report));
-    return { resolved, score: final, spec };
+    return { path, resolved, score: final, spec };
   }
 
    /**

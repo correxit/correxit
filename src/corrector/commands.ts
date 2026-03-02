@@ -233,8 +233,7 @@ async function correct(workbook: Headless): Promise<Certified> {
     return result;
   }
 
-  const corrected = await Workbook.correct(workbook);
-  const grade = { ...corrected, path: workbook.context.path };
+  const grade = await Workbook.correct(workbook);
   const identifier = Workbook.identifier(workbook);
   await save(workbook);
   return { grade, identifier, workbook };
