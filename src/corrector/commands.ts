@@ -15,7 +15,6 @@ type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
-type Rules = { commit: boolean; overwrite: boolean };
 
 export type Hollow = { hollow: true; context: { path: string } };
 
@@ -24,6 +23,7 @@ export type Scanned = (Headless & { hollow?: undefined }) | Hollow;
 export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
+  export const collect = 'correxit-corrector:collect';
   export const launch = 'correxit-corrector:launch';
   export const scan = 'correxit-corrector:scan';
 }
@@ -51,29 +51,31 @@ export function addCommands(
     commands.addCommand(CommandIDs.batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
-        args: Partial<Credentials & { certify: boolean; overwrite: boolean }>
+        args: Partial<Credentials & { overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const rules = { commit: !!args.certify, overwrite: !!args.overwrite };
+        const overwrite = !!args.overwrite;
         const actions: Actions = {
-          correct: workbook => correct(workbook, rules),
-          exclude: workbook => exclude(workbook, rules),
+          correct: workbook => correct(workbook),
+          exclude: workbook => exclude(workbook, overwrite),
           recover
         };
         const auth = !!(args.key || args.passphrase);
-        const potential = { ...args, unlock: auth ? !!args.unlock : true };
+        const potential = {
+          ...args,
+          unlock: auth ? !!args.unlock : true
+        };
         const handle = normalize(potential as Partial<Credentials>);
         if (!handle)
           throw new Error(`batch failed, args: ${JSON.stringify(args)}`);
 
         const cap = kernels.cap();
         const retries = kernels.retries();
-        const grades = async function* (): AsyncGenerator<Certified> {
-          yield* grader(scanner({ commands }, handle), actions, cap, retries);
-        };
-        return (async function* (stream: AsyncGenerator<Certified>) {
-          for await (const { grade, workbook } of stream)
+        const source = scanner({ commands }, handle);
+        const grades = grader(source, actions, cap, retries);
+        return (async function* () {
+          for await (const { grade, workbook } of grades)
             yield [grade.path, { grade, workbook: workbook as Headless }];
-        })(args.certify ? collector(grades()) : grades());
+        })();
       }
     })
   );
@@ -98,6 +100,38 @@ export function addCommands(
         }
         if (typeof path === 'string') widget.path = path || '.';
         widget.removeClass('cxt-mod-cd');
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.collect, {
+      label: trans.__('Collect certified workbooks into a grade store...'),
+      execute: (
+        args: Partial<Credentials & { overwrite: boolean }>
+      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
+        const overwrite = !!args.overwrite;
+        const auth = !!(args.key || args.passphrase);
+        const potential = { ...args, unlock: auth ? !!args.unlock : true };
+        const handle = normalize(potential as Partial<Credentials>);
+        if (!handle)
+          throw new Error(`collect failed, args: ${JSON.stringify(args)}`);
+        const source = scanner({ commands }, handle);
+        const pipe = async function* () {
+          for await (const workbook of source) {
+            const item = certified(workbook);
+            if (!item) continue;
+            if (!overwrite) {
+              const { collection } =
+                Workbook.open(workbook, true)?.assignment ?? {};
+              if (collection) continue;
+            }
+            yield item;
+          }
+        };
+        return (async function* () {
+          for await (const { grade, workbook } of collector(pipe()))
+            yield [grade.path, { grade, workbook: workbook as Headless }];
+        })();
       }
     })
   );
@@ -177,7 +211,12 @@ function certified(workbook: Headless): Certified | null {
   const partial = Object.values(report.scores).some(transient);
   const incomplete = Object.keys(rubric.cells).some(id => !report.scores[id]);
   const unscored = score.status === 'unscored';
-  if (!report.timestamp || unscored || partial || incomplete) return null;
+  const { interventions } = report;
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  if (!report.timestamp || unscored || partial || incomplete || pending)
+    return null;
 
   const path = workbook.context.path;
   const grade: Grade = { path, resolved: true, score, spec: null };
@@ -185,18 +224,22 @@ function certified(workbook: Headless): Certified | null {
   return { grade, identifier, timestamp: report.timestamp, workbook };
 }
 
-async function correct(workbook: Headless, rules: Rules): Promise<Certified> {
+async function correct(workbook: Headless): Promise<Certified> {
   const rubric = Workbook.open(workbook, true);
   if (!rubric || rubric.locked) return recover(workbook);
 
-  const { certify } = Workbook;
-  const graded = await (rules.commit ? certify(workbook) : grade(workbook));
-  await save(rules.commit ? workbook : null);
+  const { interventions } = rubric.assignment.report;
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  const commit = !pending;
+  const graded = await (commit ? Workbook.certify(workbook) : grade(workbook));
+  await save(commit ? workbook : null);
   return graded;
 }
 
-function exclude(workbook: Headless, rules: Rules): Certified | null {
-  return rules.commit && !rules.overwrite ? certified(workbook) : null;
+function exclude(workbook: Headless, overwrite: boolean): Certified | null {
+  return !overwrite ? certified(workbook) : null;
 }
 
 async function grade(workbook: Headless): Promise<Certified> {

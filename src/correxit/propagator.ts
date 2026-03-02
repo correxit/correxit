@@ -76,12 +76,16 @@ async function reassign({ assignee, key, notebook, roster }: {
     { assignment: Rubric.Assignment, revised: number };
   const { expiration, roster: encrypted } = metadata.assignment;
   const blank = { digest: '', interventions: {}, scores: {}, timestamp: null };
-  const lifecycle = { confirmation: null, expiration, submission: null };
-  const unsigned = { assignee, ...lifecycle, report: blank, roster };
+  const unsigned = { assignee, ...stages(expiration), report: blank, roster };
   const signature = await Rubric.Assignment.sign(unsigned, key);
   metadata.assignment = { ...unsigned, roster: encrypted, signature };
   metadata.revised = Date.now();
   return { assignee, assignment: metadata.id, signature };
+}
+
+/** @returns initialized lifecycle stage timestamps for an assignment. */
+function stages(expiration: number | null) {
+  return { collection: null, confirmation: null, expiration, submission: null };
 }
 
 async function template(

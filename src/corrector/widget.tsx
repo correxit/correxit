@@ -158,7 +158,11 @@ class ModeSelector extends ReactWidget {
 
   render() {
     const { busy, mode, overwrite, trans } = this;
-    const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
+    const modes: {
+      label: string;
+      tooltip: string;
+      value: Corrector.Mode;
+    }[] = [
       {
         value: 'scan',
         label: trans.__('Scan'),
@@ -167,12 +171,12 @@ class ModeSelector extends ReactWidget {
       {
         value: 'grade',
         label: trans.__('Grade'),
-        tooltip: trans.__('Unlock and grade workbooks (read-only, no save)')
+        tooltip: trans.__('Unlock, grade, certify, and save workbooks')
       },
       {
-        value: 'certify',
-        label: trans.__('Grade & Certify'),
-        tooltip: trans.__('Unlock workbooks and collect grades, (save file)')
+        value: 'collect',
+        label: trans.__('Collect'),
+        tooltip: trans.__('Collect certified workbooks into a grade store')
       }
     ];
     const action = () => this.go(mode, overwrite);
@@ -208,12 +212,12 @@ class ModeSelector extends ReactWidget {
         </fieldset>
         <label
           className="correxit-corrector-overwrite"
-          title={trans.__('Re-certify already certified workbooks')}
+          title={trans.__('Re-process already certified workbooks')}
         >
           <input
             type="checkbox"
             checked={overwrite}
-            disabled={mode !== 'certify'}
+            disabled={mode === 'scan'}
             onChange={({ target }) => this.set({ overwrite: target.checked })}
             aria-label={trans.__('Overwrite already certified workbooks')}
           />

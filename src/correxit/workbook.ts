@@ -278,7 +278,14 @@ export namespace Workbook {
     workbook: Workbook
   ): Promise<Certified> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) throw new Error('certify error');
+    if (!rubric || rubric.locked)
+      throw new Error('certify error');
+
+    const { interventions } = rubric.assignment.report;
+    const pending = Object.values(rubric.cells)
+      .filter(({ is }) => is === 'reviewable')
+      .some(({ id }) => !interventions[id]);
+    if (pending) throw new Error('certify error: pending review');
 
     const corrected = await correct(workbook);
     const grade = { ...corrected, path: workbook.context.path };
@@ -350,7 +357,12 @@ export namespace Workbook {
     }
 
     const rubric = audited.rubric;
-    const result = await execute(workbook, rubric, id);
+    const reviewable = ({ is }: Rubric.Cell) => is === 'reviewable';
+    const cells = Object.values(rubric.cells);
+    const manual = cells.length > 0 && cells.every(reviewable);
+    const result = manual
+      ? { spec: null, outputs: new Map() as Rubric.Outputs }
+      : await execute(workbook, rubric, id);
     if (!result) {
       const code: Rubric.Score.Code = 'error-execute';
       return {
@@ -367,17 +379,21 @@ export namespace Workbook {
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
     const final = id ? report.scores[id] : summary(report);
-    const missing = (cell: Rubric.Cell) => {
-      const { id, is, reference } = cell;
+    const missing = ({ id, is, reference }: Rubric.Cell) => {
+      if (is === 'reviewable') return false;
       return !outputs.has(id) ||
-        ((is === 'comparable' || is === 'correctable') && reference
-          ? reference.some(id => !outputs.has(id))
+        ((is === 'comparable' || is === 'correctable')
+          && reference
+          ? reference.some(reference => !outputs.has(reference))
           : false);
     };
-    const { status } = final;
+    const unresolved = (cell: Rubric.Cell) => {
+      const { status } = report.scores[cell.id] || {};
+      return cell.is !== 'reviewable' && (!status || status === 'unscored');
+    };
     const resolved = id
-      ? status !== 'unscored'
-      : !Object.values(rubric.cells).some(missing) && status !== 'unscored';
+      ? final.status !== 'unscored'
+      : !cells.some(missing) && !cells.some(unresolved);
     if (resolved && !rubric.locked) {
       const sources = Workbook.sources(workbook, rubric);
       await update(workbook, await Rubric.sign(rubric, report, sources));

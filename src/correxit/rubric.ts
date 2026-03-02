@@ -15,6 +15,7 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 export namespace Rubric {
   export type Assignment = Readonly<{
     assignee: string;
+    collection: number | null;
     confirmation: string | null;
     expiration: number | null;
     report: Assignment.Report;
@@ -279,6 +280,7 @@ export namespace Rubric {
     export function empty(): Assignment {
       return Object.freeze({
         assignee: '',
+        collection: null,
         confirmation: null,
         expiration: null,
         report: Report.empty(),
@@ -348,8 +350,15 @@ export namespace Rubric {
     }
 
     export async function sign(
-      { assignee, expiration, report: { interventions, scores }, roster }:
-        Omit<Assignment, 'confirmation' | 'signature' | 'submission'>,
+      {
+        assignee,
+        expiration,
+        report: { interventions, scores },
+        roster
+      }: Omit<
+        Assignment,
+        'collection' | 'confirmation' | 'signature' | 'submission'
+      >,
       key: string
     ): Promise<string> {
       const report = {
@@ -361,22 +370,43 @@ export namespace Rubric {
     }
 
     export function summary(report: Report): Score {
-      const { interventions, scores } = { ...Report.empty(), ...report };
+      const { interventions, scores } = {
+        ...Report.empty(), ...report
+      };
       const ids = new Set([
         ...Object.keys(interventions),
         ...Object.keys(scores)
       ]);
-      const sum = (a: Score, b: Score): Score => {
-        if (a.status === 'unscored') return b;
-        if (b.status === 'unscored') return a;
 
-        const points = a.points + b.points;
+      // The sentinel UNSCORED uses `possible: -1` to
+      // distinguish itself from reviewable cells that
+      // have `possible > 0` but `status: 'unscored'`.
+      // Reviewable cells always contribute their
+      // possible points so totals remain honest.
+      const sentinel = (s: Score) =>
+        s.status === 'unscored' && s.possible < 0;
+      const sum = (a: Score, b: Score): Score => {
+        if (sentinel(a)) return b;
+        if (sentinel(b)) return a;
+
+        // Unintervened reviewable: 0 points, N possible.
+        const bp = b.status === 'unscored'
+          ? 0 : b.points;
+        const ap = a.status === 'unscored'
+          ? 0 : a.points;
+        const points = ap + bp;
         const possible = a.possible + b.possible;
         const status = 'summary';
-        return { code: '', comment: '', id: '', points, possible, status };
+        return {
+          code: '', comment: '', id: '',
+          points, possible, status
+        };
       };
       return Array.from(ids)
-        .map(id => Score.resolve(report, id) ?? Score.UNSCORED)
+        .map(
+          id => Score.resolve(report, id)
+            ?? Score.UNSCORED
+        )
         .reduce(sum, Score.UNSCORED);
     }
 
@@ -505,6 +535,7 @@ export namespace Rubric {
     { key, ...rubric }: Unlocked,
     {
       assignee = rubric.assignment.assignee,
+      collection = rubric.assignment.collection,
       confirmation = rubric.assignment.confirmation,
       expiration = rubric.assignment.expiration,
       roster = rubric.assignment.roster,
@@ -515,17 +546,16 @@ export namespace Rubric {
 
     const stale =
       assignee !== rubric.assignment.assignee ||
+      collection !== rubric.assignment.collection ||
       confirmation !== rubric.assignment.confirmation ||
       expiration !== rubric.assignment.expiration ||
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster) ||
       submission !== rubric.assignment.submission;
-    const report = stale
-      ? Assignment.Report.empty()
-      : rubric.assignment.report;
+    const report = stale ? Assignment.Report.empty() : rubric.assignment.report;
     const unsigned = { assignee, expiration, report, roster };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = {
-      ...unsigned, confirmation, signature, submission
+      ...unsigned, collection, confirmation, signature, submission
     };
     await Assignment.validate({ assignment, key });
     return { ...rubric, assignment, key };
@@ -543,12 +573,25 @@ export namespace Rubric {
     return { assignment, cells: {}, id, locked: false, revised };
   }
 
-  /** @returns a locked rubric with null submission and confirmation. */
+  /** @returns a locked rubric with collection/confirmation/submission nulled. */
   export function draft(rubric: Locked): Locked {
-    const confirmation = null;
-    const submission = null;
-    const assignment = { ...rubric.assignment, confirmation, submission };
+    const assignment = {
+      ...rubric.assignment,
+      collection: null,
+      confirmation: null,
+      submission: null
+    };
     return { ...rubric, assignment, revised: Date.now() };
+  }
+
+  /** @returns a locked rubric with a collection timestamp. */
+  export function collect(
+    rubric: Locked,
+    confirmation: string | null = null
+  ): Locked {
+    const collection = Date.now();
+    const assignment = { ...rubric.assignment, collection, confirmation };
+    return { ...rubric, assignment, revised: collection };
   }
 
   /** @returns the cell for `id`, or `null`. */
