@@ -60,10 +60,7 @@ export function addCommands(
           recover
         };
         const auth = !!(args.key || args.passphrase);
-        const potential = {
-          ...args,
-          unlock: auth ? !!args.unlock : true
-        };
+        const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
         if (!handle)
           throw new Error(`batch failed, args: ${JSON.stringify(args)}`);
@@ -71,11 +68,10 @@ export function addCommands(
         const cap = kernels.cap();
         const retries = kernels.retries();
         const source = scanner({ commands }, handle);
-        const grades = grader(source, actions, cap, retries);
-        return (async function* () {
+        return (async function* (grades: AsyncGenerator<Workbook.Certified>) {
           for await (const { grade, workbook } of grades)
             yield [grade.path, { grade, workbook: workbook as Headless }];
-        })();
+        })(grader(source, actions, cap, retries));
       }
     })
   );

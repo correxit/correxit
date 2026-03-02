@@ -359,11 +359,8 @@ export namespace Workbook {
     // missing cells (they are pruned), headless ones fail outright.
     const audited = audit(workbook, opened);
     if (!audited.ok) {
-      return {
-        resolved: false,
-        score: { ...Rubric.Score.UNSCORED, code: '' },
-        spec: null
-      };
+      const score = { ...Rubric.Score.UNSCORED, comment: audited.error };
+      return { resolved: false, score, spec: null };
     }
 
     const rubric = audited.rubric;
@@ -374,16 +371,15 @@ export namespace Workbook {
       ? { spec: null, outputs: new Map() as Rubric.Outputs }
       : await execute(workbook, rubric, id);
     if (!result) {
-      const code: Rubric.Score.Code = 'error-execute';
       return {
         resolved: false,
-        score: { ...Rubric.Score.UNSCORED, code },
+        score: { ...Rubric.Score.UNSCORED, code: 'error-execute' },
         spec: null
       };
     }
 
     const { score, summary } = Rubric.Assignment;
-    const { spec, outputs } = result;
+    const { outputs, spec } = result;
     const report = await score(rubric, outputs, id);
     const scored = Object.entries(report.scores);
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
@@ -406,7 +402,7 @@ export namespace Workbook {
       : !cells.some(missing) && !cells.some(unresolved);
     if (resolved && !rubric.locked)
       await update(workbook, await Rubric.sign(rubric, report));
-    return { resolved, spec, score: final };
+    return { resolved, score: final, spec };
   }
 
    /**
