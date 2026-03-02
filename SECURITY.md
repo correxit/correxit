@@ -7,17 +7,20 @@ no trusted third party. Cryptographic primitives use `window.crypto`
 
 ## Threat Profile
 
-| Threat                                  | Mitigation                                      |
-| --------------------------------------- | ----------------------------------------------- |
-| Student reads another student's answers | Reference cell encryption (AES-256 via openpgp) |
-| Student reads the roster                | Roster encryption (AES-256 via openpgp)         |
-| Student forges or alters their grade    | Assignment signature (SHA-256 HMAC)             |
-| Student edits cells after submission    | Workbook locking + freezing                     |
-| Tampered workbook delivery              | Out-of-band (Consumer/Collector plugin hashing) |
+| Threat                               | Mitigation                                      |
+| ------------------------------------ | ----------------------------------------------- |
+| Student reads the reference cells    | Reference cell encryption (AES-256 via openpgp) |
+| Student reads answerable payload     | Answer payload is a digest (SHA-256 hash)       |
+| Student reads the roster             | Roster encryption (AES-256 via openpgp)         |
+| Student forges or alters their grade | Assignment signature (keyed SHA-256 hash)       |
+| Student edits cells after submission | Workbook locking + freezing                     |
+| Tampered workbook delivery           | Out-of-band (Consumer/Collector plugin hashing) |
 
 **Out of scope:** malicious instructors (they hold the key — full
-authority by design), browser memory extraction, and compromised
-JupyterLab servers (Correxit has no backend).
+authority by design), browser memory extraction, compromised
+JupyterLab servers (Correxit has no backend), and cross-student
+file access (students reading each other's workbooks is a file
+system or LMS access-control concern, not solvable in-workbook).
 
 ## Key Management
 
@@ -27,9 +30,9 @@ scope and enter via user input, dying with the browser tab. The
 `key: null`. Notebook metadata only stores locked rubrics — the key
 is structurally absent from anything on disk.
 
-## Two Integrity Mechanisms
+## Integrity
 
-### 1. Assignment Signature
+### Assignment Signature
 
 Signs the **terms** of the assignment: `assignee`, `expiration`,
 `report` (interventions + scores, sorted), and `roster`.
@@ -37,6 +40,9 @@ Signs the **terms** of the assignment: `assignee`, `expiration`,
 ```
 signature = SHA-256(JSON.stringify(terms) + key)
 ```
+
+This is a keyed hash. The key is appended, which avoids length-extension
+concerns.
 
 Proves the assignment contract is authentic. Any modification to
 these fields invalidates the signature.
@@ -46,7 +52,7 @@ and receipts (`collected`, `submitted`). These change after signing
 and are administrative — including them would couple every lifecycle
 event to key availability.
 
-### 2. Transport Integrity (Plugin Responsibility)
+### Transport Integrity (Plugin Responsibility)
 
 Whole-file integrity of distributed workbook files is the
 responsibility of the `Consumer` or `Collector` plugin at the
@@ -86,7 +92,7 @@ evidence with zero security value.
 1. `correct()` — execute cells, compute scores, sign report
    if all cells resolve
 2. `certify()` — write certification timestamp
-3. `lock()` — encrypt roster, erase key
+3. `lock()` — encrypt reference cells and roster, erase key
 4. `freeze()` — set cells to non-editable
 
 A workbook cannot be collected without a non-null `certification`.
