@@ -32,7 +32,6 @@ export namespace Workbook {
   export type Certified = {
     grade: Workbook.Grade;
     identifier: Workbook.Identifier;
-    timestamp: number;
     workbook: Workbook;
   };
 
@@ -176,17 +175,17 @@ export namespace Workbook {
     assignment: Rubric.Assignment,
     {
       assignee = assignment.assignee,
-      confirmation = assignment.confirmation,
       expiration = assignment.expiration,
       submission = assignment.submission,
+      submitted = assignment.submitted,
       roster = assignment.roster,
       signature = assignment.signature
     }: Partial<Rubric.Assignment>
   ): boolean => (
     assignee !== assignment.assignee ||
-    confirmation !== assignment.confirmation ||
     expiration !== assignment.expiration ||
     submission !== assignment.submission ||
+    submitted !== assignment.submitted ||
     (roster !== assignment.roster &&
       (roster.length !== assignment.roster.length ||
         roster.some((record, i) => record !== assignment.roster[i]))) ||
@@ -273,6 +272,17 @@ export namespace Workbook {
     return { ok: true, pruned: [], rubric };
   }
 
+  /** Collect a certified workbook grade. */
+  export async function collect(
+    workbook: Workbook,
+    collected: string | null = null
+  ): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked || !rubric.assignment.certification)
+      throw new Error('collect error');
+    return update(workbook, Rubric.collect(rubric, collected));
+  }
+
   /** Certify a workbook: correct, lock, and freeze. */
   export async function certify(
     workbook: Workbook
@@ -294,10 +304,10 @@ export namespace Workbook {
       const { status } = corrected.score;
       throw new Error(`certify error: unresolved status ${status}`);
     }
-
+    await update(workbook, Rubric.certify(rubric));
     await lock(workbook);
     freeze(workbook);
-    return { grade, identifier, timestamp: timestamp(workbook), workbook };
+    return { grade, identifier, workbook };
   }
 
   /** Convert a plain notebook into a workbook and return its rubric. */
@@ -660,27 +670,13 @@ export namespace Workbook {
   /** Submit an assignment, locking all cells to read-only. */
   export async function submit(
     workbook: Workbook,
-    confirmation: string | null = null
+    submitted: string | null = null
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked) throw new Error('submit error');
     freeze(workbook);
-    return update(workbook, Rubric.submit(rubric, confirmation));
+    return update(workbook, Rubric.submit(rubric, submitted));
   }
-
-  /**
-   * @returns the timestamp recorded when the assignment was signed.
-   *
-   * #### Notes
-   * This function is only meant for use when a client expects a timestamp to
-   * exist. It will throw an error if it fails to find a timestamp.
-   */
-  export function timestamp(workbook: Workbook): number {
-    const rubric = open(workbook, quiet);
-    const timestamp = rubric?.assignment.report.timestamp;
-    if (!timestamp) throw new Error('timestamp error');
-    return timestamp;
-  };
 
   /** Toggle a workbook cell's `shared` flag. */
   export async function toggle(

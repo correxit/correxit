@@ -312,50 +312,48 @@ const Breakdown: React.FC<{
   workbook: Workbook.Headless;
 }> = ({ failed, trans, workbook }) => {
   if (failed) return <td className="correxit-corrector-breakdown" />;
+
   const rubric = open(workbook);
-  const notebook = workbook.context.model.sharedModel;
   if (!rubric) return <td className="correxit-corrector-breakdown" />;
+
   const { cells } = rubric;
-  const { interventions, scores } = rubric.assignment.report;
-  const breakdown = Array.from(notebook.cells)
+  const { report } = rubric.assignment;
+  const breakdown = workbook.context.model.sharedModel.cells
     .map(cell => cell.id)
     .filter(id => id in cells);
-  const label = (id: string, kind: string) => {
-    const { points = 0, possible = 0 } = scores[id] ?? {};
+  const computed = (id: string) =>
+    Rubric.Score.resolve(report, id) ?? Rubric.Score.UNSCORED;
+  const status = (id: string) => {
+    const { status } = computed(id);
+    const reviewable = cells[id].is === 'reviewable';
+    return reviewable && status === 'unscored' ? 'review' : status;
+  };
+  const label = (id: string) => {
+    const resolution = status(id);
+    const { points, possible } = computed(id);
     const { is: type } = cells[id];
-    if (kind === 'review') return trans.__('%1: needs review', type);
-    if (kind === 'unscored') return trans.__('%1: unscored', type);
+    if (resolution === 'review') return trans.__('%1: needs review', type);
+    if (resolution === 'unscored') return trans.__('%1: unscored', type);
     return trans.__('%1: %2 of %3', type, points, possible);
   };
-  const aria = breakdown
-    .map(id => {
-      const scored = !!scores[id]?.status;
-      const intervened = !!interventions[id];
-      const awaiting = cells[id].is === 'reviewable' && !scored && !intervened;
-      return label(id, awaiting ? 'review' : scores[id]?.status || 'unscored');
-    })
-    .join(', ');
   return (
     <td className="correxit-corrector-breakdown">
       <span
-        aria-label={aria}
+        aria-label={breakdown.map(label).join(', ')}
         className="correxit-corrector-breakdown-bar"
         role="img"
       >
         {breakdown.map(id => {
-          const { status = 'unscored' } = scores[id] ?? {};
-          const review = cells[id].is === 'reviewable' && status === 'unscored';
-          const kind = review ? 'review' : status;
           const className = [
             'correxit-corrector-breakdown-segment',
-            `correxit-corrector-breakdown-${kind}`
+            `correxit-corrector-breakdown-${status(id)}`
           ].join(' ');
           return (
             <span
               aria-hidden="true"
               className={className}
               key={id}
-              title={label(id, kind)}
+              title={label(id)}
             />
           );
         })}

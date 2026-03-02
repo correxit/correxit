@@ -223,7 +223,7 @@ test('scan does not silence next fetch after first fetch failure', async ({
   await dispose();
 });
 
-test('batch grades scanned workbooks without certifying', async ({ page }) => {
+test('batch grades and certifies workbooks', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'print(42)' },
     { id: 'target', source: 'answer = 42\nprint(answer)' }
@@ -235,6 +235,7 @@ test('batch grades scanned workbooks without certifying', async ({ page }) => {
   await cd(page, '.');
 
   const result = await page.evaluate(async (directory: string) => {
+    const { Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const stream: AsyncGenerator<any> = await app.commands.execute(
       'correxit-corrector:batch',
@@ -242,7 +243,10 @@ test('batch grades scanned workbooks without certifying', async ({ page }) => {
     );
     const grades: any[] = [];
     for await (const [path, { grade, workbook }] of stream) {
+      const rubric = Workbook.open(workbook, true);
+      const { certification } = rubric.assignment;
       grades.push({
+        certification: certification !== null,
         path,
         points: grade.score.points,
         possible: grade.score.possible,
@@ -255,44 +259,10 @@ test('batch grades scanned workbooks without certifying', async ({ page }) => {
 
   expect(result).toHaveLength(2);
   for (const grade of result) {
+    expect(grade.certification).toBe(true);
     expect(grade.status).not.toBe('unscored');
     expect(grade.possible).toBeGreaterThan(0);
   }
-
-  await cleanup(page, propagated);
-  await dispose();
-});
-
-test('batch certifies workbooks when certify flag is set', async ({ page }) => {
-  const { dispose } = await setup(page, [
-    { id: 'ref', source: 'print(42)' },
-    { id: 'target', source: 'answer = 42\nprint(answer)' }
-  ]);
-  const propagated = await propagate(page, ['alice@example.com']);
-  await cd(page, '.');
-
-  const result = await page.evaluate(async (directory: string) => {
-    const { Workbook } = (window as any).__correxit__;
-    const app = (window as any).jupyterapp;
-    const stream: AsyncGenerator<any> = await app.commands.execute(
-      'correxit-corrector:batch',
-      { certify: true, key: 'secret', path: directory }
-    );
-    const grades: any[] = [];
-    for await (const [path, { grade, workbook }] of stream) {
-      const rubric = Workbook.open(workbook, true);
-      grades.push({
-        locked: rubric?.locked ?? null,
-        path,
-        status: grade.score.status
-      });
-      workbook.context.dispose();
-    }
-    return grades;
-  }, propagated.directory);
-
-  expect(result).toHaveLength(1);
-  expect(result[0].status).not.toBe('unscored');
 
   await cleanup(page, propagated);
   await dispose();
@@ -326,9 +296,7 @@ test('batch yields nothing for a directory with no workbooks', async ({
   await dispose();
 });
 
-test('full lifecycle: propagate, scan, grade, verify scores', async ({
-  page
-}) => {
+test('full lifecycle: propagate, scan, grade, verify', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'print(42)' },
     { id: 'target', source: 'answer = 42\nprint(answer)' }
@@ -368,8 +336,10 @@ test('full lifecycle: propagate, scan, grade, verify scores', async ({
       const gradedResults: any[] = [];
       for await (const [path, { grade, workbook }] of graded) {
         const rubric = Workbook.open(workbook, true);
+        const { certification } = rubric.assignment;
         gradedResults.push({
           assignee: rubric?.assignment?.assignee ?? null,
+          certification: certification !== null,
           path,
           points: grade.score.points,
           possible: grade.score.possible,
@@ -404,6 +374,7 @@ test('full lifecycle: propagate, scan, grade, verify scores', async ({
     expect(grade.status).not.toBe('unscored');
     expect(grade.possible).toBeGreaterThan(0);
     expect(grade.spec).toBeTruthy();
+    expect(grade.certification).toBe(true);
   }
 
   const assignees = result.graded.map((g: any) => g.assignee).sort();

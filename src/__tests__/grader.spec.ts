@@ -22,7 +22,6 @@ const grade = (workbook: Headless): Certified =>
       spec: null
     },
     identifier: { assignee: null, assignment: 'x', signature: null },
-    timestamp: 1,
     workbook
   }) as unknown as Certified;
 
@@ -35,7 +34,6 @@ const failed = (workbook: Headless): Certified =>
       spec: null
     },
     identifier: { assignee: null, assignment: '', signature: null },
-    timestamp: 0,
     workbook
   }) as unknown as Certified;
 

@@ -116,21 +116,20 @@ export function addCommands(
         if (!handle)
           throw new Error(`collect failed, args: ${JSON.stringify(args)}`);
         const source = scanner({ commands }, handle);
-        const pipe = async function* () {
+        return (async function* () {
           for await (const workbook of source) {
             const item = certified(workbook);
             if (!item) continue;
             if (!overwrite) {
-              const { collection } =
+              const { collected } =
                 Workbook.open(workbook, true)?.assignment ?? {};
-              if (collection) continue;
+              if (collected) continue;
             }
-            yield item;
-          }
-        };
-        return (async function* () {
-          for await (const { grade, workbook } of collector(pipe()))
+            const collected = await collector(item);
+            await Workbook.collect(workbook, collected);
+            const { grade } = item;
             yield [grade.path, { grade, workbook: workbook as Headless }];
+          }
         })();
       }
     })
@@ -204,24 +203,24 @@ function certified(workbook: Headless): Certified | null {
   const rubric = Workbook.open(workbook, true);
   if (!rubric) return null;
 
-  const { report } = rubric.assignment;
-  const score = Rubric.Assignment.summary(report);
+  const { assignment, cells } = rubric;
+  const { interventions, scores } = assignment.report;
+  const path = workbook.context.path;
   const transient = ({ code }: Rubric.Score) =>
     code === 'missing-given' || code === 'missing-reference';
-  const partial = Object.values(report.scores).some(transient);
-  const incomplete = Object.keys(rubric.cells).some(id => !report.scores[id]);
-  const unscored = score.status === 'unscored';
-  const { interventions } = report;
-  const pending = Object.values(rubric.cells)
+  const incomplete = Object.keys(cells).some(id => !scores[id]);
+  const partial = Object.values(scores).some(transient);
+  const pending = Object.values(cells)
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
-  if (!report.timestamp || unscored || partial || incomplete || pending)
-    return null;
+  const uncertified = !assignment.certification;
+  const summary = Rubric.Assignment.summary(assignment.report);
+  const unscored = summary.status === 'unscored';
+  if (incomplete || partial || pending || uncertified || unscored) return null;
 
-  const path = workbook.context.path;
-  const grade: Grade = { path, resolved: true, score, spec: null };
+  const grade: Grade = { path, resolved: true, score: summary, spec: null };
   const identifier = Workbook.identifier(workbook);
-  return { grade, identifier, timestamp: report.timestamp, workbook };
+  return { grade, identifier, workbook };
 }
 
 async function correct(workbook: Headless): Promise<Certified> {
@@ -244,23 +243,34 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
 
 async function grade(workbook: Headless): Promise<Certified> {
   const corrected = await Workbook.correct(workbook);
-  const grade = { ...corrected, path: workbook.context.path };
+  const grade = {
+    ...corrected,
+    path: workbook.context.path
+  };
   const identifier = Workbook.identifier(workbook);
-  const timestamp = Workbook.timestamp(workbook);
-  return { grade, identifier, timestamp, workbook };
+  return { grade, identifier, workbook };
 }
 
 function recover(workbook: Headless): Certified {
   const path = workbook.context.path;
   const unscored = { ...Rubric.Score.UNSCORED };
-  const grade: Grade = { path, resolved: false, score: unscored, spec: null };
+  const grade: Grade = {
+    path,
+    resolved: false,
+    score: unscored,
+    spec: null
+  };
   let identifier: Workbook.Identifier;
   try {
     identifier = Workbook.identifier(workbook);
   } catch {
-    identifier = { assignee: null, assignment: '', signature: null };
+    identifier = {
+      assignee: null,
+      assignment: '',
+      signature: null
+    };
   }
-  return { grade, identifier, timestamp: 0, workbook };
+  return { grade, identifier, workbook };
 }
 
 async function save(workbook: Headless | null) {

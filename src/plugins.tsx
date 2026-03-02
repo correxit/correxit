@@ -68,17 +68,14 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
 };
 
 /**
- * The default (pass-through) Correxit grade collector.
+ * The default (no-op) Correxit grade collector.
  */
 const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   id: Correxit.COLLECTOR,
   description: Correxit.DESCRIPTION.COLLECTOR,
   provides: Correxit.Collector,
   ...((deactivator?: () => void) => ({
-    activate: (): Correxit.Collector =>
-      async function* collector(grades) {
-        for await (const grade of grades) yield grade;
-      },
+    activate: (): Correxit.Collector => async _ => null,
     deactivate: () => deactivator?.()
   }))()
 };

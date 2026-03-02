@@ -15,13 +15,14 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 export namespace Rubric {
   export type Assignment = Readonly<{
     assignee: string;
-    collection: number | null;
-    confirmation: string | null;
+    certification: number | null;
+    collected: string | null;
     expiration: number | null;
     report: Assignment.Report;
     roster: string[];
     signature: string;
     submission: number | null;
+    submitted: string | null;
   }>;
 
   type Base = Readonly<{
@@ -266,7 +267,6 @@ export namespace Rubric {
       digest: string;
       interventions: { [id: string]: Score };
       scores: { [id: string]: Score };
-      timestamp: number | null;
     }>;
 
     export namespace Report {
@@ -274,8 +274,7 @@ export namespace Rubric {
         return Object.freeze({
           digest: '',
           interventions: {},
-          scores: {},
-          timestamp: null
+          scores: {}
         });
       }
     }
@@ -283,13 +282,14 @@ export namespace Rubric {
     export function empty(): Assignment {
       return Object.freeze({
         assignee: '',
-        collection: null,
-        confirmation: null,
+        certification: null,
+        collected: null,
         expiration: null,
         report: Report.empty(),
         roster: [],
         signature: '',
-        submission: null
+        submission: null,
+        submitted: null
       });
     }
 
@@ -321,12 +321,12 @@ export namespace Rubric {
       const done = (await Promise.all(pending)).map(score => [score.id, score]);
       const scores = Object.fromEntries([...current, ...done]);
       const { interventions } = report;
-      return { digest: '', interventions, scores, timestamp: Date.now() };
+      return { digest: '', interventions, scores };
     }
 
     /** @returns a digest of cell interventions, scores, and sources. */
-    export async function certify(
-      { interventions, scores }: Omit<Report, 'digest' | 'timestamp'>,
+    export async function digest(
+      { interventions, scores }: Omit<Report, 'digest'>,
       sources: { [id: string]: string },
       key: string
     ): Promise<string> {
@@ -348,7 +348,7 @@ export namespace Rubric {
       key: string
     ): Promise<void> {
       if (report.digest === '') return;
-      if (report.digest !== await certify(report, sources, key))
+      if (report.digest !== await digest(report, sources, key))
         throw new Error('verify error, cell digest mismatch');
     }
 
@@ -360,7 +360,11 @@ export namespace Rubric {
         roster
       }: Omit<
         Assignment,
-        'collection' | 'confirmation' | 'signature' | 'submission'
+        | 'certification'
+        | 'collected'
+        | 'signature'
+        | 'submission'
+        | 'submitted'
       >,
       key: string
     ): Promise<string> {
@@ -545,27 +549,34 @@ export namespace Rubric {
     { key, ...rubric }: Unlocked,
     {
       assignee = rubric.assignment.assignee,
-      collection = rubric.assignment.collection,
-      confirmation = rubric.assignment.confirmation,
+      certification = rubric.assignment.certification,
+      collected = rubric.assignment.collected,
       expiration = rubric.assignment.expiration,
       roster = rubric.assignment.roster,
-      submission = rubric.assignment.submission
+      submission = rubric.assignment.submission,
+      submitted = rubric.assignment.submitted
     }: Partial<Assignment> = {}
   ): Promise<Unlocked> {
     roster = unique(roster);
 
     const stale =
       assignee !== rubric.assignment.assignee ||
-      collection !== rubric.assignment.collection ||
-      confirmation !== rubric.assignment.confirmation ||
+      certification !== rubric.assignment.certification ||
+      collected !== rubric.assignment.collected ||
       expiration !== rubric.assignment.expiration ||
+      submitted !== rubric.assignment.submitted ||
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster) ||
       submission !== rubric.assignment.submission;
     const report = stale ? Assignment.Report.empty() : rubric.assignment.report;
     const unsigned = { assignee, expiration, report, roster };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = {
-      ...unsigned, collection, confirmation, signature, submission
+      ...unsigned,
+      certification,
+      collected,
+      signature,
+      submission,
+      submitted
     };
     await Assignment.validate({ assignment, key });
     return { ...rubric, assignment, key };
@@ -583,25 +594,37 @@ export namespace Rubric {
     return { assignment, cells: {}, id, locked: false, revised };
   }
 
-  /** @returns a locked rubric with collection/confirmation/submission nulled. */
+  /** @returns a locked rubric with lifecycle timestamps nulled. */
   export function draft(rubric: Locked): Locked {
     const assignment = {
       ...rubric.assignment,
-      collection: null,
-      confirmation: null,
-      submission: null
+      certification: null,
+      collected: null,
+      submission: null,
+      submitted: null
     };
     return { ...rubric, assignment, revised: Date.now() };
   }
 
-  /** @returns a locked rubric with a collection timestamp. */
+  /** @returns an unlocked rubric with a certification timestamp. */
+  export function certify(rubric: Unlocked): Unlocked {
+    const certification = Date.now();
+    const assignment = { ...rubric.assignment, certification };
+    return { ...rubric, assignment, revised: certification };
+  }
+
+  /** @returns a locked rubric with a collected receipt. */
   export function collect(
     rubric: Locked,
-    confirmation: string | null = null
+    collected: string | null = null
   ): Locked {
-    const collection = Date.now();
-    const assignment = { ...rubric.assignment, collection, confirmation };
-    return { ...rubric, assignment, revised: collection };
+    if (!rubric.assignment.certification)
+      throw new Error('collect error: not certified');
+    const revised = Date.now();
+    const assignment = {
+      ...rubric.assignment, collected
+    };
+    return { ...rubric, assignment, revised };
   }
 
   /** @returns the cell for `id`, or `null`. */
@@ -656,15 +679,13 @@ export namespace Rubric {
     if (!record(assignment.report))
       throw new Error('invalid rubric, missing assignment report');
 
-    const { digest, interventions, scores, timestamp } = assignment.report;
+    const { digest, interventions, scores } = assignment.report;
     if (typeof digest !== 'string')
       throw new Error('invalid rubric, missing assignment report digest');
     if (!record(interventions))
       throw new Error('invalid rubric, missing assignment interventions');
     if (!record(scores))
       throw new Error('invalid rubric, missing assignment scores');
-    if (timestamp !== null && typeof timestamp !== 'number')
-      throw new Error('invalid rubric, assignment timestamp mismatch');
     return { assignment, cells, id, key, locked, revised };
   }
 
@@ -686,7 +707,7 @@ export namespace Rubric {
     report: Assignment.Report,
     sources: { [id: string]: string } = {}
   ): Promise<Rubric.Unlocked> {
-    const digest = await Assignment.certify(report, sources, rubric.key);
+    const digest = await Assignment.digest(report, sources, rubric.key);
     const signed = { ...report, digest };
     const unsigned = { ...rubric.assignment, report: signed };
     const signature = await Assignment.sign(unsigned, rubric.key);
@@ -700,10 +721,10 @@ export namespace Rubric {
   }
 
   export function submit(
-    rubric: Locked, confirmation: string | null = null
+    rubric: Locked, submitted: string | null = null
   ): Locked {
     const submission = Date.now();
-    const assignment = { ...rubric.assignment, confirmation, submission };
+    const assignment = { ...rubric.assignment, submission, submitted };
     return { ...rubric, assignment, revised: submission };
   }
 

@@ -8,8 +8,8 @@ import { Icons as ICONS } from './icons';
 export namespace Correxit {
   /** A collector of certified workbook grades. */
   export type Collector = (
-    grades: AsyncIterable<Workbook.Certified> | Iterable<Workbook.Certified>
-  ) => AsyncGenerator<Workbook.Certified>;
+    certified: Workbook.Certified
+  ) => Promise<string | null>;
 
   export type Consumer = (output: {
     path: string;

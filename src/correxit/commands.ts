@@ -47,8 +47,9 @@ type Reified =
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
 const { get, has, size } = Rubric;
-const { add, assign, certify, comment, convert, correct, draft } = Workbook;
-const { intervene, lock, remove, reset, reweight, submit, toggle } = Workbook;
+const { add, assign, certify, collect, comment, convert, correct } = Workbook;
+const { draft, intervene, lock, remove, reset, reweight, submit } = Workbook;
+const { toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function addCommands(
@@ -104,7 +105,9 @@ export function addCommands(
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
-      for await (const _ of collector([await certify(workbook)])) void _;
+      const certified = await certify(workbook);
+      const collected = await collector(certified);
+      await collect(workbook, collected);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
@@ -512,8 +515,8 @@ export function addCommands(
       if (!button.accept) return;
       try {
         const identifier = Workbook.identifier(workbook);
-        const confirmation = await submitter(workbook, identifier);
-        await submit(workbook, confirmation);
+        const submitted = await submitter(workbook, identifier);
+        await submit(workbook, submitted);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);

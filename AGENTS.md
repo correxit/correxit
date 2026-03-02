@@ -36,7 +36,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
   - _Example_: `Reified` type in `commands.ts` enables safe type narrowing after `if (!rubric)` guards.
   - _Pattern_: After checking `if (!rubric) return`, TypeScript knows `workbook` is non-null.
 - **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, assignment ID, and signature.
-- **Timestamps**: Use `Workbook.timestamp()` to retrieve the assignment report timestamp (throws if missing).
+- **Timestamps**: Lifecycle timestamps (`certification`, `submission`) live on `Assignment`. Read them via `Workbook.open()`.
 
 ## 3. Asynchronous Patterns
 

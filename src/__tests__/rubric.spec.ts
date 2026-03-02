@@ -56,8 +56,7 @@ describe('Rubric', () => {
       const report: Rubric.Assignment.Report = {
         digest: '',
         interventions: {},
-        scores: { [id]: Rubric.Score.CORRECT },
-        timestamp: Date.now()
+        scores: { [id]: Rubric.Score.CORRECT }
       };
       const secret = {
         ...base,
@@ -87,8 +86,7 @@ describe('Rubric', () => {
       const report: Rubric.Assignment.Report = {
         digest: '',
         interventions: {},
-        scores: { [id]: Rubric.Score.CORRECT },
-        timestamp: Date.now()
+        scores: { [id]: Rubric.Score.CORRECT }
       };
       const signed = await Rubric.sign(rubric, report);
       const removed = Rubric.remove(signed, id);
@@ -96,7 +94,6 @@ describe('Rubric', () => {
       expect(Rubric.has(removed, id)).toBe(false);
       expect(removed.assignment.report.scores).toEqual({});
       expect(removed.assignment.report.interventions).toEqual({});
-      expect(removed.assignment.report.timestamp).toBeNull();
     });
 
     it('invalidates report when removing a cell', () => {
@@ -113,8 +110,7 @@ describe('Rubric', () => {
       const report: Rubric.Assignment.Report = {
         digest: '',
         interventions: {},
-        scores: { c1: Rubric.Score.CORRECT },
-        timestamp: Date.now()
+        scores: { c1: Rubric.Score.CORRECT }
       };
       rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
 
@@ -157,8 +153,7 @@ describe('Rubric', () => {
       const report: Rubric.Assignment.Report = {
         digest: '',
         interventions: {},
-        scores: { [id]: Rubric.Score.CORRECT },
-        timestamp: Date.now()
+        scores: { [id]: Rubric.Score.CORRECT }
       };
       const rubric = {
         ...base,
@@ -198,8 +193,7 @@ describe('Rubric', () => {
           ...rubric.assignment,
           report: {
             digest: '',
-            scores: {},
-            timestamp: null
+            scores: {}
           }
         }
       };
@@ -279,8 +273,7 @@ describe('Rubric', () => {
       const report: Rubric.Assignment.Report = {
         digest: '',
         interventions: {},
-        scores: { c1: Rubric.Score.CORRECT },
-        timestamp: Date.now()
+        scores: { c1: Rubric.Score.CORRECT }
       };
 
       let rubric = await Rubric.assign(create(), {
@@ -336,8 +329,7 @@ describe('Rubric', () => {
       const report: Rubric.Assignment.Report = {
         digest: '',
         interventions: {},
-        scores: { c1: Rubric.Score.CORRECT },
-        timestamp: Date.now()
+        scores: { c1: Rubric.Score.CORRECT }
       };
 
       let rubric = await Rubric.assign(create(), {
@@ -371,8 +363,7 @@ describe('Rubric', () => {
       const report: Rubric.Assignment.Report = {
         digest: '',
         interventions: {},
-        scores: { 'cell-1': Rubric.Score.CORRECT },
-        timestamp: Date.now()
+        scores: { 'cell-1': Rubric.Score.CORRECT }
       };
       const roster = ['A', 'B'];
 
@@ -402,7 +393,7 @@ describe('Rubric', () => {
       expect(rubric.assignment.submission).toBe(null);
     });
 
-    it('submits a locked rubric with confirmation', async () => {
+    it('submits a locked rubric with receipt', async () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
@@ -413,11 +404,11 @@ describe('Rubric', () => {
       const receipt = 'abc-123';
       const submitted = Rubric.submit(locked, receipt);
       expect(submitted.assignment.submission).toBeGreaterThan(0);
-      expect(submitted.assignment.confirmation).toBe(receipt);
+      expect(submitted.assignment.submitted).toBe(receipt);
       expect(submitted.locked).toBe(true);
     });
 
-    it('submits a locked rubric without confirmation', async () => {
+    it('submits a locked rubric without receipt', async () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
@@ -427,7 +418,7 @@ describe('Rubric', () => {
       const locked = await Rubric.lock(unlocked);
       const submitted = Rubric.submit(locked);
       expect(submitted.assignment.submission).toBeGreaterThan(0);
-      expect(submitted.assignment.confirmation).toBeNull();
+      expect(submitted.assignment.submitted).toBeNull();
     });
 
     it('drafts a submitted rubric', async () => {
@@ -440,12 +431,13 @@ describe('Rubric', () => {
       const locked = await Rubric.lock(unlocked);
       const submitted = Rubric.submit(locked, 'receipt');
       const drafted = Rubric.draft(submitted);
+      expect(drafted.assignment.certification).toBeNull();
       expect(drafted.assignment.submission).toBeNull();
-      expect(drafted.assignment.confirmation).toBeNull();
+      expect(drafted.assignment.submitted).toBeNull();
       expect(drafted.locked).toBe(true);
     });
 
-    it('excludes confirmation from signature', async () => {
+    it('excludes submitted from signature', async () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
@@ -456,6 +448,59 @@ describe('Rubric', () => {
       const first = Rubric.submit(locked, 'receipt-a');
       const second = Rubric.submit(locked, 'receipt-b');
       expect(first.assignment.signature).toBe(second.assignment.signature);
+    });
+
+    it('collects a certified rubric with receipt', async () => {
+      const unlocked = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null,
+        submission: null
+      });
+      const locked = await Rubric.lock(unlocked);
+      const certified = {
+        ...locked,
+        assignment: {
+          ...locked.assignment,
+          certification: Date.now()
+        }
+      };
+      const receipt = 'lms-receipt-456';
+      const collected = Rubric.collect(certified, receipt);
+      expect(collected.assignment.certification).toBeGreaterThan(0);
+      expect(collected.assignment.collected).toBe(receipt);
+    });
+
+    it('collects a certified rubric without receipt', async () => {
+      const unlocked = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null,
+        submission: null
+      });
+      const locked = await Rubric.lock(unlocked);
+      const certified = {
+        ...locked,
+        assignment: {
+          ...locked.assignment,
+          certification: Date.now()
+        }
+      };
+      const collected = Rubric.collect(certified);
+      expect(collected.assignment.collected).toBeNull();
+    });
+
+    it('collect rejects uncertified rubric', async () => {
+      const unlocked = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null,
+        submission: null
+      });
+      const locked = await Rubric.lock(unlocked);
+      expect(() => Rubric.collect(locked)).toThrow(
+        'collect error: not certified'
+      );
     });
   });
 
@@ -692,7 +737,7 @@ describe('Rubric', () => {
   });
 
   describe('Rubric.Assignment', () => {
-    it('sets report.timestamp when scoring', async () => {
+    it('scores cells and generates a report', async () => {
       const payload = ['DIGEST<42>'];
       const add = (rubric: Rubric.Unlocked) =>
         Rubric.add(rubric, {
@@ -705,14 +750,11 @@ describe('Rubric', () => {
         });
       const rubric = add(create());
 
-      const start = Date.now();
       const outputs = new Map([['c1', [output('42')]]]);
       const report = await Rubric.Assignment.score(rubric, outputs);
-      const end = Date.now();
 
-      expect(report.timestamp).not.toBeNull();
-      expect(report.timestamp).toBeGreaterThanOrEqual(start);
-      expect(report.timestamp).toBeLessThanOrEqual(end);
+      expect(report.scores.c1).toBeDefined();
+      expect(report.scores.c1.status).toBe('correct');
     });
 
     it('scores multiple cells and generates a report', async () => {
@@ -800,8 +842,7 @@ describe('Rubric', () => {
           c1: Rubric.Score.CORRECT,
           c2: Rubric.Score.CORRECT,
           ghost: Rubric.Score.CORRECT
-        },
-        timestamp: null
+        }
       };
       rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
 
@@ -819,8 +860,7 @@ describe('Rubric', () => {
         scores: {
           c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
           c2: { ...Rubric.Score.INCORRECT, points: 0, possible: 10 }
-        },
-        timestamp: null
+        }
       };
       const summary = Rubric.Assignment.summary(report);
       expect(summary.points).toBe(5);
@@ -834,21 +874,20 @@ describe('Rubric', () => {
       const scores = { c1: Rubric.Score.CORRECT };
       const base: Omit<Rubric.Assignment.Report, 'digest'> = {
         interventions: {},
-        scores,
-        timestamp: null
+        scores
       };
 
-      it('certify produces a stable hex digest', async () => {
-        const d1 = await Rubric.Assignment.certify(base, cells, key);
-        const d2 = await Rubric.Assignment.certify(base, cells, key);
+      it('digest produces a stable hex digest', async () => {
+        const d1 = await Rubric.Assignment.digest(base, cells, key);
+        const d2 = await Rubric.Assignment.digest(base, cells, key);
         expect(d1).toBe(d2);
         expect(typeof d1).toBe('string');
         expect(d1.length).toBeGreaterThan(0);
       });
 
-      it('certify changes when cell source changes', async () => {
-        const d1 = await Rubric.Assignment.certify(base, cells, key);
-        const d2 = await Rubric.Assignment.certify(
+      it('digest changes when cell source changes', async () => {
+        const d1 = await Rubric.Assignment.digest(base, cells, key);
+        const d2 = await Rubric.Assignment.digest(
           base,
           { c1: 'print(2)' },
           key
@@ -857,7 +896,7 @@ describe('Rubric', () => {
       });
 
       it('verify passes when digest matches', async () => {
-        const digest = await Rubric.Assignment.certify(base, cells, key);
+        const digest = await Rubric.Assignment.digest(base, cells, key);
         const report: Rubric.Assignment.Report = { ...base, digest };
         await expect(
           Rubric.Assignment.verify(report, cells, key)
@@ -865,7 +904,7 @@ describe('Rubric', () => {
       });
 
       it('verify throws on digest mismatch', async () => {
-        const digest = await Rubric.Assignment.certify(base, cells, key);
+        const digest = await Rubric.Assignment.digest(base, cells, key);
         const report: Rubric.Assignment.Report = { ...base, digest };
         await expect(
           Rubric.Assignment.verify(report, { c1: 'tampered' }, key)
@@ -909,8 +948,7 @@ describe('Rubric', () => {
         },
         scores: {
           c1: { ...Rubric.Score.CORRECT, id: 'c1', points: 5, possible: 5 }
-        },
-        timestamp: null
+        }
       };
 
       const resolved = Rubric.Score.resolve(report, 'c1');

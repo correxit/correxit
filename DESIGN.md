@@ -141,9 +141,9 @@ flowchart TB
 ```
 
 **Batch grading:** the batch command iterates a grader, which iterates scanned
-workbooks. When certifying, a collector wraps the grader to receive certified
-grades; without `certify`, the collector is omitted and batch iterates the
-grader directly:
+workbooks. Each graded workbook is automatically certified when all cells are
+resolved. Collection is a separate step invoked per-workbook after
+certification:
 
 ```mermaid
 flowchart TB
@@ -153,17 +153,14 @@ flowchart TB
 
     UI(["useCommand"]):::ui
     B["batch()"]:::gen
-    CO["collector()"]:::gen
     G["grader()"]:::gen
     SC{{"scan()"}}:::src
 
   UI -->|for await| B
-  B -->|for await| CO
-  CO -->|for await| G
+  B -->|for await| G
   G -->|for await| SC
     SC -. workbook .-> G
-    G -. grade .-> CO
-    CO -. certified .-> B
+    G -. grade .-> B
     B -. "path, grade" .-> UI
 ```
 
@@ -225,14 +222,14 @@ Correxit provides extension points as JupyterLab plugins, each identified by a
 single token. Core logic is decoupled from IO, e.g. replacing the file-system
 consumer with an LMS consumer requires no changes to the propagator or commands.
 
-| Plugin          | Purpose                                             | Default                        |
-| --------------- | --------------------------------------------------- | ------------------------------ |
-| **`Consumer`**  | Process propagated assignments                      | Writes to local filesystem     |
-| **`Collector`** | Receive certified grades                            | Pass-through generator         |
-| **`Registrar`** | Provide rosters for assignments                     | Returns null (manual entry)    |
-| **`Submitter`** | Handle submission confirmation                      | Returns null (no confirmation) |
-| **`Unlocker`**  | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager            |
-| **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable  |
+| Plugin          | Purpose                                             | Default                       |
+| --------------- | --------------------------------------------------- | ----------------------------- |
+| **`Consumer`**  | Process propagated assignments                      | Writes to local filesystem    |
+| **`Collector`** | Collect certified grades                            | Returns null (no receipt)     |
+| **`Registrar`** | Provide rosters for assignments                     | Returns null (manual entry)   |
+| **`Submitter`** | Handle submission receipts                          | Returns null (no receipt)     |
+| **`Unlocker`**  | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager           |
+| **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |
 
 Type definitions are in `src/correxit/correxit.ts`. Default implementations are
 in `src/plugins.tsx`.
