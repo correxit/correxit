@@ -115,11 +115,7 @@ export function commands(
           for await (const workbook of source) {
             const collectable = certified(workbook);
             if (!collectable) continue;
-            if (!overwrite) {
-              const { collected } =
-                Workbook.open(workbook, true)?.assignment ?? {};
-              if (collected) continue;
-            }
+            if (!overwrite && open(workbook)?.assignment.collected) continue;
             const collected = await collector(collectable);
             await Workbook.collect(workbook, collected);
             const { grade } = collectable;
@@ -182,7 +178,7 @@ export function commands(
           for (const { path } of notebooks) {
             const fetched = await fetch({ ...handle, path }, prompted);
             if (fetched) {
-              const locked = Workbook.open(fetched, true)?.locked;
+              const locked = open(fetched)?.locked;
               const unauthenticated = !handle.key && !handle.passphrase;
               prompted ||= !locked || !handle.unlock || !unauthenticated;
               yield fetched as Headless;
@@ -195,7 +191,7 @@ export function commands(
 }
 
 function certified(workbook: Headless): Certified | null {
-  const rubric = Workbook.open(workbook, true);
+  const rubric = open(workbook);
   if (!rubric) return null;
 
   const { assignment, cells } = rubric;
@@ -219,7 +215,7 @@ function certified(workbook: Headless): Certified | null {
 }
 
 async function correct(workbook: Headless): Promise<Certified> {
-  const rubric = Workbook.open(workbook, true);
+  const rubric = open(workbook);
   if (!rubric || rubric.locked) return recover(workbook);
 
   const { interventions } = rubric.assignment.report;
@@ -239,7 +235,7 @@ async function correct(workbook: Headless): Promise<Certified> {
 }
 
 function exclude(workbook: Headless, overwrite: boolean): Certified | null {
-  const rubric = Workbook.open(workbook, true);
+  const rubric = open(workbook);
   if (!rubric) return null;
   if (overwrite) return null;
   if (rubric.locked) return certified(workbook);
@@ -266,6 +262,10 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const grade: Grade = { path, resolved: true, score: summary, spec: null };
   const identifier = Workbook.identifier(workbook);
   return { grade, identifier, workbook };
+}
+
+function open(workbook: Workbook): Rubric | null {
+  return Workbook.open(workbook, true);
 }
 
 function recover(workbook: Headless): Certified {
