@@ -56,6 +56,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
   - **Discouraged**: `items.reduce({...acc}, ...)` (Spread in reduce is a performance/complexity anti-pattern).
   - **Allowed**: `reduce` is fine for aggregation (sums, counts).
 - **Naming**: Prefer single, distinct English words (e.g., `report` vs `scoreReport`). Names should be domain words (`propagate`, `certify`, `lease`) not pattern words (`producer`, `handler`, `manager`). Bias toward beauty.
+- **Intentional Shadowing**: Variable shadowing is encouraged when it is like-for-like — the same term in the same semantic slot at a different scope. This reinforces consistent vocabulary (e.g., a `score` lambda parameter shadowing an outer `score` function). Do **not** flag like-for-like shadows as issues.
 
 ## 5. Common Pitfalls (Quick Check)
 

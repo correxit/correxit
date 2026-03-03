@@ -200,7 +200,7 @@ function certified(workbook: Headless): Certified | null {
   if (!rubric) return null;
 
   const { assignment, cells } = rubric;
-  const { interventions, scores } = assignment.report;
+  const { interventions, kernel, scores } = assignment.report;
   const path = workbook.context.path;
   const transient = ({ code }: Rubric.Score) =>
     code === 'missing-given' || code === 'missing-reference';
@@ -214,7 +214,7 @@ function certified(workbook: Headless): Certified | null {
   const unscored = summary.status === 'unscored';
   if (incomplete || partial || pending || uncertified || unscored) return null;
 
-  const grade: Grade = { path, resolved: true, score: summary, spec: null };
+  const grade: Grade = { path, resolved: true, score: summary, spec: kernel };
   const identifier = Workbook.identifier(workbook);
   return { grade, identifier, workbook };
 }

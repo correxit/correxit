@@ -55,6 +55,7 @@ describe('Rubric', () => {
       });
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: { [id]: Rubric.Score.CORRECT }
       };
       const secret = {
@@ -84,6 +85,7 @@ describe('Rubric', () => {
       });
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: { [id]: Rubric.Score.CORRECT }
       };
       const signed = await Rubric.sign(rubric, report);
@@ -107,6 +109,7 @@ describe('Rubric', () => {
 
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: { c1: Rubric.Score.CORRECT }
       };
       rubric = { ...rubric, assignment: { ...rubric.assignment, report } };
@@ -149,6 +152,7 @@ describe('Rubric', () => {
       });
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: { [id]: Rubric.Score.CORRECT }
       };
       const rubric = {
@@ -267,6 +271,7 @@ describe('Rubric', () => {
       const updated = Date.now() + 172800000;
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: { c1: Rubric.Score.CORRECT }
       };
 
@@ -322,6 +327,7 @@ describe('Rubric', () => {
       const expiration = Date.now() + 86400000;
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: { c1: Rubric.Score.CORRECT }
       };
 
@@ -355,6 +361,7 @@ describe('Rubric', () => {
       let rubric = create();
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: { 'cell-1': Rubric.Score.CORRECT }
       };
       const roster = ['A', 'B'];
@@ -829,6 +836,7 @@ describe('Rubric', () => {
 
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: {
           c1: Rubric.Score.CORRECT,
           c2: Rubric.Score.CORRECT,
@@ -847,6 +855,7 @@ describe('Rubric', () => {
     it('summarizes a report correctly', () => {
       const report: Rubric.Assignment.Report = {
         interventions: {},
+        kernel: null,
         scores: {
           c1: { ...Rubric.Score.CORRECT, points: 5, possible: 5 },
           c2: { ...Rubric.Score.INCORRECT, points: 0, possible: 10 }
@@ -884,6 +893,7 @@ describe('Rubric', () => {
             possible: 5
           })
         },
+        kernel: null,
         scores: {
           c1: { ...Rubric.Score.CORRECT, id: 'c1', points: 5, possible: 5 }
         }

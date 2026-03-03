@@ -136,9 +136,10 @@ const resolve = (
   if (collated.has(path)) return collated.get(path)!.grade;
   if (workbook.hollow || !graded) return 'pending';
   const rubric = open(workbook);
-  const summary = rubric && Rubric.Assignment.summary(rubric.assignment.report);
+  const report = rubric?.assignment.report;
+  const summary = report && Rubric.Assignment.summary(report);
   const score = summary || Rubric.Score.UNSCORED;
-  return { path, resolved: true, score, spec: null };
+  return { path, resolved: true, score, spec: report?.kernel ?? null };
 };
 
 /** @returns the number of resolved grades in a collation of workbooks. */

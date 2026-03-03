@@ -3,7 +3,7 @@
 }
 
 .correxit-sidebar {
-  --correxit-sidebar-content-inset: 6px;
+  --correxit-sidebar-content-inset: 2px;
   --correxit-sidebar-control-width: 100%;
   --correxit-sidebar-font-size: var(--jp-ui-font-size1);
   --correxit-sidebar-section-padding: 6px;

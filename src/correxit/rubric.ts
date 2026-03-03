@@ -1,5 +1,5 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
-import { Kernel, KernelMessage } from '@jupyterlab/services';
+import { Kernel, KernelMessage, KernelSpec } from '@jupyterlab/services';
 import { find } from '@lumino/algorithm';
 import * as security from './security';
 
@@ -215,8 +215,6 @@ export namespace Rubric {
       if (!cell) return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
       const possible = cell.points;
-      const points = (score: Score) =>
-        score.status === 'correct' ? possible : 0;
       if (cell.is === 'reviewable') {
         const score = await review(intervention ?? null);
         if (score.status === 'unscored') return { ...score, id, possible };
@@ -230,6 +228,8 @@ export namespace Rubric {
       }
       if (!given)
         return { ...Score.INCORRECT, code: 'missing-given', id, possible };
+
+      const points = ({ status }: Score) => status === 'correct' ? possible : 0;
       if (cell.is === 'answerable') {
         const score = await answer(cell.payload, given);
         return { ...score, id, points: points(score), possible };
@@ -267,12 +267,13 @@ export namespace Rubric {
     /** A score report for an assignment. */
     export type Report = Readonly<{
       interventions: { [id: string]: Score };
+      kernel: KernelSpec.ISpecModel | null;
       scores: { [id: string]: Score };
     }>;
 
     export namespace Report {
       export function empty(): Report {
-        return Object.freeze({ interventions: {}, scores: {} });
+        return Object.freeze({ interventions: {}, kernel: null, scores: {} });
       }
     }
 
@@ -318,8 +319,8 @@ export namespace Rubric {
       const { assignment: { report } } = rubric;
       const valid = (id: string) => has(rubric, id);
       const subset = (id ? [id] : Array.from(outputs.keys())).filter(valid);
-      const transient = (id: string) => !subset.includes(id) && valid(id);
-      const missing = id ? [] : Object.keys(rubric.cells).filter(transient);
+      const unexecuted = (id: string) => !subset.includes(id) && valid(id);
+      const missing = id ? [] : Object.keys(rubric.cells).filter(unexecuted);
       const all = [...subset, ...missing];
       if (!all.length) return report;
 
@@ -327,52 +328,36 @@ export namespace Rubric {
       const pending = all.map(id => Cell.score(rubric, id, outputs));
       const done = (await Promise.all(pending)).map(score => [score.id, score]);
       const scores = Object.fromEntries([...current, ...done]);
-      const { interventions } = report;
-      return { interventions, scores };
+      return { ...report, scores };
     }
 
     export async function sign(terms: Terms, key: string): Promise<string> {
       const { assignee, expiration, roster } = terms;
-      const { interventions, scores } = terms.report;
-      const report = {
-        interventions: sort(interventions),
-        scores: sort(scores)
-      };
-      const unsigned = { assignee, expiration, report, roster };
+      const { interventions: manual, scores: auto } = terms.report;
+      const report = { interventions: sort(manual), scores: sort(auto) };
+      const unsigned = { assignee, expiration, report: report, roster };
       return security.digest(JSON.stringify(unsigned).concat(key));
     }
 
     export function summary(report: Report): Score {
-      const { interventions, scores } = {
-        ...Report.empty(), ...report
-      };
+      const { interventions, scores } = { ...Report.empty(), ...report };
       const ids = new Set([
         ...Object.keys(interventions),
         ...Object.keys(scores)
       ]);
 
-      // The sentinel UNSCORED uses `possible: -1` to
-      // distinguish itself from reviewable cells that
-      // have `possible > 0` but `status: 'unscored'`.
-      // Reviewable cells always contribute their
-      // possible points so totals remain honest.
-      const sentinel = (s: Score) =>
-        s.status === 'unscored' && s.possible < 0;
+      const sentinel = ({ possible, status }: Score) =>
+        status === 'unscored' && possible === Score.UNSCORED.possible;
+      const points = ({ points, status }: Score) =>
+        status === 'unscored' ? 0 : points;
       const sum = (a: Score, b: Score): Score => {
         if (sentinel(a)) return b;
         if (sentinel(b)) return a;
-
-        // Unintervened reviewable: 0 points, N possible.
-        const bp = b.status === 'unscored'
-          ? 0 : b.points;
-        const ap = a.status === 'unscored'
-          ? 0 : a.points;
-        const points = ap + bp;
-        const possible = a.possible + b.possible;
-        const status = 'summary';
         return {
           code: '', comment: '', id: '',
-          points, possible, status
+          points: points(a) + points(b),
+          possible: a.possible + b.possible,
+          status: 'summary'
         };
       };
       return Array.from(ids)
@@ -386,16 +371,12 @@ export namespace Rubric {
       const { assignee, roster, signature } = assignment;
       if (assignee && !signature)
         throw new Error('missing signature for assignee');
-
       if (assignee && signature !== await sign(assignment, key))
         throw new Error('assignee signature mismatch');
-
       if (assignee && !find(roster, record => record === assignee))
         throw new Error('assignee does not exist in roster');
-
       if (roster.length && !signature)
         throw new Error('missing signature for roster');
-
     }
   }
 

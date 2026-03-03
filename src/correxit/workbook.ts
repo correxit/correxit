@@ -382,7 +382,7 @@ export namespace Workbook {
 
     const { score, summary } = Rubric.Assignment;
     const { outputs, spec } = result;
-    const report = await score(rubric, outputs, id);
+    const report = { ...await score(rubric, outputs, id), kernel: spec };
     const scored = Object.entries(report.scores);
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
