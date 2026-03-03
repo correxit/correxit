@@ -243,19 +243,25 @@ export namespace Workbook {
 
     const notebook = workbook.context.model.sharedModel;
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
-    const known = Object.fromEntries(notebook.cells.map(
-      ({ id, cell_type }) => [id, cell_type === 'code' || cell_type === 'raw'])
+    const types = Object.fromEntries(
+      notebook.cells.map(({ id, cell_type }) => [id, cell_type])
     );
+    const executable = (id: string) =>
+      types[id] === 'code' || types[id] === 'raw';
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
       const { is, payload } = cell;
       const reference = cell.reference?.[0] ?? '';
-      const valid = is === 'answerable' ? !!payload.length
+      const present = is === 'reviewable'
+        ? id in types
+        : executable(id);
+      const valid = is === 'answerable'
+        ? !!payload.length
         : is === 'reviewable' ? true
-        : known[reference];
-      if (known[id] && valid) continue;
+        : executable(reference);
+      if (present && valid) continue;
 
-      const reason = known[id] ? 'invalid cell' : 'unknown cell';
+      const reason = id in types ? 'invalid cell' : 'unknown cell';
       pruned.push({ cell: { ...cell }, reason });
     }
     if (pruned.length) {
@@ -367,7 +373,10 @@ export namespace Workbook {
     const rubric = audited.rubric;
     const reviewable = ({ is }: Rubric.Cell) => is === 'reviewable';
     const cells = Object.values(rubric.cells);
-    const manual = cells.length > 0 && cells.every(reviewable);
+    const target = id ? Rubric.get(rubric, id) : null;
+    const manual = target
+      ? target.is === 'reviewable'
+      : cells.length > 0 && cells.every(reviewable);
     const result = manual
       ? { spec: null, outputs: new Map() as Rubric.Outputs }
       : await execute(workbook, rubric, id);

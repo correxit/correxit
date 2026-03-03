@@ -301,10 +301,10 @@
   padding-top: 3px;
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after,
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after,
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after,
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-reviewable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-answerable::after,
+.jp-Cell:not(.jp-mod-active).cxt-mod-comparable::after,
+.jp-Cell:not(.jp-mod-active).cxt-mod-correctable::after,
+.jp-Cell:not(.jp-mod-active).cxt-mod-reviewable::after {
   --cxt-annotate-size: 28px;
   --cxt-annotate-icon: 16px 16px;
 
@@ -325,39 +325,35 @@
   pointer-events: none;
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-answerable::after {
   background-image: url('../monitor/icons/answerable.svg');
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-comparable::after {
   background-image: url('../monitor/icons/comparable.svg');
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-correctable::after {
   background-image: url('../monitor/icons/correctable.svg');
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-reviewable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-reviewable::after {
   background-image: url('../monitor/icons/reviewable.svg');
 }
 
-.jp-Notebook
-  .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correct
-  .jp-InputArea-editor {
+.jp-Notebook .jp-Cell:not(.jp-mod-active).cxt-mod-correct .jp-InputArea-editor {
   border: 1px solid var(--correxit-correct-color);
   border-radius: 6px;
 }
 
 .jp-Notebook
-  .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-incorrect
+  .jp-Cell:not(.jp-mod-active).cxt-mod-incorrect
   .jp-InputArea-editor {
   border: 1px solid var(--correxit-incorrect-color);
   border-radius: 6px;
 }
 
-.jp-Notebook
-  .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-partial
-  .jp-InputArea-editor {
+.jp-Notebook .jp-Cell:not(.jp-mod-active).cxt-mod-partial .jp-InputArea-editor {
   border: 1px solid var(--correxit-partial-color);
   border-radius: 6px;
 }

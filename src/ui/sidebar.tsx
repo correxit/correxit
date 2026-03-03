@@ -1,4 +1,3 @@
-import { ICodeCellModel } from '@jupyterlab/cells';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
@@ -300,10 +299,9 @@ const Body: React.FC<{
   if (!rubric || !headed || !workbook.content.activeCell)
     return <section className="correxit-sidebar-body"></section>;
 
-  const cell = (workbook.content.activeCell.model as ICodeCellModel) || null;
-  if (!cell || cell.type !== 'code') return <></>;
+  const { id } = workbook.content.activeCell.model || {};
+  if (!id) return <></>;
 
-  const { id } = cell;
   const hints = {
     answerable: trans.__('Expected output has been set.'),
     comparable: trans.__('Cell output is compared against a reference.'),

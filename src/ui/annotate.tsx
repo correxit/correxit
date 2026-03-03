@@ -17,9 +17,10 @@ function clear({ content }: Workbook) {
 function decorate(workbook: Workbook, cell: Rubric.Cell, widget: Widget) {
   const report = state.report(workbook, cell.id);
   widget.addClass(`cxt-mod-${cell.is}`);
-  if (report?.status === 'correct') widget.addClass(correct);
-  else if (report?.status === 'partial') widget.addClass(partial);
-  else if (report?.status === 'incorrect') widget.addClass(incorrect);
+  if (!report || report.status === 'unscored') return;
+  if (report.points === cell.points) widget.addClass(correct);
+  else if (report.points > 0) widget.addClass(partial);
+  else widget.addClass(incorrect);
 }
 
 function reset(widget: Widget) {
