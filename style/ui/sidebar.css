@@ -118,10 +118,31 @@
   width: 100%;
 }
 
-.correxit-sidebar-submission-actions .jp-ToolbarButtonComponent {
-  margin: 0;
-  min-width: 0;
-  width: 100%;
+.correxit-sidebar-submission-actions {
+  align-items: stretch;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+  margin: 6px var(--correxit-sidebar-content-inset) 0;
+
+  .jp-ToolbarButtonComponent {
+    margin: 0;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+.correxit-sidebar-submission-chip {
+  background-color: var(--jp-layout-color4);
+  border: 1px solid var(--jp-border-color3);
+  border-radius: 3px;
+  color: var(--jp-ui-font-color2);
+  display: block;
+  font-size: var(--jp-ui-font-size0);
+  overflow: hidden;
+  padding: 4px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent > span {
@@ -186,27 +207,6 @@
 
 .correxit-sidebar-header p {
   margin: 6px var(--correxit-sidebar-content-inset) 0;
-}
-
-.correxit-sidebar-submission-actions {
-  align-items: stretch;
-  display: grid;
-  gap: 4px;
-  grid-template-columns: 1fr 1fr;
-  margin: 6px var(--correxit-sidebar-content-inset) 0;
-}
-
-.correxit-sidebar-submission-chip {
-  background-color: var(--jp-layout-color4);
-  border: 1px solid var(--jp-border-color3);
-  border-radius: 3px;
-  color: var(--jp-ui-font-color2);
-  display: block;
-  font-size: var(--jp-ui-font-size0);
-  overflow: hidden;
-  padding: 4px 6px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .correxit-sidebar-additional-operations {

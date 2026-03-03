@@ -21,7 +21,7 @@ import { DisposableDelegate } from '@lumino/disposable';
 import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
-import { addCommands, Correxit, Unlocker, Workbook } from './correxit';
+import { Correxit, Unlocker, Workbook } from './correxit';
 import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
 import * as state from './correxit/state';
@@ -118,7 +118,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const active = new Signal<typeof tracker, void>(tracker);
       tracker.currentChanged.connect(() => active.emit(undefined));
       const { launch } = Corrector.CommandIDs;
-      const added = Corrector.addCommands(app, {
+      const added = Corrector.commands(app, {
         browser,
         collector,
         documents,
@@ -250,7 +250,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
           }
         }
       )(null as Workbook | null);
-      const added = addCommands(app, {
+      const added = Correxit.commands(app, {
         collector,
         consumer,
         injector,

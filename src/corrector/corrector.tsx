@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
 import {
-  addCommands as ADD_COMMANDS,
+  commands as COMMANDS,
   CommandIDs as COMMAND_IDS,
   Scanned
 } from './commands';
@@ -230,7 +230,7 @@ export namespace Corrector {
 
   export type Widget = CorrectorWidget;
 
-  export const addCommands = ADD_COMMANDS;
+  export const commands = COMMANDS;
 
   export const CommandIDs = COMMAND_IDS;
 

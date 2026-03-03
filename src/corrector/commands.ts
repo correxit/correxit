@@ -28,7 +28,7 @@ export namespace CommandIDs {
   export const scan = 'correxit-corrector:scan';
 }
 
-export function addCommands(
+export function commands(
   app: JupyterFrontEnd,
   utilities: {
     browser: IDefaultFileBrowser | null;

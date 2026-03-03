@@ -52,7 +52,7 @@ const { draft, intervene, lock, remove, reset, reweight, submit } = Workbook;
 const { toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
-export function addCommands(
+export function commands(
   app: JupyterFrontEnd,
   utilities: {
     collector: Correxit.Collector;
