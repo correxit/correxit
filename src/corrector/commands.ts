@@ -101,7 +101,7 @@ export function commands(
   );
   disposables.push(
     commands.addCommand(CommandIDs.collect, {
-      label: trans.__('Collect certified workbooks into a grade store...'),
+      label: trans.__('Collect certified workbook grades...'),
       execute: (
         args: Partial<Credentials & { overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {

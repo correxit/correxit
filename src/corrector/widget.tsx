@@ -158,11 +158,7 @@ class ModeSelector extends ReactWidget {
 
   render() {
     const { busy, mode, overwrite, trans } = this;
-    const modes: {
-      label: string;
-      tooltip: string;
-      value: Corrector.Mode;
-    }[] = [
+    const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
       {
         value: 'scan',
         label: trans.__('Scan'),
@@ -176,7 +172,7 @@ class ModeSelector extends ReactWidget {
       {
         value: 'collect',
         label: trans.__('Collect'),
-        tooltip: trans.__('Collect certified workbooks into a grade store')
+        tooltip: trans.__('Collect certified workbook grades')
       }
     ];
     const action = () => this.go(mode, overwrite);
