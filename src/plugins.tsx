@@ -230,9 +230,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       const notify = () =>
         ui.forEach(command => commands.notifyCommandChanged(command));
       const monitor = new Stream<null, Workbook | null>(null);
-      const { open } = Workbook;
-      const quiet = true;
-      const subscribe = (prev: Workbook | null, next: Workbook | null) => {
+      const swap = (prev: Workbook | null, next: Workbook | null) => {
         prev?.context.fileChanged.disconnect(notify);
         prev?.context.model.sharedModel.metadataChanged.disconnect(notify);
         next?.context.fileChanged.connect(notify);
@@ -240,14 +238,13 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       };
       const injector: (workbook: Workbook | null) => void = (
         previous => workbook => {
-          if (workbook !== state.workbook()) {
-            open(workbook, quiet);
-            subscribe(previous, workbook);
-            state.workbook(workbook);
-            previous = workbook;
-            monitor.emit(workbook);
-            notify();
-          }
+          if (workbook === state.workbook()) return;
+          Workbook.open(workbook, true);
+          swap(previous, workbook);
+          state.workbook(workbook);
+          previous = workbook;
+          monitor.emit(workbook);
+          notify();
         }
       )(null as Workbook | null);
       const added = Correxit.commands(app, {
