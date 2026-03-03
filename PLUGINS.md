@@ -44,9 +44,9 @@ type Consumer = (output: {
 
 Called when an instructor triggers propagation. The consumer receives:
 
-- `path` — the source notebook path.
-- `rubric` — the unlocked rubric, including the resolved roster.
-- `stream` — a factory that, given `{ base, pwd }`, returns an async
+- `path` - the source notebook path.
+- `rubric` - the unlocked rubric, including the resolved roster.
+- `stream` - a factory that, given `{ base, pwd }`, returns an async
   iterable of personalized notebook objects ready for delivery.
 
 ```typescript
@@ -60,8 +60,9 @@ type Notebook = {
 
 The consumer is responsible for delivering each notebook to its destination
 (file system, LMS upload, object store, etc.) and `yield`-ing
-`Emitter.Emission` values — `{ type: string; slots: (string | number)[] }`
-— to drive the progress UI.
+`Emitter.Emission` values - `{ type: string; slots: (string | number)[] }`
+
+- to drive the progress UI.
 
 > The default consumer writes workbooks to a local subdirectory. A
 > server-backed consumer would iterate `stream` and POST each notebook to
@@ -88,10 +89,10 @@ roster, enforce the deadline, and return the server-issued submission ID.
 
 `identifier` at call time:
 
-- `assignee` — the student's address as recorded in the workbook.
-- `assignment` — the rubric id shared across all workbooks for this
+- `assignee` - the student's address as recorded in the workbook.
+- `assignment` - the rubric id shared across all workbooks for this
   assignment.
-- `signature` — a content hash that changes whenever the rubric, roster,
+- `signature` - a content hash that changes whenever the rubric, roster,
   or grade report changes.
 
 ---
@@ -149,9 +150,3 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   }
 };
 ```
-
-Because JupyterLab resolves tokens by last-registered provider, the
-override plugin simply needs to load after `@quantstack/correxit`. The four
-default implementations (file-system consumer, UUID submitter, UUID
-collector, null registrar) are replaced entirely — no monkey-patching
-required.

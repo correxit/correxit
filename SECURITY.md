@@ -16,7 +16,7 @@ no trusted third party. Cryptographic primitives use `window.crypto`
 | Student edits cells after submission | Workbook locking + freezing                     |
 | Tampered workbook delivery           | Out-of-band (Consumer/Collector plugin hashing) |
 
-**Out of scope:** malicious instructors (they hold the key — full
+**Out of scope:** malicious instructors (they hold the key, full
 authority by design), browser memory extraction, compromised
 JupyterLab servers (Correxit has no backend), and cross-student
 file access (students reading each other's workbooks is a file
@@ -27,7 +27,7 @@ system or LMS access-control concern, not solvable in-workbook).
 Keys are **never written to disk**. They exist only in closure
 scope and enter via user input, dying with the browser tab. The
 `Rubric.Unlocked` type carries the key; `Rubric.Locked` has
-`key: null`. Notebook metadata only stores locked rubrics — the key
+`key: null`. Notebook metadata only stores locked rubrics, the key
 is structurally absent from anything on disk.
 
 ## Integrity
@@ -49,7 +49,7 @@ these fields invalidates the signature.
 
 **Not signed:** lifecycle timestamps (`certification`, `submission`)
 and receipts (`collected`, `submitted`). These change after signing
-and are administrative — including them would couple every lifecycle
+and are administrative. Including them would couple every lifecycle
 event to key availability.
 
 ### Transport Integrity (Plugin Responsibility)
@@ -81,7 +81,7 @@ evidence with zero security value.
 | `roster`        | `string[]`       | Yes     | Encrypted on lock            |
 | `expiration`    | `number \| null` | Yes     | Deadline                     |
 | `report`        | `Report`         | Yes     | Scores + interventions       |
-| `signature`     | `string`         | —       | The signature itself         |
+| `signature`     | `string`         | -       | The signature itself         |
 | `certification` | `number \| null` | No      | When the grade was finalized |
 | `submission`    | `number \| null` | No      | When the student submitted   |
 | `submitted`     | `string \| null` | No      | External submission receipt  |
@@ -89,24 +89,24 @@ evidence with zero security value.
 
 ### Certification Sequence
 
-1. `correct()` — execute cells, compute scores, sign report
+1. `correct()` - execute cells, compute scores, sign report
    if all cells resolve
-2. `certify()` — write certification timestamp
-3. `lock()` — encrypt reference cells and roster, erase key
-4. `freeze()` — set cells to non-editable
+2. `certify()` - write certification timestamp
+3. `lock()` - encrypt reference cells and roster, erase key
+4. `freeze()` - set cells to non-editable
 
 A workbook cannot be collected without a non-null `certification`.
 
 ### Verification
 
-- `Assignment.validate({ assignment, key })` — structural checks:
+- `Assignment.validate({ assignment, key })` - structural checks:
   assignee must appear in roster, signature must be valid if
   assignee or roster exists.
 
 ## Serialization Invariant
 
 All optional fields use `Type | null`, never `Type?`. This ensures
-`JSON.stringify` output is deterministic — `null` is serialized,
+`JSON.stringify` output is deterministic - `null` is serialized,
 `undefined` is omitted. Since signatures hash stringified JSON,
 field presence must be stable.
 
