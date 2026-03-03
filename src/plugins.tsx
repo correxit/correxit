@@ -16,6 +16,8 @@ import {
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStatusBar } from '@jupyterlab/statusbar';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
+import { UUID } from '@lumino/coreutils';
+import { DisposableDelegate } from '@lumino/disposable';
 import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
@@ -24,7 +26,6 @@ import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
-import { DisposableDelegate } from '@lumino/disposable';
 
 /**
  * The default (file-based) Correxit assignment propagation consumer.
@@ -68,14 +69,14 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
 };
 
 /**
- * The default (no-op) Correxit grade collector.
+ * The default Correxit grade collector, returns a UUID.
  */
 const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   id: Correxit.COLLECTOR,
   description: Correxit.DESCRIPTION.COLLECTOR,
   provides: Correxit.Collector,
   ...((deactivator?: () => void) => ({
-    activate: (): Correxit.Collector => async _ => null,
+    activate: (): Correxit.Collector => async _ => UUID.uuid4(),
     deactivate: () => deactivator?.()
   }))()
 };
@@ -280,7 +281,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
 };
 
 /**
- * The default Correxit assignment submitter.
+ * The default Correxit assignment submitter, returns a UUID.
  */
 const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   id: Correxit.SUBMITTER,
@@ -288,7 +289,7 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   autoStart: true,
   ...((deactivator?: () => void) => ({
     provides: Correxit.Submitter,
-    activate: (): Correxit.Submitter => async _ => null,
+    activate: (): Correxit.Submitter => async _ => UUID.uuid4(),
     deactivate: () => deactivator?.()
   }))()
 };
