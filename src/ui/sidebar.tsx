@@ -1,4 +1,3 @@
-import { ICodeCellModel } from '@jupyterlab/cells';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
@@ -69,13 +68,24 @@ const Header: React.FC<{
   const idle = trans.__('Correxit: idle');
   const date = (timestamp: number | null) =>
     timestamp ? new Date(timestamp).toLocaleString() : '';
+  const lifecycle = (rubric: Rubric | null) => {
+    if (!rubric) return '-';
+
+    const {
+      assignment: { certification, collected, submission, submitted }
+    } = rubric;
+    if (collected) return trans.__('Collected: %1', collected);
+    if (certification) return trans.__('Certification %1', date(certification));
+    if (submitted) return trans.__('Submitted: %1', submitted);
+    if (submission) return trans.__('Submission %1', date(submission));
+    return trans.__('Unsubmitted');
+  };
   const scored = !!score && score.status !== 'unscored';
   const titled = scored
     ? trans.__('%1 (%2 of %3)', heading, score!.points, score!.possible)
     : heading;
   const submitted = !!rubric?.assignment.submission;
-  const status = submitted ? trans.__('Submitted') : trans.__('Unsubmitted');
-  const submission = date(rubric?.assignment.submission ?? null);
+  const chip = lifecycle(rubric);
   const unlocked = !!rubric && !rubric.locked;
   const action = unlocked ? certify : submitted ? draft : submit;
   return (
@@ -90,12 +100,9 @@ const Header: React.FC<{
       {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <div className="correxit-sidebar-submission-actions">
-        <span
-          className="correxit-sidebar-submission-chip"
-          title={submission || status}
-        >
-          {status}
-        </span>
+        <div className="correxit-sidebar-submission-chip" title={chip}>
+          {chip}
+        </div>
         <CommandToolbarButtonComponent commands={commands} id={action} />
       </div>
     </section>
@@ -292,10 +299,9 @@ const Body: React.FC<{
   if (!rubric || !headed || !workbook.content.activeCell)
     return <section className="correxit-sidebar-body"></section>;
 
-  const cell = (workbook.content.activeCell.model as ICodeCellModel) || null;
-  if (!cell || cell.type !== 'code') return <></>;
+  const { id } = workbook.content.activeCell.model || {};
+  if (!id) return <></>;
 
-  const { id } = cell;
   const hints = {
     answerable: trans.__('Expected output has been set.'),
     comparable: trans.__('Cell output is compared against a reference.'),

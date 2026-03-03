@@ -253,7 +253,7 @@ test('sets and clears a cell intervention score', async ({ page }) => {
 
   expect(result.points).toBe(3);
   expect(result.comment).toBe('manual');
-  expect(result.status).toBe('incorrect');
+  expect(result.status).toBe('partial');
   expect(result.cleared).toBe(true);
   await dispose();
 });
@@ -279,7 +279,7 @@ test('submits a workbook and sets cells to read-only', async ({ page }) => {
     return {
       locked: submitted.locked,
       submission: submitted.assignment.submission,
-      confirmation: submitted.assignment.confirmation,
+      submitted: submitted.assignment.submitted,
       stored: metadata?.assignment?.submission ?? null,
       editable: notebook.cells.map((c: any) => c.getMetadata('editable'))
     };
@@ -287,7 +287,7 @@ test('submits a workbook and sets cells to read-only', async ({ page }) => {
 
   expect(result.locked).toBe(true);
   expect(result.submission).toBeGreaterThan(0);
-  expect(result.confirmation).toBe('receipt-123');
+  expect(result.submitted).toBe('receipt-123');
   expect(result.stored).toBeGreaterThan(0);
   expect(result.editable).toEqual([false, false]);
   await dispose();
@@ -318,7 +318,7 @@ test('drafts a submitted workbook, restores editability', async ({ page }) => {
     return {
       locked: drafted.locked,
       submission: drafted.assignment.submission,
-      confirmation: drafted.assignment.confirmation,
+      submitted: drafted.assignment.submitted,
       stored: metadata?.assignment?.submission ?? null,
       editable: notebook.cells.map((c: any) => c.getMetadata('editable'))
     };
@@ -326,7 +326,7 @@ test('drafts a submitted workbook, restores editability', async ({ page }) => {
 
   expect(result.locked).toBe(true);
   expect(result.submission).toBeNull();
-  expect(result.confirmation).toBeNull();
+  expect(result.submitted).toBeNull();
   expect(result.stored).toBeNull();
   expect(result.editable[0]).toBeUndefined();
   expect(result.editable[1]).toBe(false);

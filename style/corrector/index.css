@@ -133,15 +133,40 @@ td.correxit-corrector-breakdown {
 }
 
 .correxit-corrector-breakdown-correct {
-  background-color: var(--jp-success-color1);
+  background-color: var(--correxit-correct-color);
+  background-image: none;
 }
 
 .correxit-corrector-breakdown-incorrect {
-  background-color: var(--jp-error-color1);
+  background-color: var(--correxit-incorrect-color);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 2px,
+    rgb(0 0 0 / 15%) 2px,
+    rgb(0 0 0 / 15%) 4px
+  );
+}
+
+.correxit-corrector-breakdown-partial {
+  background-color: var(--correxit-partial-color);
+  background-image: none;
+}
+
+.correxit-corrector-breakdown-review {
+  background-color: var(--correxit-insistent-color);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 2px,
+    rgb(255 255 255 / 30%) 2px,
+    rgb(255 255 255 / 30%) 4px
+  );
 }
 
 .correxit-corrector-breakdown-unscored {
-  background-color: var(--jp-border-color2);
+  background-color: var(--correxit-unscored-color);
+  background-image: none;
 }
 
 tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
@@ -170,6 +195,25 @@ td.correxit-corrector-failed {
 
 td.correxit-corrector-failed {
   width: 120px;
+}
+
+td.correxit-corrector-review {
+  overflow: hidden;
+  position: relative;
+  text-align: right;
+  width: 120px;
+}
+
+td.correxit-corrector-review > span {
+  color: var(--correxit-insistent-color);
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  align-items: center;
+  display: flex;
+  gap: 2px;
+  padding: 2px 4px;
 }
 
 td.correxit-corrector-score-report {
@@ -268,7 +312,7 @@ table.correxit-corrector tr.correxit-corrector-progress.cxt-mod-active td {
   vertical-align: middle;
 }
 
-.correxit-corrector-mode:not(.cxt-mod-certify) .correxit-corrector-overwrite {
+.correxit-corrector-mode.cxt-mod-scan .correxit-corrector-overwrite {
   opacity: 0.4;
   pointer-events: none;
 }

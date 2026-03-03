@@ -15,7 +15,6 @@ type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
-type Rules = { commit: boolean; overwrite: boolean };
 
 export type Hollow = { hollow: true; context: { path: string } };
 
@@ -24,11 +23,12 @@ export type Scanned = (Headless & { hollow?: undefined }) | Hollow;
 export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
+  export const collect = 'correxit-corrector:collect';
   export const launch = 'correxit-corrector:launch';
   export const scan = 'correxit-corrector:scan';
 }
 
-export function addCommands(
+export function commands(
   app: JupyterFrontEnd,
   utilities: {
     browser: IDefaultFileBrowser | null;
@@ -51,12 +51,12 @@ export function addCommands(
     commands.addCommand(CommandIDs.batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
-        args: Partial<Credentials & { certify: boolean; overwrite: boolean }>
+        args: Partial<Credentials & { overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const rules = { commit: !!args.certify, overwrite: !!args.overwrite };
+        const overwrite = !!args.overwrite;
         const actions: Actions = {
-          correct: workbook => correct(workbook, rules),
-          exclude: workbook => exclude(workbook, rules),
+          correct: workbook => correct(workbook),
+          exclude: workbook => exclude(workbook, overwrite),
           recover
         };
         const auth = !!(args.key || args.passphrase);
@@ -67,13 +67,11 @@ export function addCommands(
 
         const cap = kernels.cap();
         const retries = kernels.retries();
-        const grades = async function* (): AsyncGenerator<Certified> {
-          yield* grader(scanner({ commands }, handle), actions, cap, retries);
-        };
-        return (async function* (stream: AsyncGenerator<Certified>) {
-          for await (const { grade, workbook } of stream)
+        const source = scanner({ commands }, handle);
+        return (async function* (grades: AsyncGenerator<Workbook.Certified>) {
+          for await (const { grade, workbook } of grades)
             yield [grade.path, { grade, workbook: workbook as Headless }];
-        })(args.certify ? collector(grades()) : grades());
+        })(grader(source, actions, cap, retries));
       }
     })
   );
@@ -98,6 +96,32 @@ export function addCommands(
         }
         if (typeof path === 'string') widget.path = path || '.';
         widget.removeClass('cxt-mod-cd');
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.collect, {
+      label: trans.__('Collect certified workbook grades...'),
+      execute: (
+        args: Partial<Credentials & { overwrite: boolean }>
+      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
+        const overwrite = !!args.overwrite;
+        const auth = !!(args.key || args.passphrase);
+        const potential = { ...args, unlock: auth ? !!args.unlock : true };
+        const handle = normalize(potential as Partial<Credentials>);
+        if (!handle) throw new Error('collect error, bad handle');
+        const source = scanner({ commands }, handle);
+        return (async function* () {
+          for await (const workbook of source) {
+            const collectable = certified(workbook);
+            if (!collectable) continue;
+            if (!overwrite && open(workbook)?.assignment.collected) continue;
+            const collected = await collector(collectable);
+            await Workbook.collect(workbook, collected);
+            const { grade } = collectable;
+            yield [grade.path, { grade, workbook: workbook as Headless }];
+          }
+        })();
       }
     })
   );
@@ -154,7 +178,7 @@ export function addCommands(
           for (const { path } of notebooks) {
             const fetched = await fetch({ ...handle, path }, prompted);
             if (fetched) {
-              const locked = Workbook.open(fetched, true)?.locked;
+              const locked = open(fetched)?.locked;
               const unauthenticated = !handle.key && !handle.passphrase;
               prompted ||= !locked || !handle.unlock || !unauthenticated;
               yield fetched as Headless;
@@ -167,44 +191,73 @@ export function addCommands(
 }
 
 function certified(workbook: Headless): Certified | null {
-  const rubric = Workbook.open(workbook, true);
+  const rubric = open(workbook);
   if (!rubric) return null;
 
-  const { report } = rubric.assignment;
-  const score = Rubric.Assignment.summary(report);
-  const transient = ({ code }: Rubric.Score) =>
-    code === 'missing-given' || code === 'missing-reference';
-  const partial = Object.values(report.scores).some(transient);
-  const incomplete = Object.keys(rubric.cells).some(id => !report.scores[id]);
-  const unscored = score.status === 'unscored';
-  if (!report.timestamp || unscored || partial || incomplete) return null;
-
+  const { assignment, cells } = rubric;
+  const { interventions, kernel, scores } = assignment.report;
   const path = workbook.context.path;
-  const grade: Grade = { path, resolved: true, score, spec: null };
+  const incomplete = Object.keys(cells).some(id => !scores[id]);
+  const partial = Object.values(scores).some(unexecuted);
+  const pending = Object.values(cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  const uncertified = !assignment.certification;
+  const summary = Rubric.Assignment.summary(assignment.report);
+  const unscored = summary.status === 'unscored';
+  if (incomplete || partial || pending || uncertified || unscored) return null;
+
+  const grade: Grade = { path, resolved: true, score: summary, spec: kernel };
   const identifier = Workbook.identifier(workbook);
-  return { grade, identifier, timestamp: report.timestamp, workbook };
+  return { grade, identifier, workbook };
 }
 
-async function correct(workbook: Headless, rules: Rules): Promise<Certified> {
-  const rubric = Workbook.open(workbook, true);
+async function correct(workbook: Headless): Promise<Certified> {
+  const rubric = open(workbook);
   if (!rubric || rubric.locked) return recover(workbook);
 
-  const { certify } = Workbook;
-  const graded = await (rules.commit ? certify(workbook) : grade(workbook));
-  await save(rules.commit ? workbook : null);
-  return graded;
-}
+  const { interventions } = rubric.assignment.report;
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  if (!pending) {
+    const result = await Workbook.certify(workbook);
+    await save(workbook);
+    return result;
+  }
 
-function exclude(workbook: Headless, rules: Rules): Certified | null {
-  return rules.commit && !rules.overwrite ? certified(workbook) : null;
-}
-
-async function grade(workbook: Headless): Promise<Certified> {
-  const corrected = await Workbook.correct(workbook);
-  const grade = { ...corrected, path: workbook.context.path };
+  const grade = await Workbook.correct(workbook);
   const identifier = Workbook.identifier(workbook);
-  const timestamp = Workbook.timestamp(workbook);
-  return { grade, identifier, timestamp, workbook };
+  await save(workbook);
+  return { grade, identifier, workbook };
+}
+
+function exclude(workbook: Headless, overwrite: boolean): Certified | null {
+  const rubric = open(workbook);
+  if (!rubric) return null;
+  if (overwrite) return null;
+  if (rubric.locked) return certified(workbook);
+
+  const { interventions, scores } = rubric.assignment.report;
+  const ids = Object.keys(rubric.cells);
+  const complete =
+    ids.length > 0 && ids.every(id => scores[id] && !unexecuted(scores[id]));
+  if (!complete) return null;
+
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  if (!pending) return null;
+
+  const path = workbook.context.path;
+  const summary = Rubric.Assignment.summary(rubric.assignment.report);
+  const grade: Grade = { path, resolved: true, score: summary, spec: null };
+  const identifier = Workbook.identifier(workbook);
+  return { grade, identifier, workbook };
+}
+
+function open(workbook: Workbook): Rubric | null {
+  return Workbook.open(workbook, true);
 }
 
 function recover(workbook: Headless): Certified {
@@ -217,7 +270,7 @@ function recover(workbook: Headless): Certified {
   } catch {
     identifier = { assignee: null, assignment: '', signature: null };
   }
-  return { grade, identifier, timestamp: 0, workbook };
+  return { grade, identifier, workbook };
 }
 
 async function save(workbook: Headless | null) {
@@ -231,4 +284,8 @@ async function* scanner(
   const stream = await commands.execute(CommandIDs.scan, credentials);
   for await (const workbook of stream as AsyncIterable<Scanned>)
     if (!workbook.hollow) yield workbook;
+}
+
+function unexecuted({ code }: Rubric.Score): boolean {
+  return code === 'missing-given' || code === 'missing-reference';
 }

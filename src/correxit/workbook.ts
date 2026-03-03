@@ -32,7 +32,6 @@ export namespace Workbook {
   export type Certified = {
     grade: Workbook.Grade;
     identifier: Workbook.Identifier;
-    timestamp: number;
     workbook: Workbook;
   };
 
@@ -176,17 +175,17 @@ export namespace Workbook {
     assignment: Rubric.Assignment,
     {
       assignee = assignment.assignee,
-      confirmation = assignment.confirmation,
       expiration = assignment.expiration,
       submission = assignment.submission,
+      submitted = assignment.submitted,
       roster = assignment.roster,
       signature = assignment.signature
     }: Partial<Rubric.Assignment>
   ): boolean => (
     assignee !== assignment.assignee ||
-    confirmation !== assignment.confirmation ||
     expiration !== assignment.expiration ||
     submission !== assignment.submission ||
+    submitted !== assignment.submitted ||
     (roster !== assignment.roster &&
       (roster.length !== assignment.roster.length ||
         roster.some((record, i) => record !== assignment.roster[i]))) ||
@@ -244,19 +243,25 @@ export namespace Workbook {
 
     const notebook = workbook.context.model.sharedModel;
     const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
-    const known = Object.fromEntries(notebook.cells.map(
-      ({ id, cell_type }) => [id, cell_type === 'code' || cell_type === 'raw'])
+    const types = Object.fromEntries(
+      notebook.cells.map(({ id, cell_type }) => [id, cell_type])
     );
+    const executable = (id: string) =>
+      types[id] === 'code' || types[id] === 'raw';
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
       const { is, payload } = cell;
       const reference = cell.reference?.[0] ?? '';
-      const valid = is === 'answerable' ? !!payload.length
+      const present = is === 'reviewable'
+        ? id in types
+        : executable(id);
+      const valid = is === 'answerable'
+        ? !!payload.length
         : is === 'reviewable' ? true
-        : known[reference];
-      if (known[id] && valid) continue;
+        : executable(reference);
+      if (present && valid) continue;
 
-      const reason = known[id] ? 'invalid cell' : 'unknown cell';
+      const reason = id in types ? 'invalid cell' : 'unknown cell';
       pruned.push({ cell: { ...cell }, reason });
     }
     if (pruned.length) {
@@ -273,6 +278,17 @@ export namespace Workbook {
     return { ok: true, pruned: [], rubric };
   }
 
+  /** Collect a certified workbook grade. */
+  export async function collect(
+    workbook: Workbook,
+    collected: string | null = null
+  ): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked || !rubric.assignment.certification)
+      throw new Error('collect error');
+    return update(workbook, Rubric.collect(rubric, collected));
+  }
+
   /** Certify a workbook: correct, lock, and freeze. */
   export async function certify(
     workbook: Workbook
@@ -280,17 +296,23 @@ export namespace Workbook {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error('certify error');
 
-    const corrected = await correct(workbook);
-    const grade = { ...corrected, path: workbook.context.path };
-    const identifier = Workbook.identifier(workbook);
-    if (!corrected.resolved) {
-      const { status } = corrected.score;
-      throw new Error(`certify error: unresolved status ${status}`);
-    }
+    const { interventions } = rubric.assignment.report;
+    const pending = Object.values(rubric.cells)
+      .filter(({ is }) => is === 'reviewable')
+      .some(({ id }) => !interventions[id]);
+    if (pending) throw new Error('certify error: pending review');
 
+    const grade = await correct(workbook);
+    const identifier = Workbook.identifier(workbook);
+    if (!grade.resolved)
+      throw new Error(`certify error: unresolved (${grade.score.status})`);
+
+    const scored = open(workbook, quiet);
+    if (!scored || scored.locked) throw new Error('certify error');
+    await update(workbook, Rubric.certify(scored));
     await lock(workbook);
     freeze(workbook);
-    return { grade, identifier, timestamp: timestamp(workbook), workbook };
+    return { grade, identifier, workbook };
   }
 
   /** Convert a plain notebook into a workbook and return its rubric. */
@@ -328,10 +350,12 @@ export namespace Workbook {
   export async function correct(
     workbook: Workbook,
     id?: string
-  ): Promise<Omit<Grade, 'path'>> {
+  ): Promise<Grade> {
+    const path = workbook.context.path;
     const opened = open(workbook, quiet);
     if (!opened) {
       return {
+        path,
         resolved: false,
         score: { ...Rubric.Score.UNSCORED, code: 'missing-rubric' },
         spec: null
@@ -342,47 +366,54 @@ export namespace Workbook {
     // missing cells (they are pruned), headless ones fail outright.
     const audited = audit(workbook, opened);
     if (!audited.ok) {
-      return {
-        resolved: false,
-        score: { ...Rubric.Score.UNSCORED, code: '' },
-        spec: null
-      };
+      const score = { ...Rubric.Score.UNSCORED, comment: audited.error };
+      return { path, resolved: false, score, spec: null };
     }
 
     const rubric = audited.rubric;
-    const result = await execute(workbook, rubric, id);
+    const reviewable = ({ is }: Rubric.Cell) => is === 'reviewable';
+    const cells = Object.values(rubric.cells);
+    const target = id ? Rubric.get(rubric, id) : null;
+    const manual = target
+      ? target.is === 'reviewable'
+      : cells.length > 0 && cells.every(reviewable);
+    const result = manual
+      ? { spec: null, outputs: new Map() as Rubric.Outputs }
+      : await execute(workbook, rubric, id);
     if (!result) {
-      const code: Rubric.Score.Code = 'error-execute';
       return {
+        path,
         resolved: false,
-        score: { ...Rubric.Score.UNSCORED, code },
+        score: { ...Rubric.Score.UNSCORED, code: 'error-execute' },
         spec: null
       };
     }
 
     const { score, summary } = Rubric.Assignment;
-    const { spec, outputs } = result;
-    const report = await score(rubric, outputs, id);
+    const { outputs, spec } = result;
+    const report = { ...await score(rubric, outputs, id), kernel: spec };
     const scored = Object.entries(report.scores);
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
     const final = id ? report.scores[id] : summary(report);
-    const missing = (cell: Rubric.Cell) => {
-      const { id, is, reference } = cell;
+    const missing = ({ id, is, reference }: Rubric.Cell) => {
+      if (is === 'reviewable') return false;
       return !outputs.has(id) ||
-        ((is === 'comparable' || is === 'correctable') && reference
-          ? reference.some(id => !outputs.has(id))
+        ((is === 'comparable' || is === 'correctable')
+          && reference
+          ? reference.some(reference => !outputs.has(reference))
           : false);
     };
-    const { status } = final;
+    const unresolved = (cell: Rubric.Cell) => {
+      const { status } = report.scores[cell.id] || {};
+      return cell.is !== 'reviewable' && (!status || status === 'unscored');
+    };
     const resolved = id
-      ? status !== 'unscored'
-      : !Object.values(rubric.cells).some(missing) && status !== 'unscored';
-    if (resolved && !rubric.locked) {
-      const sources = Workbook.sources(workbook, rubric);
-      await update(workbook, await Rubric.sign(rubric, report, sources));
-    }
-    return { resolved, spec, score: final };
+      ? final.status !== 'unscored'
+      : !cells.some(missing) && !cells.some(unresolved);
+    if (resolved && !rubric.locked)
+      await update(workbook, await Rubric.sign(rubric, report));
+    return { path, resolved, score: final, spec };
   }
 
    /**
@@ -403,8 +434,7 @@ export namespace Workbook {
 
     const { report: kept } = rubric.assignment;
     const scores = { ...kept.scores, [id]: { ...kept.scores[id], comment } };
-    const cells = sources(workbook, rubric);
-    const signed = await Rubric.sign(rubric, { ...kept, scores }, cells);
+    const signed = await Rubric.sign(rubric, { ...kept, scores });
     return update(workbook, signed);
   }
 
@@ -541,8 +571,7 @@ export namespace Workbook {
     else delete interventions[id];
 
     const report = { ...kept, interventions };
-    const sources = Workbook.sources(workbook, rubric);
-    return update(workbook, await Rubric.sign(rubric, report, sources));
+    return update(workbook, await Rubric.sign(rubric, report));
   }
 
   /**
@@ -613,58 +642,16 @@ export namespace Workbook {
     return update(workbook, Rubric.Cell.reweight(rubric, id, value));
   }
 
-  /**
-   * @returns a stable signature payload containing all rubric cell IDs and
-   * only the source code for reference cells. No student answer code is
-   * included, allowing answers to be edited without invalidating the grading.
-   */
-  export function sources(workbook: Workbook, rubric: Rubric): {
-    [id: string]: string;
-  } {
-    const notebook = workbook.context.model.sharedModel;
-    const ids = new Set(Object.keys(rubric.cells));
-    const references = new Set<string>();
-    for (const id of ids) {
-      const cell = rubric.cells[id];
-      for (const ref of cell.reference || [])
-        references.add(ref);
-
-    }
-
-    const payload: { [id: string]: string } = {};
-    for (const cell of notebook.cells) {
-      const id = cell.id;
-      if (ids.has(id) || references.has(id))
-        payload[id] = references.has(id) ? cell.getSource() : '';
-
-    }
-    return payload;
-  }
-
   /** Submit an assignment, locking all cells to read-only. */
   export async function submit(
     workbook: Workbook,
-    confirmation: string | null = null
+    submitted: string | null = null
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked) throw new Error('submit error');
     freeze(workbook);
-    return update(workbook, Rubric.submit(rubric, confirmation));
+    return update(workbook, Rubric.submit(rubric, submitted));
   }
-
-  /**
-   * @returns the timestamp recorded when the assignment was signed.
-   *
-   * #### Notes
-   * This function is only meant for use when a client expects a timestamp to
-   * exist. It will throw an error if it fails to find a timestamp.
-   */
-  export function timestamp(workbook: Workbook): number {
-    const rubric = open(workbook, quiet);
-    const timestamp = rubric?.assignment.report.timestamp;
-    if (!timestamp) throw new Error('timestamp error');
-    return timestamp;
-  };
 
   /** Toggle a workbook cell's `shared` flag. */
   export async function toggle(
@@ -686,12 +673,7 @@ export namespace Workbook {
     if (!rubric.locked) return rubric;
 
     const unlocked = await Rubric.unlock(rubric, key);
-    const decrypted = await decrypt(workbook, unlocked);
-
-    // Verify against the stable rubric source payload.
-    const cells = sources(workbook, unlocked);
-    await Rubric.Assignment.verify(decrypted.assignment.report, cells, key);
-    return decrypted;
+    return decrypt(workbook, unlocked);
   }
 
   /**

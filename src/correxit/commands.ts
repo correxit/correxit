@@ -47,11 +47,12 @@ type Reified =
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
 const { get, has, size } = Rubric;
-const { add, assign, certify, comment, convert, correct, draft } = Workbook;
-const { intervene, lock, remove, reset, reweight, submit, toggle } = Workbook;
+const { add, assign, certify, collect, comment, convert, correct } = Workbook;
+const { draft, intervene, lock, remove, reset, reweight, submit } = Workbook;
+const { toggle } = Workbook;
 const { normalize } = Workbook.Credentials;
 
-export function addCommands(
+export function commands(
   app: JupyterFrontEnd,
   utilities: {
     collector: Correxit.Collector;
@@ -104,7 +105,9 @@ export function addCommands(
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
-      for await (const _ of collector([await certify(workbook)])) void _;
+      const certified = await certify(workbook);
+      const collected = await collector(certified);
+      await collect(workbook, collected);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
@@ -129,7 +132,8 @@ export function addCommands(
         return false;
 
       const code = cell.cell_type === 'code';
-      return code && !has(rubric, id, true) || has(rubric, id);
+      if (!code) return args.is === 'reviewable';
+      return !has(rubric, id, true) || has(rubric, id);
     },
     isToggled: (args: Partial<Cell>) => {
       const id = state.cell(args);
@@ -137,6 +141,14 @@ export function addCommands(
       return !!rubric && !!id && get(rubric, id)?.is === args.is;
     },
     isVisible: cell => commands.isEnabled(CommandIDs.configure, cell),
+    caption: (cell: Partial<Cell>) => {
+      if (!commands.isEnabled(CommandIDs.configure, cell)) return '';
+      if (cell.is === 'answerable') return trans.__('Has known answer');
+      if (cell.is === 'comparable') return trans.__('Compares to reference');
+      if (cell.is === 'correctable') return trans.__('Executes correction');
+      if (cell.is === 'reviewable') return trans.__('Needs manual review');
+      return '';
+    },
     label: (cell: Partial<Cell>) => {
       if (!commands.isEnabled(CommandIDs.configure, cell)) return '';
       if (cell.is === 'answerable') return trans.__('Answer');
@@ -236,7 +248,9 @@ export function addCommands(
       const id = state.cell(args);
       const headed = workbook && workbook.content;
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
-      return !!rubric && !!headed && (id ? has(rubric, id) : size(rubric) > 0);
+      if (!rubric || !headed) return false;
+      if (!id) return size(rubric) > 0;
+      return has(rubric, id) && get(rubric, id)!.is !== 'reviewable';
     },
     isVisible: (args: Partial<Cell> & CellToolbar) =>
       commands.isEnabled(CommandIDs.correct, args),
@@ -402,7 +416,7 @@ export function addCommands(
     },
     isVisible: args => commands.isEnabled(CommandIDs.remove, args),
     icon: Icons.reset,
-    label: trans.__('Reset configuration'),
+    label: trans.__('Reset cell'),
     execute: async (args: Partial<Cell>) => {
       const workbook = state.workbook();
       const id = state.cell(args);
@@ -464,7 +478,8 @@ export function addCommands(
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const rubric = open(state.workbook());
       const id = state.cell(args);
-      return !!id && !!rubric && !rubric.locked && has(rubric, id);
+      if (!id || !rubric || rubric.locked) return false;
+      return has(rubric, id) && get(rubric, id)!.is !== 'reviewable';
     },
     isVisible: (args: Partial<Cell & CellToolbar>) => {
       return commands.isEnabled(CommandIDs.share, args);
@@ -512,8 +527,8 @@ export function addCommands(
       if (!button.accept) return;
       try {
         const identifier = Workbook.identifier(workbook);
-        const confirmation = await submitter(workbook, identifier);
-        await submit(workbook, confirmation);
+        const submitted = await submitter(workbook, identifier);
+        await submit(workbook, submitted);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);

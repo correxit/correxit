@@ -16,16 +16,18 @@
 
 .correxit-configure {
   background-color: var(--jp-inverse-layout-color3);
+  border: 1px groove var(--jp-layout-color3);
   border-radius: 0;
   display: inline-block;
+  gap: 3px;
   height: var(--correxit-cell-toolbar-button-size);
   margin: 0;
-  padding: 0;
+  padding: 0 0 4px;
   text-align: center;
   width: var(--correxit-cell-toolbar-button-size);
 
   &.lm-mod-toggled {
-    background-color: var(--md-blue-400);
+    background-color: var(--correxit-insistent-color);
     box-shadow: none;
   }
 }

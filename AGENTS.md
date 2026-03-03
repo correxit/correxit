@@ -36,7 +36,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
   - _Example_: `Reified` type in `commands.ts` enables safe type narrowing after `if (!rubric)` guards.
   - _Pattern_: After checking `if (!rubric) return`, TypeScript knows `workbook` is non-null.
 - **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, assignment ID, and signature.
-- **Timestamps**: Use `Workbook.timestamp()` to retrieve the assignment report timestamp (throws if missing).
+- **Timestamps**: Lifecycle timestamps (`certification`, `collected`, `submission`, `submitted`) live on `Assignment`. Read them via `Workbook.open()`.
 
 ## 3. Asynchronous Patterns
 
@@ -56,6 +56,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
   - **Discouraged**: `items.reduce({...acc}, ...)` (Spread in reduce is a performance/complexity anti-pattern).
   - **Allowed**: `reduce` is fine for aggregation (sums, counts).
 - **Naming**: Prefer single, distinct English words (e.g., `report` vs `scoreReport`). Names should be domain words (`propagate`, `certify`, `lease`) not pattern words (`producer`, `handler`, `manager`). Bias toward beauty.
+- **Intentional Shadowing**: Variable shadowing is encouraged when it is like-for-like, the same term in the same semantic slot at a different scope. This reinforces consistent vocabulary (e.g., a `score` lambda parameter shadowing an outer `score` function). Do **not** flag like-for-like shadows as issues.
 
 ## 5. Common Pitfalls (Quick Check)
 
@@ -76,12 +77,12 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 ## 7. Key Module Map
 
 - `rubric.ts`: Core immutable data model & scoring logic.
-- `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing.
+- `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing, and `collect()` for recording a collection receipt.
 - `security.ts`: `openpgp` & `window.crypto` wrappers.
 - `commands.ts`: The central controller registry. Defines `Reified` type for safe workbook resolution.
 - `propagator.ts`: Async generator for assignment distribution to rosters.
 - `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
-- `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Registrar`, `Submitter`, `Unlocker`).
+- `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`).
 - `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, retries, timeout })`, `cap()`, `retries()`, and `timeout()` for settings-driven control.
 - `grader.ts`: Bounded-concurrency async generator for batch grading. Accepts a `recover` callback, `cap`, and `timeout` (ms). Scanner accepts `Iterable | AsyncIterable`; failures are recovered and yielded so nothing stalls the pipeline.
 - `state.ts`: In-memory cache for active workbook and cell scores (`Map` with FIFO eviction).

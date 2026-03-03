@@ -3,7 +3,7 @@
 }
 
 .correxit-sidebar {
-  --correxit-sidebar-content-inset: 6px;
+  --correxit-sidebar-content-inset: 2px;
   --correxit-sidebar-control-width: 100%;
   --correxit-sidebar-font-size: var(--jp-ui-font-size1);
   --correxit-sidebar-section-padding: 6px;
@@ -118,10 +118,31 @@
   width: 100%;
 }
 
-.correxit-sidebar-submission-actions .jp-ToolbarButtonComponent {
-  margin: 0;
-  min-width: 0;
-  width: 100%;
+.correxit-sidebar-submission-actions {
+  align-items: stretch;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+  margin: 6px var(--correxit-sidebar-content-inset) 0;
+
+  .jp-ToolbarButtonComponent {
+    margin: 0;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+.correxit-sidebar-submission-chip {
+  background-color: var(--jp-layout-color4);
+  border: 1px solid var(--jp-border-color3);
+  border-radius: 3px;
+  color: var(--jp-ui-font-color2);
+  display: block;
+  font-size: var(--jp-ui-font-size0);
+  overflow: hidden;
+  padding: 4px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent > span {
@@ -186,27 +207,6 @@
 
 .correxit-sidebar-header p {
   margin: 6px var(--correxit-sidebar-content-inset) 0;
-}
-
-.correxit-sidebar-submission-actions {
-  align-items: stretch;
-  display: grid;
-  gap: 4px;
-  grid-template-columns: 1fr 1fr;
-  margin: 6px var(--correxit-sidebar-content-inset) 0;
-}
-
-.correxit-sidebar-submission-chip {
-  background-color: var(--jp-layout-color4);
-  border: 1px solid var(--jp-border-color3);
-  border-radius: 3px;
-  color: var(--jp-ui-font-color2);
-  display: flex;
-  font-size: var(--jp-ui-font-size0);
-  justify-content: center;
-  line-height: 1.2;
-  padding: 4px 6px;
-  white-space: nowrap;
 }
 
 .correxit-sidebar-additional-operations {
@@ -301,10 +301,10 @@
   padding-top: 3px;
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after,
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after,
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after,
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-reviewable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-answerable::after,
+.jp-Cell:not(.jp-mod-active).cxt-mod-comparable::after,
+.jp-Cell:not(.jp-mod-active).cxt-mod-correctable::after,
+.jp-Cell:not(.jp-mod-active).cxt-mod-reviewable::after {
   --cxt-annotate-size: 28px;
   --cxt-annotate-icon: 16px 16px;
 
@@ -315,7 +315,7 @@
   top: 6px;
   right: 5px;
   z-index: 10;
-  background-color: var(--md-blue-400);
+  background-color: var(--correxit-insistent-color);
   box-shadow: none;
   width: var(--cxt-annotate-size);
   height: var(--cxt-annotate-size);
@@ -325,33 +325,36 @@
   pointer-events: none;
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-answerable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-answerable::after {
   background-image: url('../monitor/icons/answerable.svg');
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-comparable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-comparable::after {
   background-image: url('../monitor/icons/comparable.svg');
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correctable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-correctable::after {
   background-image: url('../monitor/icons/correctable.svg');
 }
 
-.jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-reviewable::after {
+.jp-Cell:not(.jp-mod-active).cxt-mod-reviewable::after {
   background-image: url('../monitor/icons/reviewable.svg');
 }
 
-.jp-Notebook
-  .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-correct
-  .jp-InputArea-editor {
-  border: 1px solid var(--md-green-300);
+.jp-Notebook .jp-Cell:not(.jp-mod-active).cxt-mod-correct .jp-InputArea-editor {
+  border: 1px solid var(--correxit-correct-color);
   border-radius: 6px;
 }
 
 .jp-Notebook
-  .jp-Cell.jp-CodeCell:not(.jp-mod-active).cxt-mod-incorrect
+  .jp-Cell:not(.jp-mod-active).cxt-mod-incorrect
   .jp-InputArea-editor {
-  border: 1px solid var(--md-red-300);
+  border: 1px solid var(--correxit-incorrect-color);
+  border-radius: 6px;
+}
+
+.jp-Notebook .jp-Cell:not(.jp-mod-active).cxt-mod-partial .jp-InputArea-editor {
+  border: 1px solid var(--correxit-partial-color);
   border-radius: 6px;
 }
 

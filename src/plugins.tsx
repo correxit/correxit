@@ -16,15 +16,16 @@ import {
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStatusBar } from '@jupyterlab/statusbar';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
+import { UUID } from '@lumino/coreutils';
+import { DisposableDelegate } from '@lumino/disposable';
 import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector } from './corrector';
-import { addCommands, Correxit, Unlocker, Workbook } from './correxit';
+import { Correxit, Unlocker, Workbook } from './correxit';
 import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
-import { DisposableDelegate } from '@lumino/disposable';
 
 /**
  * The default (file-based) Correxit assignment propagation consumer.
@@ -68,17 +69,14 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
 };
 
 /**
- * The default (pass-through) Correxit grade collector.
+ * The default Correxit grade collector, returns a UUID.
  */
 const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   id: Correxit.COLLECTOR,
   description: Correxit.DESCRIPTION.COLLECTOR,
   provides: Correxit.Collector,
   ...((deactivator?: () => void) => ({
-    activate: (): Correxit.Collector =>
-      async function* collector(grades) {
-        for await (const grade of grades) yield grade;
-      },
+    activate: (): Correxit.Collector => async _ => UUID.uuid4(),
     deactivate: () => deactivator?.()
   }))()
 };
@@ -120,7 +118,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const active = new Signal<typeof tracker, void>(tracker);
       tracker.currentChanged.connect(() => active.emit(undefined));
       const { launch } = Corrector.CommandIDs;
-      const added = Corrector.addCommands(app, {
+      const added = Corrector.commands(app, {
         browser,
         collector,
         documents,
@@ -232,9 +230,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       const notify = () =>
         ui.forEach(command => commands.notifyCommandChanged(command));
       const monitor = new Stream<null, Workbook | null>(null);
-      const { open } = Workbook;
-      const quiet = true;
-      const subscribe = (prev: Workbook | null, next: Workbook | null) => {
+      const swap = (prev: Workbook | null, next: Workbook | null) => {
         prev?.context.fileChanged.disconnect(notify);
         prev?.context.model.sharedModel.metadataChanged.disconnect(notify);
         next?.context.fileChanged.connect(notify);
@@ -242,17 +238,16 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       };
       const injector: (workbook: Workbook | null) => void = (
         previous => workbook => {
-          if (workbook !== state.workbook()) {
-            open(workbook, quiet);
-            subscribe(previous, workbook);
-            state.workbook(workbook);
-            previous = workbook;
-            monitor.emit(workbook);
-            notify();
-          }
+          if (workbook === state.workbook()) return;
+          Workbook.open(workbook, true);
+          swap(previous, workbook);
+          state.workbook(workbook);
+          previous = workbook;
+          monitor.emit(workbook);
+          notify();
         }
       )(null as Workbook | null);
-      const added = addCommands(app, {
+      const added = Correxit.commands(app, {
         collector,
         consumer,
         injector,
@@ -283,7 +278,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
 };
 
 /**
- * The default Correxit assignment submitter.
+ * The default Correxit assignment submitter, returns a UUID.
  */
 const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   id: Correxit.SUBMITTER,
@@ -291,7 +286,7 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   autoStart: true,
   ...((deactivator?: () => void) => ({
     provides: Correxit.Submitter,
-    activate: (): Correxit.Submitter => async _ => null,
+    activate: (): Correxit.Submitter => async _ => UUID.uuid4(),
     deactivate: () => deactivator?.()
   }))()
 };

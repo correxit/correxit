@@ -1,15 +1,15 @@
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { Token } from '@lumino/coreutils';
 import { Rubric, Workbook } from '.';
-import { CommandIDs as COMMAND_IDS } from './commands';
+import { commands as COMMANDS, CommandIDs as COMMAND_IDS } from './commands';
 import * as description from './description';
 import { Icons as ICONS } from './icons';
 
 export namespace Correxit {
   /** A collector of certified workbook grades. */
   export type Collector = (
-    grades: AsyncIterable<Workbook.Certified> | Iterable<Workbook.Certified>
-  ) => AsyncGenerator<Workbook.Certified>;
+    certified: Workbook.Certified
+  ) => Promise<string | null>;
 
   export type Consumer = (output: {
     path: string;
@@ -75,6 +75,8 @@ export namespace Correxit {
   export const Collector = new Token<Collector>(COLLECTOR);
 
   export const CommandIDs = COMMAND_IDS;
+
+  export const commands = COMMANDS;
 
   export const CONSUMER = '@quantstack/correxit:consumer';
 

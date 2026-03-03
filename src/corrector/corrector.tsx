@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
 import {
-  addCommands as ADD_COMMANDS,
+  commands as COMMANDS,
   CommandIDs as COMMAND_IDS,
   Scanned
 } from './commands';
@@ -25,7 +25,7 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 const FAILED = 'cxt-mod-failed';
 const PENDING = 'cxt-mod-pending';
 const SELECTED = 'cxt-mod-selected';
-const { batch, scan } = COMMAND_IDS;
+const { batch, collect, scan } = COMMAND_IDS;
 const { basename } = PathExt;
 
 /**
@@ -136,9 +136,10 @@ const resolve = (
   if (collated.has(path)) return collated.get(path)!.grade;
   if (workbook.hollow || !graded) return 'pending';
   const rubric = open(workbook);
-  const summary = rubric && Rubric.Assignment.summary(rubric.assignment.report);
+  const report = rubric?.assignment.report;
+  const summary = report && Rubric.Assignment.summary(report);
   const score = summary || Rubric.Score.UNSCORED;
-  return { path, resolved: true, score, spec: null };
+  return { path, resolved: true, score, spec: report?.kernel ?? null };
 };
 
 /** @returns the number of resolved grades in a collation of workbooks. */
@@ -178,12 +179,11 @@ const Progress: React.FC<{
 
 export function Corrector(props: Corrector.Props) {
   const { commands, mode, notify, overwrite, path, trans } = props;
-  const certify = mode === 'certify';
-  const grading = mode === 'grade' || certify;
+  const grading = mode !== 'scan';
   const [workbooks, scanned] = useCommand<Scanned>(commands, scan, { path });
-  const grade = grading ? batch : '';
-  const config = { certify, overwrite, path, unlock: true };
-  const [grades, graded] = useCommand<Batched>(commands, grade, config);
+  const command = mode === 'grade' ? batch : mode === 'collect' ? collect : '';
+  const config = { overwrite, path, unlock: true };
+  const [grades, graded] = useCommand<Batched>(commands, command, config);
   const loaded = useMemo(() => workbooks.filter(reified).length, [workbooks]);
   const collated = useMemo(() => new Map(grades) as Collated, [grades]);
   const resolved = useMemo(() => resolutions(collated), [collated]);
@@ -205,16 +205,16 @@ export function Corrector(props: Corrector.Props) {
       {memo.map(workbook => {
         const { path } = workbook.context;
         const grade = resolve(workbook, collated, graded);
-        const select = setSelection;
-        const props = { commands, grade, graded, select, trans, workbook };
-        return <Row key={path} selected={path === selection} {...props} />;
+        const flags = { graded, selected: path === selection };
+        const props = { commands, grade, mode, select: setSelection, workbook };
+        return <Row key={path} {...flags} {...props} trans={trans} />;
       })}
     </table>
   );
 }
 
 export namespace Corrector {
-  export type Mode = 'certify' | 'grade' | 'scan';
+  export type Mode = 'collect' | 'grade' | 'scan';
 
   export type Notification = { graded: boolean; scanned: boolean; mode: Mode };
 
@@ -231,11 +231,11 @@ export namespace Corrector {
 
   export type Widget = CorrectorWidget;
 
-  export const addCommands = ADD_COMMANDS;
+  export const commands = COMMANDS;
 
   export const CommandIDs = COMMAND_IDS;
 
-  export const Modes: Readonly<Mode[]> = ['scan', 'grade', 'certify'];
+  export const Modes: Readonly<Mode[]> = ['scan', 'grade', 'collect'];
 
   export const Status = CorrectorStatus;
 
@@ -273,15 +273,24 @@ const Row: React.FC<{
   commands: CommandRegistry;
   grade: Grade | 'pending';
   graded: boolean;
+  mode: Corrector.Mode;
   select: (path: string) => void;
   selected: boolean;
   trans: TranslationBundle;
   workbook: Scanned;
 }> = React.memo(props => {
-  const { commands, grade, graded, select, selected, trans, workbook } = props;
+  const { commands, grade, graded, mode, select, selected, trans, workbook } =
+    props;
   const { path } = workbook.context;
   const pending = grade === 'pending';
   const failed = !pending && !grade.resolved;
+  const rubric = workbook.hollow ? null : open(workbook);
+  const review =
+    mode === 'grade' &&
+    !pending &&
+    grade.resolved &&
+    !!rubric &&
+    !rubric.locked;
   const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');
@@ -292,35 +301,62 @@ const Row: React.FC<{
       <Lock {...{ trans, workbook }} />
       <Assignment {...{ trans, workbook }} />
       <Assignee {...{ workbook }} />
-      <Breakdown {...{ failed, workbook }} />
-      <Score {...{ grade, graded, trans }} />
+      <Breakdown {...{ failed, trans, workbook }} />
+      <Score {...{ grade, graded, review, trans }} />
     </tr>
   );
 });
 
 const Breakdown: React.FC<{
   failed: boolean;
+  trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = ({ failed, workbook }) => {
+}> = ({ failed, trans, workbook }) => {
   if (failed) return <td className="correxit-corrector-breakdown" />;
+
   const rubric = open(workbook);
-  const notebook = workbook.context.model.sharedModel;
   if (!rubric) return <td className="correxit-corrector-breakdown" />;
+
   const { cells } = rubric;
-  const { scores } = rubric.assignment.report;
-  const breakdown = Array.from(notebook.cells)
+  const { report } = rubric.assignment;
+  const breakdown = workbook.context.model.sharedModel.cells
     .map(cell => cell.id)
     .filter(id => id in cells);
+  const computed = (id: string) =>
+    Rubric.Score.resolve(report, id) ?? Rubric.Score.UNSCORED;
+  const status = (id: string) => {
+    const { status } = computed(id);
+    const reviewable = cells[id].is === 'reviewable';
+    return reviewable && status === 'unscored' ? 'review' : status;
+  };
+  const label = (id: string) => {
+    const resolution = status(id);
+    const { points, possible } = computed(id);
+    const { is: type } = cells[id];
+    if (resolution === 'review') return trans.__('%1: needs review', type);
+    if (resolution === 'unscored') return trans.__('%1: unscored', type);
+    return trans.__('%1: %2 of %3', type, points, possible);
+  };
   return (
     <td className="correxit-corrector-breakdown">
-      <span className="correxit-corrector-breakdown-bar">
+      <span
+        aria-label={breakdown.map(label).join(', ')}
+        className="correxit-corrector-breakdown-bar"
+        role="img"
+      >
         {breakdown.map(id => {
-          const status = scores[id]?.status || 'unscored';
           const className = [
             'correxit-corrector-breakdown-segment',
-            `correxit-corrector-breakdown-${status}`
+            `correxit-corrector-breakdown-${status(id)}`
           ].join(' ');
-          return <span key={id} className={className} />;
+          return (
+            <span
+              aria-hidden="true"
+              className={className}
+              key={id}
+              title={label(id)}
+            />
+          );
         })}
       </span>
     </td>
@@ -404,8 +440,9 @@ const Assignment: React.FC<{
 const Score: React.FC<{
   grade: Grade | 'pending';
   graded: boolean;
+  review: boolean;
   trans: TranslationBundle;
-}> = ({ grade, graded, trans }) => {
+}> = ({ grade, graded, review, trans }) => {
   const irrecoverable = trans.__('Grade manually');
   const recoverable = trans.__('(Retrying...)');
   if (grade === 'pending') {
@@ -420,6 +457,13 @@ const Score: React.FC<{
     return (
       <td className="correxit-corrector-failed" colSpan={2}>
         <span>{graded ? irrecoverable : recoverable}</span>
+      </td>
+    );
+  }
+  if (review) {
+    return (
+      <td className="correxit-corrector-review" colSpan={2}>
+        <span>{trans.__('Review required')}</span>
       </td>
     );
   }

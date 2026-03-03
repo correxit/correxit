@@ -32,7 +32,7 @@ export type Actions = {
  * concurrency slot is free, so the kernel pool never grows faster than grading
  * can drain it.
  *
- * Timeouts are not managed here — the kernel lease deadline (`kernels.lifespan`)
+ * Timeouts are not managed here, the kernel lease deadline (`kernels.lifespan`)
  * is the authoritative timeout because it starts after `acquire()` resolves,
  * not while waiting for a pool slot.
  *
@@ -75,19 +75,19 @@ export async function* grader(
     return queue.shift()!;
   };
   const emit = async (): Promise<Certified | null> => {
-    const item = await take();
-    if (!item) return null;
-    if (item.ok) return item.grade;
+    const settled = await take();
+    if (!settled) return null;
+    if (settled.ok) return settled.grade;
 
-    const tried = (attempts.get(item.workbook) ?? 0) + 1;
+    const tried = (attempts.get(settled.workbook) ?? 0) + 1;
     if (tried <= retries) {
-      attempts.set(item.workbook, tried);
-      start(item.workbook);
+      attempts.set(settled.workbook, tried);
+      start(settled.workbook);
       return null;
     }
-    attempts.delete(item.workbook);
-    console.warn('grader error', item.workbook.context.path, item.error);
-    return actions.recover(item.workbook);
+    attempts.delete(settled.workbook);
+    console.warn('grader error', settled.workbook.context.path, settled.error);
+    return actions.recover(settled.workbook);
   };
 
   for await (const workbook of scanner) {
@@ -95,6 +95,10 @@ export async function* grader(
     if (cached) {
       yield cached;
       continue;
+    }
+    while (queue.length) {
+      const grade = await emit();
+      if (grade) yield grade;
     }
     while (inflight >= max) {
       const grade = await emit();
