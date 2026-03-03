@@ -113,16 +113,16 @@ export function commands(
         const source = scanner({ commands }, handle);
         return (async function* () {
           for await (const workbook of source) {
-            const item = certified(workbook);
-            if (!item) continue;
+            const collectable = certified(workbook);
+            if (!collectable) continue;
             if (!overwrite) {
               const { collected } =
                 Workbook.open(workbook, true)?.assignment ?? {};
               if (collected) continue;
             }
-            const collected = await collector(item);
+            const collected = await collector(collectable);
             await Workbook.collect(workbook, collected);
-            const { grade } = item;
+            const { grade } = collectable;
             yield [grade.path, { grade, workbook: workbook as Headless }];
           }
         })();
