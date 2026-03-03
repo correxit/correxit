@@ -83,7 +83,7 @@ async function reassign({ assignee, key, notebook, roster }: {
   return { assignee, assignment: metadata.id, signature };
 }
 
-/** @returns initialized lifecycle stage timestamps for an assignment. */
+/** @returns initialized lifecycle stages for a propagated assignment. */
 function stages(expiration: number | null) {
   return {
     certification: null,
