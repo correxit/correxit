@@ -201,11 +201,11 @@
   border: 1px solid var(--jp-border-color3);
   border-radius: 3px;
   color: var(--jp-ui-font-color2);
-  display: flex;
+  display: block;
   font-size: var(--jp-ui-font-size0);
-  justify-content: center;
-  line-height: 1.2;
+  overflow: hidden;
   padding: 4px 6px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

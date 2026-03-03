@@ -21,8 +21,8 @@
   display: inline-block;
   gap: 3px;
   height: var(--correxit-cell-toolbar-button-size);
-  margin: 0px;
-  padding: 0 0 4px 0;
+  margin: 0;
+  padding: 0 0 4px;
   text-align: center;
   width: var(--correxit-cell-toolbar-button-size);
 
