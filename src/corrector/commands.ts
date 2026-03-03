@@ -109,8 +109,7 @@ export function commands(
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
-        if (!handle)
-          throw new Error(`collect failed, args: ${JSON.stringify(args)}`);
+        if (!handle) throw new Error('collect error, bad handle');
         const source = scanner({ commands }, handle);
         return (async function* () {
           for await (const workbook of source) {

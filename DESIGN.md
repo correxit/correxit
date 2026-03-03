@@ -225,9 +225,9 @@ consumer with an LMS consumer requires no changes to the propagator or commands.
 | Plugin          | Purpose                                             | Default                       |
 | --------------- | --------------------------------------------------- | ----------------------------- |
 | **`Consumer`**  | Process propagated assignments                      | Writes to local filesystem    |
-| **`Collector`** | Collect certified grades                            | Returns null (no receipt)     |
+| **`Collector`** | Collect certified grades                            | Returns a UUID                |
 | **`Registrar`** | Provide rosters for assignments                     | Returns null (manual entry)   |
-| **`Submitter`** | Handle submission receipts                          | Returns null (no receipt)     |
+| **`Submitter`** | Handle submission receipts                          | Returns a UUID                |
 | **`Unlocker`**  | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager           |
 | **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |
 

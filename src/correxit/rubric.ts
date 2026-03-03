@@ -623,12 +623,20 @@ export namespace Rubric {
     if (!record(assignment.report))
       throw new Error('invalid rubric, missing assignment report');
 
-    const { interventions, scores } = assignment.report;
+    const { interventions, kernel: spec, scores } = assignment.report;
+    const kernel = spec ?? null;
     if (!record(interventions))
       throw new Error('invalid rubric, missing assignment interventions');
     if (!record(scores))
       throw new Error('invalid rubric, missing assignment scores');
-    return { assignment, cells, id, key, locked, revised };
+    if (kernel !== null && !object(kernel))
+      throw new Error('invalid rubric, invalid kernel spec');
+    const blank = Assignment.Report.empty();
+    const report = { ...blank, interventions, kernel, scores };
+    return {
+      assignment: { ...Assignment.empty(), ...assignment, report },
+      cells, id, key, locked, revised
+    };
   }
 
   /** Remove a cell from a rubric and invalidate report. */
