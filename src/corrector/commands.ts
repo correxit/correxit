@@ -197,10 +197,8 @@ function certified(workbook: Headless): Certified | null {
   const { assignment, cells } = rubric;
   const { interventions, kernel, scores } = assignment.report;
   const path = workbook.context.path;
-  const transient = ({ code }: Rubric.Score) =>
-    code === 'missing-given' || code === 'missing-reference';
   const incomplete = Object.keys(cells).some(id => !scores[id]);
-  const partial = Object.values(scores).some(transient);
+  const partial = Object.values(scores).some(unexecuted);
   const pending = Object.values(cells)
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
@@ -242,14 +240,8 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
 
   const { interventions, scores } = rubric.assignment.report;
   const ids = Object.keys(rubric.cells);
-  const transient = ({ code }: Rubric.Score) =>
-    code === 'missing-given' || code === 'missing-reference';
   const complete =
-    ids.length > 0 &&
-    ids.every(id => {
-      const score = scores[id];
-      return score && !transient(score);
-    });
+    ids.length > 0 && ids.every(id => scores[id] && !unexecuted(scores[id]));
   if (!complete) return null;
 
   const pending = Object.values(rubric.cells)
@@ -292,4 +284,8 @@ async function* scanner(
   const stream = await commands.execute(CommandIDs.scan, credentials);
   for await (const workbook of stream as AsyncIterable<Scanned>)
     if (!workbook.hollow) yield workbook;
+}
+
+function unexecuted({ code }: Rubric.Score): boolean {
+  return code === 'missing-given' || code === 'missing-reference';
 }
