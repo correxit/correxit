@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/QuantStack/correxit/compare/v1.4.0...v1.5.0) (2026-03-03)
+
+
+### Features
+
+* `reviewable` cell upgrade and follow-on ([#45](https://github.com/QuantStack/correxit/issues/45)) ([96fce89](https://github.com/QuantStack/correxit/commit/96fce89c3365e9d6347e6080e38db2cfdf2280e7))
+
 # [1.4.0](https://github.com/QuantStack/correxit/compare/v1.3.0...v1.4.0) (2026-03-01)
 
 
