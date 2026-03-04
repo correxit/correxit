@@ -19,6 +19,8 @@ export namespace Rubric {
     certification: number | null;
     collected: string | null;
     expiration: number | null;
+    id: string | null;
+    name: string;
     report: Assignment.Report;
     roster: string[];
     signature: string;
@@ -66,8 +68,7 @@ export namespace Rubric {
       | KernelMessage.IIOPubMessage<'error'>;
 
     namespace Output {
-      export const error = ({ header }: Output) =>
-        header.msg_type === 'error';
+      export const error = ({ header }: Output) => header.msg_type === 'error';
 
       export const stdout = (output: Output) =>
         stream(output) &&
@@ -134,9 +135,7 @@ export namespace Rubric {
       return { ...Score.UNSCORED, code: 'error-compare' };
     };
 
-    export async function correct(
-      expected: Output[]
-    ): Promise<Score> {
+    export async function correct(expected: Output[]): Promise<Score> {
       return expected.some(Output.error) ? Score.INCORRECT : Score.CORRECT;
     }
 
@@ -169,9 +168,7 @@ export namespace Rubric {
       return outputs;
     }
 
-    export async function review(
-      intervention: Score | null
-    ): Promise<Score> {
+    export async function review(intervention: Score | null): Promise<Score> {
       return intervention ?? { ...Score.UNSCORED, code: 'intervene' };
     }
 
@@ -264,6 +261,37 @@ export namespace Rubric {
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
   export namespace Assignment {
+    export type Registration = Pick<
+      Rubric.Assignment,
+      'expiration' | 'id' | 'name' | 'roster'
+    >;
+
+    export namespace Equal {
+      const registration = (x: Registration, y: Registration): boolean => (
+        x.expiration === y.expiration &&
+        x.id === y.id &&
+        x.name === y.name &&
+        roster(x.roster, y.roster)
+      );
+      const roster = (x: string[], y: string[]): boolean =>
+        x.length === y.length &&
+        x.every((record, i) => record === y[i]);
+
+      export function assignment(x: Assignment, y: Assignment): boolean {
+        return x.assignee === y.assignee && registration(x, y);
+      }
+
+      export function registered(
+        x: Registration[] | null,
+        y: Registration[] | null
+      ): boolean {
+        if (x === y) return true;
+        if (x === null || y === null) return false;
+        if (x.length !== y.length) return false;
+        return x.every((item, i) => registration(item, y[i]));
+      }
+    }
+
     /** A score report for an assignment. */
     export type Report = Readonly<{
       interventions: { [id: string]: Score };
@@ -293,6 +321,8 @@ export namespace Rubric {
         certification: null,
         collected: null,
         expiration: null,
+        id: null,
+        name: '',
         report: Report.empty(),
         roster: [],
         signature: '',
@@ -332,10 +362,10 @@ export namespace Rubric {
     }
 
     export async function sign(terms: Terms, key: string): Promise<string> {
-      const { assignee, expiration, roster } = terms;
+      const { assignee, expiration, id, name, roster } = terms;
       const { interventions: manual, scores: auto } = terms.report;
       const report = { interventions: sort(manual), scores: sort(auto) };
-      const unsigned = { assignee, expiration, report: report, roster };
+      const unsigned = { assignee, expiration, id, name, report, roster };
       return security.digest(JSON.stringify(unsigned).concat(key));
     }
 
@@ -496,6 +526,8 @@ export namespace Rubric {
       certification = rubric.assignment.certification,
       collected = rubric.assignment.collected,
       expiration = rubric.assignment.expiration,
+      id = rubric.assignment.id,
+      name = rubric.assignment.name,
       roster = rubric.assignment.roster,
       submission = rubric.assignment.submission,
       submitted = rubric.assignment.submitted
@@ -508,11 +540,13 @@ export namespace Rubric {
       certification !== rubric.assignment.certification ||
       collected !== rubric.assignment.collected ||
       expiration !== rubric.assignment.expiration ||
+      id !== rubric.assignment.id ||
+      name !== rubric.assignment.name ||
       submitted !== rubric.assignment.submitted ||
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster) ||
       submission !== rubric.assignment.submission;
     const report = stale ? Assignment.Report.empty() : rubric.assignment.report;
-    const unsigned = { assignee, expiration, report, roster };
+    const unsigned = { assignee, expiration, id, name, report, roster };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = {
       ...unsigned,
@@ -565,9 +599,7 @@ export namespace Rubric {
     if (!rubric.assignment.certification)
       throw new Error('collect error: not certified');
     const revised = Date.now();
-    const assignment = {
-      ...rubric.assignment, collected
-    };
+    const assignment = { ...rubric.assignment, collected };
     return { ...rubric, assignment, revised };
   }
 

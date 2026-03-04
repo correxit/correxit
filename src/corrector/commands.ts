@@ -106,9 +106,7 @@ export function commands(
         args: Partial<Credentials & { overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
-        const auth = !!(args.key || args.passphrase);
-        const potential = { ...args, unlock: auth ? !!args.unlock : true };
-        const handle = normalize(potential as Partial<Credentials>);
+        const handle = normalize({ path: args.path } as Partial<Credentials>);
         if (!handle) throw new Error('collect error, bad handle');
         const source = scanner({ commands }, handle);
         return (async function* () {
@@ -118,6 +116,7 @@ export function commands(
             if (!overwrite && open(workbook)?.assignment.collected) continue;
             const collected = await collector(collectable);
             await Workbook.collect(workbook, collected);
+            await save(workbook);
             const { grade } = collectable;
             yield [grade.path, { grade, workbook: workbook as Headless }];
           }
@@ -192,7 +191,7 @@ export function commands(
 
 function certified(workbook: Headless): Certified | null {
   const rubric = open(workbook);
-  if (!rubric) return null;
+  if (!rubric || !rubric.locked) return null;
 
   const { assignment, cells } = rubric;
   const { interventions, kernel, scores } = assignment.report;
@@ -268,7 +267,12 @@ function recover(workbook: Headless): Certified {
   try {
     identifier = Workbook.identifier(workbook);
   } catch {
-    identifier = { assignee: null, assignment: '', signature: null };
+    identifier = {
+      assignee: null,
+      assignment: null,
+      rubric: '',
+      signature: null
+    };
   }
   return { grade, identifier, workbook };
 }

@@ -21,12 +21,12 @@ export namespace CommandIDs {
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const draft = 'correxit:draft';
+  export const enroll = 'correxit:enroll';
   export const fetch = 'correxit:fetch';
   export const inject = 'correxit:inject';
   export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
-  export const registrar = 'correxit:registrar';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
   export const reweight = 'correxit:reweight';
@@ -41,6 +41,7 @@ type Cell = Rubric.Cell;
 type CellToolbar = Rubric.Cell.Toolbar;
 type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
+type Registration = Rubric.Assignment.Registration;
 type Reified =
   { handle: Credentials | null; rubric: null; workbook: null; } |
   { handle: Credentials | null; rubric: null; workbook: Workbook; } |
@@ -88,10 +89,7 @@ export function commands(
     execute: async (args: Partial<Credentials & Assignment>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
-
-      const identifier = Workbook.identifier(workbook);
-      const roster = await registrar(workbook, identifier) || args.roster;
-      await assign(workbook, { ...args, roster });
+      await assign(workbook, args);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.certify, {
@@ -394,13 +392,15 @@ export function commands(
       return (async function* empty() {})();
     }
   }));
-  disposables.push(commands.addCommand(CommandIDs.registrar, {
-    execute: async (args: Partial<Credentials>): Promise<string[] | null> => {
+  disposables.push(commands.addCommand(CommandIDs.enroll, {
+    execute: async (
+      args: Partial<Credentials>
+    ): Promise<Registration[] | null> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric) return null;
 
       const warn = (error: any) => {
-        console.warn('registrar failed for workbook', workbook, error);
+        console.warn('enroll failed for workbook', workbook, error);
         return [];
       };
       const identifier = Workbook.identifier(workbook);

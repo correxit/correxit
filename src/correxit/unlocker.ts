@@ -12,11 +12,7 @@ type Secrets = {
 };
 
 export namespace Unlocker {
-  export async function store(
-    id: string,
-    key: string,
-    secrets: Secrets
-  ) {
+  export async function store(id: string, key: string, secrets: Secrets) {
     const { manager, token } = secrets;
     if (manager && token) {
       const secret = { namespace: Correxit.UNLOCKER, id, value: key };
