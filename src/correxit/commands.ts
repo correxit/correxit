@@ -248,7 +248,8 @@ export function commands(
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
       if (!rubric || !headed) return false;
       if (!id) return size(rubric) > 0;
-      return has(rubric, id) && get(rubric, id)!.is !== 'reviewable';
+      const { is, shared } = get(rubric, id) || {};
+      return !!is && (shared || !rubric.locked) && is !== 'reviewable';
     },
     isVisible: args => commands.isEnabled(CommandIDs.correct, args),
     label: (args: Partial<Cell> & CellToolbar) => {

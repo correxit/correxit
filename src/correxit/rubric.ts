@@ -212,6 +212,8 @@ export namespace Rubric {
       if (!cell) return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
       const possible = cell.points;
+      if (rubric.locked && !cell.shared)
+        return { ...Score.INCORRECT, code: 'locked', id, possible };
       if (cell.is === 'reviewable') {
         const score = await review(intervention ?? null);
         if (score.status === 'unscored') return { ...score, id, possible };
@@ -419,6 +421,7 @@ export namespace Rubric {
       | 'error-given'
       | 'error-is-unknown'
       | 'intervene'
+      | 'locked'
       | 'mismatch-congruence'
       | 'mismatch-data'
       | 'mismatch-digest'
