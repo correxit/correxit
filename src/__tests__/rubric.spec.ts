@@ -30,7 +30,6 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 5,
         reference: null,
-        shared: false,
         payload: ['42']
       };
       const rubric = Rubric.add(create(), cell);
@@ -47,30 +46,34 @@ describe('Rubric', () => {
       const id = 'cell-1';
       const base = Rubric.add(create(), {
         id,
-        is: 'answerable',
+        is: 'comparable',
+        payload: null,
         points: 1,
-        reference: null,
-        shared: false,
-        payload: []
+        reference: ['ref-1'],
+        secret: true
       });
       const report: Rubric.Assignment.Report = {
         interventions: {},
         kernel: null,
         scores: { [id]: Rubric.Score.CORRECT }
       };
-      const secret = {
+      const before = {
         ...base,
         assignment: {
           ...base.assignment,
           report
         }
       };
-      const shared = Rubric.toggle(secret, id);
-      expect(secret.cells[id]).toBeDefined();
-      expect(secret.cells[id].shared).toBe(false);
-      expect(shared.cells[id]).toBeDefined();
-      expect(shared.cells[id].shared).toBe(true);
-      expect(shared.assignment.report.scores).toEqual({});
+      const after = Rubric.toggle(before, id);
+      expect(before.cells[id]).toBeDefined();
+      expect(
+        (before.cells[id] as any).secret
+      ).toBe(true);
+      expect(after.cells[id]).toBeDefined();
+      expect(
+        (after.cells[id] as any).secret
+      ).toBe(false);
+      expect(after.assignment.report.scores).toEqual({});
     });
 
     it('removes a cell from the rubric and report', async () => {
@@ -80,7 +83,6 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        shared: false,
         payload: []
       });
       const report: Rubric.Assignment.Report = {
@@ -103,7 +105,6 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        shared: false,
         payload: []
       });
 
@@ -126,7 +127,6 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        shared: false,
         payload: []
       });
       rubric = Rubric.add(rubric, {
@@ -134,7 +134,6 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        shared: true,
         payload: []
       });
       expect(Rubric.size(rubric)).toBe(2);
@@ -147,8 +146,7 @@ describe('Rubric', () => {
         is: 'reviewable',
         payload: null,
         points: 1,
-        reference: null,
-        shared: false
+        reference: null
       });
       const report: Rubric.Assignment.Report = {
         interventions: {},
@@ -512,7 +510,6 @@ describe('Rubric', () => {
           is: 'answerable',
           points: 1,
           reference: null,
-          shared: false,
           payload: [digest]
         };
         return Rubric.add(create(), cell);
@@ -560,7 +557,7 @@ describe('Rubric', () => {
           is: 'comparable',
           points: 1,
           reference: [ref],
-          shared: false,
+          secret: false,
           payload: null
         };
         return Rubric.add(create(), cell);
@@ -620,7 +617,7 @@ describe('Rubric', () => {
           is: 'correctable',
           points: 1,
           reference: [ref],
-          shared: false,
+          secret: false,
           payload: null
         };
         return Rubric.add(create(), cell);
@@ -658,8 +655,7 @@ describe('Rubric', () => {
           is: 'reviewable',
           payload: null,
           points: 5,
-          reference: null,
-          shared: false
+          reference: null
         };
         return Rubric.add(create(), cell);
       };
@@ -744,7 +740,6 @@ describe('Rubric', () => {
           is: 'answerable',
           points: 1,
           reference: null,
-          shared: false,
           payload
         });
       const rubric = add(create());
@@ -763,7 +758,6 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        shared: false,
         payload: ['DIGEST<A>']
       });
       rubric = Rubric.add(rubric, {
@@ -771,7 +765,6 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        shared: false,
         payload: ['DIGEST<B>']
       });
 
@@ -792,7 +785,6 @@ describe('Rubric', () => {
           is: 'answerable',
           points: 1,
           reference: null,
-          shared: false,
           payload: [`DIGEST<${text}>`]
         }));
       add('c1', 'A');
@@ -828,7 +820,6 @@ describe('Rubric', () => {
           is: 'answerable',
           points: 1,
           reference: null,
-          shared: false,
           payload: []
         }));
       add('c1');

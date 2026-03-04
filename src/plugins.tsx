@@ -184,9 +184,15 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
       return [
         {
           expiration: Date.now() + week,
-          id: 'example-assignment',
-          name: 'Example Assignment',
+          id: 'example-assignment-1',
+          name: 'Example Assignment 1',
           roster: ['alpha@example.com', 'bravo@example.com']
+        },
+        {
+          expiration: Date.now() + week,
+          id: 'example-assignment-2',
+          name: 'Example Assignment 2',
+          roster: ['charlie@example.com', 'delta@example.com']
         }
       ];
     },

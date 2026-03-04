@@ -21,7 +21,7 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
         is: 'comparable',
         points: 1,
         reference: ['ref'],
-        shared: false,
+        secret: true,
         payload: null
       }
     );

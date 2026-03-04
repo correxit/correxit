@@ -114,12 +114,12 @@ async function template(
   const notebook = workbook.context.model.sharedModel.toJSON();
   for (const id in rubric.cells) {
     const cell = rubric.cells[id];
-    if (cell.shared) continue;
-    if (cell.is === 'comparable' || cell.is === 'correctable') {
-      const [reference] = cell.reference;
-      await encrypt(notebook, reference, rubric.key);
-      encrypted.push(reference);
-    }
+    if (cell.is !== 'comparable' && cell.is !== 'correctable')
+      continue;
+    if (!cell.secret) continue;
+    const [reference] = cell.reference;
+    await encrypt(notebook, reference, rubric.key);
+    encrypted.push(reference);
   }
   return { encrypted, notebook };
 }

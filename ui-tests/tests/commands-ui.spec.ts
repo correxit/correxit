@@ -55,7 +55,7 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
       is: cell?.is ?? null,
       points: cell?.points ?? null,
       reference: cell?.reference ?? null,
-      shared: cell?.shared ?? null,
+      secret: cell?.secret ?? null,
       toggled: app.commands.isToggled('correxit:configure', {
         id: 'cell',
         is: 'comparable'
@@ -66,7 +66,7 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
   expect(result.is).toBe('comparable');
   expect(result.points).toBe(1);
   expect(result.reference).toEqual(['ref']);
-  expect(result.shared).toBe(false);
+  expect(result.secret).toBe(false);
   expect(result.toggled).toBe(true);
   await dispose();
 });
@@ -124,7 +124,7 @@ test('removes a cell from the rubric', async ({ page }) => {
         is: 'comparable',
         points: 1,
         reference: ['ref'],
-        shared: false,
+        secret: false,
         payload: null
       }
     );
@@ -142,7 +142,7 @@ test('removes a cell from the rubric', async ({ page }) => {
   await dispose();
 });
 
-test('toggles shared flag on a rubric cell', async ({ page }) => {
+test('toggles secret flag on a rubric cell', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
@@ -160,16 +160,16 @@ test('toggles shared flag on a rubric cell', async ({ page }) => {
         is: 'comparable',
         points: 1,
         reference: ['ref'],
-        shared: false,
+        secret: false,
         payload: null
       }
     );
     await Workbook.update(panel, rubric);
 
-    const before = Rubric.get(Workbook.open(panel)!, 'cell')!.shared;
+    const before = Rubric.get(Workbook.open(panel)!, 'cell')!.secret;
     await app.commands.execute('correxit:share', { id: 'cell' });
 
-    const after = Rubric.get(Workbook.open(panel)!, 'cell')!.shared;
+    const after = Rubric.get(Workbook.open(panel)!, 'cell')!.secret;
     return { before, after };
   });
 
@@ -196,7 +196,7 @@ test('sets a comment on a rubric cell', async ({ page }) => {
         is: 'comparable',
         points: 1,
         reference: ['ref'],
-        shared: false,
+        secret: false,
         payload: null
       }
     );
@@ -306,7 +306,7 @@ test('locks workbook and encrypts reference cells', async ({ page }) => {
         is: 'comparable',
         points: 1,
         reference: ['ref'],
-        shared: false,
+        secret: true,
         payload: null
       }
     );
@@ -349,7 +349,7 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
         is: 'comparable',
         points: 1,
         reference: ['ref'],
-        shared: false,
+        secret: true,
         payload: null
       }
     );

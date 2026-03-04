@@ -82,18 +82,26 @@ export const Assignment: React.FC<{
       return;
     }
     setView('assignee');
-
     if (!registered.length) {
       pick(null);
       merge(blank);
       return;
     }
 
-    const active =
-      registered.find(registration => identify(registration) === selected) ||
-      registered[0];
-    pick(identify(active));
-    merge(current => freeze(current, active));
+    const matched = selected
+      ? registered.find(registration => identify(registration) === selected)
+      : !selected && selected !== null
+        ? null
+        : registered.find(
+            registration => identify(registration) === rubric.assignment.id
+          ) || (registered.length === 1 ? registered[0] : null);
+    if (!matched) {
+      pick(null);
+      merge(blank);
+      return;
+    }
+    pick(identify(matched));
+    merge(current => freeze(current, matched));
   }, [registered, selected]);
   useEffect(() => void reassign(assignment, locked), [assignment, locked]);
 
@@ -307,7 +315,7 @@ const Enrollment: React.FC<{
   const due = expiration
     ? new Date(expiration).toLocaleString()
     : trans.__('No deadline');
-  const line = trans.__('%1: %2 (roster: %3)', name, due, roster.length);
+  const line = trans.__('%1 (%2) roster: %3', name, due, roster.length);
   const unassigned = trans.__('Template - unassigned');
   return (
     <>
@@ -321,8 +329,9 @@ const Enrollment: React.FC<{
               id="correxit-assignment-registration"
               name="correxit-assignment-registration"
               onChange={({ target: { value } }) => setSelected(value)}
-              value={selected || ''}
+              value={selected ?? ''}
             >
+              <option value="">{trans.__('No assignment')}</option>
               {registered.map(registration => (
                 <option
                   key={identify(registration)}

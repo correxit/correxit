@@ -18,7 +18,7 @@ test('audits and prunes invalid rubric cells', async ({ page }) => {
         is: 'comparable',
         points: 1,
         reference: ['nope'],
-        shared: false,
+        secret: true,
         payload: null
       }
     );
@@ -79,7 +79,7 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
         is: 'comparable',
         points: 1,
         reference: ['ref'],
-        shared: false,
+        secret: true,
         payload: null
       }
     );
@@ -190,8 +190,7 @@ test('reweights a configured cell', async ({ page }) => {
         is: 'reviewable',
         payload: null,
         points: 1,
-        reference: null,
-        shared: false
+        reference: null
       }
     );
     await Workbook.update(workbook, rubric);
@@ -225,8 +224,7 @@ test('sets and clears a cell intervention score', async ({ page }) => {
         is: 'reviewable',
         payload: null,
         points: 5,
-        reference: null,
-        shared: false
+        reference: null
       }
     );
     await Workbook.update(workbook, rubric);

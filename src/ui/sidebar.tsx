@@ -100,9 +100,11 @@ const Header: React.FC<{
       {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <div className="correxit-sidebar-submission-actions">
-        <div className="correxit-sidebar-submission-chip" title={chip}>
-          {chip}
-        </div>
+        {!!rubric && (
+          <div className="correxit-sidebar-submission-chip" title={chip}>
+            {chip}
+          </div>
+        )}
         <CommandToolbarButtonComponent commands={commands} id={action} />
       </div>
     </section>

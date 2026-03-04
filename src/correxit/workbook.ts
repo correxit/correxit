@@ -449,14 +449,12 @@ export namespace Workbook {
     // Decrypt only the cells that survived the audit.
     const { cells, key } = audited.rubric as Rubric.Unlocked;
     for (const [, cell] of Object.entries(cells)) {
-      if (cell.shared) continue;
-      if (cell.is === 'comparable' || cell.is === 'correctable') {
-        const [reference] = cell.reference;
-        await Cell.decrypt(workbook, reference, key);
-      }
+      if (cell.is !== 'comparable' && cell.is !== 'correctable') continue;
+      if (!cell.secret) continue;
+      const [reference] = cell.reference;
+      await Cell.decrypt(workbook, reference, key);
     };
-    // Cache the original (un-pruned) rubric so downstream audit can
-    // still detect the missing cells.
+    // Keep the original (un-pruned) rubric for downstream audits.
     return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
@@ -541,11 +539,10 @@ export namespace Workbook {
     if (!rubric || rubric.locked) return;
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
-      if (cell.shared) continue;
-      if (cell.is === 'comparable' || cell.is === 'correctable') {
-        const [reference] = cell.reference;
-        await Cell.encrypt(workbook, reference, rubric.key);
-      }
+      if (cell.is !== 'comparable' && cell.is !== 'correctable') continue;
+      if (!cell.secret) continue;
+      const [reference] = cell.reference;
+      await Cell.encrypt(workbook, reference, rubric.key);
     };
     update(workbook, await Rubric.lock(rubric));
   }
@@ -655,9 +652,10 @@ export namespace Workbook {
     return update(workbook, Rubric.submit(rubric, submitted));
   }
 
-  /** Toggle a workbook cell's `shared` flag. */
+  /** Toggle a workbook cell's `secret` flag. */
   export async function toggle(
-    workbook: Workbook, id: string
+    workbook: Workbook,
+    id: string
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked || !Rubric.has(rubric, id))

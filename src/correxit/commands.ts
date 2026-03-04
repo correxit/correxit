@@ -183,16 +183,14 @@ export function commands(
         const payload = [await security.digest(expected)];
         const points = 1;
         const reference = null;
-        const shared = false;
-        await add(workbook, { id, is, payload, points, reference, shared });
+        await add(workbook, { id, is, payload, points, reference });
         return;
       }
       if (is === 'reviewable') {
         const payload = null;
         const points = 1;
         const reference = null;
-        const shared = false;
-        await add(workbook, { id, is, payload, points, reference, shared });
+        await add(workbook, { id, is, payload, points, reference });
         return;
       }
       if (is !== 'comparable' && is !== 'correctable') return;
@@ -211,8 +209,8 @@ export function commands(
 
       const payload = null;
       const points = 1;
-      const shared = false;
-      await add(workbook, { id, is, payload, points, reference, shared });
+      const secret = false;
+      await add(workbook, { id, is, payload, points, reference, secret });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.convert, {
@@ -248,8 +246,8 @@ export function commands(
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
       if (!rubric || !headed) return false;
       if (!id) return size(rubric) > 0;
-      const { is, shared } = get(rubric, id) || {};
-      return !!is && (shared || !rubric.locked) && is !== 'reviewable';
+      const { is, secret } = get(rubric, id) || {} as any;
+      return !!is && (!secret || !rubric.locked) && is !== 'reviewable';
     },
     isVisible: args => commands.isEnabled(CommandIDs.correct, args),
     label: (args: Partial<Cell> & CellToolbar) => {
@@ -471,23 +469,27 @@ export function commands(
     icon: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return undefined;
 
-      const { shared } = get(open(state.workbook())!, state.cell(args))!;
-      return shared ? Icons.shared : Icons.secret;
+      const cell = get(open(state.workbook())!, state.cell(args))!;
+      return cell.is === 'comparable' || cell.is === 'correctable'
+        ? (cell.secret ? Icons.secret : Icons.shared)
+        : undefined;
     },
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const rubric = open(state.workbook());
       const id = state.cell(args);
       if (!id || !rubric || rubric.locked) return false;
-      return has(rubric, id) && get(rubric, id)!.is !== 'reviewable';
+      const cell = get(rubric, id);
+      return !!cell && (cell.is === 'comparable' || cell.is === 'correctable');
     },
     isVisible: args => commands.isEnabled(CommandIDs.share, args),
     label: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return '';
 
-      const { shared } = get(open(state.workbook())!, state.cell(args))!;
-      return shared
-        ? trans.__('Mode: shared')
-        : trans.__('Mode: secret');
+      const cell = get(open(state.workbook())!, state.cell(args))!;
+      if (cell.is !== 'comparable' && cell.is !== 'correctable') return '';
+      return cell.secret
+        ? trans.__('Mode: secret')
+        : trans.__('Mode: shared');
     },
     execute: async (args: Partial<Cell>) => {
       if (commands.isEnabled(CommandIDs.share, args))

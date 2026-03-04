@@ -42,21 +42,19 @@ export namespace Rubric {
     payload: string[];
     points: number;
     reference: null;
-    shared: boolean;
   }> | Readonly<{
     id: string;
     is: 'comparable' | 'correctable';
     payload: null;
     points: number;
     reference: string[];
-    shared: boolean;
+    secret: boolean;
   }> | Readonly<{
     id: string;
     is: 'reviewable';
     payload: null;
     points: number;
     reference: null;
-    shared: boolean;
   }>;
 
   export namespace Cell {
@@ -212,8 +210,6 @@ export namespace Rubric {
       if (!cell) return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
       const possible = cell.points;
-      if (rubric.locked && !cell.shared)
-        return { ...Score.INCORRECT, code: 'locked', id, possible };
       if (cell.is === 'reviewable') {
         const score = await review(intervention ?? null);
         if (score.status === 'unscored') return { ...score, id, possible };
@@ -233,6 +229,8 @@ export namespace Rubric {
         const score = await answer(cell.payload, given);
         return { ...score, id, points: points(score), possible };
       }
+      if (rubric.locked && cell.secret)
+        return { ...Score.INCORRECT, code: 'locked', id, possible };
       if (!expected)
         return { ...Score.INCORRECT, code: 'missing-reference', id, possible };
       if (cell.is === 'comparable') {
@@ -710,16 +708,19 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: submission };
   }
 
-  /** @returns a rubric with the cell's shared flag toggled. */
+  /** @returns a rubric with the cell's secret flag toggled. */
   export function toggle(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
-    if (!cell) throw new Error(`toggle: cell ${id} not found in rubric`);
+    if (!cell) throw new Error(`toggle: cell ${id} not found`);
+    if (cell.is !== 'comparable' && cell.is !== 'correctable')
+      throw new Error(`toggle: cell ${id} is ${cell.is}`);
 
     const assignment = {
       ...rubric.assignment,
       report: Assignment.Report.empty()
     };
-    const cells = { ...rubric.cells, [id]: { ...cell, shared: !cell.shared } };
+    const toggled = { ...cell, secret: !cell.secret };
+    const cells = { ...rubric.cells, [id]: toggled };
     return { ...rubric, assignment, cells };
   }
 

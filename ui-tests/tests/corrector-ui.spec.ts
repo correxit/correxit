@@ -35,7 +35,7 @@ async function propagate(
         payload: null,
         points: 1,
         reference: ['ref'],
-        shared: false
+        secret: true
       }
     );
     await Workbook.update(panel, rubric);
