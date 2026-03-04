@@ -138,7 +138,7 @@ export function commands(
       const rubric = open(state.workbook());
       return !!rubric && !!id && get(rubric, id)?.is === args.is;
     },
-    isVisible: cell => commands.isEnabled(CommandIDs.configure, cell),
+    isVisible: args => commands.isEnabled(CommandIDs.configure, args),
     caption: (cell: Partial<Cell>) => {
       if (!commands.isEnabled(CommandIDs.configure, cell)) return '';
       if (cell.is === 'answerable') return trans.__('Has known answer');
@@ -250,8 +250,7 @@ export function commands(
       if (!id) return size(rubric) > 0;
       return has(rubric, id) && get(rubric, id)!.is !== 'reviewable';
     },
-    isVisible: (args: Partial<Cell> & CellToolbar) =>
-      commands.isEnabled(CommandIDs.correct, args),
+    isVisible: args => commands.isEnabled(CommandIDs.correct, args),
     label: (args: Partial<Cell> & CellToolbar) => {
       if (!commands.isEnabled(CommandIDs.correct, args)) return '';
       return state.cell(args)
@@ -288,12 +287,11 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.draft, {
     isEnabled: () => {
       const rubric = open(state.workbook());
-      return !!rubric?.locked && !!rubric.assignment.submission;
+      const submitted = !!rubric?.assignment.submission;
+      const certified = !!rubric?.assignment.certification;
+      return !!rubric?.locked && submitted && !certified;
     },
-    isVisible: () => {
-      const rubric = open(state.workbook());
-      return !!rubric?.assignment.submission;
-    },
+    isVisible: () => commands.isEnabled(CommandIDs.draft),
     label: trans.__('Revert to draft...'),
     execute: async (args: Partial<Credentials>) => {
       const { workbook } = await reify(args);
@@ -481,9 +479,7 @@ export function commands(
       if (!id || !rubric || rubric.locked) return false;
       return has(rubric, id) && get(rubric, id)!.is !== 'reviewable';
     },
-    isVisible: (args: Partial<Cell & CellToolbar>) => {
-      return commands.isEnabled(CommandIDs.share, args);
-    },
+    isVisible: args => commands.isEnabled(CommandIDs.share, args),
     label: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return '';
 
@@ -503,12 +499,10 @@ export function commands(
       const locked = !!rubric?.locked;
       const assigned = !!rubric?.assignment.assignee;
       const submitted = !!rubric?.assignment.submission;
-      return locked && assigned && !submitted;
+      const certified = !!rubric?.assignment.certification;
+      return locked && assigned && !submitted && !certified;
     },
-    isVisible: () => {
-      const rubric = open(state.workbook());
-      return !!rubric && !rubric.assignment.submission;
-    },
+    isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
