@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/QuantStack/correxit/compare/v1.5.0...v1.5.1) (2026-03-04)
+
+
+### Bug Fixes
+
+* Update broken example workbook ([#46](https://github.com/QuantStack/correxit/issues/46)) ([ab3bb18](https://github.com/QuantStack/correxit/commit/ab3bb1855aaf0b338b7f65f803554caa49b6cafd))
+
 # [1.5.0](https://github.com/QuantStack/correxit/compare/v1.4.0...v1.5.0) (2026-03-03)
 
 
