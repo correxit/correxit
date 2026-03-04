@@ -51,7 +51,6 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
         const total = rubric.assignment.roster.length;
         const { directory, location } = await mkdir(path);
         yield { type: 'mkdir', slots: [directory.path] };
-        yield { type: 'progress', slots: [++progress, total] };
         for await (const created of await stream(location)) {
           const { identifier, notebook, path } = created;
           const saved = await io.create({ factory, manager, notebook, path });
@@ -179,23 +178,7 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
   autoStart: true,
   ...((deactivator?: () => void) => ({
     provides: Correxit.Registrar,
-    activate: (): Correxit.Registrar => async _ => {
-      const week = 7 * 24 * 60 * 60 * 1000;
-      return [
-        {
-          expiration: Date.now() + week,
-          id: 'example-assignment-1',
-          name: 'Example Assignment 1',
-          roster: ['alpha@example.com', 'bravo@example.com']
-        },
-        {
-          expiration: Date.now() + week,
-          id: 'example-assignment-2',
-          name: 'Example Assignment 2',
-          roster: ['charlie@example.com', 'delta@example.com']
-        }
-      ];
-    },
+    activate: (): Correxit.Registrar => async _ => null,
     deactivate: () => deactivator?.()
   }))()
 };

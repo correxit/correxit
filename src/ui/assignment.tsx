@@ -90,7 +90,7 @@ export const Assignment: React.FC<{
 
     const matched = selected
       ? registered.find(registration => identify(registration) === selected)
-      : !selected && selected !== null
+      : selected === ''
         ? null
         : registered.find(
             registration => identify(registration) === rubric.assignment.id
@@ -254,7 +254,7 @@ const Roster: React.FC<{
         assignee: roster.includes(assignee) ? assignee : '',
         roster
       })),
-    [roster]
+    [value]
   );
   if (locked) return <></>;
   return (

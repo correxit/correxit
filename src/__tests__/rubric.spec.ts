@@ -66,13 +66,9 @@ describe('Rubric', () => {
       };
       const after = Rubric.toggle(before, id);
       expect(before.cells[id]).toBeDefined();
-      expect(
-        (before.cells[id] as any).secret
-      ).toBe(true);
+      expect((before.cells[id] as any).secret).toBe(true);
       expect(after.cells[id]).toBeDefined();
-      expect(
-        (after.cells[id] as any).secret
-      ).toBe(false);
+      expect((after.cells[id] as any).secret).toBe(false);
       expect(after.assignment.report.scores).toEqual({});
     });
 

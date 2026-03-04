@@ -528,9 +528,8 @@ export namespace Workbook {
     if (!rubric) throw new Error('identifier error');
     const assignee = rubric.assignment.assignee || null;
     const assignment = rubric.assignment.id;
-    const rubricId = rubric.id;
     const signature = rubric.assignment.signature || null;
-    return { assignee, assignment, rubric: rubricId, signature };
+    return { assignee, assignment, rubric: rubric.id, signature };
   }
 
   /** Lock a workbook if its rubric is unlocked. */
