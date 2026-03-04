@@ -146,43 +146,13 @@ const resolve = (
 const resolutions = (collated: Collated) =>
   Array.from(collated.values()).filter(({ grade }) => grade.resolved).length;
 
-const Progress: React.FC<{
-  graded: boolean;
-  grading: boolean;
-  loaded: number;
-  resolved: number;
-  scanned: boolean;
-  total: number;
-  trans: TranslationBundle;
-}> = ({ graded, grading, loaded, resolved, scanned, total, trans }) => {
-  const active = !!total && (!scanned || (grading && !graded));
-  const peak = useRef(0);
-  peak.current = Math.max(peak.current, grading ? resolved : loaded);
-
-  const progress = active ? peak.current : 0;
-  const text = trans.__('%1 of %2', progress, total);
-  const className = active
-    ? 'correxit-corrector-progress cxt-mod-active'
-    : 'correxit-corrector-progress';
-  return (
-    <tr className={className}>
-      <td colSpan={7}>
-        {active ? (
-          <progress max={total} value={progress}>
-            {text}
-          </progress>
-        ) : null}
-      </td>
-    </tr>
-  );
-};
-
 export function Corrector(props: Corrector.Props) {
   const { commands, mode, notify, overwrite, path, trans } = props;
   const grading = mode !== 'scan';
   const [workbooks, scanned] = useCommand<Scanned>(commands, scan, { path });
   const command = mode === 'grade' ? batch : mode === 'collect' ? collect : '';
-  const config = { overwrite, path, unlock: true };
+  const auth = mode === 'grade';
+  const config = { overwrite, path, ...(auth ? { unlock: true } : {}) };
   const [grades, graded] = useCommand<Batched>(commands, command, config);
   const loaded = useMemo(() => workbooks.filter(reified).length, [workbooks]);
   const collated = useMemo(() => new Map(grades) as Collated, [grades]);
@@ -242,6 +212,37 @@ export namespace Corrector {
   export const Widget = CorrectorWidget;
 }
 
+const Progress: React.FC<{
+  graded: boolean;
+  grading: boolean;
+  loaded: number;
+  resolved: number;
+  scanned: boolean;
+  total: number;
+  trans: TranslationBundle;
+}> = ({ graded, grading, loaded, resolved, scanned, total, trans }) => {
+  const active = !!total && (!scanned || (grading && !graded));
+  const peak = useRef(0);
+  peak.current = Math.max(peak.current, grading ? resolved : loaded);
+
+  const progress = active ? peak.current : 0;
+  const text = trans.__('%1 of %2', progress, total);
+  const className = active
+    ? 'correxit-corrector-progress cxt-mod-active'
+    : 'correxit-corrector-progress';
+  return (
+    <tr className={className}>
+      <td colSpan={7}>
+        {active ? (
+          <progress max={total} value={progress}>
+            {text}
+          </progress>
+        ) : null}
+      </td>
+    </tr>
+  );
+};
+
 const Columns: React.FC = () => (
   <colgroup>
     <col className="correxit-corrector-col-open" />
@@ -290,7 +291,8 @@ const Row: React.FC<{
     !pending &&
     grade.resolved &&
     !!rubric &&
-    !rubric.locked;
+    !rubric.locked &&
+    !rubric.assignment.certification;
   const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');

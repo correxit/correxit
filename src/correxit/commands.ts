@@ -119,7 +119,7 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.configure, {
     className: 'correxit-configure',
     icon: ({ is }: Partial<Cell>) =>
-      Rubric.Cell.types.some(type => is === type) ? Icons[is!] : undefined,
+      is && is in Icons ? Icons[is as keyof typeof Icons] : undefined,
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const notebook = state.workbook()?.context.model.sharedModel;
       const id = state.cell(args);
