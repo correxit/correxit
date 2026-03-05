@@ -66,26 +66,11 @@ const Header: React.FC<{
     : null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   const idle = trans.__('Correxit: idle');
-  const date = (timestamp: number | null) =>
-    timestamp ? new Date(timestamp).toLocaleString() : '';
-  const lifecycle = (rubric: Rubric | null) => {
-    if (!rubric) return '-';
-
-    const {
-      assignment: { certification, collected, submission, submitted }
-    } = rubric;
-    if (collected) return trans.__('Collected: %1', collected);
-    if (certification) return trans.__('Certification %1', date(certification));
-    if (submitted) return trans.__('Submitted: %1', submitted);
-    if (submission) return trans.__('Submission %1', date(submission));
-    return trans.__('Unsubmitted');
-  };
   const scored = !!score && score.status !== 'unscored';
   const titled = scored
     ? trans.__('%1 (%2 of %3)', heading, score!.points, score!.possible)
     : heading;
   const submitted = !!rubric?.assignment.submission;
-  const chip = lifecycle(rubric);
   const unlocked = !!rubric && !rubric.locked;
   const action = unlocked ? certify : submitted ? draft : submit;
   return (
@@ -100,14 +85,45 @@ const Header: React.FC<{
       {!!rubric && <Assignment {...{ commands, trans, workbook }} />}
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <div className="correxit-sidebar-submission-actions">
-        {!!rubric && (
-          <div className="correxit-sidebar-submission-chip" title={chip}>
-            {chip}
-          </div>
-        )}
+        <Lifecycle {...{ rubric, trans }} />
         <CommandToolbarButtonComponent commands={commands} id={action} />
       </div>
     </section>
+  );
+};
+
+const Lifecycle: React.FC<{
+  rubric: Rubric | null;
+  trans: TranslationBundle;
+}> = ({ rubric, trans }) => {
+  if (!rubric) return <></>;
+
+  const {
+    assignment: { certification, collected, submission, submitted }
+  } = rubric;
+  const date = (timestamp: number | null) =>
+    timestamp !== null ? new Date(timestamp).toLocaleString() : '';
+  const lines: string[] = [];
+  if (submission !== null)
+    lines.push(trans.__('Submission %1', date(submission)));
+  if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
+  if (certification !== null)
+    lines.push(trans.__('Certification %1', date(certification)));
+  if (collected !== null) lines.push(trans.__('Collected: %1', collected));
+
+  const label = lines.length
+    ? lines[lines.length - 1]
+    : trans.__('Unsubmitted');
+  const title = lines.length ? lines.join('\n') : trans.__('Unsubmitted');
+  return (
+    <div
+      aria-label={title}
+      className="correxit-sidebar-submission-chip"
+      role="status"
+      title={title}
+    >
+      {label}
+    </div>
   );
 };
 
