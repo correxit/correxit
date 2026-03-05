@@ -208,7 +208,7 @@ export function commands(
 
       const payload = null;
       const points = 1;
-      const secret = false;
+      const secret = true;
       await add(workbook, { id, is, payload, points, reference, secret });
     }
   }));
