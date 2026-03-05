@@ -429,9 +429,7 @@ export namespace Workbook {
       return !outputs.has(id) ||
         ((is === 'comparable' || is === 'correctable')
           && references
-          ? references.some(
-            referent => !outputs.has(referent)
-          )
+          ? references.some(referent => !outputs.has(referent))
           : false);
     };
     const unresolved = (cell: Rubric.Cell) => {

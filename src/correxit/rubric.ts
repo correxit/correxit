@@ -61,8 +61,8 @@ export namespace Rubric {
     /** A reference cell that serves as an oracle for scoring. */
     export type Reference = Readonly<{
       cell: string;
-      referent: string;
       points: number;
+      referent: string;
       secret: boolean;
     }>;
 
@@ -302,15 +302,11 @@ export namespace Rubric {
     ): Unlocked {
       const reference = rubric.references[referent];
       if (!reference)
-        {throw new Error(
-          `reweight: reference ${referent} not found`
-        );}
+        throw new Error(`reweight: reference ${referent} not found`);
 
       const cell = get(rubric, reference.cell);
       if (!cell || cell.is !== 'correctable')
-        {throw new Error(
-          `reweight: cell ${reference.cell} invalid`
-        );}
+        throw new Error(`reweight: cell ${reference.cell} invalid`);
 
       const assignment = {
         ...rubric.assignment,
@@ -318,11 +314,8 @@ export namespace Rubric {
       };
       const updated = { ...reference, points };
       const total = cell.references.reduce(
-        (sum, id) => sum + (
-          id === referent
-            ? points
-            : rubric.references[id].points
-        ), 0
+        (sum, id) =>
+          sum + (id === referent ? points : rubric.references[id].points), 0
       );
       const cells = {
         ...rubric.cells,
@@ -887,10 +880,8 @@ export namespace Rubric {
     const remaining = cell.references.filter(id => id !== referent);
     if (!remaining.length) return remove(rubric, cell.id);
 
-    const assignment = {
-      ...rubric.assignment,
-      report: Assignment.Report.empty()
-    };
+    const blank = Assignment.Report.empty();
+    const assignment = { ...rubric.assignment, report: blank };
     const points = cell.is === 'correctable'
       ? cell.points - reference.points
       : cell.points;

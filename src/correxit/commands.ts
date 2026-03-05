@@ -206,7 +206,7 @@ export function commands(
         const selected = workbook.content && await input.cell(workbook);
         references = selected && [selected.id];
       }
-      if (!references || id === references[0]) return;
+      if (!references || references.includes(id)) return;
       if (workbook.content) {
         const { widgets } = workbook.content;
         const original = find(widgets, ({ model }) => model.id === id);
