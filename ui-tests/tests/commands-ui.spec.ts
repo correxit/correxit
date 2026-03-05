@@ -46,7 +46,7 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
     await app.commands.execute('correxit:configure', {
       id: 'cell',
       is: 'comparable',
-      reference: ['ref']
+      references: ['ref']
     });
 
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
@@ -54,8 +54,8 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
     return {
       is: cell?.is ?? null,
       points: cell?.points ?? null,
-      reference: cell?.reference ?? null,
-      secret: cell?.secret ?? null,
+      references: cell?.references ?? null,
+      secret: metadata?.references?.['ref']?.secret ?? null,
       toggled: app.commands.isToggled('correxit:configure', {
         id: 'cell',
         is: 'comparable'
@@ -65,7 +65,7 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
 
   expect(result.is).toBe('comparable');
   expect(result.points).toBe(1);
-  expect(result.reference).toEqual(['ref']);
+  expect(result.references).toEqual(['ref']);
   expect(result.secret).toBe(true);
   expect(result.toggled).toBe(true);
   await dispose();
@@ -85,14 +85,14 @@ test('adds a correctable cell to the rubric', async ({ page }) => {
     await app.commands.execute('correxit:configure', {
       id: 'cell',
       is: 'correctable',
-      reference: ['ref']
+      references: ['ref']
     });
 
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
     const cell = metadata?.cells?.['cell'];
     return {
       is: cell?.is ?? null,
-      reference: cell?.reference ?? null,
+      references: cell?.references ?? null,
       toggled: app.commands.isToggled('correxit:configure', {
         id: 'cell',
         is: 'correctable'
@@ -101,7 +101,7 @@ test('adds a correctable cell to the rubric', async ({ page }) => {
   });
 
   expect(result.is).toBe('correctable');
-  expect(result.reference).toEqual(['ref']);
+  expect(result.references).toEqual(['ref']);
   expect(result.toggled).toBe(true);
   await dispose();
 });
@@ -123,10 +123,10 @@ test('removes a cell from the rubric', async ({ page }) => {
         id: 'cell',
         is: 'comparable',
         points: 1,
-        reference: ['ref'],
-        secret: false,
+        references: ['ref'],
         payload: null
-      }
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: false }]
     );
     await Workbook.update(panel, rubric);
 
@@ -159,17 +159,17 @@ test('toggles secret flag on a rubric cell', async ({ page }) => {
         id: 'cell',
         is: 'comparable',
         points: 1,
-        reference: ['ref'],
-        secret: false,
+        references: ['ref'],
         payload: null
-      }
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: false }]
     );
     await Workbook.update(panel, rubric);
 
-    const before = Rubric.get(Workbook.open(panel)!, 'cell')!.secret;
+    const before = Workbook.open(panel)!.references['ref']?.secret;
     await app.commands.execute('correxit:share', { id: 'cell' });
 
-    const after = Rubric.get(Workbook.open(panel)!, 'cell')!.secret;
+    const after = Workbook.open(panel)!.references['ref']?.secret;
     return { before, after };
   });
 
@@ -195,10 +195,10 @@ test('sets a comment on a rubric cell', async ({ page }) => {
         id: 'cell',
         is: 'comparable',
         points: 1,
-        reference: ['ref'],
-        secret: false,
+        references: ['ref'],
         payload: null
-      }
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: false }]
     );
     await Workbook.update(panel, rubric);
     await app.commands.execute('correxit:comment', {
@@ -305,10 +305,10 @@ test('locks workbook and encrypts reference cells', async ({ page }) => {
         id: 'cell',
         is: 'comparable',
         points: 1,
-        reference: ['ref'],
-        secret: true,
+        references: ['ref'],
         payload: null
-      }
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
     );
     await Workbook.update(panel, rubric);
     await app.commands.execute('correxit:lock');
@@ -348,10 +348,10 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
         id: 'cell',
         is: 'comparable',
         points: 1,
-        reference: ['ref'],
-        secret: true,
+        references: ['ref'],
         payload: null
-      }
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
     );
     await Workbook.update(panel, rubric);
 

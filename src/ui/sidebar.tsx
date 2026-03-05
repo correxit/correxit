@@ -11,9 +11,10 @@ import { SidebarWidget } from './widget';
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const { CommandIDs } = Correxit;
-const { get, has } = Rubric;
-const { certify, configure, convert, correct, draft } = CommandIDs;
-const { lock, remove, reset, submit, share, unlock } = CommandIDs;
+const { get } = Rubric;
+const { certify, configure, convert, correct, dereference } = CommandIDs;
+const { draft, lock, refer, remove, reset } = CommandIDs;
+const { share, submit, unlock } = CommandIDs;
 const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
 
 export function Sidebar(props: Sidebar.Props) {
@@ -319,7 +320,7 @@ const Body: React.FC<{
     reference: trans.__('Selected cell is a reference cell.'),
     reviewable: trans.__('Cell is manually reviewed by an instructor.')
   };
-  const hint = get(rubric, id)?.is ?? (has(rubric, id, true) && 'reference');
+  const hint = get(rubric, id)?.is ?? (id in rubric.references && 'reference');
   return (
     <section className="correxit-sidebar-body">
       <div
@@ -373,7 +374,94 @@ const Body: React.FC<{
           {...{ commands, id: remove, args: { id } }}
         />
       </div>
+      <References {...{ commands, id, rubric, trans, workbook }} />
       {hint && <p className="correxit-sidebar-cell-hint">{hints[hint]}</p>}
     </section>
+  );
+};
+
+const References: React.FC<{
+  commands: CommandRegistry;
+  id: string;
+  rubric: Rubric;
+  trans: TranslationBundle;
+  workbook: Workbook;
+}> = ({ commands, id, rubric, trans, workbook }) => {
+  const cell = get(rubric, id);
+  if (!cell) return <></>;
+  if (cell.is !== 'comparable' && cell.is !== 'correctable') return <></>;
+
+  const refs = Object.values(rubric.references).filter(
+    reference => reference.cell === id
+  );
+  if (!refs.length && rubric.locked) return <></>;
+
+  const editable = !rubric.locked && !rubric.assignment.assignee;
+  const correctable = cell.is === 'correctable';
+  const notebook = workbook.content;
+  const source = (referent: string) => {
+    const cell = notebook?.widgets.find(
+      w => w.model.id === referent
+    );
+    return cell?.model.sharedModel.getSource().split('\n')[0] ?? '';
+  };
+  const scroll = (referent: string) => {
+    if (!notebook) return;
+    const widget = notebook.widgets.find(
+      w => w.model.id === referent
+    );
+    if (widget) void notebook.scrollToCell(widget);
+  };
+
+  return (
+    <div className="correxit-sidebar-references">
+      <h5>{trans.__('References (%1)', refs.length)}</h5>
+      <ul className="correxit-sidebar-references-list">
+        {refs.map(reference => (
+          <li
+            className="correxit-sidebar-reference-item"
+            key={reference.referent}
+          >
+            <button
+              className="correxit-sidebar-reference-locate"
+              onClick={() => scroll(reference.referent)}
+              title={reference.referent}
+              type="button"
+            >
+              {reference.referent.slice(0, 4)}
+            </button>
+            <span
+              className="correxit-sidebar-reference-source"
+              title={source(reference.referent)}
+            >
+              {source(reference.referent)}
+            </span>
+            {correctable && (
+              <span
+                className="correxit-sidebar-reference-points"
+                title={trans.__('Points')}
+              >
+                {reference.points}pt
+              </span>
+            )}
+            {editable && (
+              <CommandToolbarButtonComponent
+                {...{
+                  commands,
+                  id: dereference,
+                  label: '',
+                  args: { referent: reference.referent }
+                }}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+      {editable && (
+        <CommandToolbarButtonComponent
+          {...{ commands, id: refer, args: { id } }}
+        />
+      )}
+    </div>
   );
 };

@@ -198,11 +198,13 @@ export namespace Workbook {
   /** Add a cell to a workbook's rubric. */
   export async function add(
     workbook: Workbook,
-    cell: Rubric.Cell
+    cell: Rubric.Cell,
+    references: Rubric.Cell.Reference[] = []
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) throw new Error('add error, invalid rubric');
-    return update(workbook, Rubric.add(rubric, cell));
+    if (!rubric || rubric.locked)
+      throw new Error('add error, invalid rubric');
+    return update(workbook, Rubric.add(rubric, cell, references));
   }
 
   /** Acknowledge a submitted workbook grade with a receipt. */
@@ -265,14 +267,15 @@ export namespace Workbook {
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
       const { is, payload } = cell;
-      const reference = cell.reference?.[0] ?? '';
       const present = is === 'reviewable'
         ? id in types
         : executable(id);
+      const references = Object.values(rubric.references)
+        .filter(reference => reference.cell === id);
       const valid = is === 'answerable'
         ? !!payload.length
         : is === 'reviewable' ? true
-        : executable(reference);
+        : references.every(reference => executable(reference.referent));
       if (present && valid) continue;
 
       const reason = id in types ? 'invalid cell' : 'unknown cell';
@@ -408,12 +411,14 @@ export namespace Workbook {
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
     const final = id ? report.scores[id] : summary(report);
-    const missing = ({ id, is, reference }: Rubric.Cell) => {
+    const missing = ({ id, is, references }: Rubric.Cell) => {
       if (is === 'reviewable') return false;
       return !outputs.has(id) ||
         ((is === 'comparable' || is === 'correctable')
-          && reference
-          ? reference.some(reference => !outputs.has(reference))
+          && references
+          ? references.some(
+            referent => !outputs.has(referent)
+          )
           : false);
     };
     const unresolved = (cell: Rubric.Cell) => {
@@ -451,22 +456,25 @@ export namespace Workbook {
   }
 
   /** Decrypts workbook content. */
-  export async function decrypt(workbook: Workbook, rubric: Rubric.Unlocked) {
+  export async function decrypt(
+    workbook: Workbook,
+    rubric: Rubric.Unlocked
+  ) {
     const audited = Workbook.audit(workbook, rubric);
-    if (!audited.ok) throw new Error(`decrypt error: ${audited.error}`);
+    if (!audited.ok)
+      throw new Error(`decrypt error: ${audited.error}`);
     if (audited.pruned.length)
       console.warn('decrypt: workbook has missing cells', audited.pruned);
 
-    // Decrypt only the cells that survived the audit.
-    const { cells, key } = audited.rubric as Rubric.Unlocked;
-    for (const [, cell] of Object.entries(cells)) {
-      if (cell.is !== 'comparable' && cell.is !== 'correctable') continue;
-      if (!cell.secret) continue;
-      const [reference] = cell.reference;
-      await Cell.decrypt(workbook, reference, key);
-    };
+    const { key, references } = audited.rubric as Rubric.Unlocked;
+    for (const reference of Object.values(references)) {
+      if (!reference.secret) continue;
+      await Cell.decrypt(workbook, reference.referent, key);
+    }
     // Keep the original (un-pruned) rubric for downstream audits.
-    return update(workbook, rubric, { ok: true, pruned: [], rubric });
+    return update(
+      workbook, rubric, { ok: true, pruned: [], rubric }
+    );
   }
 
   /** Revert a submission to draft, restoring cell editability. */
@@ -507,7 +515,7 @@ export namespace Workbook {
       1 + findIndex(cells, ({ id }) => id === target);
     const scan = (cell: Rubric.Cell) =>
       cell.is === 'correctable' || cell.is === 'comparable'
-        ? Math.max(position(cell.id), ...cell.reference.map(position))
+        ? Math.max(position(cell.id), ...cell.references.map(position))
         : position(cell.id);
     const cell = id && Rubric.get(rubric, id);
     if (id && !cell) return null;
@@ -544,16 +552,16 @@ export namespace Workbook {
   }
 
   /** Lock a workbook if its rubric is unlocked. */
-  export async function lock(workbook: Workbook): Promise<void> {
+  export async function lock(
+    workbook: Workbook
+  ): Promise<void> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) return;
-    for (const id in rubric.cells) {
-      const cell = rubric.cells[id];
-      if (cell.is !== 'comparable' && cell.is !== 'correctable') continue;
-      if (!cell.secret) continue;
-      const [reference] = cell.reference;
-      await Cell.encrypt(workbook, reference, rubric.key);
-    };
+    await Rubric.Assignment.validate(rubric);
+    for (const reference of Object.values(rubric.references)) {
+      if (!reference.secret) continue;
+      await Cell.encrypt(workbook, reference.referent, rubric.key);
+    }
     update(workbook, await Rubric.lock(rubric));
   }
 
@@ -622,6 +630,18 @@ export namespace Workbook {
     }
   }
 
+  /** Add a reference to an existing comparable or correctable cell. */
+  export async function refer(
+    workbook: Workbook,
+    id: string,
+    reference: Rubric.Cell.Reference
+  ): Promise<Rubric.Unlocked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked)
+      throw new Error('refer error, invalid rubric');
+    return update(workbook, Rubric.refer(rubric, id, reference));
+  }
+
   /** Remove a cell from a workbook's rubric. */
   export function remove(workbook: Workbook, id: string): void {
     const rubric = open(workbook, quiet);
@@ -659,15 +679,26 @@ export namespace Workbook {
     return update(workbook, Rubric.submit(rubric));
   }
 
-  /** Toggle a workbook cell's `secret` flag. */
+  /** Toggle a workbook reference's `secret` flag. */
   export async function toggle(
     workbook: Workbook,
-    id: string
+    referent: string
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked || !Rubric.has(rubric, id))
+    if (!rubric || rubric.locked)
       throw new Error('toggle error');
-    return update(workbook, Rubric.toggle(rubric, id));
+    return update(workbook, Rubric.toggle(rubric, referent));
+  }
+
+  /** Remove a single reference from a cell. */
+  export function dereference(
+    workbook: Workbook,
+    referent: string
+  ): void {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked)
+      throw new Error('dereference error, invalid rubric');
+    update(workbook, Rubric.dereference(rubric, referent));
   }
 
   /** Unlocks a workbook's rubric and decrypts its contents. */

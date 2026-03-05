@@ -112,14 +112,10 @@ async function template(
 ): Promise<{ encrypted: string[]; notebook: INotebookContent }> {
   const encrypted: string[] = [];
   const notebook = workbook.context.model.sharedModel.toJSON();
-  for (const id in rubric.cells) {
-    const cell = rubric.cells[id];
-    if (cell.is !== 'comparable' && cell.is !== 'correctable')
-      continue;
-    if (!cell.secret) continue;
-    const [reference] = cell.reference;
-    await encrypt(notebook, reference, rubric.key);
-    encrypted.push(reference);
+  for (const reference of Object.values(rubric.references)) {
+    if (!reference.secret) continue;
+    await encrypt(notebook, reference.referent, rubric.key);
+    encrypted.push(reference.referent);
   }
   return { encrypted, notebook };
 }

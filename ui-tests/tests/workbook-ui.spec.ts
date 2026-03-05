@@ -17,10 +17,10 @@ test('audits and prunes invalid rubric cells', async ({ page }) => {
         id: 'missing-ref',
         is: 'comparable',
         points: 1,
-        reference: ['nope'],
-        secret: true,
+        references: ['nope'],
         payload: null
-      }
+      },
+      [{ cell: 'missing-ref', referent: 'nope', points: 1, secret: true }]
     );
 
     const audit = Workbook.audit(workbook, rubric);
@@ -78,10 +78,10 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
         id: 'cell',
         is: 'comparable',
         points: 1,
-        reference: ['ref'],
-        secret: true,
+        references: ['ref'],
         payload: null
-      }
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
     );
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
@@ -190,7 +190,7 @@ test('reweights a configured cell', async ({ page }) => {
         is: 'reviewable',
         payload: null,
         points: 1,
-        reference: null
+        references: null
       }
     );
     await Workbook.update(workbook, rubric);
@@ -224,7 +224,7 @@ test('sets and clears a cell intervention score', async ({ page }) => {
         is: 'reviewable',
         payload: null,
         points: 5,
-        reference: null
+        references: null
       }
     );
     await Workbook.update(workbook, rubric);

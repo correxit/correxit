@@ -20,10 +20,10 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
         id: 'target',
         is: 'comparable',
         points: 1,
-        reference: ['ref'],
-        secret: true,
+        references: ['ref'],
         payload: null
-      }
+      },
+      [{ cell: 'target', referent: 'ref', points: 1, secret: true }]
     );
     await Workbook.update(panel, rubric);
     await app.commands.execute('correxit:assign', {

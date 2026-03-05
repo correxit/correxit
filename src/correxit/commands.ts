@@ -27,6 +27,7 @@ export namespace CommandIDs {
   export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
+  export const refer = 'correxit:refer';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
   export const reweight = 'correxit:reweight';
@@ -34,6 +35,7 @@ export namespace CommandIDs {
   export const share = 'correxit:share';
   export const submit = 'correxit:submit';
   export const unlock = 'correxit:unlock';
+  export const dereference = 'correxit:dereference';
 }
 
 type Assignment = Rubric.Assignment;
@@ -49,8 +51,9 @@ type Reified =
 
 const { get, has, size } = Rubric;
 const {
-  acknowledge, add, assign, certify, collect, comment, convert, correct,
-  draft, intervene, lock, remove, reset, reweight, submit, toggle
+  acknowledge, add, assign, certify, collect, comment,
+  convert, correct, dereference, draft, intervene, lock,
+  refer, remove, reset, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -126,14 +129,14 @@ export function commands(
       const notebook = state.workbook()?.context.model.sharedModel;
       const id = state.cell(args);
       const cell = find(notebook?.cells || [], cell => cell.id === id);
-      const reference = args.reference;
+      const references = args.references;
       const rubric = open(state.workbook());
-      if (!cell || !rubric || !id || id === reference?.[0]) return false;
+      if (!cell || !rubric || !id || id === references?.[0]) return false;
       if (rubric.locked || rubric.assignment.assignee) return false;
 
       const code = cell.cell_type === 'code';
       if (!code) return args.is === 'reviewable';
-      return !has(rubric, id, true) || has(rubric, id);
+      return !(id in rubric.references) || has(rubric, id);
     },
     isToggled: (args: Partial<Cell>) => {
       const id = state.cell(args);
@@ -184,27 +187,25 @@ export function commands(
 
         const payload = [await security.digest(expected)];
         const points = 1;
-        const reference = null;
-        const secret = null;
-        await add(workbook, { id, is, payload, points, reference, secret });
+        const references = null;
+        await add(workbook, { id, is, payload, points, references });
         return;
       }
       if (is === 'reviewable') {
         const payload = null;
         const points = 1;
-        const reference = null;
-        const secret = null;
-        await add(workbook, { id, is, payload, points, reference, secret });
+        const references = null;
+        await add(workbook, { id, is, payload, points, references });
         return;
       }
       if (is !== 'comparable' && is !== 'correctable') return;
 
-      let reference: string[] | null = args.reference || null;
-      if (!reference) {
+      let references: string[] | null = args.references || null;
+      if (!references) {
         const selected = workbook.content && await input.cell(workbook);
-        reference = selected && [selected.id];
+        references = selected && [selected.id];
       }
-      if (!reference || id === reference[0]) return;
+      if (!references || id === references[0]) return;
       if (workbook.content) {
         const { widgets } = workbook.content;
         const original = find(widgets, ({ model }) => model.id === id);
@@ -213,8 +214,13 @@ export function commands(
 
       const payload = null;
       const points = 1;
-      const secret = true;
-      await add(workbook, { id, is, payload, points, reference, secret });
+      await add(
+        workbook,
+        { id, is, payload, points, references },
+        references.map(referent =>
+          ({ cell: id, referent, points: 1, secret: true })
+        )
+      );
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.convert, {
@@ -250,8 +256,14 @@ export function commands(
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
       if (!rubric || !headed) return false;
       if (!id) return size(rubric) > 0;
-      const { is, secret } = get(rubric, id) || {} as any;
-      return !!is && (!secret || !rubric.locked) && is !== 'reviewable';
+      const cell = get(rubric, id);
+      if (!cell || cell.is === 'reviewable') return false;
+      if (!rubric.locked) return true;
+      const references = Object.values(rubric.references)
+        .filter(reference => reference.cell === id);
+      return !references.length || references.some(
+        reference => !reference.secret
+      );
     },
     isVisible: args => commands.isEnabled(CommandIDs.correct, args),
     label: (args: Partial<Cell> & CellToolbar) => {
@@ -414,6 +426,61 @@ export function commands(
       return await registrar(workbook, identifier).catch(warn);
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.refer, {
+    icon: Icons.comparable,
+    isEnabled: (args: Partial<Cell>) => {
+      const id = state.cell(args);
+      const rubric = open(state.workbook());
+      if (!id || !rubric || rubric.locked) return false;
+      if (rubric.assignment.assignee) return false;
+      const cell = get(rubric, id);
+      return !!cell && (
+        cell.is === 'comparable' || cell.is === 'correctable'
+      );
+    },
+    isVisible: args =>
+      commands.isEnabled(CommandIDs.refer, args),
+    label: trans.__('Add reference'),
+    execute: async (args: Partial<Cell>) => {
+      const workbook = state.workbook();
+      const id = state.cell(args);
+      if (!workbook?.content || !id) return;
+
+      const selected = await input.cell(workbook);
+      if (!selected) return;
+
+      const rubric = open(workbook);
+      if (!rubric || rubric.locked) return;
+      const cell = get(rubric, id);
+      if (!cell) return;
+      if (
+        cell.is !== 'comparable' &&
+        cell.is !== 'correctable'
+      ) return;
+
+      const referent = selected.id;
+      if (
+        referent === id ||
+        referent in rubric.references ||
+        referent in rubric.cells
+      ) return;
+
+      const reference = {
+        cell: id,
+        referent,
+        points: 1,
+        secret: true
+      };
+      await refer(workbook, id, reference);
+
+      const { widgets } = workbook.content;
+      const original = find(
+        widgets, ({ model }) => model.id === id
+      );
+      if (original)
+        await workbook.content.scrollToCell(original);
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.remove, {
     className: 'correxit-remove',
     isEnabled: (args: Partial<Cell>) => {
@@ -481,34 +548,32 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.share, {
     icon: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return undefined;
-
-      const cell = get(open(state.workbook())!, state.cell(args))!;
-      return cell.is === 'comparable' || cell.is === 'correctable'
-        ? (cell.secret ? Icons.secret : Icons.shared)
-        : undefined;
+      const rubric = open(state.workbook())!;
+      const id = state.cell(args);
+      const ref = rubric.references[id];
+      return ref.secret ? Icons.secret : Icons.shared;
     },
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const id = state.cell(args);
       const rubric = open(state.workbook());
       if (!id || !rubric || rubric.locked || rubric.assignment.assignee)
         return false;
-
-      const cell = get(rubric, id);
-      return !!cell && (cell.is === 'comparable' || cell.is === 'correctable');
+      return id in rubric.references;
     },
     isVisible: args => commands.isEnabled(CommandIDs.share, args),
     label: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return '';
-
-      const cell = get(open(state.workbook())!, state.cell(args))!;
-      if (cell.is !== 'comparable' && cell.is !== 'correctable') return '';
-      return cell.secret
+      const rubric = open(state.workbook())!;
+      const id = state.cell(args);
+      const ref = rubric.references[id];
+      return ref.secret
         ? trans.__('Mode: secret')
         : trans.__('Mode: shared');
     },
     execute: async (args: Partial<Cell>) => {
-      if (commands.isEnabled(CommandIDs.share, args))
-        toggle(state.workbook()!, state.cell(args));
+      if (!commands.isEnabled(CommandIDs.share, args)) return;
+      const id = state.cell(args);
+      await toggle(state.workbook()!, id);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.submit, {
@@ -547,6 +612,24 @@ export function commands(
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);
       }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.dereference, {
+    icon: Icons.reset,
+    isEnabled: (args: Partial<{ referent: string }>) => {
+      const rubric = open(state.workbook());
+      if (!rubric || rubric.locked) return false;
+      if (rubric.assignment.assignee) return false;
+      return !!args.referent &&
+        args.referent in rubric.references;
+    },
+    isVisible: args =>
+      commands.isEnabled(CommandIDs.dereference, args),
+    label: trans.__('Remove reference'),
+    execute: async (args: Partial<{ referent: string }>) => {
+      const workbook = state.workbook();
+      if (!workbook || !args.referent) return;
+      dereference(workbook, args.referent);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.unlock, {

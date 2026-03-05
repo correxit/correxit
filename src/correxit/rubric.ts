@@ -32,6 +32,7 @@ export namespace Rubric {
     assignment: Assignment;
     cells: Readonly<{ [id: string]: Cell }>;
     id: string;
+    references: Readonly<{ [referent: string]: Cell.Reference; }>;
     revised: number;
   }>;
 
@@ -41,25 +42,30 @@ export namespace Rubric {
     is: 'answerable';
     payload: string[];
     points: number;
-    reference: null;
-    secret: null;
+    references: null;
   }> | Readonly<{
     id: string;
     is: 'comparable' | 'correctable';
     payload: null;
     points: number;
-    reference: string[];
-    secret: boolean;
+    references: string[];
   }> | Readonly<{
     id: string;
     is: 'reviewable';
     payload: null;
     points: number;
-    reference: null;
-    secret: null;
+    references: null;
   }>;
 
   export namespace Cell {
+    /** A reference cell that serves as an oracle for scoring. */
+    export type Reference = Readonly<{
+      cell: string;
+      referent: string;
+      points: number;
+      secret: boolean;
+    }>;
+
     /** An output is an `iopub` message of interest. */
     export type Output =
       | KernelMessage.IIOPubMessage<'execute_result'>
@@ -96,7 +102,8 @@ export namespace Rubric {
       const { error, stdout, stream, text } = Output;
       if (!expected) return { ...Score.UNSCORED, code: 'empty-expected' };
       if (!given.length) return { ...Score.INCORRECT, code: 'empty-given' };
-      if (find(given, error)) return { ...Score.INCORRECT, code: 'error-given' };
+      if (find(given, error))
+        return { ...Score.INCORRECT, code: 'error-given' };
       if (find(given, stream)) {
         const answered = given.filter(stdout).map(text).join('').trim();
         if (answered) {
@@ -114,7 +121,8 @@ export namespace Rubric {
       expected: Output[],
       given: Output[]
     ): Promise<Score> {
-      if (!expected.length) return { ...Score.UNSCORED, code: 'empty-expected' };
+      if (!expected.length)
+        return { ...Score.UNSCORED, code: 'empty-expected' };
       if (!given.length) return { ...Score.INCORRECT, code: 'empty-given' };
 
       const shape = (content: Output['content']) =>
@@ -206,10 +214,9 @@ export namespace Rubric {
     ): Promise<Score> {
       const cell = get(rubric, id);
       const given = outputs.get(id);
-      const reference = cell?.reference?.[0] ?? '';
-      const expected = outputs.get(reference);
       const intervention = rubric.assignment.report.interventions[id];
-      if (!cell) return { ...Score.UNSCORED, code: 'missing-cell-given', id };
+      if (!cell)
+        return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
       const possible = cell.points;
       if (cell.is === 'reviewable') {
@@ -226,23 +233,60 @@ export namespace Rubric {
       if (!given)
         return { ...Score.INCORRECT, code: 'missing-given', id, possible };
 
-      const points = ({ status }: Score) => status === 'correct' ? possible : 0;
       if (cell.is === 'answerable') {
+        const points = ({ status }: Score) =>
+          status === 'correct' ? possible : 0;
         const score = await answer(cell.payload, given);
         return { ...score, id, points: points(score), possible };
       }
-      if (rubric.locked && cell.secret)
-        return { ...Score.INCORRECT, code: 'locked', id, possible };
-      if (!expected)
-        return { ...Score.INCORRECT, code: 'missing-reference', id, possible };
+
+      // Gather references for comparable/correctable.
+      const references = Object.values(rubric.references)
+        .filter(reference => reference.cell === id);
+      const visible = rubric.locked
+        ? references.filter(reference => !reference.secret)
+        : references;
+
       if (cell.is === 'comparable') {
+        const [reference] = visible;
+        if (!reference)
+          return { ...Score.INCORRECT, code: 'locked', id, possible };
+        const expected = outputs.get(reference.referent);
+        if (!expected) {
+          return {
+            ...Score.INCORRECT, code: 'missing-reference', id, possible
+          };
+        }
+        const points = ({ status }: Score) =>
+          status === 'correct' ? possible : 0;
         const score = await compare(expected, given);
         return { ...score, id, points: points(score), possible };
       }
+
       if (cell.is === 'correctable') {
-        const score = await correct(expected);
-        return { ...score, id, points: points(score), possible };
+        if (!visible.length)
+          return { ...Score.INCORRECT, code: 'locked', id, possible };
+        const vp = visible.reduce(
+          (sum, reference) => sum + reference.points, 0
+        );
+        let earned = 0;
+        for (const reference of visible) {
+          const expected = outputs.get(reference.referent);
+          if (!expected) continue;
+          const result = await correct(expected);
+          if (result.status === 'correct')
+            earned += reference.points;
+        }
+        const status: Score.Status =
+          earned === vp ? 'correct'
+          : earned === 0 ? 'incorrect'
+          : 'partial';
+        return {
+          ...Score.CORRECT, code: '', id,
+          points: earned, possible: vp, status
+        };
       }
+
       return { ...Score.UNSCORED, code: 'error-is-unknown', id };
     }
   }
@@ -507,18 +551,35 @@ export namespace Rubric {
     }
   }
 
-  export function add(rubric: Unlocked, cell: Cell): Unlocked {
-    if (has(rubric, cell.id, true))
+  export function add(
+    rubric: Unlocked,
+    cell: Cell,
+    references: Cell.Reference[] = []
+  ): Unlocked {
+    if (has(rubric, cell.id) || cell.id in rubric.references)
       throw new Error(`add error, rubric already has cell id ${cell.id}`);
-
+    for (const { referent } of references) {
+      if (referent in rubric.references)
+        throw new Error(`add error, reference ${referent} already exists`);
+      if (referent in rubric.cells)
+        throw new Error(`add error, reference ${referent} collides with cell`);
+    }
     const assignment = {
       ...rubric.assignment,
       report: Assignment.Report.empty()
     };
+    const added = Object.fromEntries(
+      references.map(reference => [reference.referent, reference])
+    );
+    const points = cell.is === 'correctable'
+      ? references.reduce(
+          (sum, reference) => sum + reference.points, 0
+        )
+      : cell.points;
+    const cells = { ...rubric.cells, [cell.id]: { ...cell, points } };
     return {
-      ...rubric,
-      assignment,
-      cells: { ...rubric.cells, [cell.id]: cell }
+      ...rubric, assignment, cells,
+      references: { ...rubric.references, ...added }
     };
   }
 
@@ -574,7 +635,10 @@ export namespace Rubric {
     const assignment = { ...Assignment.empty() };
     const encoded = revised.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
-    return { assignment, cells: {}, id, locked: false, revised };
+    return {
+      assignment, cells: {}, id,
+      locked: false, references: {}, revised
+    };
   }
 
   /** @returns a locked rubric with lifecycle timestamps nulled. */
@@ -613,18 +677,9 @@ export namespace Rubric {
     return rubric.cells[id] || null;
   }
 
-  /**
-   * @param deep also check if given `id` is a `reference`, defaults to `false`.
-   * @returns whether a rubric has or references a given id.
-   */
-  export function has(rubric: Rubric, id: string, deep = false): boolean {
-    if (get(rubric, id)) return true;
-    if (deep) {
-      const reference = id;
-      const entries = Object.entries(rubric.cells);
-      return !!find(entries, ([, cell]) => cell.reference?.[0] === reference);
-    }
-    return false;
+  /** @returns whether a rubric has a cell with the given id. */
+  export function has(rubric: Rubric, id: string): boolean {
+    return !!get(rubric, id);
   }
 
   /** @returns the given rubric, locked. */
@@ -633,12 +688,12 @@ export namespace Rubric {
     await Assignment.validate(rubric);
 
     const locked = true;
-    const { cells, id, key } = rubric;
+    const { cells, id, key, references } = rubric;
     const serialized = JSON.stringify(rubric.assignment.roster);
     const roster = [await security.encrypt(serialized, key)];
     const assignment = { ...rubric.assignment, roster };
     const revised = Date.now();
-    return { assignment, cells, id, key: null, locked, revised };
+    return { assignment, cells, id, key: null, locked, references, revised };
   }
 
   /** @returns a normalized locked rubric or throws. */
@@ -670,9 +725,10 @@ export namespace Rubric {
       throw new Error('invalid rubric, invalid kernel spec');
     const blank = Assignment.Report.empty();
     const report = { ...blank, interventions, kernel, scores };
+    const references = rubric.references ?? {};
     return {
       assignment: { ...Assignment.empty(), ...assignment, report },
-      cells, id, key, locked, revised
+      cells, id, key, locked, references, revised
     };
   }
 
@@ -686,7 +742,52 @@ export namespace Rubric {
     };
     const { [id]: _, ...cells } = rubric.cells;
     void _; // This is the removed cell.
-    return { ...rubric, assignment, cells };
+    const references = Object.fromEntries(
+      Object.entries(rubric.references)
+        .filter(([, reference]) => reference.cell !== id)
+    );
+    return { ...rubric, assignment, cells, references };
+  }
+
+  /** Add a reference to an existing comparable or correctable cell. */
+  export function refer(
+    rubric: Unlocked,
+    id: string,
+    reference: Cell.Reference
+  ): Unlocked {
+    const cell = get(rubric, id);
+    if (!cell)
+      throw new Error(`refer error, cell ${id} not found`);
+    if (cell.is !== 'comparable' && cell.is !== 'correctable')
+      throw new Error(`refer error, cell ${id} is ${cell.is}`);
+    const { referent } = reference;
+    if (referent in rubric.references) {
+      throw new Error(
+        `refer error, reference ${referent} already exists`
+      );
+    }
+    if (referent in rubric.cells) {
+      throw new Error(
+        `refer error, reference ${referent} collides`
+      );
+    }
+    const assignment = {
+      ...rubric.assignment,
+      report: Assignment.Report.empty()
+    };
+    const refs = [...cell.references, referent];
+    const points = cell.is === 'correctable'
+      ? cell.points + reference.points
+      : cell.points;
+    const cells = {
+      ...rubric.cells,
+      [id]: { ...cell, points, references: refs }
+    };
+    const references = {
+      ...rubric.references,
+      [referent]: reference
+    };
+    return { ...rubric, assignment, cells, references };
   }
 
   export async function sign(
@@ -711,31 +812,71 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: submission };
   }
 
-  /** @returns a rubric with the cell's secret flag toggled. */
-  export function toggle(rubric: Unlocked, id: string): Unlocked {
-    const cell = get(rubric, id);
-    if (!cell) throw new Error(`toggle: cell ${id} not found`);
-    if (cell.is !== 'comparable' && cell.is !== 'correctable')
-      throw new Error(`toggle: cell ${id} is ${cell.is}`);
+  /** @returns a rubric with a reference's secret flag toggled. */
+  export function toggle(rubric: Unlocked, referent: string): Unlocked {
+    const reference = rubric.references[referent];
+    if (!reference)
+      throw new Error(`toggle: reference ${referent} not found`);
 
     const assignment = {
       ...rubric.assignment,
       report: Assignment.Report.empty()
     };
-    const toggled = { ...cell, secret: !cell.secret };
-    const cells = { ...rubric.cells, [id]: toggled };
-    return { ...rubric, assignment, cells };
+    const toggled = { ...reference, secret: !reference.secret };
+    const references = { ...rubric.references, [referent]: toggled };
+    return { ...rubric, assignment, references };
+  }
+
+  /** Remove a single reference; removes the cell if none remain. */
+  export function dereference(
+    rubric: Unlocked,
+    referent: string
+  ): Unlocked {
+    const reference = rubric.references[referent];
+    if (!reference) {
+      throw new Error(
+        `dereference error, reference ${referent} not found`
+      );
+    }
+    const cell = get(rubric, reference.cell);
+    if (
+      !cell ||
+      cell.is === 'answerable' ||
+      cell.is === 'reviewable'
+    ) {
+      throw new Error(
+        `dereference error, cell ${reference.cell} invalid`
+      );
+    }
+    const remaining = cell.references.filter(
+      id => id !== referent
+    );
+    if (!remaining.length) return remove(rubric, cell.id);
+    const assignment = {
+      ...rubric.assignment,
+      report: Assignment.Report.empty()
+    };
+    const points = cell.is === 'correctable'
+      ? cell.points - reference.points
+      : cell.points;
+    const cells = {
+      ...rubric.cells,
+      [cell.id]: { ...cell, points, references: remaining }
+    };
+    const { [referent]: _, ...references } = rubric.references;
+    void _;
+    return { ...rubric, assignment, cells, references };
   }
 
   /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
     const locked = false;
-    const { cells, id, assignment: { roster: [block]} } = rubric;
+    const { cells, id, references, assignment: { roster: [block] } } = rubric;
     const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
     const assignment = { ...rubric.assignment, roster };
     const revised = Date.now();
     await Assignment.validate({ assignment, key });
-    return { assignment, cells, id, key, locked, revised };
+    return { assignment, cells, id, key, locked, references, revised };
   }
 }
 
