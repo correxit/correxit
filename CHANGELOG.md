@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/QuantStack/correxit/compare/v1.6.0...v1.6.1) (2026-03-05)
+
+
+### Bug Fixes
+
+* reassign/unassign lifecycle metadata staleness ([#48](https://github.com/QuantStack/correxit/issues/48)) ([66bee79](https://github.com/QuantStack/correxit/commit/66bee794e60da1ab65b8b21106d7ceee8c930658))
+
 # [1.6.0](https://github.com/QuantStack/correxit/compare/v1.5.1...v1.6.0) (2026-03-05)
 
 
