@@ -522,43 +522,45 @@ export namespace Rubric {
     };
   }
 
+  /** @returns a locked rubric with a submitted receipt. */
+  export function acknowledge(
+    rubric: Locked,
+    receipt: string | null = null
+  ): Locked {
+    if (!rubric.assignment.submission)
+      throw new Error('acknowledge error: not submitted');
+
+    const assignment = { ...rubric.assignment, submitted: receipt };
+    return { ...rubric, assignment, revised: Date.now() };
+  }
+
   export async function assign(
     { key, ...rubric }: Unlocked,
     {
       assignee = rubric.assignment.assignee,
-      certification = rubric.assignment.certification,
-      collected = rubric.assignment.collected,
       expiration = rubric.assignment.expiration,
       id = rubric.assignment.id,
       name = rubric.assignment.name,
-      roster = rubric.assignment.roster,
-      submission = rubric.assignment.submission,
-      submitted = rubric.assignment.submitted
+      roster = rubric.assignment.roster
     }: Partial<Assignment> = {}
   ): Promise<Unlocked> {
     roster = unique(roster);
 
     const stale =
       assignee !== rubric.assignment.assignee ||
-      certification !== rubric.assignment.certification ||
-      collected !== rubric.assignment.collected ||
       expiration !== rubric.assignment.expiration ||
       id !== rubric.assignment.id ||
       name !== rubric.assignment.name ||
-      submitted !== rubric.assignment.submitted ||
-      JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster) ||
-      submission !== rubric.assignment.submission;
+      JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster);
+    const certification = stale ? null : rubric.assignment.certification;
+    const collected = stale ? null : rubric.assignment.collected;
+    const submission = stale ? null : rubric.assignment.submission;
+    const submitted = stale ? null : rubric.assignment.submitted;
     const report = stale ? Assignment.Report.empty() : rubric.assignment.report;
     const unsigned = { assignee, expiration, id, name, report, roster };
+    const lifecycle = { certification, collected, submission, submitted };
     const signature = await Assignment.sign(unsigned, key);
-    const assignment = {
-      ...unsigned,
-      certification,
-      collected,
-      signature,
-      submission,
-      submitted
-    };
+    const assignment = { ...unsigned, ...lifecycle, signature };
     await Assignment.validate({ assignment, key });
     return { ...rubric, assignment, key };
   }
@@ -597,12 +599,12 @@ export namespace Rubric {
   /** @returns a locked rubric with a collected receipt. */
   export function collect(
     rubric: Locked,
-    collected: string | null = null
+    receipt: string | null = null
   ): Locked {
     if (!rubric.assignment.certification)
       throw new Error('collect error: not certified');
     const revised = Date.now();
-    const assignment = { ...rubric.assignment, collected };
+    const assignment = { ...rubric.assignment, collected: receipt };
     return { ...rubric, assignment, revised };
   }
 
@@ -702,11 +704,10 @@ export namespace Rubric {
     return Object.keys(rubric.cells).length;
   }
 
-  export function submit(
-    rubric: Locked, submitted: string | null = null
-  ): Locked {
+  /** Record the submission timestamp for a locked workbook. */
+  export function submit(rubric: Locked): Locked {
     const submission = Date.now();
-    const assignment = { ...rubric.assignment, submission, submitted };
+    const assignment = { ...rubric.assignment, submission };
     return { ...rubric, assignment, revised: submission };
   }
 

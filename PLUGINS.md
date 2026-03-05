@@ -7,6 +7,28 @@ are described below.
 
 ---
 
+## `Workbook.Identifier`
+
+Most plugins receive a `Workbook.Identifier`, which provides the core correlation identity for a workbook state:
+
+```typescript
+type Identifier = {
+  // The assigned student's identifier, if any.
+  assignee: string | null;
+  // The external assignment ID used for LMS correlation.
+  assignment: string | null;
+  // The immutable rubric ID shared by all workbooks.
+  rubric: string;
+  // A content hash that changes when the assignment materially changes.
+  signature: string | null;
+};
+```
+
+An integrator uses these fields to look up a course, validate submission
+integrity, enforce deadlines, or record a grade to an external gradebook.
+
+---
+
 ## `Correxit.Registrar`
 
 ```typescript
@@ -33,11 +55,8 @@ type Registration = Pick<
 | `[]`             | Assignment input is locked; the assignment has no eligible registrations.                                      |
 | `Registration[]` | Assignment input is locked; a single registration is auto-selected, multiple registrations present a dropdown. |
 
-The `identifier` carries the external `assignment` id (from the
-registration), the immutable `rubric` id, and the workbook `signature`
-(a hash of the assignee, roster, report, and registration fields). An
-integrator can use these to look up a course in an LMS and return its
-available assignments.
+The integrator relies on the `identifier` values to fetch available
+course roster and assignment metadata.
 
 ---
 
@@ -61,7 +80,7 @@ Called when an instructor triggers propagation. The consumer receives:
 ```typescript
 // Propagator.Notebook
 type Notebook = {
-  identifier: Workbook.Identifier; // { assignee, assignment, rubric, signature }
+  identifier: Workbook.Identifier;
   notebook: INotebookContent; // nbformat notebook, ready to save
   path: string; // intended destination path
 };
@@ -88,23 +107,13 @@ type Submitter = (
 ) => Promise<string | null>;
 ```
 
-Called when a student submits a workbook. Returns an opaque submission ID
+Called when a student submits a workbook. Returns an opaque submission receipt
 that Correxit stores in the workbook metadata, or `null` if the submission
 was not recorded.
 
 The default implementation returns a random UUID. A server-backed submitter
 would POST the submission to an LMS, validate the assignee against the
-roster, enforce the deadline, and return the server-issued submission ID.
-
-`identifier` at call time:
-
-- `assignee` - the student's address as recorded in the workbook.
-- `assignment` - the external assignment id used for LMS/backend
-  correlation.
-- `rubric` - the immutable rubric id shared across all workbooks for
-  this assignment.
-- `signature` - a content hash that changes whenever the assignee,
-  roster, report, or registration fields change.
+roster, enforce the deadline, and return the server-issued receipt ID.
 
 ---
 
@@ -115,7 +124,7 @@ type Collector = (certified: Workbook.Certified) => Promise<string | null>;
 ```
 
 Called by the corrector after a workbook has been graded and certified.
-Returns an opaque collection ID that Correxit stores in the workbook
+Returns an opaque receipt that Correxit stores in the workbook
 metadata, or `null` if the grade was not recorded.
 
 ```typescript
@@ -137,7 +146,7 @@ type Grade = {
 
 The default implementation returns a random UUID. A server-backed collector
 would POST the grade to the gradebook, verify the signature, and return the
-server-issued record ID.
+server-issued receipt ID.
 
 ---
 
@@ -156,8 +165,11 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   provides: Correxit.Submitter,
   autoStart: true,
   activate: () => async (workbook, identifier) => {
-    const id = await myLms.submit(identifier.assignment, identifier.assignee);
-    return id ?? null;
+    const receipt = await myLms.submit(
+      identifier.assignment,
+      identifier.assignee
+    );
+    return receipt ?? null;
   }
 };
 ```

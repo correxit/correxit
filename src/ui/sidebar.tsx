@@ -177,11 +177,11 @@ const CellScore: React.FC<{
   ]);
   if (!cell) return <></>;
 
-  const actual = report && report.status !== 'unscored' ? report.points : '-';
   const heading = rubric.locked
     ? trans.__('Cell score')
     : trans.__('Cell configuration');
-  const subheading = trans.__('%1 of %2', actual, cell.points);
+  const computed = report && report.status !== 'unscored' ? report.points : '-';
+  const subheading = trans.__('%1 of %2', computed, cell.points);
   const ids = {
     comment: `correxit-sidebar-cell-score-comment-${id}`,
     heading: `correxit-sidebar-cell-score-heading-${id}`,
@@ -194,35 +194,27 @@ const CellScore: React.FC<{
       await commands.execute(CommandIDs.comment, { id, comment });
   };
   const reweight = async () => {
-    const scored = score;
     const invalid = typeof points !== 'number' || Number.isNaN(points);
     if (rubric.locked || invalid || points === cell.points) return;
     await commands.execute(CommandIDs.reweight, { id, points });
-    if (typeof scored === 'number' && !Number.isNaN(scored)) {
-      const manual = { comment, points: scored, possible: points };
+    if (typeof score === 'number' && !Number.isNaN(score)) {
+      const manual = { comment, points: score, possible: points };
       const intervention = Rubric.Score.intervene(id, manual);
       await commands.execute(CommandIDs.intervene, { id, intervention });
     }
   };
 
   const intervene = async () => {
-    const scored = score;
-    const possible = points;
     if (rubric.locked) return;
-
-    if (typeof scored === 'number' && !Number.isNaN(scored)) {
-      const max = typeof possible === 'number' ? possible : cell.points;
-      const update = { comment, points: scored, possible: max };
+    if (typeof score === 'number' && !Number.isNaN(score)) {
+      const possible = typeof points === 'number' ? points : cell.points;
+      const update = { comment, points: score, possible };
       const intervention = Rubric.Score.intervene(id, update);
       await commands.execute(CommandIDs.intervene, { id, intervention });
       return;
     }
-    if (intervened) {
-      await commands.execute(CommandIDs.intervene, {
-        id,
-        intervention: null
-      });
-    }
+    if (intervened)
+      await commands.execute(CommandIDs.intervene, { id, intervention: null });
   };
 
   const sync = async () => {

@@ -108,17 +108,18 @@ export function commands(
         const overwrite = !!args.overwrite;
         const handle = normalize(args);
         if (!handle) throw new Error('collect error, bad handle');
-        const source = scanner({ commands }, handle);
         return (async function* () {
-          for await (const workbook of source) {
-            const collectable = certified(workbook);
-            if (!collectable) continue;
-            if (!overwrite && open(workbook)?.assignment.collected) continue;
-            const collected = await collector(collectable);
-            await Workbook.collect(workbook, collected);
+          for await (const workbook of scanner({ commands }, handle)) {
+            const certified = precertified(workbook);
+            if (!certified) continue;
+
+            const { collected } = open(workbook)?.assignment || {};
+            if (collected && !overwrite) continue;
+
+            const receipt = await collector(certified);
+            await Workbook.collect(workbook, receipt);
             await save(workbook);
-            const { grade } = collectable;
-            yield [grade.path, { grade, workbook: workbook as Headless }];
+            yield [certified.grade.path, { grade: certified.grade, workbook }];
           }
         })();
       }
@@ -189,28 +190,6 @@ export function commands(
   return disposables;
 }
 
-function certified(workbook: Headless): Certified | null {
-  const rubric = open(workbook);
-  if (!rubric || !rubric.locked) return null;
-
-  const { assignment, cells } = rubric;
-  const { interventions, kernel, scores } = assignment.report;
-  const path = workbook.context.path;
-  const incomplete = Object.keys(cells).some(id => !scores[id]);
-  const partial = Object.values(scores).some(unexecuted);
-  const pending = Object.values(cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !interventions[cell.id]);
-  const uncertified = !assignment.certification;
-  const summary = Rubric.Assignment.summary(assignment.report);
-  const unscored = summary.status === 'unscored';
-  if (incomplete || partial || pending || uncertified || unscored) return null;
-
-  const grade: Grade = { path, resolved: true, score: summary, spec: kernel };
-  const identifier = Workbook.identifier(workbook);
-  return { grade, identifier, workbook };
-}
-
 async function correct(workbook: Headless): Promise<Certified> {
   const rubric = open(workbook);
   if (!rubric || rubric.locked) return recover(workbook);
@@ -261,6 +240,28 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
 
 function open(workbook: Workbook): Rubric | null {
   return Workbook.open(workbook, true);
+}
+
+function precertified(workbook: Headless): Certified | null {
+  const rubric = open(workbook);
+  if (!rubric || !rubric.locked) return null;
+
+  const { assignment, cells } = rubric;
+  const { interventions, kernel, scores } = assignment.report;
+  const path = workbook.context.path;
+  const incomplete = Object.keys(cells).some(id => !scores[id]);
+  const partial = Object.values(scores).some(unexecuted);
+  const pending = Object.values(cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  const uncertified = !assignment.certification;
+  const summary = Rubric.Assignment.summary(assignment.report);
+  const unscored = summary.status === 'unscored';
+  if (incomplete || partial || pending || uncertified || unscored) return null;
+
+  const grade: Grade = { path, resolved: true, score: summary, spec: kernel };
+  const identifier = Workbook.identifier(workbook);
+  return { grade, identifier, workbook };
 }
 
 function recover(workbook: Headless): Certified {
