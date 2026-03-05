@@ -51,12 +51,12 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
         const total = rubric.assignment.roster.length;
         const { directory, location } = await mkdir(path);
         yield { type: 'mkdir', slots: [directory.path] };
-        for await (const created of await stream(location)) {
-          const { identifier, notebook, path } = created;
-          const saved = await io.create({ factory, manager, notebook, path });
+        for await (const propagated of await stream(location)) {
+          const { identifier, notebook, path } = propagated;
+          const created = await io.create({ factory, manager, notebook, path });
           yield { type: 'separator', slots: [] };
           yield { type: 'assigned', slots: [identifier.assignee!] };
-          yield { type: saved ? 'saved' : 'create-error', slots: [path] };
+          yield { type: created ? 'saved' : 'create-error', slots: [path] };
           yield { type: 'progress', slots: [++progress, total] };
         }
         await io.cd(commands, directory.path);

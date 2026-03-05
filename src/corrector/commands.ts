@@ -106,7 +106,7 @@ export function commands(
         args: Partial<{ overwrite: boolean; path: string }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
-        const handle = normalize({ path: args.path });
+        const handle = normalize(args);
         if (!handle) throw new Error('collect error, bad handle');
         const source = scanner({ commands }, handle);
         return (async function* () {
