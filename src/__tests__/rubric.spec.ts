@@ -369,10 +369,11 @@ describe('Rubric', () => {
       });
       const locked = await Rubric.lock(unlocked);
       const receipt = 'abc-123';
-      const submitted = Rubric.submit(locked, receipt);
-      expect(submitted.assignment.submission).toBeGreaterThan(0);
-      expect(submitted.assignment.submitted).toBe(receipt);
-      expect(submitted.locked).toBe(true);
+      const submitted = Rubric.submit(locked);
+      const acknowledged = Rubric.acknowledge(submitted, receipt);
+      expect(acknowledged.assignment.submission).toBeGreaterThan(0);
+      expect(acknowledged.assignment.submitted).toBe(receipt);
+      expect(acknowledged.locked).toBe(true);
     });
 
     it('submits a locked rubric without receipt', async () => {
@@ -394,8 +395,9 @@ describe('Rubric', () => {
         expiration: null
       });
       const locked = await Rubric.lock(unlocked);
-      const submitted = Rubric.submit(locked, 'receipt');
-      const drafted = Rubric.draft(submitted);
+      const submitted = Rubric.submit(locked);
+      const acknowledged = Rubric.acknowledge(submitted, 'receipt');
+      const drafted = Rubric.draft(acknowledged);
       expect(drafted.assignment.certification).toBeNull();
       expect(drafted.assignment.submission).toBeNull();
       expect(drafted.assignment.submitted).toBeNull();
@@ -409,8 +411,8 @@ describe('Rubric', () => {
         expiration: null
       });
       const locked = await Rubric.lock(unlocked);
-      const first = Rubric.submit(locked, 'receipt-a');
-      const second = Rubric.submit(locked, 'receipt-b');
+      const first = Rubric.acknowledge(Rubric.submit(locked), 'receipt-a');
+      const second = Rubric.acknowledge(Rubric.submit(locked), 'receipt-b');
       expect(first.assignment.signature).toBe(second.assignment.signature);
     });
 

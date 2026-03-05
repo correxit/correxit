@@ -48,9 +48,10 @@ type Reified =
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
 const { get, has, size } = Rubric;
-const { add, assign, certify, collect, comment, convert, correct } = Workbook;
-const { draft, intervene, lock, remove, reset, reweight, submit } = Workbook;
-const { toggle } = Workbook;
+const {
+  acknowledge, add, assign, certify, collect, comment, convert, correct,
+  draft, intervene, lock, remove, reset, reweight, submit, toggle
+} = Workbook;
 const { normalize } = Workbook.Credentials;
 
 export function commands(
@@ -538,8 +539,10 @@ export function commands(
       if (!button.accept) return;
       try {
         const identifier = Workbook.identifier(workbook);
+        await submit(workbook);
+
         const receipt = await submitter(workbook, identifier);
-        await submit(workbook, receipt);
+        await acknowledge(workbook, receipt);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);

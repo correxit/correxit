@@ -271,7 +271,8 @@ test('submits a workbook and sets cells to read-only', async ({ page }) => {
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
 
-    const submitted = await Workbook.submit(workbook, 'receipt-123');
+    let submitted = await Workbook.submit(workbook);
+    submitted = await Workbook.acknowledge(workbook, 'receipt-123');
     const notebook = panel.context.model.sharedModel;
     const metadata = notebook.getMetadata('correxit');
     return {

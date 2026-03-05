@@ -522,6 +522,18 @@ export namespace Rubric {
     };
   }
 
+  /** @returns a locked rubric with a submitted receipt. */
+  export function acknowledge(
+    rubric: Locked,
+    receipt: string | null = null
+  ): Locked {
+    if (!rubric.assignment.submission)
+      throw new Error('acknowledge error: not submitted');
+
+    const assignment = { ...rubric.assignment, submitted: receipt };
+    return { ...rubric, assignment, revised: Date.now() };
+  }
+
   export async function assign(
     { key, ...rubric }: Unlocked,
     {
@@ -692,12 +704,10 @@ export namespace Rubric {
     return Object.keys(rubric.cells).length;
   }
 
-  export function submit(
-    rubric: Locked,
-    receipt: string | null = null
-  ): Locked {
+  /** Record the submission timestamp for a locked workbook. */
+  export function submit(rubric: Locked): Locked {
     const submission = Date.now();
-    const assignment = { ...rubric.assignment, submission, submitted: receipt };
+    const assignment = { ...rubric.assignment, submission };
     return { ...rubric, assignment, revised: submission };
   }
 

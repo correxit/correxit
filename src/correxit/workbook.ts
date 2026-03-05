@@ -205,6 +205,17 @@ export namespace Workbook {
     return update(workbook, Rubric.add(rubric, cell));
   }
 
+  /** Acknowledge a submitted workbook grade with a receipt. */
+  export async function acknowledge(
+    workbook: Workbook,
+    receipt: string | null = null
+  ): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric || !rubric.locked || !rubric.assignment.submission)
+      throw new Error('acknowledge error');
+    return update(workbook, Rubric.acknowledge(rubric, receipt));
+  }
+
   /**
    * Update a workbook's assignment metadata.
    *
@@ -641,14 +652,11 @@ export namespace Workbook {
   }
 
   /** Submit an assignment, locking all cells to read-only. */
-  export async function submit(
-    workbook: Workbook,
-    receipt: string | null = null
-  ): Promise<Rubric.Locked> {
+  export async function submit(workbook: Workbook): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked) throw new Error('submit error');
     freeze(workbook);
-    return update(workbook, Rubric.submit(rubric, receipt));
+    return update(workbook, Rubric.submit(rubric));
   }
 
   /** Toggle a workbook cell's `secret` flag. */
