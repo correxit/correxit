@@ -112,7 +112,9 @@ export function commands(
           for await (const workbook of scanner({ commands }, handle)) {
             const certified = precertified(workbook);
             if (!certified) continue;
-            if (!overwrite && open(workbook)?.assignment.collected) continue;
+
+            const { collected } = open(workbook)?.assignment || {};
+            if (collected && !overwrite) continue;
 
             const receipt = await collector(certified);
             await Workbook.collect(workbook, receipt);
