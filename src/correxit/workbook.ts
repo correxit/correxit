@@ -284,12 +284,12 @@ export namespace Workbook {
   /** Collect a certified workbook grade. */
   export async function collect(
     workbook: Workbook,
-    collected: string | null = null
+    receipt: string | null = null
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric || !rubric.locked || !rubric.assignment.certification)
       throw new Error('collect error');
-    return update(workbook, Rubric.collect(rubric, collected));
+    return update(workbook, Rubric.collect(rubric, receipt));
   }
 
   /** Certify a workbook: correct, lock, and freeze. */
@@ -643,12 +643,12 @@ export namespace Workbook {
   /** Submit an assignment, locking all cells to read-only. */
   export async function submit(
     workbook: Workbook,
-    submitted: string | null = null
+    receipt: string | null = null
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked) throw new Error('submit error');
     freeze(workbook);
-    return update(workbook, Rubric.submit(rubric, submitted));
+    return update(workbook, Rubric.submit(rubric, receipt));
   }
 
   /** Toggle a workbook cell's `secret` flag. */

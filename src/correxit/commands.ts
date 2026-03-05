@@ -103,7 +103,10 @@ export function commands(
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
-      await collect(workbook, await collector(await certify(workbook)));
+
+      const certified = await certify(workbook);
+      const receipt = await collector(certified);
+      await collect(workbook, receipt);
       await commands.execute(CommandIDs.save, { ...args, undo: false });
     }
   }));
@@ -535,8 +538,8 @@ export function commands(
       if (!button.accept) return;
       try {
         const identifier = Workbook.identifier(workbook);
-        const submitted = await submitter(workbook, identifier);
-        await submit(workbook, submitted);
+        const receipt = await submitter(workbook, identifier);
+        await submit(workbook, receipt);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);

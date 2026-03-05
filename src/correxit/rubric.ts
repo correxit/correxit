@@ -587,12 +587,12 @@ export namespace Rubric {
   /** @returns a locked rubric with a collected receipt. */
   export function collect(
     rubric: Locked,
-    collected: string | null = null
+    receipt: string | null = null
   ): Locked {
     if (!rubric.assignment.certification)
       throw new Error('collect error: not certified');
     const revised = Date.now();
-    const assignment = { ...rubric.assignment, collected };
+    const assignment = { ...rubric.assignment, collected: receipt };
     return { ...rubric, assignment, revised };
   }
 
@@ -693,10 +693,11 @@ export namespace Rubric {
   }
 
   export function submit(
-    rubric: Locked, submitted: string | null = null
+    rubric: Locked,
+    receipt: string | null = null
   ): Locked {
     const submission = Date.now();
-    const assignment = { ...rubric.assignment, submission, submitted };
+    const assignment = { ...rubric.assignment, submission, submitted: receipt };
     return { ...rubric, assignment, revised: submission };
   }
 
