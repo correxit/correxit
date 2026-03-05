@@ -274,8 +274,7 @@ describe('Rubric', () => {
       let rubric = await Rubric.assign(create(), {
         assignee: '',
         roster,
-        expiration: initial,
-
+        expiration: initial
       });
       rubric = {
         ...rubric,
@@ -289,8 +288,7 @@ describe('Rubric', () => {
       rubric = await Rubric.assign(rubric, {
         assignee: '',
         roster,
-        expiration: updated,
-
+        expiration: updated
       });
       expect(rubric.assignment.expiration).toBe(updated);
       expect(rubric.assignment.report.scores).toEqual({});
@@ -378,8 +376,7 @@ describe('Rubric', () => {
       const rubric = await Rubric.assign(create(), {
         assignee: '',
         roster: ['assignee@example.com'],
-        expiration,
-
+        expiration
       });
 
       expect(rubric.assignment.expiration).toBe(expiration);
@@ -390,8 +387,7 @@ describe('Rubric', () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
-        expiration: Date.now() + 86400000,
-
+        expiration: Date.now() + 86400000
       });
       const locked = await Rubric.lock(unlocked);
       const receipt = 'abc-123';
@@ -405,8 +401,7 @@ describe('Rubric', () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
-        expiration: null,
-
+        expiration: null
       });
       const locked = await Rubric.lock(unlocked);
       const submitted = Rubric.submit(locked);
@@ -418,8 +413,7 @@ describe('Rubric', () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
-        expiration: null,
-
+        expiration: null
       });
       const locked = await Rubric.lock(unlocked);
       const submitted = Rubric.submit(locked, 'receipt');
@@ -434,8 +428,7 @@ describe('Rubric', () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
-        expiration: null,
-
+        expiration: null
       });
       const locked = await Rubric.lock(unlocked);
       const first = Rubric.submit(locked, 'receipt-a');
@@ -447,8 +440,7 @@ describe('Rubric', () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
-        expiration: null,
-
+        expiration: null
       });
       const locked = await Rubric.lock(unlocked);
       const certified = {
@@ -468,8 +460,7 @@ describe('Rubric', () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
-        expiration: null,
-
+        expiration: null
       });
       const locked = await Rubric.lock(unlocked);
       const certified = {
@@ -487,8 +478,7 @@ describe('Rubric', () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
-        expiration: null,
-
+        expiration: null
       });
       const locked = await Rubric.lock(unlocked);
       expect(() => Rubric.collect(locked)).toThrow(
