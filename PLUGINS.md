@@ -13,10 +13,14 @@ Most plugins receive a `Workbook.Identifier`, which provides the core correlatio
 
 ```typescript
 type Identifier = {
-  assignee: string | null; // The assigned student's identifier, if any.
-  assignment: string | null; // The external assignment ID used for LMS correlation.
-  rubric: string; // The immutable rubric ID shared by all workbooks.
-  signature: string | null; // A content hash that changes when roster/rules change.
+  // The assigned student's identifier, if any.
+  assignee: string | null;
+  // The external assignment ID used for LMS correlation.
+  assignment: string | null;
+  // The immutable rubric ID shared by all workbooks.
+  rubric: string;
+  // A content hash that changes when the assignment materially changes.
+  signature: string | null;
 };
 ```
 

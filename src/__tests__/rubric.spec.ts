@@ -313,7 +313,7 @@ describe('Rubric', () => {
       await expect(validate(tampered)).rejects.toThrow('match');
     });
 
-    it('resets lifecycle timestamps and report if assignee or roster changes', async () => {
+    it('resets lifecycle timestamps and report if any core assignment property changes', async () => {
       let rubric = create();
       const report: Rubric.Assignment.Report = {
         interventions: {},
@@ -347,28 +347,6 @@ describe('Rubric', () => {
       expect(rubric.assignment.collected).toBeNull();
       expect(rubric.assignment.submission).toBeNull();
       expect(rubric.assignment.submitted).toBeNull();
-    });
-
-    it('resets report if assignee changes', async () => {
-      let rubric = create();
-      const report: Rubric.Assignment.Report = {
-        interventions: {},
-        kernel: null,
-        scores: { 'cell-1': Rubric.Score.CORRECT }
-      };
-      const roster = ['A', 'B'];
-
-      rubric = await Rubric.assign(
-        {
-          ...rubric,
-          assignment: { ...rubric.assignment, assignee: 'A', report, roster }
-        },
-        { assignee: 'A' }
-      );
-      expect(rubric.assignment.report.scores).toEqual(report.scores);
-
-      rubric = await Rubric.assign(rubric, { assignee: 'B' });
-      expect(rubric.assignment.report.scores).toEqual({});
     });
 
     it('expiration can be set to control deadline', async () => {
