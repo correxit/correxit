@@ -526,39 +526,29 @@ export namespace Rubric {
     { key, ...rubric }: Unlocked,
     {
       assignee = rubric.assignment.assignee,
-      certification = rubric.assignment.certification,
-      collected = rubric.assignment.collected,
       expiration = rubric.assignment.expiration,
       id = rubric.assignment.id,
       name = rubric.assignment.name,
-      roster = rubric.assignment.roster,
-      submission = rubric.assignment.submission,
-      submitted = rubric.assignment.submitted
+      roster = rubric.assignment.roster
     }: Partial<Assignment> = {}
   ): Promise<Unlocked> {
     roster = unique(roster);
 
     const stale =
       assignee !== rubric.assignment.assignee ||
-      certification !== rubric.assignment.certification ||
-      collected !== rubric.assignment.collected ||
       expiration !== rubric.assignment.expiration ||
       id !== rubric.assignment.id ||
       name !== rubric.assignment.name ||
-      submitted !== rubric.assignment.submitted ||
-      JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster) ||
-      submission !== rubric.assignment.submission;
+      JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster);
+    const certification = stale ? null : rubric.assignment.certification;
+    const collected = stale ? null : rubric.assignment.collected;
+    const submission = stale ? null : rubric.assignment.submission;
+    const submitted = stale ? null : rubric.assignment.submitted;
     const report = stale ? Assignment.Report.empty() : rubric.assignment.report;
     const unsigned = { assignee, expiration, id, name, report, roster };
+    const lifecycle = { certification, collected, submission, submitted };
     const signature = await Assignment.sign(unsigned, key);
-    const assignment = {
-      ...unsigned,
-      certification,
-      collected,
-      signature,
-      submission,
-      submitted
-    };
+    const assignment = { ...unsigned, ...lifecycle, signature };
     await Assignment.validate({ assignment, key });
     return { ...rubric, assignment, key };
   }
