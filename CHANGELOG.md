@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/QuantStack/correxit/compare/v1.5.1...v1.6.0) (2026-03-05)
+
+
+### Features
+
+* update registrar extension point ([#47](https://github.com/QuantStack/correxit/issues/47)) ([546f5e2](https://github.com/QuantStack/correxit/commit/546f5e2c744b6dcdd49e374059c8e7294b474712))
+
 ## [1.5.1](https://github.com/QuantStack/correxit/compare/v1.5.0...v1.5.1) (2026-03-04)
 
 
