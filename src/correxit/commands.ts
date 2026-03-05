@@ -125,8 +125,8 @@ export function commands(
       const cell = find(notebook?.cells || [], cell => cell.id === id);
       const reference = args.reference;
       const rubric = open(state.workbook());
-      if (!cell || !rubric || rubric.locked || !id || id === reference?.[0])
-        return false;
+      if (!cell || !rubric || !id || id === reference?.[0]) return false;
+      if (rubric.locked || rubric.assignment.assignee) return false;
 
       const code = cell.cell_type === 'code';
       if (!code) return args.is === 'reviewable';
@@ -368,7 +368,7 @@ export function commands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.propagate, {
-    label: trans.__('Propagate assignment to roster...'),
+    label: trans.__('Create individually-assigned workbooks...'),
     isEnabled: () => {
       const rubric = open(state.workbook());
       if (!rubric) return false;
@@ -410,7 +410,10 @@ export function commands(
     isEnabled: (args: Partial<Cell>) => {
       const id = state.cell(args);
       const rubric = open(state.workbook());
-      return !!id && !!rubric && !rubric.locked && has(rubric, id);
+      if (!id || !rubric || rubric.locked || rubric.assignment.assignee)
+        return false;
+
+      return has(rubric, id);
     },
     isVisible: args => commands.isEnabled(CommandIDs.remove, args),
     icon: Icons.reset,
@@ -476,9 +479,11 @@ export function commands(
         : undefined;
     },
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
-      const rubric = open(state.workbook());
       const id = state.cell(args);
-      if (!id || !rubric || rubric.locked) return false;
+      const rubric = open(state.workbook());
+      if (!id || !rubric || rubric.locked || rubric.assignment.assignee)
+        return false;
+
       const cell = get(rubric, id);
       return !!cell && (cell.is === 'comparable' || cell.is === 'correctable');
     },
