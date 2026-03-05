@@ -2,17 +2,23 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { checkIcon, ToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
-import { Correxit, Rubric } from '..';
+import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
 import { Toggle } from './toggle';
 
 type Assignment = Rubric.Assignment;
+type Enrolled = {
+  cached: string;
+  expires: number;
+  registered: Awaited<ReturnType<Correxit.Registrar>>;
+};
 type Registration = Rubric.Assignment.Registration;
 type TranslationBundle = IRenderMime.TranslationBundle;
 
+const TTL = 60_000;
 const { assign, enroll } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
-const enrolled = new Map<string, Registration[] | null>();
+const enrolled = new WeakMap<Workbook, Enrolled>();
 const identify = ({ id, name }: Registration) => id || name;
 const blank = (assignment: Assignment): Assignment => ({
   ...assignment,
@@ -32,14 +38,16 @@ const freeze = (assignment: Assignment, active: Registration): Assignment => ({
 
 export const Assignment: React.FC<{
   commands: CommandRegistry;
-  rubric: Rubric;
   trans: TranslationBundle;
-}> = ({ commands, rubric, trans }) => {
+  workbook: Workbook;
+}> = ({ commands, trans, workbook }) => {
+  const rubric = Workbook.open(workbook, true)!;
   const { locked, revised } = rubric;
   const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
   const [registered, setRegistered] = useState<Registration[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
+  const cached = `${rubric.id}:${locked}`;
   const keep = (next: Assignment) =>
     setAssignment(current =>
       Equal.assignment(current, next) ? current : next
@@ -64,17 +72,18 @@ export const Assignment: React.FC<{
       void commands.execute(assign, assignment).catch(_ => {});
   };
   const request = async () => {
-    const cached = `${rubric.id}:${rubric.locked}`;
-    if (enrolled.has(cached)) {
-      store(enrolled.get(cached)!);
+    const now = Date.now();
+    const current = enrolled.get(workbook);
+    if (current && current.cached === cached && now < current.expires) {
+      store(current.registered);
       return;
     }
     const result = await commands.execute(enroll).catch(_ => null);
-    enrolled.set(cached, result as Registration[] | null);
-    store(result as Registration[] | null);
+    const registered = result as Registration[] | null;
+    enrolled.set(workbook, { cached, expires: now + TTL, registered });
+    store(registered);
   };
-
-  useEffect(() => void request(), [rubric.id, rubric.locked]);
+  useEffect(() => void request(), [cached, workbook]);
   useEffect(() => keep(rubric.assignment), [rubric.assignment]);
   useEffect(() => {
     if (registered === null) {
@@ -96,7 +105,7 @@ export const Assignment: React.FC<{
             registration => identify(registration) === rubric.assignment.id
           ) || (registered.length === 1 ? registered[0] : null);
     if (!matched) {
-      pick(null);
+      if (selected !== '') pick(null);
       merge(blank);
       return;
     }
@@ -206,9 +215,10 @@ const Expiration: React.FC<{
       ? 'correxit-assignment-expiration cxt-mod-expired'
       : 'correxit-assignment-expiration';
   if (locked) {
-    const label = expiration
-      ? trans.__('Due %1', new Date(expiration).toLocaleString())
-      : trans.__('No deadline');
+    const label =
+      expiration !== null
+        ? trans.__('Due %1', new Date(expiration).toLocaleString())
+        : trans.__('No deadline');
     return (
       <div className={className}>
         <div className="correxit-monospace">{label}</div>
@@ -312,9 +322,10 @@ const Enrollment: React.FC<{
     );
   }
 
-  const due = expiration
-    ? new Date(expiration).toLocaleString()
-    : trans.__('No deadline');
+  const due =
+    expiration !== null
+      ? new Date(expiration).toLocaleString()
+      : trans.__('No deadline');
   const line = trans.__('%1 (%2) roster: %3', name, due, roster.length);
   const unassigned = trans.__('Template - unassigned');
   return (

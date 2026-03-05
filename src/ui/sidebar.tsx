@@ -97,7 +97,7 @@ const Header: React.FC<{
           <CommandToolbarButtonComponent commands={commands} id={unlock} />
         </div>
       </div>
-      {!!rubric && <Assignment {...{ commands, rubric, trans }} />}
+      {!!rubric && <Assignment {...{ commands, trans, workbook }} />}
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <div className="correxit-sidebar-submission-actions">
         {!!rubric && (

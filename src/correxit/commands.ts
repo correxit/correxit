@@ -398,7 +398,7 @@ export function commands(
 
       const warn = (error: any) => {
         console.warn('enroll failed for workbook', workbook, error);
-        return [];
+        return null;
       };
       const identifier = Workbook.identifier(workbook);
       return await registrar(workbook, identifier).catch(warn);

@@ -262,7 +262,7 @@ export namespace Rubric {
 
   export namespace Assignment {
     export type Registration = Pick<
-      Rubric.Assignment,
+      Assignment,
       'expiration' | 'id' | 'name' | 'roster'
     >;
 
