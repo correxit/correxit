@@ -167,7 +167,7 @@ test('toggles secret flag on a rubric cell', async ({ page }) => {
     await Workbook.update(panel, rubric);
 
     const before = Workbook.open(panel)!.references['ref']?.secret;
-    await app.commands.execute('correxit:share', { id: 'cell' });
+    await app.commands.execute('correxit:share', { id: 'ref' });
 
     const after = Workbook.open(panel)!.references['ref']?.secret;
     return { before, after };
@@ -362,7 +362,7 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
       }),
       lock: app.commands.isEnabled('correxit:lock'),
       remove: app.commands.isEnabled('correxit:remove', { id: 'cell' }),
-      toggle: app.commands.isEnabled('correxit:share', { id: 'cell' }),
+      toggle: app.commands.isEnabled('correxit:share', { id: 'ref' }),
       unlock: app.commands.isEnabled('correxit:unlock')
     };
     await Workbook.lock(panel);
@@ -374,7 +374,7 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
       }),
       lock: app.commands.isEnabled('correxit:lock'),
       remove: app.commands.isEnabled('correxit:remove', { id: 'cell' }),
-      toggle: app.commands.isEnabled('correxit:share', { id: 'cell' }),
+      toggle: app.commands.isEnabled('correxit:share', { id: 'ref' }),
       unlock: app.commands.isEnabled('correxit:unlock')
     };
     return { unlocked, locked };

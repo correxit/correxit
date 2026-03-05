@@ -1,3 +1,4 @@
+import { SharedCell } from '@jupyter/ydoc';
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import {
@@ -89,68 +90,68 @@ export namespace Workbook {
   }
 
   export namespace Cell {
-    /**
-     * Decrypts a workbook cell, modifying its source and changing its cell type
-     * from `raw` to `code`.
-     */
+    export type Prepared = { index: number; replacement: SharedCell.Cell; };
+
+    /** Returns a prepared decrypted cell replacement. */
     export async function decrypt(
       workbook: Workbook,
       reference: string,
       key: string
-    ): Promise<void> {
+    ): Promise<Prepared> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, ({ id }) => id === reference);
       if (!key || index === -1) throw new Error('decrypt error');
 
       const cell = notebook.cells[index];
-      const decrypted = await security.decrypt(cell.getSource(), key);
-      cell.transact(() => {
-        const jupyter = (cell.getMetadata('jupyter') as any || {});
-        delete jupyter['source_hidden'];
-        cell.setMetadata('jupyter', jupyter);
-        cell.setMetadata('trusted', true);
-        cell.deleteMetadata('editable');
-        cell.setSource(decrypted);
-      });
+      const source = await security.decrypt(cell.getSource(), key);
+      const jupyter = { ...(cell.getMetadata('jupyter') as any || {}) };
+      delete jupyter['source_hidden'];
 
-      const code = { ...cell.toJSON(), cell_type: 'code' };
-      notebook.transact(() => {
-        notebook.deleteCell(index);
-        notebook.insertCell(index, code);
-      }, false);
-      if (workbook.content) NotebookActions.deselectAll(workbook.content);
+      const serialized = cell.toJSON();
+      const { metadata } = serialized;
+      const replacement = {
+        ...serialized,
+        cell_type: 'code',
+        metadata: { ...metadata, editable: undefined, jupyter, trusted: true },
+        source
+      };
+      return { index, replacement };
     }
 
     /**
-     * Encrypts a workbook cell, modifying its source and changing its cell type
-     * from `code` to `raw`.
+     * Prepares an encrypted cell replacement.
+     *
+     * @returns the cell index and its encrypted JSON
+     * with `cell_type` set to `'raw'`.
      */
     export async function encrypt(
       workbook: Workbook,
       reference: string,
       key: string
-    ): Promise<void> {
+    ): Promise<Prepared> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, ({ id }) => id === reference);
       if (!key || index === -1) throw new Error('encrypt error');
 
       const cell = notebook.cells[index];
-      const encrypted = await security.encrypt(cell.getSource(), key);
-      cell.transact(() => {
-        const jupyter = (cell.getMetadata('jupyter') || {}) as any;
-        cell.setMetadata('jupyter', { ...jupyter, 'source_hidden': true });
-        cell.deleteMetadata('trusted');
-        cell.setMetadata('editable', false);
-        cell.setSource(encrypted);
-      });
+      const source = await security.encrypt(cell.getSource(), key);
+      const jupyter = {
+        ...(cell.getMetadata('jupyter') || {} as any),
+        source_hidden: true
+      };
+      const serialized = cell.toJSON();
+      const metadata = { ...serialized.metadata, jupyter };
+      delete metadata['trusted'];
 
-      const raw = { ...cell.toJSON(), cell_type: 'raw' };
-      notebook.transact(() => {
-        notebook.deleteCell(index);
-        notebook.insertCell(index, raw);
-      }, false);
-      if (workbook.content) NotebookActions.deselectAll(workbook.content);
+      const replacement = {
+        ...serialized,
+        cell_type: 'raw',
+        metadata: { ...metadata, editable: false },
+        source
+      };
+      return { index, replacement };
     }
+
   }
 
   const quiet = true;
@@ -194,6 +195,18 @@ export namespace Workbook {
         roster.some((record, i) => record !== assignment.roster[i]))) ||
     signature !== assignment.signature
   );
+  const transact = (workbook: Workbook, prepared: Cell.Prepared[]): void => {
+    if (!prepared.length) return;
+    const notebook = workbook.context.model.sharedModel;
+    notebook.transact(() => {
+      for (const { index, replacement } of prepared) {
+        notebook.deleteCell(index);
+        notebook.insertCell(index, replacement);
+      }
+    }, false);
+    if (workbook.content)
+      NotebookActions.deselectAll(workbook.content);
+  };
 
   /** Add a cell to a workbook's rubric. */
   export async function add(
@@ -467,10 +480,11 @@ export namespace Workbook {
       console.warn('decrypt: workbook has missing cells', audited.pruned);
 
     const { key, references } = audited.rubric as Rubric.Unlocked;
-    for (const reference of Object.values(references)) {
-      if (!reference.secret) continue;
-      await Cell.decrypt(workbook, reference.referent, key);
-    }
+    const secrets = Object.values(references).filter(({ secret }) => secret);
+    const prepared = await Promise.all(
+      secrets.map(({ referent }) => Cell.decrypt(workbook, referent, key))
+    );
+    transact(workbook, prepared);
     // Keep the original (un-pruned) rubric for downstream audits.
     return update(
       workbook, rubric, { ok: true, pruned: [], rubric }
@@ -558,10 +572,13 @@ export namespace Workbook {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) return;
     await Rubric.Assignment.validate(rubric);
-    for (const reference of Object.values(rubric.references)) {
-      if (!reference.secret) continue;
-      await Cell.encrypt(workbook, reference.referent, rubric.key);
-    }
+
+    const { key, references } = rubric;
+    const secrets = Object.values(references).filter(({ secret }) => secret);
+    const prepared = await Promise.all(
+      secrets.map(({ referent }) => Cell.encrypt(workbook, referent, key))
+    );
+    transact(workbook, prepared);
     update(workbook, await Rubric.lock(rubric));
   }
 
