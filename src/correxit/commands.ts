@@ -368,7 +368,13 @@ export function commands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.propagate, {
-    label: trans.__('Create individually-assigned workbooks...'),
+    label: () => {
+      const rubric = open(state.workbook());
+      if (!rubric) return '';
+
+      const total = rubric.assignment.roster.length;
+      return trans.__('Create %1 assigned workbooks...', total);
+    },
     isEnabled: () => {
       const rubric = open(state.workbook());
       if (!rubric) return false;
