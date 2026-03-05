@@ -167,36 +167,11 @@
   margin: 5px 0;
 }
 
-.correxit-sidebar-footer {
-  margin-top: 6px;
-}
-
-.correxit-sidebar-footer .jp-ToolbarButtonComponent {
-  background-color: var(--jp-layout-color2);
-  border: 1px solid var(--jp-warn-color2);
-  margin: 0;
-  min-width: 0;
-  width: 100%;
-}
-
-.correxit-sidebar-footer .jp-ToolbarButtonComponent:hover {
-  background-color: var(--jp-layout-color3);
-  border-color: var(--jp-warn-color1);
-}
-
-.correxit-sidebar-footer .jp-ToolbarButtonComponent > span {
-  color: var(--jp-warn-color0);
-}
-
 .correxit-sidebar-inner-header {
   align-items: center;
   display: flex;
   justify-content: space-between;
   margin: 6px var(--correxit-sidebar-content-inset);
-
-  .jp-ToolbarButtonComponent:hover {
-    background-color: transparent;
-  }
 }
 
 .correxit-sidebar p {
@@ -480,4 +455,29 @@
   min-width: 0;
   padding: 0;
   width: 24px;
+}
+
+.correxit-sidebar-footer {
+  margin-top: 6px;
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent {
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-warn-color2);
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent:hover {
+  background-color: var(--jp-layout-color3);
+  border-color: var(--jp-warn-color1);
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent > span {
+  color: var(--jp-warn-color0);
+}
+
+.correxit-sidebar-inner-header .jp-ToolbarButtonComponent:hover {
+  background-color: transparent;
 }

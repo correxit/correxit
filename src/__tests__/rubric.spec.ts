@@ -45,15 +45,22 @@ describe('Rubric', () => {
     it('toggles a cell between shared and secret', () => {
       const id = 'cell-1';
       const reference: Rubric.Cell.Reference = {
-        cell: id, referent: 'ref-1', points: 1, secret: true
-      };
-      const base = Rubric.add(create(), {
-        id,
-        is: 'comparable',
-        payload: null,
+        cell: id,
+        referent: 'ref-1',
         points: 1,
-        references: ['ref-1']
-      }, [reference]);
+        secret: true
+      };
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'comparable',
+          payload: null,
+          points: 1,
+          references: ['ref-1']
+        },
+        [reference]
+      );
       const report: Rubric.Assignment.Report = {
         interventions: {},
         kernel: null,
@@ -937,18 +944,23 @@ describe('Rubric', () => {
   describe('References', () => {
     it('adds a reference to an existing correctable cell', () => {
       const id = 'cell-1';
-      const base = Rubric.add(create(), {
-        id,
-        is: 'correctable',
-        payload: null,
-        points: 1,
-        references: ['ref-1']
-      }, [
-        { cell: id, referent: 'ref-1', points: 1, secret: true }
-      ]);
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 1,
+          references: ['ref-1']
+        },
+        [{ cell: id, referent: 'ref-1', points: 1, secret: true }]
+      );
 
       const reference: Rubric.Cell.Reference = {
-        cell: id, referent: 'ref-2', points: 2, secret: false
+        cell: id,
+        referent: 'ref-2',
+        points: 2,
+        secret: false
       };
       const rubric = Rubric.refer(base, id, reference);
       const cell = Rubric.get(rubric, id)!;
@@ -960,18 +972,23 @@ describe('Rubric', () => {
 
     it('refer preserves points for comparable cells', () => {
       const id = 'cell-1';
-      const base = Rubric.add(create(), {
-        id,
-        is: 'comparable',
-        payload: null,
-        points: 5,
-        references: ['ref-1']
-      }, [
-        { cell: id, referent: 'ref-1', points: 1, secret: false }
-      ]);
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'comparable',
+          payload: null,
+          points: 5,
+          references: ['ref-1']
+        },
+        [{ cell: id, referent: 'ref-1', points: 1, secret: false }]
+      );
 
       const reference: Rubric.Cell.Reference = {
-        cell: id, referent: 'ref-2', points: 1, secret: false
+        cell: id,
+        referent: 'ref-2',
+        points: 1,
+        secret: false
       };
       const rubric = Rubric.refer(base, id, reference);
       expect(Rubric.get(rubric, id)!.points).toBe(5);
@@ -979,33 +996,44 @@ describe('Rubric', () => {
 
     it('refer rejects duplicate referent', () => {
       const id = 'cell-1';
-      const base = Rubric.add(create(), {
-        id,
-        is: 'correctable',
-        payload: null,
-        points: 1,
-        references: ['ref-1']
-      }, [
-        { cell: id, referent: 'ref-1', points: 1, secret: true }
-      ]);
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 1,
+          references: ['ref-1']
+        },
+        [{ cell: id, referent: 'ref-1', points: 1, secret: true }]
+      );
 
-      expect(() => Rubric.refer(base, id, {
-        cell: id, referent: 'ref-1', points: 1, secret: true
-      })).toThrow('already exists');
+      expect(() =>
+        Rubric.refer(base, id, {
+          cell: id,
+          referent: 'ref-1',
+          points: 1,
+          secret: true
+        })
+      ).toThrow('already exists');
     });
 
     it('dereferences a single reference, cell preserved', () => {
       const id = 'cell-1';
-      const base = Rubric.add(create(), {
-        id,
-        is: 'correctable',
-        payload: null,
-        points: 2,
-        references: ['ref-1', 'ref-2']
-      }, [
-        { cell: id, referent: 'ref-1', points: 1, secret: true },
-        { cell: id, referent: 'ref-2', points: 1, secret: false }
-      ]);
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 2,
+          references: ['ref-1', 'ref-2']
+        },
+        [
+          { cell: id, referent: 'ref-1', points: 1, secret: true },
+          { cell: id, referent: 'ref-2', points: 1, secret: false }
+        ]
+      );
 
       const rubric = Rubric.dereference(base, 'ref-1');
       const cell = Rubric.get(rubric, id)!;
@@ -1017,15 +1045,17 @@ describe('Rubric', () => {
 
     it('dereferences last reference, removes cell', () => {
       const id = 'cell-1';
-      const base = Rubric.add(create(), {
-        id,
-        is: 'correctable',
-        payload: null,
-        points: 1,
-        references: ['ref-1']
-      }, [
-        { cell: id, referent: 'ref-1', points: 1, secret: true }
-      ]);
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 1,
+          references: ['ref-1']
+        },
+        [{ cell: id, referent: 'ref-1', points: 1, secret: true }]
+      );
 
       const rubric = Rubric.dereference(base, 'ref-1');
       expect(Rubric.has(rubric, id)).toBe(false);
@@ -1034,17 +1064,21 @@ describe('Rubric', () => {
 
     it('scores correctable with multiple references', async () => {
       const id = 'cell-1';
-      const rubric = Rubric.add(create(), {
-        id,
-        is: 'correctable',
-        payload: null,
-        points: 3,
-        references: ['ref-1', 'ref-2', 'ref-3']
-      }, [
-        { cell: id, referent: 'ref-1', points: 1, secret: false },
-        { cell: id, referent: 'ref-2', points: 1, secret: false },
-        { cell: id, referent: 'ref-3', points: 1, secret: false }
-      ]);
+      const rubric = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 3,
+          references: ['ref-1', 'ref-2', 'ref-3']
+        },
+        [
+          { cell: id, referent: 'ref-1', points: 1, secret: false },
+          { cell: id, referent: 'ref-2', points: 1, secret: false },
+          { cell: id, referent: 'ref-3', points: 1, secret: false }
+        ]
+      );
 
       const outputs = new Map([
         [id, []],
@@ -1052,9 +1086,7 @@ describe('Rubric', () => {
         ['ref-2', [error('fail')]],
         ['ref-3', [output('pass')]]
       ]);
-      const score = await Rubric.Cell.score(
-        rubric, id, outputs
-      );
+      const score = await Rubric.Cell.score(rubric, id, outputs);
       expect(score.status).toBe('partial');
       expect(score.points).toBe(2);
       expect(score.possible).toBe(3);
@@ -1062,16 +1094,20 @@ describe('Rubric', () => {
 
     it('scores only visible references when locked', async () => {
       const id = 'cell-1';
-      const unlocked = Rubric.add(create(), {
-        id,
-        is: 'correctable',
-        payload: null,
-        points: 2,
-        references: ['ref-1', 'ref-2']
-      }, [
-        { cell: id, referent: 'ref-1', points: 1, secret: true },
-        { cell: id, referent: 'ref-2', points: 1, secret: false }
-      ]);
+      const unlocked = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 2,
+          references: ['ref-1', 'ref-2']
+        },
+        [
+          { cell: id, referent: 'ref-1', points: 1, secret: true },
+          { cell: id, referent: 'ref-2', points: 1, secret: false }
+        ]
+      );
 
       const locked = await Rubric.lock(unlocked);
       const outputs = new Map([
@@ -1079,9 +1115,7 @@ describe('Rubric', () => {
         ['ref-1', [output('pass')]],
         ['ref-2', [output('pass')]]
       ]);
-      const score = await Rubric.Cell.score(
-        locked, id, outputs
-      );
+      const score = await Rubric.Cell.score(locked, id, outputs);
       // Only ref-2 is visible; ref-1 is secret.
       expect(score.points).toBe(1);
       expect(score.possible).toBe(1);
@@ -1090,24 +1124,24 @@ describe('Rubric', () => {
 
     it('returns locked when all references are secret', async () => {
       const id = 'cell-1';
-      const unlocked = Rubric.add(create(), {
-        id,
-        is: 'correctable',
-        payload: null,
-        points: 1,
-        references: ['ref-1']
-      }, [
-        { cell: id, referent: 'ref-1', points: 1, secret: true }
-      ]);
+      const unlocked = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 1,
+          references: ['ref-1']
+        },
+        [{ cell: id, referent: 'ref-1', points: 1, secret: true }]
+      );
 
       const locked = await Rubric.lock(unlocked);
       const outputs = new Map([
         [id, []],
         ['ref-1', [output('pass')]]
       ]);
-      const score = await Rubric.Cell.score(
-        locked, id, outputs
-      );
+      const score = await Rubric.Cell.score(locked, id, outputs);
       expect(score.code).toBe('locked');
       expect(score.status).toBe('incorrect');
     });

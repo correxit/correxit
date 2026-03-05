@@ -427,7 +427,7 @@ export function commands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.refer, {
-    icon: Icons.comparable,
+    icon: Icons.correctable,
     isEnabled: (args: Partial<Cell>) => {
       const id = state.cell(args);
       const rubric = open(state.workbook());
@@ -520,13 +520,14 @@ export function commands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.reweight, {
-    label: trans.__('Update maximum possible points for a cell'),
-    execute: async (args: Partial<Cell & { points: number }>) => {
+    label: trans.__('Update points'),
+    execute: async (
+      args: Partial<Cell & { points: number }>
+    ) => {
       const workbook = state.workbook();
-      const id = state.cell(args);
+      const id = args.id || state.cell(args);
       if (workbook && id && typeof args.points === 'number')
         await reweight(workbook, id, args.points);
-
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.save, {

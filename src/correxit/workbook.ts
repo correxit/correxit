@@ -658,17 +658,20 @@ export namespace Workbook {
     update(workbook, null);
   }
 
-  /** Update the maximum points for a cell in a workbook's rubric. */
+  /** Update points for a cell or reference. */
   export async function reweight(
     workbook: Workbook,
     id: string,
-    value: number
+    points: number
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked)
       throw new Error('reweight error, invalid rubric');
 
-    return update(workbook, Rubric.Cell.reweight(rubric, id, value));
+    const updated = id in rubric.references
+      ? Rubric.Reference.reweight(rubric, id, points)
+      : Rubric.Cell.reweight(rubric, id, points);
+    return update(workbook, updated);
   }
 
   /** Submit an assignment, locking all cells to read-only. */

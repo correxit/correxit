@@ -178,6 +178,7 @@ const CellScore: React.FC<{
   ]);
   if (!cell) return <></>;
 
+  const derived = cell.is === 'comparable' || cell.is === 'correctable';
   const heading = rubric.locked
     ? trans.__('Cell score')
     : trans.__('Cell configuration');
@@ -258,7 +259,7 @@ const CellScore: React.FC<{
             />
           </label>
         )}
-        {!rubric.locked && (
+        {!rubric.locked && !derived && (
           <label
             className="correxit-sidebar-cell-score-field"
             htmlFor={ids.points}
@@ -400,17 +401,13 @@ const References: React.FC<{
   const correctable = cell.is === 'correctable';
   const notebook = workbook.content;
   const source = (referent: string) => {
-    const cell = notebook?.widgets.find(
-      w => w.model.id === referent
-    );
+    const cell = notebook?.widgets.find(({ model }) => model.id === referent);
     return cell?.model.sharedModel.getSource().split('\n')[0] ?? '';
   };
   const scroll = (referent: string) => {
     if (!notebook) return;
-    const widget = notebook.widgets.find(
-      w => w.model.id === referent
-    );
-    if (widget) void notebook.scrollToCell(widget);
+    const cell = notebook.widgets.find(({ model }) => model.id === referent);
+    if (cell) void notebook.scrollToCell(cell);
   };
 
   return (

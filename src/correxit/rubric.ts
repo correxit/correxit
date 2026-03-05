@@ -293,6 +293,50 @@ export namespace Rubric {
 
   export type Locked = Base & Readonly<{ key: null; locked: true; }>;
 
+  export namespace Reference {
+    /** @returns a rubric with a reference's points updated. */
+    export function reweight(
+      rubric: Unlocked,
+      referent: string,
+      points: number
+    ): Unlocked {
+      const reference = rubric.references[referent];
+      if (!reference)
+        {throw new Error(
+          `reweight: reference ${referent} not found`
+        );}
+
+      const cell = get(rubric, reference.cell);
+      if (!cell || cell.is !== 'correctable')
+        {throw new Error(
+          `reweight: cell ${reference.cell} invalid`
+        );}
+
+      const assignment = {
+        ...rubric.assignment,
+        report: Assignment.Report.empty()
+      };
+      const updated = { ...reference, points };
+      const total = cell.references.reduce(
+        (sum, id) => sum + (
+          id === referent
+            ? points
+            : rubric.references[id].points
+        ), 0
+      );
+      const cells = {
+        ...rubric.cells,
+        [cell.id]: { ...cell, points: total }
+      };
+      const references = {
+        ...rubric.references, [referent]: updated
+      };
+      return {
+        ...rubric, assignment, cells, references
+      };
+    }
+  }
+
   export type Outputs = Map<string, Cell.Output[]>;
 
   export type Score = Readonly<{
