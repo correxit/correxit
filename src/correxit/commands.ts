@@ -20,6 +20,7 @@ export namespace CommandIDs {
   export const configure = 'correxit:configure';
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
+  export const dereference = 'correxit:dereference';
   export const draft = 'correxit:draft';
   export const enroll = 'correxit:enroll';
   export const fetch = 'correxit:fetch';
@@ -35,7 +36,6 @@ export namespace CommandIDs {
   export const share = 'correxit:share';
   export const submit = 'correxit:submit';
   export const unlock = 'correxit:unlock';
-  export const dereference = 'correxit:dereference';
 }
 
 type Assignment = Rubric.Assignment;
@@ -51,9 +51,9 @@ type Reified =
 
 const { get, has, size } = Rubric;
 const {
-  acknowledge, add, assign, certify, collect, comment,
-  convert, correct, dereference, draft, intervene, lock,
-  refer, remove, reset, reweight, submit, toggle
+  acknowledge, add, assign, certify, collect, comment, convert, correct,
+  dereference, draft, intervene, lock, refer, remove, reset, reweight, submit,
+  toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -71,8 +71,9 @@ export function commands(
 ) {
   const { commands, serviceManager: manager } = app;
   const { Icons } = Correxit;
-  const { collector, consumer, injector } = utilities;
-  const { registrar, submitter, unlocker } = utilities;
+  const {
+    collector, consumer, injector, registrar, submitter, unlocker
+  } = utilities;
   const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
   const fetch = (handle: Credentials, silent = false) =>
@@ -131,7 +132,7 @@ export function commands(
       const cell = find(notebook?.cells || [], cell => cell.id === id);
       const references = args.references;
       const rubric = open(state.workbook());
-      if (!cell || !rubric || !id || id === references?.[0]) return false;
+      if (!cell || !rubric || !id || references?.includes(id)) return false;
       if (rubric.locked || rubric.assignment.assignee) return false;
 
       const code = cell.cell_type === 'code';
@@ -297,6 +298,23 @@ export function commands(
         injector(null);
         injector(workbook);
       }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.dereference, {
+    icon: Icons.reset,
+    isEnabled: (args: Partial<{ referent: string }>) => {
+      const rubric = open(state.workbook());
+      if (!rubric || rubric.locked) return false;
+      if (rubric.assignment.assignee) return false;
+      return !!args.referent && args.referent in rubric.references;
+    },
+    isVisible: args =>
+      commands.isEnabled(CommandIDs.dereference, args),
+    label: trans.__('Remove reference'),
+    execute: async (args: Partial<{ referent: string }>) => {
+      const workbook = state.workbook();
+      if (!workbook || !args.referent) return;
+      dereference(workbook, args.referent);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.draft, {
@@ -613,24 +631,6 @@ export function commands(
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);
       }
-    }
-  }));
-  disposables.push(commands.addCommand(CommandIDs.dereference, {
-    icon: Icons.reset,
-    isEnabled: (args: Partial<{ referent: string }>) => {
-      const rubric = open(state.workbook());
-      if (!rubric || rubric.locked) return false;
-      if (rubric.assignment.assignee) return false;
-      return !!args.referent &&
-        args.referent in rubric.references;
-    },
-    isVisible: args =>
-      commands.isEnabled(CommandIDs.dereference, args),
-    label: trans.__('Remove reference'),
-    execute: async (args: Partial<{ referent: string }>) => {
-      const workbook = state.workbook();
-      if (!workbook || !args.referent) return;
-      dereference(workbook, args.referent);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.unlock, {

@@ -877,25 +877,16 @@ export namespace Rubric {
     referent: string
   ): Unlocked {
     const reference = rubric.references[referent];
-    if (!reference) {
-      throw new Error(
-        `dereference error, reference ${referent} not found`
-      );
-    }
+    if (!reference)
+      throw new Error(`dereference error, reference ${referent} not found`);
+
     const cell = get(rubric, reference.cell);
-    if (
-      !cell ||
-      cell.is === 'answerable' ||
-      cell.is === 'reviewable'
-    ) {
-      throw new Error(
-        `dereference error, cell ${reference.cell} invalid`
-      );
-    }
-    const remaining = cell.references.filter(
-      id => id !== referent
-    );
+    if (!cell || cell.is === 'answerable' || cell.is === 'reviewable')
+      throw new Error(`dereference error, cell ${reference.cell} invalid`);
+
+    const remaining = cell.references.filter(id => id !== referent);
     if (!remaining.length) return remove(rubric, cell.id);
+
     const assignment = {
       ...rubric.assignment,
       report: Assignment.Report.empty()
@@ -909,7 +900,7 @@ export namespace Rubric {
     };
     const { [referent]: _, ...references } = rubric.references;
     void _;
-    return { ...rubric, assignment, cells, references };
+    return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 
   /** @returns an unlocked rubric after decrypting the roster. */
