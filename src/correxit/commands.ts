@@ -103,9 +103,8 @@ export function commands(
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
-      const certified = await certify(workbook);
-      const collected = await collector(certified);
-      await collect(workbook, collected);
+      await collect(workbook, await collector(await certify(workbook)));
+      await commands.execute(CommandIDs.save, { ...args, undo: false });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
