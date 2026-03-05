@@ -132,7 +132,8 @@
   }
 }
 
-.correxit-sidebar-submission-chip {
+.correxit-sidebar-submission-chip,
+.correxit-assignment-chip {
   background-color: var(--jp-layout-color4);
   border: 1px solid var(--jp-border-color3);
   border-radius: 3px;
@@ -143,6 +144,10 @@
   padding: 4px 6px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.correxit-assignment-chip {
+  margin: 2px var(--correxit-sidebar-content-inset);
 }
 
 .correxit-sidebar .jp-ToolbarButtonComponent > span {

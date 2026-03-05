@@ -1,47 +1,143 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { checkIcon, ToolbarButtonComponent } from '@jupyterlab/ui-components';
-import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useRef, useState } from 'react';
-import { Correxit, Rubric } from '..';
+import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
 import { Toggle } from './toggle';
 
 type Assignment = Rubric.Assignment;
+type Enrolled = {
+  cached: string;
+  expires: number;
+  registered: Awaited<ReturnType<Correxit.Registrar>>;
+};
+type Registration = Rubric.Assignment.Registration;
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const { assign, registrar } = Correxit.CommandIDs;
+const TTL = 60_000;
+const { assign, enroll } = Correxit.CommandIDs;
+const { Equal } = Rubric.Assignment;
+const enrolled = new WeakMap<Workbook, Enrolled>();
+const identify = ({ id, name }: Registration) => id || name;
+const blank = (assignment: Assignment): Assignment => ({
+  ...assignment,
+  assignee: '',
+  expiration: null,
+  id: null,
+  name: '',
+  roster: []
+});
+const freeze = (assignment: Assignment, active: Registration): Assignment => ({
+  ...assignment,
+  ...active,
+  assignee: active.roster.includes(assignment.assignee)
+    ? assignment.assignee
+    : ''
+});
 
 export const Assignment: React.FC<{
   commands: CommandRegistry;
-  rubric: Rubric;
   trans: TranslationBundle;
-}> = ({ commands, rubric, trans }) => {
+  workbook: Workbook;
+}> = ({ commands, trans, workbook }) => {
+  const rubric = Workbook.open(workbook, true)!;
   const { locked, revised } = rubric;
   const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
-  const [registered, setRegistered] = useState<string[] | null>(null);
+  const [registered, setRegistered] = useState<Registration[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
+  const cached = `${rubric.id}:${locked}`;
+  const keep = (next: Assignment) =>
+    setAssignment(current =>
+      Equal.assignment(current, next) ? current : next
+    );
+  const merge = (mutate: (assignment: Assignment) => Assignment) =>
+    setAssignment(current => {
+      const next = mutate(current);
+      return Equal.assignment(current, next) ? current : next;
+    });
+  const pick = (next: string | null) =>
+    setSelected(current => (current === next ? current : next));
+  const store = (next: Registration[] | null) =>
+    setRegistered(current =>
+      Equal.registered(current, next) ? current : next
+    );
   const toggle = (to: 'assignee' | 'roster', updated: Assignment) => {
     setAssignment(updated);
     setView(to);
   };
-  const reassign = async (assignment: Assignment, locked: boolean) =>
-    void (!locked && commands.execute(assign, assignment).catch(_ => {}));
-  const request = async () => setRegistered(await commands.execute(registrar));
-  const freeze = (roster: string[]) =>
-    setAssignment(assignment => ({ ...assignment, roster }));
-  useEffect(() => void request(), [rubric]);
-  useEffect(() => void (registered && freeze(registered)), [registered]);
-  useEffect(() => setAssignment(rubric.assignment), [rubric]);
-  useEffect(() => void reassign(assignment, locked), [assignment]);
+  const reassign = (assignment: Assignment, locked: boolean) => {
+    if (!locked && !Equal.assignment(rubric.assignment, assignment))
+      void commands.execute(assign, assignment).catch(_ => {});
+  };
+  const request = async () => {
+    const now = Date.now();
+    const current = enrolled.get(workbook);
+    if (current && current.cached === cached && now < current.expires) {
+      store(current.registered);
+      return;
+    }
+    const result = await commands.execute(enroll).catch(_ => null);
+    const registered = result as Registration[] | null;
+    enrolled.set(workbook, { cached, expires: now + TTL, registered });
+    store(registered);
+  };
+  useEffect(() => void request(), [cached, workbook]);
+  useEffect(() => keep(rubric.assignment), [rubric.assignment]);
+  useEffect(() => {
+    if (registered === null) {
+      pick(null);
+      return;
+    }
+    setView('assignee');
+    if (!registered.length) {
+      pick(null);
+      merge(blank);
+      return;
+    }
+
+    const matched = selected
+      ? registered.find(registration => identify(registration) === selected)
+      : selected === ''
+        ? null
+        : registered.find(
+            registration => identify(registration) === rubric.assignment.id
+          ) || (registered.length === 1 ? registered[0] : null);
+    if (!matched) {
+      if (selected !== '') pick(null);
+      merge(blank);
+      return;
+    }
+    pick(identify(matched));
+    merge(current => freeze(current, matched));
+  }, [registered, selected]);
+  useEffect(() => void reassign(assignment, locked), [assignment, locked]);
+
+  const manual = registered === null;
+  const multiple = !!registered && registered.length > 1;
   return (
     <div className="correxit-assignment">
-      {view === 'assignee' ? (
-        <Assignee {...{ assignment, locked, toggle, trans }} />
+      {manual ? (
+        view === 'assignee' ? (
+          <Assignee {...{ assignment, locked, toggle, trans }} />
+        ) : (
+          <Roster {...{ assignment, locked, toggle, trans }} />
+        )
       ) : (
-        <Roster {...{ assignment, locked, registered, toggle, trans }} />
+        <Enrollment
+          {...{
+            assignment,
+            locked,
+            multiple,
+            registered,
+            selected,
+            setSelected,
+            trans
+          }}
+        />
       )}
-      <Expiration {...{ assignment, locked, toggle, trans }} />
+      {manual && <Expiration {...{ assignment, locked, toggle, trans }} />}
       {!locked && <Propagate {...{ commands, revised, trans }} />}
     </div>
   );
@@ -119,9 +215,10 @@ const Expiration: React.FC<{
       ? 'correxit-assignment-expiration cxt-mod-expired'
       : 'correxit-assignment-expiration';
   if (locked) {
-    const label = expiration
-      ? trans.__('Due %1', new Date(expiration).toLocaleString())
-      : trans.__('No deadline');
+    const label =
+      expiration !== null
+        ? trans.__('Due %1', new Date(expiration).toLocaleString())
+        : trans.__('No deadline');
     return (
       <div className={className}>
         <div className="correxit-monospace">{label}</div>
@@ -153,23 +250,21 @@ const Expiration: React.FC<{
 const Roster: React.FC<{
   assignment: Assignment;
   locked: boolean;
-  registered: string[] | null;
   toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
   trans: TranslationBundle;
-}> = ({ assignment: seed, locked, registered, toggle, trans }) => {
+}> = ({ assignment: seed, locked, toggle, trans }) => {
   const id = 'correxit-assignment-roster';
   const [assignment, setAssignment] = useState<Assignment>(seed);
   const [value, setValue] = useState<string>(assignment.roster.join('\n'));
   const roster = value.split('\n').filter(Boolean);
-  const freeze = (roster: string[]) => setValue(roster.join('\n'));
-  useEffect(() => void (registered && freeze(registered)), [registered]);
   useEffect(
     () =>
-      setAssignment(({ assignee, ...assignment }) => {
-        assignee = find(roster, record => record === assignee) ? assignee : '';
-        return { ...assignment, assignee, roster };
-      }),
-    [roster]
+      setAssignment(({ assignee, ...assignment }) => ({
+        ...assignment,
+        assignee: roster.includes(assignee) ? assignee : '',
+        roster
+      })),
+    [value]
   );
   if (locked) return <></>;
   return (
@@ -187,7 +282,6 @@ const Roster: React.FC<{
         </label>
         <textarea
           id={id}
-          disabled={!!registered}
           data-lm-suppress-shortcuts="true"
           rows={8}
           name="correxit-assignment-roster"
@@ -196,6 +290,78 @@ const Roster: React.FC<{
         />
       </div>
     </div>
+  );
+};
+
+const Enrollment: React.FC<{
+  assignment: Assignment;
+  locked: boolean;
+  multiple: boolean;
+  registered: Registration[];
+  selected: string | null;
+  setSelected: (id: string) => void;
+  trans: TranslationBundle;
+}> = props => {
+  const {
+    assignment: { assignee, expiration, name, roster },
+    locked,
+    multiple,
+    registered,
+    selected,
+    setSelected,
+    trans
+  } = props;
+  if (!registered.length) {
+    return (
+      <div
+        className="correxit-assignment-chip"
+        title={trans.__('No registrations')}
+      >
+        {trans.__('No registrations')}
+      </div>
+    );
+  }
+
+  const due =
+    expiration !== null
+      ? new Date(expiration).toLocaleString()
+      : trans.__('No deadline');
+  const line = trans.__('%1 (%2) roster: %3', name, due, roster.length);
+  const unassigned = trans.__('Template - unassigned');
+  return (
+    <>
+      {multiple && !locked && (
+        <div className="correxit-assignment-assignee">
+          <div>
+            <label htmlFor="correxit-assignment-registration">
+              {trans.__('Assignment')}
+            </label>
+            <select
+              id="correxit-assignment-registration"
+              name="correxit-assignment-registration"
+              onChange={({ target: { value } }) => setSelected(value)}
+              value={selected ?? ''}
+            >
+              <option value="">{trans.__('No assignment')}</option>
+              {registered.map(registration => (
+                <option
+                  key={identify(registration)}
+                  value={identify(registration)}
+                >
+                  {registration.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+      <div className="correxit-assignment-chip" title={line}>
+        {line}
+      </div>
+      <div className="correxit-assignment-assignee">
+        <div className="correxit-monospace">{assignee || unassigned}</div>
+      </div>
+    </>
   );
 };
 
@@ -238,13 +404,15 @@ const Propagate: React.FC<{
   );
 };
 
-const Log: React.FC<{ done: boolean; messages: string[] }> = props => {
-  const { done, messages } = props;
-  if (done && !messages.length) return <></>;
+const Log: React.FC<{
+  done: boolean;
+  messages: string[];
+}> = ({ done, messages }) => {
   const ref = useRef<HTMLPreElement | null>(null);
-  const scroll = () =>
-    void (ref.current && (ref.current.scrollTop = ref.current.scrollHeight));
-  useEffect(scroll, [messages.length]);
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+  }, [messages.length]);
+  if (done && !messages.length) return <></>;
   return (
     <pre ref={ref}>
       {messages.map((message, key) => (

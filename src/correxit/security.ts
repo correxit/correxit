@@ -6,8 +6,7 @@ import {
 } from 'openpgp';
 
 // Equivalent to: await digest('correxit:salt');
-const SALT =
-  'af4680e881d3da6272c9026660c11e8cbf89ecf515a3c6489e9330b1bed47cf8';
+const SALT = 'af4680e881d3da6272c9026660c11e8cbf89ecf515a3c6489e9330b1bed47cf8';
 // Equivalent to: await digest('correxit:pepper');
 const PEPPER =
   'a4964c9269aeecfbdd4143cfd087c2262351f0d6bf1961bc56cd0e247c1c71e9';

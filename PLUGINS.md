@@ -13,22 +13,31 @@ are described below.
 type Registrar = (
   workbook: Workbook,
   identifier: Workbook.Identifier
-) => Promise<string[] | null>;
+) => Promise<Rubric.Assignment.Registration[] | null>;
 ```
 
 Called when an instructor opens a workbook that has not yet been assigned.
-Returns the authorized roster for the assignment.
+Returns assignment registrations for the workbook.
 
-| Return value | Effect                                                                 |
-| ------------ | ---------------------------------------------------------------------- |
-| `null`       | Roster input is unlocked; the instructor may enter addresses manually. |
-| `[]`         | Roster input is locked; the assignment has no eligible recipients.     |
-| `string[]`   | Roster input is locked; the list is used verbatim and is not editable. |
+```typescript
+// Rubric.Assignment.Registration
+type Registration = Pick<
+  Rubric.Assignment,
+  'expiration' | 'id' | 'name' | 'roster'
+>;
+```
 
-The `identifier` carries the rubric `assignment` id and the workbook
-`signature` (a hash of the rubric, assignee list, and grade report). An
+| Return value     | Effect                                                                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| `null`           | Assignment input is unlocked; the instructor may enter details manually.                                       |
+| `[]`             | Assignment input is locked; the assignment has no eligible registrations.                                      |
+| `Registration[]` | Assignment input is locked; a single registration is auto-selected, multiple registrations present a dropdown. |
+
+The `identifier` carries the external `assignment` id (from the
+registration), the immutable `rubric` id, and the workbook `signature`
+(a hash of the assignee, roster, report, and registration fields). An
 integrator can use these to look up a course in an LMS and return its
-enrollment list.
+available assignments.
 
 ---
 
@@ -52,7 +61,7 @@ Called when an instructor triggers propagation. The consumer receives:
 ```typescript
 // Propagator.Notebook
 type Notebook = {
-  identifier: Workbook.Identifier; // { assignee, assignment, signature }
+  identifier: Workbook.Identifier; // { assignee, assignment, rubric, signature }
   notebook: INotebookContent; // nbformat notebook, ready to save
   path: string; // intended destination path
 };
@@ -90,10 +99,12 @@ roster, enforce the deadline, and return the server-issued submission ID.
 `identifier` at call time:
 
 - `assignee` - the student's address as recorded in the workbook.
-- `assignment` - the rubric id shared across all workbooks for this
-  assignment.
-- `signature` - a content hash that changes whenever the rubric, roster,
-  or grade report changes.
+- `assignment` - the external assignment id used for LMS/backend
+  correlation.
+- `rubric` - the immutable rubric id shared across all workbooks for
+  this assignment.
+- `signature` - a content hash that changes whenever the assignee,
+  roster, report, or registration fields change.
 
 ---
 

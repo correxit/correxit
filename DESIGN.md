@@ -226,7 +226,7 @@ consumer with an LMS consumer requires no changes to the propagator or commands.
 | --------------- | --------------------------------------------------- | ----------------------------- |
 | **`Consumer`**  | Process propagated assignments                      | Writes to local filesystem    |
 | **`Collector`** | Collect certified grades                            | Returns a UUID                |
-| **`Registrar`** | Provide rosters for assignments                     | Returns null (manual entry)   |
+| **`Registrar`** | Provide assignment registrations                    | Returns null (manual entry)   |
 | **`Submitter`** | Handle submission receipts                          | Returns a UUID                |
 | **`Unlocker`**  | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager           |
 | **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |

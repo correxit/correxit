@@ -19,6 +19,8 @@ export namespace Rubric {
     certification: number | null;
     collected: string | null;
     expiration: number | null;
+    id: string | null;
+    name: string;
     report: Assignment.Report;
     roster: string[];
     signature: string;
@@ -40,21 +42,21 @@ export namespace Rubric {
     payload: string[];
     points: number;
     reference: null;
-    shared: boolean;
+    secret: null;
   }> | Readonly<{
     id: string;
     is: 'comparable' | 'correctable';
     payload: null;
     points: number;
     reference: string[];
-    shared: boolean;
+    secret: boolean;
   }> | Readonly<{
     id: string;
     is: 'reviewable';
     payload: null;
     points: number;
     reference: null;
-    shared: boolean;
+    secret: null;
   }>;
 
   export namespace Cell {
@@ -66,8 +68,7 @@ export namespace Rubric {
       | KernelMessage.IIOPubMessage<'error'>;
 
     namespace Output {
-      export const error = ({ header }: Output) =>
-        header.msg_type === 'error';
+      export const error = ({ header }: Output) => header.msg_type === 'error';
 
       export const stdout = (output: Output) =>
         stream(output) &&
@@ -134,9 +135,7 @@ export namespace Rubric {
       return { ...Score.UNSCORED, code: 'error-compare' };
     };
 
-    export async function correct(
-      expected: Output[]
-    ): Promise<Score> {
+    export async function correct(expected: Output[]): Promise<Score> {
       return expected.some(Output.error) ? Score.INCORRECT : Score.CORRECT;
     }
 
@@ -169,9 +168,7 @@ export namespace Rubric {
       return outputs;
     }
 
-    export async function review(
-      intervention: Score | null
-    ): Promise<Score> {
+    export async function review(intervention: Score | null): Promise<Score> {
       return intervention ?? { ...Score.UNSCORED, code: 'intervene' };
     }
 
@@ -234,6 +231,8 @@ export namespace Rubric {
         const score = await answer(cell.payload, given);
         return { ...score, id, points: points(score), possible };
       }
+      if (rubric.locked && cell.secret)
+        return { ...Score.INCORRECT, code: 'locked', id, possible };
       if (!expected)
         return { ...Score.INCORRECT, code: 'missing-reference', id, possible };
       if (cell.is === 'comparable') {
@@ -264,6 +263,37 @@ export namespace Rubric {
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
   export namespace Assignment {
+    export type Registration = Pick<
+      Assignment,
+      'expiration' | 'id' | 'name' | 'roster'
+    >;
+
+    export namespace Equal {
+      const registration = (x: Registration, y: Registration): boolean => (
+        x.expiration === y.expiration &&
+        x.id === y.id &&
+        x.name === y.name &&
+        roster(x.roster, y.roster)
+      );
+      const roster = (x: string[], y: string[]): boolean =>
+        x.length === y.length &&
+        x.every((record, i) => record === y[i]);
+
+      export function assignment(x: Assignment, y: Assignment): boolean {
+        return x.assignee === y.assignee && registration(x, y);
+      }
+
+      export function registered(
+        x: Registration[] | null,
+        y: Registration[] | null
+      ): boolean {
+        if (x === y) return true;
+        if (x === null || y === null) return false;
+        if (x.length !== y.length) return false;
+        return x.every((item, i) => registration(item, y[i]));
+      }
+    }
+
     /** A score report for an assignment. */
     export type Report = Readonly<{
       interventions: { [id: string]: Score };
@@ -293,6 +323,8 @@ export namespace Rubric {
         certification: null,
         collected: null,
         expiration: null,
+        id: null,
+        name: '',
         report: Report.empty(),
         roster: [],
         signature: '',
@@ -332,10 +364,10 @@ export namespace Rubric {
     }
 
     export async function sign(terms: Terms, key: string): Promise<string> {
-      const { assignee, expiration, roster } = terms;
+      const { assignee, expiration, id, name, roster } = terms;
       const { interventions: manual, scores: auto } = terms.report;
       const report = { interventions: sort(manual), scores: sort(auto) };
-      const unsigned = { assignee, expiration, report: report, roster };
+      const unsigned = { assignee, expiration, id, name, report, roster };
       return security.digest(JSON.stringify(unsigned).concat(key));
     }
 
@@ -389,6 +421,7 @@ export namespace Rubric {
       | 'error-given'
       | 'error-is-unknown'
       | 'intervene'
+      | 'locked'
       | 'mismatch-congruence'
       | 'mismatch-data'
       | 'mismatch-digest'
@@ -496,6 +529,8 @@ export namespace Rubric {
       certification = rubric.assignment.certification,
       collected = rubric.assignment.collected,
       expiration = rubric.assignment.expiration,
+      id = rubric.assignment.id,
+      name = rubric.assignment.name,
       roster = rubric.assignment.roster,
       submission = rubric.assignment.submission,
       submitted = rubric.assignment.submitted
@@ -508,11 +543,13 @@ export namespace Rubric {
       certification !== rubric.assignment.certification ||
       collected !== rubric.assignment.collected ||
       expiration !== rubric.assignment.expiration ||
+      id !== rubric.assignment.id ||
+      name !== rubric.assignment.name ||
       submitted !== rubric.assignment.submitted ||
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster) ||
       submission !== rubric.assignment.submission;
     const report = stale ? Assignment.Report.empty() : rubric.assignment.report;
-    const unsigned = { assignee, expiration, report, roster };
+    const unsigned = { assignee, expiration, id, name, report, roster };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = {
       ...unsigned,
@@ -565,9 +602,7 @@ export namespace Rubric {
     if (!rubric.assignment.certification)
       throw new Error('collect error: not certified');
     const revised = Date.now();
-    const assignment = {
-      ...rubric.assignment, collected
-    };
+    const assignment = { ...rubric.assignment, collected };
     return { ...rubric, assignment, revised };
   }
 
@@ -675,16 +710,19 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: submission };
   }
 
-  /** @returns a rubric with the cell's shared flag toggled. */
+  /** @returns a rubric with the cell's secret flag toggled. */
   export function toggle(rubric: Unlocked, id: string): Unlocked {
     const cell = get(rubric, id);
-    if (!cell) throw new Error(`toggle: cell ${id} not found in rubric`);
+    if (!cell) throw new Error(`toggle: cell ${id} not found`);
+    if (cell.is !== 'comparable' && cell.is !== 'correctable')
+      throw new Error(`toggle: cell ${id} is ${cell.is}`);
 
     const assignment = {
       ...rubric.assignment,
       report: Assignment.Report.empty()
     };
-    const cells = { ...rubric.cells, [id]: { ...cell, shared: !cell.shared } };
+    const toggled = { ...cell, secret: !cell.secret };
+    const cells = { ...rubric.cells, [id]: toggled };
     return { ...rubric, assignment, cells };
   }
 

@@ -6,7 +6,7 @@ export const CORRECTOR = 'Correxit Corrector user interface for batch grading wo
 
 export const MONITOR = 'Correxit monitor connects/disconnects active workbooks and yields them';
 
-export const REGISTRAR = 'Correxit registrar to provide rosters for workbooks';
+export const REGISTRAR = 'Correxit registrar to provide assignment registrations for workbooks';
 
 export const SUBMITTER = 'Correxit submitter to receive workbook submissions';
 

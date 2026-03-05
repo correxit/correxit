@@ -74,13 +74,25 @@ async function reassign({ assignee, key, notebook, roster }: {
 }): Promise<Workbook.Identifier> {
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
     { assignment: Rubric.Assignment, revised: number };
-  const { expiration, roster: encrypted } = metadata.assignment;
+  const { expiration, id, name, roster: encrypted } = metadata.assignment;
   const blank = Rubric.Assignment.Report.empty();
-  const unsigned = { assignee, ...stages(expiration), report: blank, roster };
+  const unsigned = {
+    assignee,
+    ...stages(expiration),
+    id,
+    name,
+    report: blank,
+    roster
+  };
   const signature = await Rubric.Assignment.sign(unsigned, key);
   metadata.assignment = { ...unsigned, roster: encrypted, signature };
   metadata.revised = Date.now();
-  return { assignee, assignment: metadata.id, signature };
+  return {
+    assignee,
+    assignment: metadata.assignment.id,
+    rubric: metadata.id,
+    signature
+  };
 }
 
 /** @returns initialized lifecycle stages for a propagated assignment. */
@@ -102,12 +114,12 @@ async function template(
   const notebook = workbook.context.model.sharedModel.toJSON();
   for (const id in rubric.cells) {
     const cell = rubric.cells[id];
-    if (cell.shared) continue;
-    if (cell.is === 'comparable' || cell.is === 'correctable') {
-      const [reference] = cell.reference;
-      await encrypt(notebook, reference, rubric.key);
-      encrypted.push(reference);
-    }
+    if (cell.is !== 'comparable' && cell.is !== 'correctable')
+      continue;
+    if (!cell.secret) continue;
+    const [reference] = cell.reference;
+    await encrypt(notebook, reference, rubric.key);
+    encrypted.push(reference);
   }
   return { encrypted, notebook };
 }

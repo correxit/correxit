@@ -7,14 +7,14 @@ no trusted third party. Cryptographic primitives use `window.crypto`
 
 ## Threat Profile
 
-| Threat                               | Mitigation                                      |
-| ------------------------------------ | ----------------------------------------------- |
-| Student reads the reference cells    | Reference cell encryption (AES-256 via openpgp) |
-| Student reads answerable payload     | Answer payload is a digest (SHA-256 hash)       |
-| Student reads the roster             | Roster encryption (AES-256 via openpgp)         |
-| Student forges or alters their grade | Assignment signature (keyed SHA-256 hash)       |
-| Student edits cells after submission | Workbook locking + freezing                     |
-| Tampered workbook delivery           | Out-of-band (Consumer/Collector plugin hashing) |
+| Threat                               | Mitigation                                             |
+| ------------------------------------ | ------------------------------------------------------ |
+| Student reads the reference cells    | Secret reference cell encryption (AES-256 via openpgp) |
+| Student reads answerable payload     | Answer payload is a digest (SHA-256 hash)              |
+| Student reads the roster             | Roster encryption (AES-256 via openpgp)                |
+| Student forges or alters their grade | Assignment signature (keyed SHA-256 hash)              |
+| Student edits cells after submission | Workbook locking + freezing                            |
+| Tampered workbook delivery           | Out-of-band (Consumer/Collector plugin hashing)        |
 
 **Out of scope:** malicious instructors (they hold the key, full
 authority by design), browser memory extraction, compromised
@@ -34,8 +34,8 @@ is structurally absent from anything on disk.
 
 ### Assignment Signature
 
-Signs the **terms** of the assignment: `assignee`, `expiration`,
-`report` (interventions + scores, sorted), and `roster`.
+Signs the **terms** of the assignment: `assignee`, `expiration`, `id`,
+`name`, `report` (interventions + scores, sorted), and `roster`.
 
 ```
 signature = SHA-256(JSON.stringify(terms) + key)
@@ -63,8 +63,12 @@ evidence with zero security value.
 
 ## Encryption
 
-- **Reference cells:** Encrypted with the assignment key on lock.
-  Students cannot read reference answers without the key.
+- **Reference cells:** `comparable` and `correctable` cells marked
+  `secret: true` have their reference cells encrypted with the
+  assignment key on lock. Students cannot read secret reference
+  answers without the key. Cells marked `secret: false` leave
+  reference cells visible (useful when the reference is not
+  sensitive, e.g. a unit test).
 - **Roster:** Encrypted with the assignment key on lock. Students
   cannot enumerate the roster.
 - **Answerable cells:** Store a SHA-256 digest of the expected
@@ -80,6 +84,8 @@ evidence with zero security value.
 | `assignee`      | `string`         | Yes     | Student identifier           |
 | `roster`        | `string[]`       | Yes     | Encrypted on lock            |
 | `expiration`    | `number \| null` | Yes     | Deadline                     |
+| `id`            | `string \| null` | Yes     | External assignment id       |
+| `name`          | `string`         | Yes     | Assignment display name      |
 | `report`        | `Report`         | Yes     | Scores + interventions       |
 | `signature`     | `string`         | -       | The signature itself         |
 | `certification` | `number \| null` | No      | When the grade was finalized |

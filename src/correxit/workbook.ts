@@ -78,8 +78,11 @@ export namespace Workbook {
     /** The assignee (typically an email address) or `null` if unassigned. */
     assignee: string | null;
 
-    /** The workbook/assignment id, i.e. the rubric id of the workbook. */
-    assignment: string;
+    /** The external assignment id used for LMS/backend correlation. */
+    assignment: string | null;
+
+    /** The immutable rubric id of the workbook metadata. */
+    rubric: string;
 
     /** The workbook/assignment signature for the assignee/roster/report. */
     signature: string | null;
@@ -284,15 +287,13 @@ export namespace Workbook {
     collected: string | null = null
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
-    if (!rubric?.locked || !rubric.assignment.certification)
+    if (!rubric || !rubric.locked || !rubric.assignment.certification)
       throw new Error('collect error');
     return update(workbook, Rubric.collect(rubric, collected));
   }
 
   /** Certify a workbook: correct, lock, and freeze. */
-  export async function certify(
-    workbook: Workbook
-  ): Promise<Certified> {
+  export async function certify(workbook: Workbook): Promise<Certified> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error('certify error');
 
@@ -448,14 +449,12 @@ export namespace Workbook {
     // Decrypt only the cells that survived the audit.
     const { cells, key } = audited.rubric as Rubric.Unlocked;
     for (const [, cell] of Object.entries(cells)) {
-      if (cell.shared) continue;
-      if (cell.is === 'comparable' || cell.is === 'correctable') {
-        const [reference] = cell.reference;
-        await Cell.decrypt(workbook, reference, key);
-      }
+      if (cell.is !== 'comparable' && cell.is !== 'correctable') continue;
+      if (!cell.secret) continue;
+      const [reference] = cell.reference;
+      await Cell.decrypt(workbook, reference, key);
     };
-    // Cache the original (un-pruned) rubric so downstream audit can
-    // still detect the missing cells.
+    // Keep the original (un-pruned) rubric for downstream audits.
     return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
@@ -528,9 +527,9 @@ export namespace Workbook {
     const rubric = open(workbook, quiet);
     if (!rubric) throw new Error('identifier error');
     const assignee = rubric.assignment.assignee || null;
-    const assignment = rubric.id;
+    const assignment = rubric.assignment.id;
     const signature = rubric.assignment.signature || null;
-    return { assignee, assignment, signature };
+    return { assignee, assignment, rubric: rubric.id, signature };
   }
 
   /** Lock a workbook if its rubric is unlocked. */
@@ -539,11 +538,10 @@ export namespace Workbook {
     if (!rubric || rubric.locked) return;
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
-      if (cell.shared) continue;
-      if (cell.is === 'comparable' || cell.is === 'correctable') {
-        const [reference] = cell.reference;
-        await Cell.encrypt(workbook, reference, rubric.key);
-      }
+      if (cell.is !== 'comparable' && cell.is !== 'correctable') continue;
+      if (!cell.secret) continue;
+      const [reference] = cell.reference;
+      await Cell.encrypt(workbook, reference, rubric.key);
     };
     update(workbook, await Rubric.lock(rubric));
   }
@@ -653,9 +651,10 @@ export namespace Workbook {
     return update(workbook, Rubric.submit(rubric, submitted));
   }
 
-  /** Toggle a workbook cell's `shared` flag. */
+  /** Toggle a workbook cell's `secret` flag. */
   export async function toggle(
-    workbook: Workbook, id: string
+    workbook: Workbook,
+    id: string
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked || !Rubric.has(rubric, id))
@@ -700,10 +699,7 @@ export namespace Workbook {
     rubric: Rubric.Unlocked,
     audited?: Audit
   ): Promise<Rubric.Unlocked>;
-  export async function update(
-    workbook: Workbook,
-    rubric: null
-  ): Promise<null>;
+  export async function update(workbook: Workbook, rubric: null): Promise<null>;
   export async function update(
     workbook: Workbook,
     rubric: Rubric | null,

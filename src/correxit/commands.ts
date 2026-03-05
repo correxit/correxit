@@ -21,12 +21,12 @@ export namespace CommandIDs {
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const draft = 'correxit:draft';
+  export const enroll = 'correxit:enroll';
   export const fetch = 'correxit:fetch';
   export const inject = 'correxit:inject';
   export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
-  export const registrar = 'correxit:registrar';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
   export const reweight = 'correxit:reweight';
@@ -41,6 +41,7 @@ type Cell = Rubric.Cell;
 type CellToolbar = Rubric.Cell.Toolbar;
 type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
+type Registration = Rubric.Assignment.Registration;
 type Reified =
   { handle: Credentials | null; rubric: null; workbook: null; } |
   { handle: Credentials | null; rubric: null; workbook: Workbook; } |
@@ -88,10 +89,7 @@ export function commands(
     execute: async (args: Partial<Credentials & Assignment>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
-
-      const identifier = Workbook.identifier(workbook);
-      const roster = await registrar(workbook, identifier) || args.roster;
-      await assign(workbook, { ...args, roster });
+      await assign(workbook, args);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.certify, {
@@ -120,8 +118,7 @@ export function commands(
   }));
   disposables.push(commands.addCommand(CommandIDs.configure, {
     className: 'correxit-configure',
-    icon: ({ is }: Partial<Cell>) =>
-      Rubric.Cell.types.some(type => is === type) ? Icons[is!] : undefined,
+    icon: ({ is }: Partial<Cell>) => is && Icons[is] || undefined,
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const notebook = state.workbook()?.context.model.sharedModel;
       const id = state.cell(args);
@@ -140,7 +137,7 @@ export function commands(
       const rubric = open(state.workbook());
       return !!rubric && !!id && get(rubric, id)?.is === args.is;
     },
-    isVisible: cell => commands.isEnabled(CommandIDs.configure, cell),
+    isVisible: args => commands.isEnabled(CommandIDs.configure, args),
     caption: (cell: Partial<Cell>) => {
       if (!commands.isEnabled(CommandIDs.configure, cell)) return '';
       if (cell.is === 'answerable') return trans.__('Has known answer');
@@ -185,16 +182,16 @@ export function commands(
         const payload = [await security.digest(expected)];
         const points = 1;
         const reference = null;
-        const shared = false;
-        await add(workbook, { id, is, payload, points, reference, shared });
+        const secret = null;
+        await add(workbook, { id, is, payload, points, reference, secret });
         return;
       }
       if (is === 'reviewable') {
         const payload = null;
         const points = 1;
         const reference = null;
-        const shared = false;
-        await add(workbook, { id, is, payload, points, reference, shared });
+        const secret = null;
+        await add(workbook, { id, is, payload, points, reference, secret });
         return;
       }
       if (is !== 'comparable' && is !== 'correctable') return;
@@ -213,8 +210,8 @@ export function commands(
 
       const payload = null;
       const points = 1;
-      const shared = false;
-      await add(workbook, { id, is, payload, points, reference, shared });
+      const secret = true;
+      await add(workbook, { id, is, payload, points, reference, secret });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.convert, {
@@ -250,10 +247,10 @@ export function commands(
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
       if (!rubric || !headed) return false;
       if (!id) return size(rubric) > 0;
-      return has(rubric, id) && get(rubric, id)!.is !== 'reviewable';
+      const { is, secret } = get(rubric, id) || {} as any;
+      return !!is && (!secret || !rubric.locked) && is !== 'reviewable';
     },
-    isVisible: (args: Partial<Cell> & CellToolbar) =>
-      commands.isEnabled(CommandIDs.correct, args),
+    isVisible: args => commands.isEnabled(CommandIDs.correct, args),
     label: (args: Partial<Cell> & CellToolbar) => {
       if (!commands.isEnabled(CommandIDs.correct, args)) return '';
       return state.cell(args)
@@ -290,12 +287,11 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.draft, {
     isEnabled: () => {
       const rubric = open(state.workbook());
-      return !!rubric?.locked && !!rubric.assignment.submission;
+      const submitted = !!rubric?.assignment.submission;
+      const certified = !!rubric?.assignment.certification;
+      return !!rubric?.locked && submitted && !certified;
     },
-    isVisible: () => {
-      const rubric = open(state.workbook());
-      return !!rubric?.assignment.submission;
-    },
+    isVisible: () => commands.isEnabled(CommandIDs.draft),
     label: trans.__('Revert to draft...'),
     execute: async (args: Partial<Credentials>) => {
       const { workbook } = await reify(args);
@@ -394,14 +390,16 @@ export function commands(
       return (async function* empty() {})();
     }
   }));
-  disposables.push(commands.addCommand(CommandIDs.registrar, {
-    execute: async (args: Partial<Credentials>): Promise<string[] | null> => {
+  disposables.push(commands.addCommand(CommandIDs.enroll, {
+    execute: async (
+      args: Partial<Credentials>
+    ): Promise<Registration[] | null> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric) return null;
 
       const warn = (error: any) => {
-        console.warn('registrar failed for workbook', workbook, error);
-        return [];
+        console.warn('enroll failed for workbook', workbook, error);
+        return null;
       };
       const identifier = Workbook.identifier(workbook);
       return await registrar(workbook, identifier).catch(warn);
@@ -472,25 +470,27 @@ export function commands(
     icon: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return undefined;
 
-      const { shared } = get(open(state.workbook())!, state.cell(args))!;
-      return shared ? Icons.shared : Icons.secret;
+      const cell = get(open(state.workbook())!, state.cell(args))!;
+      return cell.is === 'comparable' || cell.is === 'correctable'
+        ? (cell.secret ? Icons.secret : Icons.shared)
+        : undefined;
     },
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const rubric = open(state.workbook());
       const id = state.cell(args);
       if (!id || !rubric || rubric.locked) return false;
-      return has(rubric, id) && get(rubric, id)!.is !== 'reviewable';
+      const cell = get(rubric, id);
+      return !!cell && (cell.is === 'comparable' || cell.is === 'correctable');
     },
-    isVisible: (args: Partial<Cell & CellToolbar>) => {
-      return commands.isEnabled(CommandIDs.share, args);
-    },
+    isVisible: args => commands.isEnabled(CommandIDs.share, args),
     label: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return '';
 
-      const { shared } = get(open(state.workbook())!, state.cell(args))!;
-      return shared
-        ? trans.__('Mode: shared')
-        : trans.__('Mode: secret');
+      const cell = get(open(state.workbook())!, state.cell(args))!;
+      if (cell.is !== 'comparable' && cell.is !== 'correctable') return '';
+      return cell.secret
+        ? trans.__('Mode: secret')
+        : trans.__('Mode: shared');
     },
     execute: async (args: Partial<Cell>) => {
       if (commands.isEnabled(CommandIDs.share, args))
@@ -503,12 +503,10 @@ export function commands(
       const locked = !!rubric?.locked;
       const assigned = !!rubric?.assignment.assignee;
       const submitted = !!rubric?.assignment.submission;
-      return locked && assigned && !submitted;
+      const certified = !!rubric?.assignment.certification;
+      return locked && assigned && !submitted && !certified;
     },
-    isVisible: () => {
-      const rubric = open(state.workbook());
-      return !!rubric && !rubric.assignment.submission;
-    },
+    isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);

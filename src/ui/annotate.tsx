@@ -18,7 +18,8 @@ function decorate(workbook: Workbook, cell: Rubric.Cell, widget: Widget) {
   const report = state.report(workbook, cell.id);
   widget.addClass(`cxt-mod-${cell.is}`);
   if (!report || report.status === 'unscored') return;
-  if (report.points === cell.points) widget.addClass(correct);
+  if (report.code === 'locked') widget.addClass(partial);
+  else if (report.points === cell.points) widget.addClass(correct);
   else if (report.points > 0) widget.addClass(partial);
   else widget.addClass(incorrect);
 }

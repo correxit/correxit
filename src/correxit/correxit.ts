@@ -41,16 +41,16 @@ export namespace Correxit {
   }
 
   /**
-   * A registrar that provides an immutable roster for a workbook.
+    * A registrar that provides assignment registrations for a workbook.
    *
    * #### Notes
-   * If the returned roster is null, user roster input is unlocked.
-   * If it is an empty list or populated list, user roster input is locked.
+    * If the returned registrations are null, assignment input is unlocked.
+    * If registrations are empty or populated, assignment input is locked.
    */
   export type Registrar = (
     workbook: Workbook,
     identifier: Workbook.Identifier
-  ) => Promise<string[] | null>;
+  ) => Promise<Rubric.Assignment.Registration[] | null>;
 
   export type Injector = (workbook: Workbook | null) => void;
 

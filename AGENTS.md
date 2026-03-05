@@ -35,7 +35,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - **Discriminated Unions**: Use union types with a common discriminator field to encode mutually exclusive states.
   - _Example_: `Reified` type in `commands.ts` enables safe type narrowing after `if (!rubric)` guards.
   - _Pattern_: After checking `if (!rubric) return`, TypeScript knows `workbook` is non-null.
-- **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, assignment ID, and signature.
+- **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, external assignment ID, rubric ID, and signature.
 - **Timestamps**: Lifecycle timestamps (`certification`, `collected`, `submission`, `submitted`) live on `Assignment`. Read them via `Workbook.open()`.
 
 ## 3. Asynchronous Patterns
@@ -82,7 +82,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `commands.ts`: The central controller registry. Defines `Reified` type for safe workbook resolution.
 - `propagator.ts`: Async generator for assignment distribution to rosters.
 - `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
-- `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`).
+- `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`). The `Registrar` returns `Registration[]` objects (not raw strings).
 - `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, retries, timeout })`, `cap()`, `retries()`, and `timeout()` for settings-driven control.
 - `grader.ts`: Bounded-concurrency async generator for batch grading. Accepts a `recover` callback, `cap`, and `timeout` (ms). Scanner accepts `Iterable | AsyncIterable`; failures are recovered and yielded so nothing stalls the pipeline.
 - `state.ts`: In-memory cache for active workbook and cell scores (`Map` with FIFO eviction).

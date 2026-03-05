@@ -103,12 +103,10 @@ export function commands(
     commands.addCommand(CommandIDs.collect, {
       label: trans.__('Collect certified workbook grades...'),
       execute: (
-        args: Partial<Credentials & { overwrite: boolean }>
+        args: Partial<{ overwrite: boolean; path: string }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
-        const auth = !!(args.key || args.passphrase);
-        const potential = { ...args, unlock: auth ? !!args.unlock : true };
-        const handle = normalize(potential as Partial<Credentials>);
+        const handle = normalize(args);
         if (!handle) throw new Error('collect error, bad handle');
         const source = scanner({ commands }, handle);
         return (async function* () {
@@ -118,6 +116,7 @@ export function commands(
             if (!overwrite && open(workbook)?.assignment.collected) continue;
             const collected = await collector(collectable);
             await Workbook.collect(workbook, collected);
+            await save(workbook);
             const { grade } = collectable;
             yield [grade.path, { grade, workbook: workbook as Headless }];
           }
@@ -192,7 +191,7 @@ export function commands(
 
 function certified(workbook: Headless): Certified | null {
   const rubric = open(workbook);
-  if (!rubric) return null;
+  if (!rubric || !rubric.locked) return null;
 
   const { assignment, cells } = rubric;
   const { interventions, kernel, scores } = assignment.report;
@@ -234,26 +233,30 @@ async function correct(workbook: Headless): Promise<Certified> {
 
 function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const rubric = open(workbook);
-  if (!rubric) return null;
-  if (overwrite) return null;
-  if (rubric.locked) return certified(workbook);
-
-  const { interventions, scores } = rubric.assignment.report;
-  const ids = Object.keys(rubric.cells);
-  const complete =
-    ids.length > 0 && ids.every(id => scores[id] && !unexecuted(scores[id]));
-  if (!complete) return null;
-
-  const pending = Object.values(rubric.cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !interventions[cell.id]);
-  if (!pending) return null;
+  if (!rubric || overwrite) return null;
 
   const path = workbook.context.path;
-  const summary = Rubric.Assignment.summary(rubric.assignment.report);
-  const grade: Grade = { path, resolved: true, score: summary, spec: null };
+  const { assignment } = rubric;
+  const { report } = assignment;
+  const summary = Rubric.Assignment.summary(report);
   const identifier = Workbook.identifier(workbook);
-  return { grade, identifier, workbook };
+  const grade = (spec: Grade['spec']): Certified => ({
+    grade: { path, resolved: true, score: summary, spec },
+    identifier,
+    workbook
+  });
+  if (assignment.certification) return grade(report.kernel);
+
+  const { interventions, scores } = report;
+  const ids = Object.keys(rubric.cells);
+  const scored =
+    ids.length > 0 && ids.every(id => scores[id] && !unexecuted(scores[id]));
+  if (!scored) return null;
+
+  const reviewing = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  return reviewing ? grade(null) : null;
 }
 
 function open(workbook: Workbook): Rubric | null {
@@ -268,7 +271,12 @@ function recover(workbook: Headless): Certified {
   try {
     identifier = Workbook.identifier(workbook);
   } catch {
-    identifier = { assignee: null, assignment: '', signature: null };
+    identifier = {
+      assignee: null,
+      assignment: null,
+      rubric: '',
+      signature: null
+    };
   }
   return { grade, identifier, workbook };
 }
