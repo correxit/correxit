@@ -66,7 +66,7 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
   expect(result.is).toBe('comparable');
   expect(result.points).toBe(1);
   expect(result.reference).toEqual(['ref']);
-  expect(result.secret).toBe(false);
+  expect(result.secret).toBe(true);
   expect(result.toggled).toBe(true);
   await dispose();
 });

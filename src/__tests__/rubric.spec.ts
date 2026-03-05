@@ -30,7 +30,8 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 5,
         reference: null,
-        payload: ['42']
+        payload: ['42'],
+        secret: null
       };
       const rubric = Rubric.add(create(), cell);
       const { key } = rubric;
@@ -79,7 +80,8 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        payload: []
+        payload: [],
+        secret: null
       });
       const report: Rubric.Assignment.Report = {
         interventions: {},
@@ -101,7 +103,8 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        payload: []
+        payload: [],
+        secret: null
       });
 
       const report: Rubric.Assignment.Report = {
@@ -123,14 +126,16 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        payload: []
+        payload: [],
+        secret: null
       });
       rubric = Rubric.add(rubric, {
         id: 'b',
         is: 'answerable',
         points: 1,
         reference: null,
-        payload: []
+        payload: [],
+        secret: null
       });
       expect(Rubric.size(rubric)).toBe(2);
     });
@@ -142,7 +147,8 @@ describe('Rubric', () => {
         is: 'reviewable',
         payload: null,
         points: 1,
-        reference: null
+        reference: null,
+        secret: null
       });
       const report: Rubric.Assignment.Report = {
         interventions: {},
@@ -506,7 +512,8 @@ describe('Rubric', () => {
           is: 'answerable',
           points: 1,
           reference: null,
-          payload: [digest]
+          payload: [digest],
+          secret: null
         };
         return Rubric.add(create(), cell);
       };
@@ -651,7 +658,8 @@ describe('Rubric', () => {
           is: 'reviewable',
           payload: null,
           points: 5,
-          reference: null
+          reference: null,
+          secret: null
         };
         return Rubric.add(create(), cell);
       };
@@ -736,7 +744,8 @@ describe('Rubric', () => {
           is: 'answerable',
           points: 1,
           reference: null,
-          payload
+          payload,
+          secret: null
         });
       const rubric = add(create());
 
@@ -754,14 +763,16 @@ describe('Rubric', () => {
         is: 'answerable',
         points: 1,
         reference: null,
-        payload: ['DIGEST<A>']
+        payload: ['DIGEST<A>'],
+        secret: null
       });
       rubric = Rubric.add(rubric, {
         id: 'c2',
         is: 'answerable',
         points: 1,
         reference: null,
-        payload: ['DIGEST<B>']
+        payload: ['DIGEST<B>'],
+        secret: null
       });
 
       const outputs = new Map([
@@ -781,7 +792,8 @@ describe('Rubric', () => {
           is: 'answerable',
           points: 1,
           reference: null,
-          payload: [`DIGEST<${text}>`]
+          payload: [`DIGEST<${text}>`],
+          secret: null
         }));
       add('c1', 'A');
       add('c2', 'B');
@@ -816,7 +828,8 @@ describe('Rubric', () => {
           is: 'answerable',
           points: 1,
           reference: null,
-          payload: []
+          payload: [],
+          secret: null
         }));
       add('c1');
       add('c2');

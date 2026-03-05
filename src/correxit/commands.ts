@@ -182,14 +182,16 @@ export function commands(
         const payload = [await security.digest(expected)];
         const points = 1;
         const reference = null;
-        await add(workbook, { id, is, payload, points, reference });
+        const secret = null;
+        await add(workbook, { id, is, payload, points, reference, secret });
         return;
       }
       if (is === 'reviewable') {
         const payload = null;
         const points = 1;
         const reference = null;
-        await add(workbook, { id, is, payload, points, reference });
+        const secret = null;
+        await add(workbook, { id, is, payload, points, reference, secret });
         return;
       }
       if (is !== 'comparable' && is !== 'correctable') return;

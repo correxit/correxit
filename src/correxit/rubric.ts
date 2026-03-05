@@ -42,6 +42,7 @@ export namespace Rubric {
     payload: string[];
     points: number;
     reference: null;
+    secret: null;
   }> | Readonly<{
     id: string;
     is: 'comparable' | 'correctable';
@@ -55,6 +56,7 @@ export namespace Rubric {
     payload: null;
     points: number;
     reference: null;
+    secret: null;
   }>;
 
   export namespace Cell {
