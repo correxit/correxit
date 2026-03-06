@@ -67,9 +67,13 @@ const Header: React.FC<{
     : null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   const idle = trans.__('Correxit: idle');
-  const scored = !!score && score.status !== 'unscored';
+  const scored =
+    !!score &&
+    score.status !== 'unscored' &&
+    Number.isFinite(score.points) &&
+    Number.isFinite(score.possible);
   const titled = scored
-    ? trans.__('%1 (%2 of %3)', heading, score!.points, score!.possible)
+    ? trans.__('%1 (%2 of %3)', heading, score.points, score.possible)
     : heading;
   const submitted = !!rubric?.assignment.submission;
   const unlocked = !!rubric && !rubric.locked;
@@ -178,6 +182,7 @@ const CellScore: React.FC<{
   ]);
   if (!cell) return <></>;
 
+  const assigned = !!rubric.assignment.assignee;
   const derived = cell.is === 'comparable' || cell.is === 'correctable';
   const heading = rubric.locked
     ? trans.__('Cell score')
@@ -190,24 +195,8 @@ const CellScore: React.FC<{
     points: `correxit-sidebar-cell-score-points-${id}`,
     score: `correxit-sidebar-cell-score-value-${id}`
   };
-  const placeholder = trans.__('Cell comment...');
-  const note = async () => {
-    if (comment !== seed.comment)
-      await commands.execute(CommandIDs.comment, { id, comment });
-  };
-  const reweight = async () => {
-    const invalid = typeof points !== 'number' || Number.isNaN(points);
-    if (rubric.locked || invalid || points === cell.points) return;
-    await commands.execute(CommandIDs.reweight, { id, points });
-    if (typeof score === 'number' && !Number.isNaN(score)) {
-      const manual = { comment, points: score, possible: points };
-      const intervention = Rubric.Score.intervene(id, manual);
-      await commands.execute(CommandIDs.intervene, { id, intervention });
-    }
-  };
-
   const intervene = async () => {
-    if (rubric.locked) return;
+    if (rubric.locked || !assigned) return;
     if (typeof score === 'number' && !Number.isNaN(score)) {
       const possible = typeof points === 'number' ? points : cell.points;
       const update = { comment, points: score, possible };
@@ -219,6 +208,20 @@ const CellScore: React.FC<{
       await commands.execute(CommandIDs.intervene, { id, intervention: null });
   };
 
+  const note = async () => {
+    if (!assigned || comment === seed.comment) return;
+    await commands.execute(CommandIDs.comment, { id, comment });
+  };
+  const reweight = async () => {
+    const invalid = typeof points !== 'number' || Number.isNaN(points);
+    if (rubric.locked || invalid || points === cell.points) return;
+    await commands.execute(CommandIDs.reweight, { id, points });
+    if (assigned && typeof score === 'number' && !Number.isNaN(score)) {
+      const manual = { comment, points: score, possible: points };
+      const intervention = Rubric.Score.intervene(id, manual);
+      await commands.execute(CommandIDs.intervene, { id, intervention });
+    }
+  };
   const sync = async () => {
     await note();
     await intervene();
@@ -239,7 +242,7 @@ const CellScore: React.FC<{
         role="group"
         aria-labelledby={ids.heading}
       >
-        {!rubric.locked && (
+        {assigned && !rubric.locked && (
           <label
             className="correxit-sidebar-cell-score-field"
             htmlFor={ids.score}
@@ -278,29 +281,53 @@ const CellScore: React.FC<{
             />
           </label>
         )}
-        <label
-          className="correxit-sidebar-cell-score-label"
-          htmlFor={ids.comment}
-        >
-          {trans.__('Comment')}
-        </label>
-        <textarea
-          className="correxit-sidebar-cell-score-textarea"
-          id={ids.comment}
-          data-lm-suppress-shortcuts="true"
-          name="correxit-sidebar-cell-score-comment"
-          onBlur={() => void sync()}
-          onChange={({ target: { value } }) => setComment(value)}
-          placeholder={placeholder}
-          readOnly={rubric.locked}
-          rows={4}
-          value={comment}
+        <CellComment
+          {...{
+            comment,
+            id: ids.comment,
+            locked: rubric.locked,
+            setComment,
+            sync,
+            trans,
+            visible: assigned
+          }}
         />
       </div>
     </>
   );
 };
 
+const CellComment: React.FC<{
+  comment: string;
+  id: string;
+  locked: boolean;
+  setComment: (value: string) => void;
+  sync: () => Promise<void>;
+  trans: TranslationBundle;
+  visible: boolean;
+}> = ({ comment, id, locked, setComment, sync, trans, visible }) => {
+  if (!visible || (locked && !comment)) return <></>;
+  return (
+    <details className="correxit-sidebar-cell-score-comment">
+      <summary>{trans.__('Comment')}</summary>
+      {locked ? (
+        <p className="correxit-sidebar-cell-score-guide">{comment}</p>
+      ) : (
+        <textarea
+          className="correxit-sidebar-cell-score-textarea"
+          id={id}
+          data-lm-suppress-shortcuts="true"
+          name="correxit-sidebar-cell-score-comment"
+          onBlur={() => void sync()}
+          onChange={({ target: { value } }) => setComment(value)}
+          placeholder={trans.__('Cell comment...')}
+          rows={4}
+          value={comment}
+        />
+      )}
+    </details>
+  );
+};
 const Body: React.FC<{
   commands: CommandRegistry;
   trans: TranslationBundle;
@@ -317,7 +344,7 @@ const Body: React.FC<{
   const hints = {
     answerable: trans.__('Expected output has been set.'),
     comparable: trans.__('Cell output is compared against a reference.'),
-    correctable: trans.__('Cell is corrected by a reference cell.'),
+    correctable: trans.__('Cell is corrected by reference cells.'),
     reference: trans.__('Selected cell is a reference cell.'),
     reviewable: trans.__('Cell is manually reviewed by an instructor.')
   };
@@ -336,43 +363,26 @@ const Body: React.FC<{
         />
       </div>
       <CellScore {...{ commands, id, rubric, trans, workbook }} />
-      <div
-        className={[
-          'correxit-sidebar-cell-config',
-          'correxit-sidebar-cell-pair'
-        ].join(' ')}
-      >
+      <div className="correxit-sidebar-cell-pair">
         <CommandToolbarButtonComponent
           {...{ commands, id: configure, args: { id, is: 'answerable' } }}
         />
         <CommandToolbarButtonComponent
           {...{ commands, id: configure, args: { id, is: 'reviewable' } }}
         />
-      </div>
-      <div
-        className={[
-          'correxit-sidebar-cell-config',
-          'correxit-sidebar-cell-pair'
-        ].join(' ')}
-      >
         <CommandToolbarButtonComponent
           {...{ commands, id: configure, args: { id, is: 'comparable' } }}
         />
         <CommandToolbarButtonComponent
           {...{ commands, id: configure, args: { id, is: 'correctable' } }}
         />
-      </div>
-      <div
-        className={[
-          'correxit-sidebar-cell-config',
-          'correxit-sidebar-cell-actions'
-        ].join(' ')}
-      >
-        <CommandToolbarButtonComponent
-          {...{ commands, id: share, args: { id } }}
-        />
         <CommandToolbarButtonComponent
           {...{ commands, id: remove, args: { id } }}
+        />
+      </div>
+      <div className="correxit-sidebar-cell-actions">
+        <CommandToolbarButtonComponent
+          {...{ commands, id: share, args: { id } }}
         />
       </div>
       <References {...{ commands, id, rubric, trans, workbook }} />

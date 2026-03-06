@@ -808,21 +808,19 @@ export namespace Rubric {
         `refer error, reference ${referent} collides`
       );
     }
+
     const assignment = {
       ...rubric.assignment,
       report: Assignment.Report.empty()
     };
-    const refs = [...cell.references, referent];
+    const references = { ...rubric.references, [referent]: reference };
+    const constituents = [...cell.references, referent];
     const points = cell.is === 'correctable'
-      ? cell.points + reference.points
+      ? constituents.reduce((sum, id) => sum + references[id].points, 0)
       : cell.points;
     const cells = {
       ...rubric.cells,
-      [id]: { ...cell, points, references: refs }
-    };
-    const references = {
-      ...rubric.references,
-      [referent]: reference
+      [id]: { ...cell, points, references: constituents }
     };
     return { ...rubric, assignment, cells, references };
   }
@@ -882,15 +880,15 @@ export namespace Rubric {
 
     const blank = Assignment.Report.empty();
     const assignment = { ...rubric.assignment, report: blank };
+    const { [referent]: _, ...references } = rubric.references;
+    void _;
     const points = cell.is === 'correctable'
-      ? cell.points - reference.points
+      ? remaining.reduce((sum, id) => sum + references[id].points, 0)
       : cell.points;
     const cells = {
       ...rubric.cells,
       [cell.id]: { ...cell, points, references: remaining }
     };
-    const { [referent]: _, ...references } = rubric.references;
-    void _;
     return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 

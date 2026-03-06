@@ -970,6 +970,36 @@ describe('Rubric', () => {
       expect(rubric.assignment.report.scores).toEqual({});
     });
 
+    it('recomputes correctable points when adding references', () => {
+      const id = 'cell-1';
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 1,
+          references: ['ref-1']
+        },
+        [{ cell: id, referent: 'ref-1', points: 1, secret: true }]
+      );
+      const stale = {
+        ...base,
+        cells: {
+          ...base.cells,
+          [id]: { ...base.cells[id], points: 9 }
+        }
+      } as Rubric.Unlocked;
+
+      const rubric = Rubric.refer(stale, id, {
+        cell: id,
+        referent: 'ref-2',
+        points: 2,
+        secret: false
+      });
+      expect(Rubric.get(rubric, id)!.points).toBe(3);
+    });
+
     it('refer preserves points for comparable cells', () => {
       const id = 'cell-1';
       const base = Rubric.add(
@@ -1041,6 +1071,34 @@ describe('Rubric', () => {
       expect(cell.points).toBe(1);
       expect(rubric.references['ref-1']).toBeUndefined();
       expect(rubric.references['ref-2']).toBeDefined();
+    });
+
+    it('recomputes correctable points when removing references', () => {
+      const id = 'cell-1';
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 2,
+          references: ['ref-1', 'ref-2']
+        },
+        [
+          { cell: id, referent: 'ref-1', points: 1, secret: true },
+          { cell: id, referent: 'ref-2', points: 1, secret: false }
+        ]
+      );
+      const stale = {
+        ...base,
+        cells: {
+          ...base.cells,
+          [id]: { ...base.cells[id], points: 9 }
+        }
+      } as Rubric.Unlocked;
+
+      const rubric = Rubric.dereference(stale, 'ref-1');
+      expect(Rubric.get(rubric, id)!.points).toBe(1);
     });
 
     it('dereferences last reference, removes cell', () => {

@@ -120,7 +120,9 @@ export function commands(
     execute: async (args: Partial<Cell & { comment: string; }>) => {
       const workbook = state.workbook();
       const id = state.cell(args);
-      if (workbook && id) await comment(workbook, id, args.comment || '');
+      const rubric = open(workbook);
+      if (!workbook || !id || !rubric?.assignment.assignee) return;
+      await comment(workbook, id, args.comment || '');
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.configure, {
@@ -134,19 +136,26 @@ export function commands(
       const rubric = open(state.workbook());
       if (!cell || !rubric || !id || references?.includes(id)) return false;
       if (rubric.locked || rubric.assignment.assignee) return false;
+      if (has(rubric, id)) return false;
 
       const code = cell.cell_type === 'code';
       if (!code) return args.is === 'reviewable';
-      return !(id in rubric.references) || has(rubric, id);
+      return !(id in rubric.references);
     },
     isToggled: (args: Partial<Cell>) => {
       const id = state.cell(args);
       const rubric = open(state.workbook());
       return !!rubric && !!id && get(rubric, id)?.is === args.is;
     },
-    isVisible: args => commands.isEnabled(CommandIDs.configure, args),
+    isVisible: (args: Partial<Cell>) => {
+      const id = state.cell(args);
+      const rubric = open(state.workbook());
+      if (!id || !rubric) return false;
+      if (rubric.locked || rubric.assignment.assignee) return false;
+      if (has(rubric, id)) return get(rubric, id)?.is === args.is;
+      return commands.isEnabled(CommandIDs.configure, args);
+    },
     caption: (cell: Partial<Cell>) => {
-      if (!commands.isEnabled(CommandIDs.configure, cell)) return '';
       if (cell.is === 'answerable') return trans.__('Has known answer');
       if (cell.is === 'comparable') return trans.__('Compares to reference');
       if (cell.is === 'correctable') return trans.__('Executes correction');
@@ -154,7 +163,6 @@ export function commands(
       return '';
     },
     label: (cell: Partial<Cell>) => {
-      if (!commands.isEnabled(CommandIDs.configure, cell)) return '';
       if (cell.is === 'answerable') return trans.__('Answer');
       if (cell.is === 'comparable') return trans.__('Compare');
       if (cell.is === 'correctable') return trans.__('Correct');
@@ -375,7 +383,10 @@ export function commands(
     ) => {
       const workbook = state.workbook();
       const id = state.cell(args);
-      if (workbook && id && args.intervention !== undefined)
+      const rubric = open(workbook);
+      const assigned = !!rubric?.assignment.assignee;
+      if (!workbook || !id || !assigned) return;
+      if (args.intervention !== undefined)
         await intervene(workbook, id, args.intervention);
     }
   }));
