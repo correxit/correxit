@@ -221,7 +221,7 @@ td.correxit-corrector-status {
 }
 
 tr.cxt-mod-selected .correxit-corrector-chip {
-  border-left-color: currentColor;
+  border-left-color: currentcolor;
 }
 
 tr.cxt-mod-selected .correxit-corrector-chip.cxt-mod-collected {
