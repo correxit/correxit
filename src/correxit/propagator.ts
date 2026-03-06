@@ -24,7 +24,9 @@ export async function* propagate({ consumer, workbook }: {
       const { base, pwd } = location;
       for (const assignee of roster) {
         const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
-        const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
+        const local = assignee.split('@')[0];
+        const hash = (await security.digest(assignee)).slice(0, 8);
+        const file = `${base}-${local}-${hash}.ipynb`;
         const path = PathExt.join(pwd, file);
         const identifier = await reassign({ assignee, key, notebook, roster });
         yield { identifier, notebook, path };
