@@ -3,7 +3,7 @@ import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import { CellScore } from './cell';
+import { Score } from './cell';
 import { References } from './references';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
@@ -37,58 +37,30 @@ export const Body: React.FC<{
       <div className="correxit-sidebar-cell-config">
         <CommandToolbarButtonComponent {...{ commands, id: correct }} />
         <CommandToolbarButtonComponent
-          {...{
-            args: { id },
-            commands,
-            id: correct
-          }}
+          {...{ args: { id }, commands, id: correct }}
         />
       </div>
-      <CellScore {...{ commands, id, rubric, trans, workbook }} />
+      <Score {...{ commands, id, rubric, trans, workbook }} />
       <div className="correxit-sidebar-cell-pair">
         <CommandToolbarButtonComponent
-          {...{
-            args: { id, is: 'answerable' },
-            commands,
-            id: configure
-          }}
+          {...{ args: { id, is: 'answerable' }, commands, id: configure }}
         />
         <CommandToolbarButtonComponent
-          {...{
-            args: { id, is: 'reviewable' },
-            commands,
-            id: configure
-          }}
+          {...{ args: { id, is: 'reviewable' }, commands, id: configure }}
         />
         <CommandToolbarButtonComponent
-          {...{
-            args: { id, is: 'comparable' },
-            commands,
-            id: configure
-          }}
+          {...{ args: { id, is: 'comparable' }, commands, id: configure }}
         />
         <CommandToolbarButtonComponent
-          {...{
-            args: { id, is: 'correctable' },
-            commands,
-            id: configure
-          }}
+          {...{ args: { id, is: 'correctable' }, commands, id: configure }}
         />
         <CommandToolbarButtonComponent
-          {...{
-            args: { id },
-            commands,
-            id: remove
-          }}
+          {...{ args: { id }, commands, id: remove }}
         />
       </div>
       <div className="correxit-sidebar-cell-actions">
         <CommandToolbarButtonComponent
-          {...{
-            args: { id },
-            commands,
-            id: share
-          }}
+          {...{ args: { id }, commands, id: share }}
         />
       </div>
       <References {...{ commands, id, rubric, trans, workbook }} />

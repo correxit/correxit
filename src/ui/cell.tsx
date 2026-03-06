@@ -16,7 +16,7 @@ const whole = (value: string): number | '' => {
   return Math.max(0, Math.floor(parsed));
 };
 
-export const CellScore: React.FC<{
+export const Score: React.FC<{
   commands: CommandRegistry;
   id: string;
   rubric: Rubric;
