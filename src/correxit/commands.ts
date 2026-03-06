@@ -109,10 +109,14 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
 
-      const certified = await certify(workbook);
-      const receipt = await collector(certified);
-      await collect(workbook, receipt);
-      await commands.execute(CommandIDs.save, { ...args, undo: false });
+      try {
+        const certified = await certify(workbook);
+        const receipt = await collector(certified);
+        await collect(workbook, receipt);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        void showErrorMessage(trans.__('Could not certify'), error as Error);
+      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.comment, {
