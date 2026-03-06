@@ -53,6 +53,24 @@ const cache = (cached: { [path: string]: Headless }, workbooks: Headless[]) => {
 const dispose = (workbooks: Headless[]) =>
   workbooks.forEach(({ context }) => context.dispose());
 
+/** @returns a multi-line lifecycle history for tooltips. */
+const history = (workbook: Scanned, trans: TranslationBundle): string => {
+  const rubric = open(workbook);
+  if (!rubric) return '';
+
+  const { certification, collected, submission, submitted } = rubric.assignment;
+  const date = (timestamp: number | null) =>
+    timestamp !== null ? new Date(timestamp).toLocaleString() : '';
+  const lines: string[] = [];
+  if (submission !== null)
+    lines.push(trans.__('Submission %1', date(submission)));
+  if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
+  if (certification !== null)
+    lines.push(trans.__('Certification %1', date(certification)));
+  if (collected !== null) lines.push(trans.__('Collected: %1', collected));
+  return lines.join('\n');
+};
+
 /**
  * Injects a new workbook to be yielded by the Correxit monitor plugin.
  *
@@ -65,9 +83,23 @@ const inject = (commands: CommandRegistry, workbook: Workbook | null) =>
   void (async workbook =>
     (await commands.execute(Correxit.CommandIDs.inject))?.(workbook))(workbook);
 
-/**
- * @returns the logo of a kernel in order of preference.
- */
+/** @returns the lifecycle phase of a workbook. */
+const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
+  if (grade === 'pending') return 'pending';
+  if (!grade.resolved) return 'failed';
+  if (workbook.hollow) return 'scanned';
+  const rubric = open(workbook);
+  if (!rubric) return 'scanned';
+  const { assignment } = rubric;
+  if (assignment.collected) return 'collected';
+  if (assignment.certification) return 'certified';
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !assignment.report.interventions[cell.id]);
+  return pending ? 'review' : 'scanned';
+};
+
+/** @returns the logo of a kernel in order of preference. */
 const logo = (spec: Exclude<Workbook.Grade['spec'], null>) => {
   const { resources } = spec;
   const src =
@@ -75,17 +107,13 @@ const logo = (spec: Exclude<Workbook.Grade['spec'], null>) => {
   return src || '';
 };
 
-/**
- * @returns a workbook or `null` if path matches workbook context.
- */
+/** @returns a workbook or `null` if path matches workbook context. */
 const match = (workbooks: Scanned[], path = ''): Headless | null =>
   (find(workbooks, workbook => {
     return workbook.context.path === path && !workbook.hollow;
   }) || null) as Headless | null;
 
-/**
- * @returns a merged list workbooks that prioritizes the graded collection.
- */
+/** @returns a merged list workbooks that prioritizes the graded collection. */
 const merge = (scanned: Scanned[], grades: Collated) => {
   const latest = new Map<string, Scanned>();
   for (const workbook of scanned) latest.set(workbook.context.path, workbook);
@@ -93,21 +121,15 @@ const merge = (scanned: Scanned[], grades: Collated) => {
   return Array.from(latest.values());
 };
 
-/**
- * Open a workbook rubric quietly.
- */
+/** Open a workbook rubric quietly. */
 const open = (workbook: Scanned | null) =>
   workbook && !workbook.hollow ? Workbook.open(workbook, true) : null;
 
-/**
- * Collect workbook paths as a set.
- */
+/** Collect workbook paths as a set. */
 const paths = (workbooks: Scanned[]) =>
   new Set(workbooks.map(({ context }) => context.path));
 
-/**
- * Dispose and remove cached workbooks not in the live path set.
- */
+/** Dispose and remove cached workbooks not in the live path set. */
 const prune = (
   cached: { [path: string]: Headless },
   live: Set<string>,
@@ -133,6 +155,10 @@ const reconcile = (
 /** A filter function that filters out hollow workbooks. */
 const reified = (workbook: Scanned): workbook is Headless => !workbook.hollow;
 
+/** @returns the number of resolved grades in a collation of workbooks. */
+const resolutions = (collated: Collated) =>
+  Array.from(collated.values()).filter(({ grade }) => grade.resolved).length;
+
 /** @returns the grade for a workbook given current batch and scan state. */
 const resolve = (
   workbook: Scanned,
@@ -149,43 +175,36 @@ const resolve = (
   return { path, resolved: true, score, spec: report?.kernel ?? null };
 };
 
-/** @returns the number of resolved grades in a collation of workbooks. */
-const resolutions = (collated: Collated) =>
-  Array.from(collated.values()).filter(({ grade }) => grade.resolved).length;
+/** @returns the at-a-glance status of a workbook in the corrector. */
+const status = (
+  grade: Grade,
+  graded: boolean,
+  phase: Exclude<Phase, 'pending'>,
+  trans: TranslationBundle
+) => {
+  if (phase === 'failed')
+    return graded ? trans.__('failed') : trans.__('retrying');
 
-/** @returns the lifecycle phase of a workbook. */
-const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
-  if (grade === 'pending') return 'pending';
-  if (!grade.resolved) return 'failed';
-  if (workbook.hollow) return 'scanned';
-  const rubric = open(workbook);
-  if (!rubric) return 'scanned';
-  const { assignment } = rubric;
-  if (assignment.collected) return 'collected';
-  if (assignment.certification) return 'certified';
-  const pending = Object.values(rubric.cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !assignment.report.interventions[cell.id]);
-  return pending ? 'review' : 'scanned';
-};
-
-/** @returns a multi-line lifecycle history for tooltips. */
-const history = (workbook: Scanned, trans: TranslationBundle): string => {
-  const rubric = open(workbook);
-  if (!rubric) return '';
-  const {
-    assignment: { certification, collected, submission, submitted }
-  } = rubric;
-  const date = (timestamp: number | null) =>
-    timestamp !== null ? new Date(timestamp).toLocaleString() : '';
-  const lines: string[] = [];
-  if (submission !== null)
-    lines.push(trans.__('Submission %1', date(submission)));
-  if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
-  if (certification !== null)
-    lines.push(trans.__('Certification %1', date(certification)));
-  if (collected !== null) lines.push(trans.__('Collected: %1', collected));
-  return lines.join('\n');
+  const { points, possible, status } = grade.score;
+  const unscored = status === 'unscored';
+  if (phase === 'collected') {
+    return unscored
+      ? trans.__('unscored \u00b7 collected')
+      : trans.__('%1 of %2 \u00b7 collected', points, possible);
+  }
+  if (phase === 'certified') {
+    return unscored
+      ? trans.__('unscored \u00b7 certified')
+      : trans.__('%1 of %2 \u00b7 certified', points, possible);
+  }
+  if (phase === 'review') {
+    return unscored
+      ? trans.__('unscored \u00b7 review')
+      : trans.__('%1 of %2 \u00b7 review', points, possible);
+  }
+  return unscored
+    ? trans.__('unscored')
+    : trans.__('%1 of %2', points, possible);
 };
 
 export function Corrector(props: Corrector.Props) {
@@ -213,14 +232,16 @@ export function Corrector(props: Corrector.Props) {
   return (
     <table className="correxit-corrector">
       <Columns />
-      <Progress {...{ ...progress, trans }} />
-      {memo.map(workbook => {
-        const { path } = workbook.context;
-        const grade = resolve(workbook, collated, graded);
-        const flags = { graded, selected: path === selection };
-        const props = { commands, grade, select: setSelection, workbook };
-        return <Row key={path} {...{ ...flags, ...props, trans }} />;
-      })}
+      <tbody>
+        <Progress {...{ ...progress, trans }} />
+        {memo.map(workbook => {
+          const { path } = workbook.context;
+          const grade = resolve(workbook, collated, graded);
+          const flags = { graded, selected: path === selection };
+          const props = { commands, grade, select: setSelection, workbook };
+          return <Row key={path} {...{ ...flags, ...props, trans }} />;
+        })}
+      </tbody>
     </table>
   );
 }
@@ -482,46 +503,16 @@ const Status: React.FC<{
   title: string;
   trans: TranslationBundle;
 }> = ({ grade, graded, phase, title, trans }) => {
-  if (phase === 'pending') return <Pending />;
-  if (phase === 'failed') {
-    const label = graded ? trans.__('failed') : trans.__('retrying');
-    return (
-      <td className="correxit-corrector-status">
-        <span
-          aria-label={title || undefined}
-          className={'correxit-corrector-chip cxt-mod-failed'}
-          role={title ? 'status' : undefined}
-          title={title || undefined}
-        >
-          {label}
-        </span>
-      </td>
-    );
-  }
-  const { score } = grade as Grade;
-  const text =
-    score.status === 'unscored'
-      ? trans.__('unscored')
-      : trans.__('%1 of %2', score.points, score.possible);
-  const suffix =
-    phase === 'collected'
-      ? trans.__('collected')
-      : phase === 'certified'
-        ? trans.__('certified')
-        : phase === 'review'
-          ? trans.__('review')
-          : null;
-  const label = suffix ? `${text} \u00b7 ${suffix}` : text;
-  const className = ['correxit-corrector-chip', `cxt-mod-${phase}`].join(' ');
+  if (phase === 'pending' || grade === 'pending') return <Pending />;
   return (
     <td className="correxit-corrector-status">
       <span
         aria-label={title || undefined}
-        className={className}
+        className={`correxit-corrector-chip cxt-mod-${phase}`}
         role={title ? 'status' : undefined}
         title={title || undefined}
       >
-        {label}
+        {status(grade, graded, phase, trans)}
       </span>
     </td>
   );

@@ -27,9 +27,7 @@ import * as io from './correxit/io';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
 
-/**
- * The default (file-based) Correxit assignment propagation consumer.
- */
+/** The default (file-based) Correxit assignment propagation consumer. */
 const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
   id: Correxit.CONSUMER,
   description: Correxit.DESCRIPTION.CONSUMER,
@@ -67,9 +65,7 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
   }))()
 };
 
-/**
- * The default Correxit grade collector, returns a UUID.
- */
+/** The default Correxit grade collector, returns a UUID. */
 const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   id: Correxit.COLLECTOR,
   description: Correxit.DESCRIPTION.COLLECTOR,
@@ -80,9 +76,7 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   }))()
 };
 
-/**
- * The Correxit Corrector UI.
- */
+/** The Correxit Corrector UI. */
 const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
   description: Correxit.DESCRIPTION.CORRECTOR,
@@ -169,23 +163,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
   }))()
 };
 
-/**
- * The default Correxit roster registrar.
- */
-const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
-  id: Correxit.REGISTRAR,
-  description: Correxit.DESCRIPTION.REGISTRAR,
-  autoStart: true,
-  ...((deactivator?: () => void) => ({
-    provides: Correxit.Registrar,
-    activate: (): Correxit.Registrar => async _ => null,
-    deactivate: () => deactivator?.()
-  }))()
-};
-
-/**
- * The Correxit workbook monitor asynchronously yields the active workbook or null.
- */
+/** The Correxit workbook monitor yields the active workbook or null. */
 const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
   id: Correxit.MONITOR,
   description: Correxit.DESCRIPTION.MONITOR,
@@ -276,9 +254,19 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
   }))()
 };
 
-/**
- * The default Correxit assignment submitter, returns a UUID.
- */
+/** The default Correxit roster registrar. */
+const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
+  id: Correxit.REGISTRAR,
+  description: Correxit.DESCRIPTION.REGISTRAR,
+  autoStart: true,
+  ...((deactivator?: () => void) => ({
+    provides: Correxit.Registrar,
+    activate: (): Correxit.Registrar => async _ => null,
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/** The default Correxit assignment submitter, returns a UUID. */
 const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   id: Correxit.SUBMITTER,
   description: Correxit.DESCRIPTION.SUBMITTER,
@@ -290,6 +278,7 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   }))()
 };
 
+/** The Correxit sidebar and notebook decoration UI. */
 const ui: JupyterFrontEndPlugin<void> = {
   id: Correxit.UI,
   description: Correxit.DESCRIPTION.UI,
@@ -319,6 +308,7 @@ const ui: JupyterFrontEndPlugin<void> = {
   }))()
 };
 
+/** The default Correxit unlocker, signed by the Jupyter secrets manager. */
 const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
   Correxit.UNLOCKER,
   token => ({

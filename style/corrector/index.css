@@ -8,14 +8,6 @@
   width: 100%;
 }
 
-.correxit-corrector-widget-content > progress {
-  display: block;
-  position: sticky;
-  top: 0;
-  width: 100%;
-  z-index: 1;
-}
-
 table.correxit-corrector {
   --correxit-corrector-assignee-width: 150px;
   --correxit-corrector-icon-size: 16px;
@@ -94,22 +86,14 @@ table.correxit-corrector tr.cxt-mod-selected td {
   }
 }
 
-td.correxit-corrector-assignment,
-td.correxit-corrector-kernel,
-td.correxit-corrector-lock,
-td.correxit-corrector-open {
-  width: var(--correxit-corrector-icon-width);
-
-  .correxit-corrector-icon {
-    align-items: center;
-    display: flex;
-    height: 100%;
-    justify-content: center;
-  }
+td .correxit-corrector-icon {
+  align-items: center;
+  display: flex;
+  height: 100%;
+  justify-content: center;
 }
 
 td.correxit-corrector-assignee {
-  width: var(--correxit-corrector-assignee-width);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -117,7 +101,6 @@ td.correxit-corrector-assignee {
 
 td.correxit-corrector-breakdown {
   overflow: hidden;
-  width: 100%;
 }
 
 .correxit-corrector-breakdown-bar {
@@ -187,7 +170,6 @@ tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
 
 td.correxit-corrector-status {
   text-align: right;
-  width: var(--correxit-corrector-status-width);
 }
 
 .correxit-corrector-chip {
@@ -210,7 +192,8 @@ td.correxit-corrector-status {
 
 .correxit-corrector-chip.cxt-mod-certified {
   background-color: color-mix(
-    in srgb, var(--correxit-correct-color) 12%,
+    in srgb,
+    var(--correxit-correct-color) 12%,
     transparent
   );
   border-left-color: var(--correxit-correct-color);
@@ -223,17 +206,15 @@ td.correxit-corrector-status {
 }
 
 .correxit-corrector-chip.cxt-mod-failed {
-  background-color: color-mix(
-    in srgb, var(--jp-error-color1) 12%,
-    transparent
-  );
+  background-color: color-mix(in srgb, var(--jp-error-color1) 12%, transparent);
   border-left-color: var(--jp-error-color1);
   color: var(--jp-error-color1);
 }
 
 .correxit-corrector-chip.cxt-mod-review {
   background-color: color-mix(
-    in srgb, var(--correxit-insistent-color) 12%,
+    in srgb,
+    var(--correxit-insistent-color) 12%,
     transparent
   );
   border-left-color: var(--correxit-insistent-color);
