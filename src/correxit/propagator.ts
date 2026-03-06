@@ -61,6 +61,17 @@ async function encrypt(
   delete cell.metadata.trusted;
 }
 
+/** @returns initialized lifecycle stages for a propagated assignment. */
+function lifecycle(expiration: number | null) {
+  return {
+    certification: null,
+    collected: null,
+    expiration,
+    submission: null,
+    submitted: null
+  };
+}
+
 /**
  * Reassigns a serialized workbook to an assignee using a given unlocked rubric.
  *
@@ -80,7 +91,7 @@ async function reassign({ assignee, key, notebook, roster }: {
   const blank = Rubric.Assignment.Report.empty();
   const unsigned = {
     assignee,
-    ...stages(expiration),
+    ...lifecycle(expiration),
     id,
     name,
     report: blank,
@@ -94,17 +105,6 @@ async function reassign({ assignee, key, notebook, roster }: {
     assignment: metadata.assignment.id,
     rubric: metadata.id,
     signature
-  };
-}
-
-/** @returns initialized lifecycle stages for a propagated assignment. */
-function stages(expiration: number | null) {
-  return {
-    certification: null,
-    collected: null,
-    expiration,
-    submission: null,
-    submitted: null
   };
 }
 

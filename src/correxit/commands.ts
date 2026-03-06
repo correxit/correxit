@@ -4,7 +4,6 @@ import { PathExt } from '@jupyterlab/coreutils';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
-import { notebookIcon, saveIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '..';
 import * as input from './input';
@@ -313,7 +312,7 @@ export function commands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.dereference, {
-    icon: Icons.reset,
+    icon: Icons.remove,
     isEnabled: (args: Partial<{ referent: string }>) => {
       const rubric = open(state.workbook());
       if (!rubric || rubric.locked) return false;
@@ -459,20 +458,18 @@ export function commands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.refer, {
-    icon: Icons.correctable,
+    icon: Icons.refer,
     isEnabled: (args: Partial<Cell>) => {
       const id = state.cell(args);
       const rubric = open(state.workbook());
       if (!id || !rubric || rubric.locked) return false;
       if (rubric.assignment.assignee) return false;
+
       const cell = get(rubric, id);
-      return !!cell && (
-        cell.is === 'comparable' || cell.is === 'correctable'
-      );
+      return !!cell && (cell.is === 'comparable' || cell.is === 'correctable');
     },
-    isVisible: args =>
-      commands.isEnabled(CommandIDs.refer, args),
-    label: trans.__('Add reference'),
+    isVisible: args => commands.isEnabled(CommandIDs.refer, args),
+    label: trans.__('Add a reference cell'),
     execute: async (args: Partial<Cell>) => {
       const workbook = state.workbook();
       const id = state.cell(args);
@@ -524,7 +521,7 @@ export function commands(
       return has(rubric, id);
     },
     isVisible: args => commands.isEnabled(CommandIDs.remove, args),
-    icon: Icons.reset,
+    icon: Icons.remove,
     label: trans.__('Reset cell'),
     execute: async (args: Partial<Cell>) => {
       const workbook = state.workbook();
@@ -533,7 +530,7 @@ export function commands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.reset, {
-    icon: notebookIcon,
+    icon: Icons.reset,
     isEnabled: () => open(state.workbook())?.locked === false,
     isVisible: () => commands.isEnabled(CommandIDs.reset),
     caption: trans.__('Deletes Correxit metadata, keeps notebook content'),
@@ -563,7 +560,7 @@ export function commands(
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.save, {
-    icon: saveIcon,
+    icon: Icons.save,
     label: trans.__('Save workbook metadata'),
     execute: async (args: Partial<Credentials & { undo?: boolean }>) => {
       const { handle, workbook } = await reify(args);

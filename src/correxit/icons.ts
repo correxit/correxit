@@ -1,4 +1,9 @@
-import { LabIcon } from '@jupyterlab/ui-components';
+import {
+  addIcon,
+  LabIcon,
+  notebookIcon,
+  saveIcon
+} from '@jupyterlab/ui-components';
 import ANSWERABLE from '../../style/monitor/icons/answerable.svg';
 import ASSIGNEE from '../../style/monitor/icons/assignee.svg';
 import ASSIGNMENT from '../../style/monitor/icons/assignment.svg';
@@ -11,7 +16,7 @@ import CORRECTABLE from '../../style/monitor/icons/correctable.svg';
 import KERNEL from '../../style/monitor/icons/kernel.svg';
 import KEY from '../../style/monitor/icons/key.svg';
 import LOCKED from '../../style/monitor/icons/locked.svg';
-import RESET from '../../style/monitor/icons/reset.svg';
+import REMOVE from '../../style/monitor/icons/remove.svg';
 import REVIEWABLE from '../../style/monitor/icons/reviewable.svg';
 import ROSTER from '../../style/monitor/icons/roster.svg';
 import SECRET from '../../style/monitor/icons/secret.svg';
@@ -40,16 +45,18 @@ export namespace Icons {
     new LabIcon({ name: 'correxit:correctable', svgstr: CORRECTABLE });
   export const kernel =
     new LabIcon({ name: 'correxit:kernel', svgstr: KERNEL });
-  export const key =
-    new LabIcon({ name: 'correxit:key', svgstr: KEY });
+  export const key = new LabIcon({ name: 'correxit:key', svgstr: KEY });
   export const locked =
     new LabIcon({ name: 'correxit:locked', svgstr: LOCKED });
-  export const reset =
-    new LabIcon({ name: 'correxit:reset', svgstr: RESET });
+  export const refer = addIcon;
+  export const remove =
+    new LabIcon({ name: 'correxit:remove', svgstr: REMOVE });
+  export const reset = notebookIcon;
   export const reviewable =
     new LabIcon({ name: 'correxit:reviewable', svgstr: REVIEWABLE });
   export const roster =
     new LabIcon({ name: 'correxit:roster', svgstr: ROSTER });
+  export const save = saveIcon;
   export const secret =
     new LabIcon({ name: 'correxit:secret', svgstr: SECRET });
   export const shared =
