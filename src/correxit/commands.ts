@@ -634,8 +634,7 @@ export function commands(
       if (!button.accept) return;
       try {
         const identifier = Workbook.identifier(workbook);
-        if (!Workbook.Identifier.assigned(identifier))
-          return;
+        if (!Workbook.Identifier.assigned(identifier)) return;
         await submit(workbook);
 
         const receipt = await submitter(workbook, identifier);

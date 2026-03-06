@@ -20,6 +20,13 @@ type Batched = [path: string, file: { grade: Grade; workbook: Headless }];
 type Collated = Map<string, { grade: Grade; workbook: Headless }>;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
+type Phase =
+  | 'certified'
+  | 'collected'
+  | 'failed'
+  | 'pending'
+  | 'review'
+  | 'scanned';
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const FAILED = 'cxt-mod-failed';
@@ -146,6 +153,41 @@ const resolve = (
 const resolutions = (collated: Collated) =>
   Array.from(collated.values()).filter(({ grade }) => grade.resolved).length;
 
+/** @returns the lifecycle phase of a workbook. */
+const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
+  if (grade === 'pending') return 'pending';
+  if (!grade.resolved) return 'failed';
+  if (workbook.hollow) return 'scanned';
+  const rubric = open(workbook);
+  if (!rubric) return 'scanned';
+  const { assignment } = rubric;
+  if (assignment.collected) return 'collected';
+  if (assignment.certification) return 'certified';
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !assignment.report.interventions[cell.id]);
+  return pending ? 'review' : 'scanned';
+};
+
+/** @returns a multi-line lifecycle history for tooltips. */
+const history = (workbook: Scanned, trans: TranslationBundle): string => {
+  const rubric = open(workbook);
+  if (!rubric) return '';
+  const {
+    assignment: { certification, collected, submission, submitted }
+  } = rubric;
+  const date = (timestamp: number | null) =>
+    timestamp !== null ? new Date(timestamp).toLocaleString() : '';
+  const lines: string[] = [];
+  if (submission !== null)
+    lines.push(trans.__('Submission %1', date(submission)));
+  if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
+  if (certification !== null)
+    lines.push(trans.__('Certification %1', date(certification)));
+  if (collected !== null) lines.push(trans.__('Collected: %1', collected));
+  return lines.join('\n');
+};
+
 export function Corrector(props: Corrector.Props) {
   const { commands, mode, notify, overwrite, path, trans } = props;
   const grading = mode !== 'scan';
@@ -176,8 +218,8 @@ export function Corrector(props: Corrector.Props) {
         const { path } = workbook.context;
         const grade = resolve(workbook, collated, graded);
         const flags = { graded, selected: path === selection };
-        const props = { commands, grade, mode, select: setSelection, workbook };
-        return <Row key={path} {...flags} {...props} trans={trans} />;
+        const props = { commands, grade, select: setSelection, workbook };
+        return <Row key={path} {...{ ...flags, ...props, trans }} />;
       })}
     </table>
   );
@@ -251,7 +293,7 @@ const Columns: React.FC = () => (
     <col className="correxit-corrector-col-assignee" />
     <col className="correxit-corrector-col-breakdown" />
     <col className="correxit-corrector-col-kernel" />
-    <col className="correxit-corrector-col-score" />
+    <col className="correxit-corrector-col-status" />
   </colgroup>
 );
 
@@ -274,29 +316,22 @@ const Row: React.FC<{
   commands: CommandRegistry;
   grade: Grade | 'pending';
   graded: boolean;
-  mode: Corrector.Mode;
   select: (path: string) => void;
   selected: boolean;
   trans: TranslationBundle;
   workbook: Scanned;
 }> = React.memo(props => {
-  const { commands, grade, graded, mode, select, selected, trans, workbook } =
-    props;
+  const { commands, grade, graded, select, selected, trans, workbook } = props;
   const { path } = workbook.context;
   const pending = grade === 'pending';
   const failed = !pending && !grade.resolved;
-  const rubric = workbook.hollow ? null : open(workbook);
-  const review =
-    mode === 'grade' &&
-    !pending &&
-    grade.resolved &&
-    !!rubric &&
-    !rubric.locked &&
-    !rubric.assignment.certification;
+  const phase = lifecycle(workbook, grade);
   const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');
   if (workbook.hollow) return <HollowRow {...{ className, path }} />;
+  const spec = pending ? null : grade.spec;
+  const title = history(workbook, trans);
   return (
     <tr className={className} onClick={() => select(selected ? '' : path)}>
       <Notebook {...{ commands, trans, workbook }} />
@@ -304,7 +339,8 @@ const Row: React.FC<{
       <Assignment {...{ trans, workbook }} />
       <Assignee {...{ workbook }} />
       <Breakdown {...{ failed, trans, workbook }} />
-      <Score {...{ grade, graded, review, trans }} />
+      <Kernel {...{ spec }} />
+      <Status {...{ grade, graded, phase, title, trans }} />
     </tr>
   );
 });
@@ -439,57 +475,72 @@ const Assignment: React.FC<{
   );
 };
 
-const Score: React.FC<{
+const Status: React.FC<{
   grade: Grade | 'pending';
   graded: boolean;
-  review: boolean;
+  phase: Phase;
+  title: string;
   trans: TranslationBundle;
-}> = ({ grade, graded, review, trans }) => {
-  const irrecoverable = trans.__('Grade manually');
-  const recoverable = trans.__('(Retrying...)');
-  if (grade === 'pending') {
+}> = ({ grade, graded, phase, title, trans }) => {
+  if (phase === 'pending') return <Pending />;
+  if (phase === 'failed') {
+    const label = graded ? trans.__('failed') : trans.__('retrying');
     return (
-      <>
-        <td className="correxit-corrector-kernel" />
-        <Pending />
-      </>
-    );
-  }
-  if (!grade.resolved) {
-    return (
-      <td className="correxit-corrector-failed" colSpan={2}>
-        <span>{graded ? irrecoverable : recoverable}</span>
+      <td className="correxit-corrector-status">
+        <span
+          aria-label={title || undefined}
+          className={'correxit-corrector-chip cxt-mod-failed'}
+          role={title ? 'status' : undefined}
+          title={title || undefined}
+        >
+          {label}
+        </span>
       </td>
     );
   }
-  if (review) {
-    return (
-      <td className="correxit-corrector-review" colSpan={2}>
-        <span>{trans.__('Review required')}</span>
-      </td>
-    );
-  }
+  const { score } = grade as Grade;
+  const text =
+    score.status === 'unscored'
+      ? trans.__('unscored')
+      : trans.__('%1 of %2', score.points, score.possible);
+  const suffix =
+    phase === 'collected'
+      ? trans.__('collected')
+      : phase === 'certified'
+        ? trans.__('certified')
+        : phase === 'review'
+          ? trans.__('review')
+          : null;
+  const label = suffix ? `${text} \u00b7 ${suffix}` : text;
+  const className = ['correxit-corrector-chip', `cxt-mod-${phase}`].join(' ');
   return (
-    <>
-      <Kernel spec={grade.spec} />
-      <Report score={grade.score} trans={trans} />
-    </>
+    <td className="correxit-corrector-status">
+      <span
+        aria-label={title || undefined}
+        className={className}
+        role={title ? 'status' : undefined}
+        title={title || undefined}
+      >
+        {label}
+      </span>
+    </td>
   );
 };
 
 const Pending: React.FC = () => (
-  <td className="correxit-corrector-pending correxit-corrector-score-report">
-    <span>
-      <span className="correxit-corrector-pending-dot"></span>
-      <span className="correxit-corrector-pending-dot"></span>
-      <span className="correxit-corrector-pending-dot"></span>
+  <td className="correxit-corrector-status">
+    <span className={'correxit-corrector-chip cxt-mod-pending'}>
+      <span className="correxit-corrector-pending-dot" />
+      <span className="correxit-corrector-pending-dot" />
+      <span className="correxit-corrector-pending-dot" />
     </span>
   </td>
 );
 
-const Kernel: React.FC<{ spec: Workbook.Grade['spec'] }> = ({ spec }) => {
-  if (!spec) return <td className="correxit-corrector-kernel"></td>;
-
+const Kernel: React.FC<{
+  spec: Workbook.Grade['spec'];
+}> = ({ spec }) => {
+  if (!spec) return <td className="correxit-corrector-kernel" />;
   const src = logo(spec);
   return (
     <td className="correxit-corrector-kernel">
@@ -502,15 +553,4 @@ const Kernel: React.FC<{ spec: Workbook.Grade['spec'] }> = ({ spec }) => {
       </div>
     </td>
   );
-};
-
-const Report: React.FC<{
-  score: Rubric.Score;
-  trans: TranslationBundle;
-}> = ({ score, trans }) => {
-  const report =
-    score.status === 'unscored'
-      ? trans.__('unscored')
-      : trans.__('%1 of %2', score.points, score.possible);
-  return <td className="correxit-corrector-score-report">{report}</td>;
 };

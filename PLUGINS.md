@@ -28,7 +28,7 @@ Plugins that operate on _assigned_ workbooks (consumer, submitter) receive
 `Identifier.Assigned`, which narrows `assignee` and `signature` to `string`:
 
 ```typescript
-type Assigned = Identifier & { assignee: string; signature: string; };
+type Assigned = Identifier & { assignee: string; signature: string };
 ```
 
 A type guard `Identifier.assigned(id)` bridges the two at runtime.

@@ -20,7 +20,7 @@ table.correxit-corrector {
   --correxit-corrector-assignee-width: 150px;
   --correxit-corrector-icon-size: 16px;
   --correxit-corrector-icon-width: 32px;
-  --correxit-corrector-score-width: 100px;
+  --correxit-corrector-status-width: 140px;
 
   border-collapse: collapse;
   table-layout: fixed;
@@ -38,8 +38,8 @@ table.correxit-corrector col.correxit-corrector-col-assignee {
   width: var(--correxit-corrector-assignee-width);
 }
 
-table.correxit-corrector col.correxit-corrector-col-score {
-  width: var(--correxit-corrector-score-width);
+table.correxit-corrector col.correxit-corrector-col-status {
+  width: var(--correxit-corrector-status-width);
 }
 
 table.correxit-corrector img,
@@ -185,56 +185,67 @@ tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
   }
 }
 
-td.correxit-corrector-pending,
-td.correxit-corrector-failed {
-  overflow: hidden;
-  position: relative;
+td.correxit-corrector-status {
   text-align: right;
-  width: 60px;
+  width: var(--correxit-corrector-status-width);
 }
 
-td.correxit-corrector-failed {
-  width: 120px;
+.correxit-corrector-chip {
+  border-left: 3px solid transparent;
+  border-radius: 2px;
+  box-sizing: border-box;
+  display: inline-block;
+  font-size: var(--jp-ui-font-size0);
+  line-height: 1.4;
+  padding: 1px 6px;
+  white-space: nowrap;
+  width: calc(var(--correxit-corrector-status-width) - 12px);
 }
 
-td.correxit-corrector-review {
-  overflow: hidden;
-  position: relative;
-  text-align: right;
-  width: 120px;
-}
-
-td.correxit-corrector-review > span {
-  color: var(--correxit-insistent-color);
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+.correxit-corrector-chip.cxt-mod-pending {
   align-items: center;
-  display: flex;
+  display: inline-flex;
   gap: 2px;
-  padding: 2px 4px;
 }
 
-td.correxit-corrector-score-report {
-  text-align: right;
-  width: var(--correxit-corrector-score-width);
+.correxit-corrector-chip.cxt-mod-certified {
+  background-color: color-mix(
+    in srgb, var(--correxit-correct-color) 12%,
+    transparent
+  );
+  border-left-color: var(--correxit-correct-color);
 }
 
-td.correxit-corrector-pending > span,
-td.correxit-corrector-failed > span {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  align-items: center;
-  display: flex;
-  gap: 2px;
-  padding: 2px 4px;
+.correxit-corrector-chip.cxt-mod-collected {
+  background-color: var(--correxit-correct-color);
+  border-left-color: var(--correxit-correct-color);
+  color: var(--jp-ui-inverse-font-color1);
 }
 
-td.correxit-corrector-failed > span {
+.correxit-corrector-chip.cxt-mod-failed {
+  background-color: color-mix(
+    in srgb, var(--jp-error-color1) 12%,
+    transparent
+  );
+  border-left-color: var(--jp-error-color1);
   color: var(--jp-error-color1);
+}
+
+.correxit-corrector-chip.cxt-mod-review {
+  background-color: color-mix(
+    in srgb, var(--correxit-insistent-color) 12%,
+    transparent
+  );
+  border-left-color: var(--correxit-insistent-color);
+}
+
+tr.cxt-mod-selected .correxit-corrector-chip {
+  border-left-color: currentColor;
+}
+
+tr.cxt-mod-selected .correxit-corrector-chip.cxt-mod-collected {
+  background-color: var(--jp-ui-inverse-font-color1);
+  color: var(--jp-brand-color1);
 }
 
 .correxit-corrector-pending-dot {
