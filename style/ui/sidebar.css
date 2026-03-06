@@ -72,8 +72,15 @@
 
 .correxit-sidebar-cell-config {
   color: var(--jp-ui-font-color3);
-  justify-content: center;
+  display: flex;
+  gap: 4px;
   text-align: center;
+}
+
+.correxit-sidebar-cell-config .jp-ToolbarButtonComponent {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
 }
 
 .correxit-sidebar-cell-actions .jp-ToolbarButtonComponent {
@@ -91,7 +98,7 @@
 .correxit-sidebar-cell-pair {
   display: grid;
   gap: 4px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(calc(50% - 2px), 1fr));
 }
 
 .correxit-sidebar-cell-pair .jp-ToolbarButtonComponent {

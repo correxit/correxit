@@ -243,7 +243,7 @@ export function commands(
       }
     },
     isVisible: () => commands.isEnabled(CommandIDs.convert),
-    label: trans.__('Convert to a Correxit workbook...'),
+    label: trans.__('Convert to a workbook assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { workbook } = await reify(args);
       if (!workbook) return;
