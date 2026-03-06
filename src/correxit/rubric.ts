@@ -266,7 +266,7 @@ export namespace Rubric {
       if (cell.is === 'correctable') {
         if (!visible.length)
           return { ...Score.INCORRECT, code: 'locked', id, possible };
-        const vp = visible.reduce(
+        const total = visible.reduce(
           (sum, reference) => sum + reference.points, 0
         );
         let earned = 0;
@@ -278,12 +278,12 @@ export namespace Rubric {
             earned += reference.points;
         }
         const status: Score.Status =
-          earned === vp ? 'correct'
+          earned === total ? 'correct'
           : earned === 0 ? 'incorrect'
           : 'partial';
         return {
           ...Score.CORRECT, code: '', id,
-          points: earned, possible: vp, status
+          points: earned, possible: total, status
         };
       }
 
