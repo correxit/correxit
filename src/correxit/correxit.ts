@@ -34,7 +34,7 @@ export namespace Correxit {
 
   export namespace Propagator {
     export type Notebook = {
-      identifier: Workbook.Identifier;
+      identifier: Workbook.Identifier.Assigned;
       notebook: INotebookContent;
       path: string;
     };
@@ -56,7 +56,7 @@ export namespace Correxit {
 
   export type Submitter = (
     workbook: Workbook,
-    identifier: Workbook.Identifier
+    identifier: Workbook.Identifier.Assigned
   ) => Promise<string | null>;
 
   export type Unlocker = {

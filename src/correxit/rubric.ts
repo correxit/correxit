@@ -325,7 +325,8 @@ export namespace Rubric {
         ...rubric.references, [referent]: updated
       };
       return {
-        ...rubric, assignment, cells, references
+        ...rubric, assignment, cells,
+        references, revised: Date.now()
       };
     }
   }
@@ -616,7 +617,8 @@ export namespace Rubric {
     const cells = { ...rubric.cells, [cell.id]: { ...cell, points } };
     return {
       ...rubric, assignment, cells,
-      references: { ...rubric.references, ...added }
+      references: { ...rubric.references, ...added },
+      revised: Date.now()
     };
   }
 
@@ -660,7 +662,7 @@ export namespace Rubric {
     const signature = await Assignment.sign(unsigned, key);
     const assignment = { ...unsigned, ...lifecycle, signature };
     await Assignment.validate({ assignment, key });
-    return { ...rubric, assignment, key };
+    return { ...rubric, assignment, key, revised: Date.now() };
   }
 
   /**
@@ -783,7 +785,7 @@ export namespace Rubric {
       Object.entries(rubric.references)
         .filter(([, reference]) => reference.cell !== id)
     );
-    return { ...rubric, assignment, cells, references };
+    return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 
   /** Add a reference to an existing comparable or correctable cell. */
@@ -822,7 +824,7 @@ export namespace Rubric {
       ...rubric.cells,
       [id]: { ...cell, points, references: constituents }
     };
-    return { ...rubric, assignment, cells, references };
+    return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 
   export async function sign(
@@ -832,7 +834,7 @@ export namespace Rubric {
     const unsigned = { ...rubric.assignment, report };
     const signature = await Assignment.sign(unsigned, rubric.key);
     const assignment = { ...unsigned, signature };
-    return { ...rubric, assignment };
+    return { ...rubric, assignment, revised: Date.now() };
   }
 
   /** @returns the number of cells in a rubric. */
@@ -859,7 +861,7 @@ export namespace Rubric {
     };
     const toggled = { ...reference, secret: !reference.secret };
     const references = { ...rubric.references, [referent]: toggled };
-    return { ...rubric, assignment, references };
+    return { ...rubric, assignment, references, revised: Date.now() };
   }
 
   /** Remove a single reference; removes the cell if none remain. */

@@ -84,7 +84,7 @@ async function reassign({ assignee, key, notebook, roster }: {
   key: string;
   notebook: INotebookContent;
   roster: string[];
-}): Promise<Workbook.Identifier> {
+}): Promise<Workbook.Identifier.Assigned> {
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
     { assignment: Rubric.Assignment, revised: number };
   const { expiration, id, name, roster: encrypted } = metadata.assignment;

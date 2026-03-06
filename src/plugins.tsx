@@ -55,7 +55,7 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
           const { identifier, notebook, path } = propagated;
           const created = await io.create({ factory, manager, notebook, path });
           yield { type: 'separator', slots: [] };
-          yield { type: 'assigned', slots: [identifier.assignee!] };
+          yield { type: 'assigned', slots: [identifier.assignee] };
           yield { type: created ? 'saved' : 'create-error', slots: [path] };
           yield { type: 'progress', slots: [++progress, total] };
         }

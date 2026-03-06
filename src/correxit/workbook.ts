@@ -76,17 +76,23 @@ export namespace Workbook {
 
   /** A type for plugins to identify a workbook/assignment/assignee match. */
   export type Identifier = {
-    /** The assignee (typically an email address) or `null` if unassigned. */
     assignee: string | null;
-
-    /** The external assignment id used for LMS/backend correlation. */
     assignment: string | null;
-
-    /** The immutable rubric id of the workbook metadata. */
     rubric: string;
-
-    /** The workbook/assignment signature for the assignee/roster/report. */
     signature: string | null;
+  };
+
+  export namespace Identifier {
+    /** An identifier with a guaranteed assignee and signature. */
+    export type Assigned = Identifier & {
+      assignee: string;
+      signature: string;
+    };
+
+    /** Type guard for assigned identifiers. */
+    export function assigned(id: Identifier): id is Assigned {
+      return id.assignee !== null && id.signature !== null;
+    }
   }
 
   export namespace Cell {

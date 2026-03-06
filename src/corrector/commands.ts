@@ -206,6 +206,7 @@ async function correct(workbook: Headless): Promise<Certified> {
 
   const grade = await Workbook.correct(workbook);
   const identifier = Workbook.identifier(workbook);
+  await Workbook.lock(workbook);
   await save(workbook);
   return { grade, identifier, workbook };
 }
