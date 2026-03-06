@@ -121,7 +121,7 @@ export function commands(
       const workbook = state.workbook();
       const id = state.cell(args);
       const rubric = open(workbook);
-      if (!workbook || !id || !rubric?.assignment.assignee) return;
+      if (!workbook || !id || !rubric) return;
       await comment(workbook, id, args.comment || '');
     }
   }));
@@ -136,7 +136,7 @@ export function commands(
       const rubric = open(state.workbook());
       if (!cell || !rubric || !id || references?.includes(id)) return false;
       if (rubric.locked || rubric.assignment.assignee) return false;
-      if (has(rubric, id)) return false;
+      if (has(rubric, id)) return get(rubric, id)?.is === args.is;
 
       const code = cell.cell_type === 'code';
       if (!code) return args.is === 'reviewable';
@@ -384,8 +384,7 @@ export function commands(
       const workbook = state.workbook();
       const id = state.cell(args);
       const rubric = open(workbook);
-      const assigned = !!rubric?.assignment.assignee;
-      if (!workbook || !id || !assigned) return;
+      if (!workbook || !id || !rubric) return;
       if (args.intervention !== undefined)
         await intervene(workbook, id, args.intervention);
     }

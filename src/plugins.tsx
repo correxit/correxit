@@ -178,19 +178,7 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
   autoStart: true,
   ...((deactivator?: () => void) => ({
     provides: Correxit.Registrar,
-    activate: (): Correxit.Registrar => async _ => {
-      const full = Array.from(
-        { length: 26 },
-        (_, i) => `${String.fromCharCode(97 + i)}@example.com`
-      );
-      const partial = full.slice(0, 20);
-      return ['one', 'two', 'three', 'four', 'five', 'six'].map((name, i) => ({
-        id: `upstream-id-${i + 1}`,
-        expiration: 0,
-        name: `Quiz ${name}`,
-        roster: i < 5 ? full : partial
-      }));
-    },
+    activate: (): Correxit.Registrar => async _ => null,
     deactivate: () => deactivator?.()
   }))()
 };

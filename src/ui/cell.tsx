@@ -92,11 +92,7 @@ export const Score: React.FC<{
     if (rubric.locked || invalid || points === cell.points) return;
     await commands.execute(CommandIDs.reweight, { id, points });
     if (assigned && typeof score === 'number' && !Number.isNaN(score)) {
-      const manual = {
-        comment,
-        points: score,
-        possible: points
-      };
+      const manual = { comment, points: score, possible: points };
       const intervention = Rubric.Score.intervene(id, manual);
       await commands.execute(CommandIDs.intervene, { id, intervention });
     }
