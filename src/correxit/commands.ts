@@ -8,7 +8,7 @@ import { find } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '..';
 import * as input from './input';
 import * as io from './io';
-import { propagate } from './propagator';
+import * as propagator from './propagator';
 import * as security from './security';
 import * as state from './state';
 
@@ -435,7 +435,7 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked) return (async function* empty() {})();
       try {
-        return translate(propagate({ consumer, workbook }), trans);
+        return translate(propagator.propagate({ consumer, workbook }), trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }

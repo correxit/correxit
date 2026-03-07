@@ -2,8 +2,12 @@
 
 Correxit is serverless by design. All assignment distribution, submission
 recording, and grade collection are delegated to **plugin tokens** that a
-server-backed JupyterLab extension can satisfy. The four integration points
+server-backed JupyterLab extension can satisfy. The five integration points
 are described below.
+
+`Unlocker` and `Monitor` are also plugin tokens but have sensible defaults
+and are rarely overridden. `Monitor` is an internal concern. `Unlocker` is
+documented below for institutional deployments that manage keys externally.
 
 ---
 
@@ -141,7 +145,7 @@ metadata, or `null` if the grade was not recorded.
 // Workbook.Certified
 type Certified = {
   grade: Workbook.Grade;
-  identifier: Workbook.Identifier;
+  identifier: Workbook.Identifier.Assigned;
   workbook: Workbook;
 };
 
@@ -157,6 +161,28 @@ type Grade = {
 The default implementation returns a random UUID. A server-backed collector
 would POST the grade to the gradebook, verify the signature, and return the
 server-issued receipt ID.
+
+---
+
+## `Correxit.Unlocker`
+
+```typescript
+type Unlocker = {
+  store(id: string, key: string): Promise<void>;
+  unlock(
+    workbook: Workbook,
+    credentials: Partial<Workbook.Credentials & { silent: boolean }> | null
+  ): Promise<Rubric.Unlocked | null>;
+};
+```
+
+Manages the rubric key lifecycle. `store` persists a key for a rubric id
+(in memory only — keys must never reach disk). `unlock` attempts to unlock
+a workbook, optionally prompting the user for credentials.
+
+The default implementation uses the JupyterLab `SecretsManager`. An
+institutional deployer might replace it with an HSM-backed or
+vault-backed provider that supplies keys without user interaction.
 
 ---
 

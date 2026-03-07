@@ -78,19 +78,6 @@ The `locked` boolean serves as the discriminator for TypeScript narrowing.
 backed by an active `NotebookPanel` (visible in the UI), exposing only its `content` widget and its document `context`. A `Headless` workbook has only a
 `context` and `content: null`. It is used for batch grading and scanning.
 
-### Discriminated unions
-
-Correxit uses TypeScript discriminated unions to encode mutually exclusive
-states, enabling the compiler to enforce correctness:
-
-- **`Rubric.Locked | Rubric.Unlocked`**: discriminated by `locked`.
-- **`Reified`** (in `commands.ts`): encodes three possible states when
-  resolving a workbook from command arguments. After `if (!rubric) return`,
-  TypeScript knows `workbook` is non-null.
-
-This eliminates classes of runtime errors by making invalid states
-unrepresentable.
-
 ### Caching
 
 `workbook.ts` uses a `WeakMap` to cache the current `Rubric` instance, avoiding
@@ -105,6 +92,20 @@ Command arguments must be serializable. Synchronous command logic (`isEnabled`,
 by checking state and/or fetching when appropriate.
 
 Use `Workbook.open()` to retrieve the current rubric.
+
+## Discriminated unions
+
+Correxit uses TypeScript discriminated unions to encode mutually exclusive
+states, enabling the compiler to enforce correctness:
+
+- **`Rubric.Locked | Rubric.Unlocked`**: discriminated by `locked`.
+- **`Headed | Headless`**: discriminated by `content`.
+- **`Reified`** (in `commands.ts`): encodes three possible states when
+  resolving a workbook from command arguments. After `if (!rubric) return`,
+  TypeScript knows `workbook` is non-null.
+
+This eliminates classes of runtime errors by making invalid states
+unrepresentable.
 
 ## Asynchronous patterns
 
@@ -232,4 +233,5 @@ consumer with an LMS consumer requires no changes to the propagator or commands.
 | **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |
 
 Type definitions are in `src/correxit/correxit.ts`. Default implementations are
-in `src/plugins.tsx`.
+in `src/plugins.tsx`. See [PLUGINS.md](PLUGINS.md) for the full integration
+API.
