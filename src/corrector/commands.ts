@@ -73,13 +73,8 @@ export function commands(
         const source = scanner({ commands }, handle);
         return (async function* (results: AsyncGenerator<Result>) {
           for await (const result of results) {
-            if (result.ok) {
-              const { grade, workbook } = result.certified;
-              yield [grade.path, { grade, workbook: workbook as Headless }];
-            } else {
-              const { grade, workbook } = result;
-              yield [grade.path, { grade, workbook }];
-            }
+            const { grade, workbook } = result.ok ? result.certified : result;
+            yield [grade.path, { grade, workbook: workbook as Headless }];
           }
         })(grader.grade(source, actions, cap, retries));
       }

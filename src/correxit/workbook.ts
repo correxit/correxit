@@ -331,11 +331,8 @@ export namespace Workbook {
     const identifier = Workbook.identifier(workbook);
     if (!Identifier.assigned(identifier))
       throw new Error('certify error: unassigned');
-    if (!grade.resolved) {
-      throw new Error(
-        `certify error: unresolved (${grade.score.status})`
-      );
-    }
+    if (!grade.resolved)
+      throw new Error(`certify error: unresolved: (${grade.score.status})`);
 
     const scored = open(workbook, quiet);
     if (!scored || scored.locked) throw new Error('certify error');

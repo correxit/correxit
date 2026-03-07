@@ -7,25 +7,18 @@ type Settled =
   | { status: 'fulfilled'; value: Certified }
   | { status: 'rejected'; reason: unknown; workbook: Headless };
 
-export type Result = Result.Certified | Result.Failed;
-
-export namespace Result {
-  export type Certified = {
-    ok: true;
-    certified: Workbook.Certified;
-  };
-  export type Failed = {
-    ok: false;
-    grade: Grade;
-    workbook: Headless;
-  };
-}
-
 export type Actions = {
   correct: (workbook: Headless) => Promise<Certified>;
   exclude: (workbook: Headless) => Certified | null;
   recover: (workbook: Headless) => Result.Failed;
 };
+
+export type Result = Result.Certified | Result.Failed;
+
+export namespace Result {
+  export type Certified = { ok: true; certified: Workbook.Certified };
+  export type Failed = { ok: false; grade: Grade; workbook: Headless };
+}
 
 /**
  * Grade scanned workbooks with bounded in-flight concurrency.
