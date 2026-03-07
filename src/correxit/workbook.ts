@@ -113,22 +113,18 @@ export namespace Workbook {
       const jupyter = { ...(cell.getMetadata('jupyter') as any || {}) };
       delete jupyter['source_hidden'];
 
-      const serialized = cell.toJSON();
-      const { metadata } = serialized;
-      const replacement = {
-        ...serialized,
-        cell_type: 'code',
-        metadata: { ...metadata, editable: undefined, jupyter, trusted: true },
-        source
-      };
+      const snapshot = cell.toJSON();
+      const metadata = { ...snapshot.metadata as any, jupyter, trusted: true };
+      delete metadata['editable'];
+
+      const replacement = { ...snapshot, cell_type: 'code', metadata, source };
       return { index, replacement };
     }
 
     /**
      * Prepares an encrypted cell replacement.
      *
-     * @returns the cell index and its encrypted JSON
-     * with `cell_type` set to `'raw'`.
+     * @returns cell index and encrypted JSON with `cell_type` set to `'raw'`.
      */
     export async function encrypt(
       workbook: Workbook,
@@ -142,19 +138,14 @@ export namespace Workbook {
       const cell = notebook.cells[index];
       const source = await security.encrypt(cell.getSource(), key);
       const jupyter = {
-        ...(cell.getMetadata('jupyter') || {} as any),
+        ...(cell.getMetadata('jupyter') as any || {}),
         source_hidden: true
       };
-      const serialized = cell.toJSON();
-      const metadata = { ...serialized.metadata, jupyter };
+      const snapshot = cell.toJSON();
+      const metadata = { ...snapshot.metadata, editable: false, jupyter };
       delete metadata['trusted'];
 
-      const replacement = {
-        ...serialized,
-        cell_type: 'raw',
-        metadata: { ...metadata, editable: false },
-        source
-      };
+      const replacement = { ...snapshot, cell_type: 'raw', metadata, source };
       return { index, replacement };
     }
 

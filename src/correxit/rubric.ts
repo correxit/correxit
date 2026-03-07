@@ -610,9 +610,7 @@ export namespace Rubric {
       references.map(reference => [reference.referent, reference])
     );
     const points = cell.is === 'correctable'
-      ? references.reduce(
-          (sum, reference) => sum + reference.points, 0
-        )
+      ? references.reduce((sum, reference) => sum + reference.points, 0)
       : cell.points;
     const cells = { ...rubric.cells, [cell.id]: { ...cell, points } };
     return {
@@ -780,7 +778,6 @@ export namespace Rubric {
       report: Assignment.Report.empty()
     };
     const { [id]: _, ...cells } = rubric.cells;
-    void _; // This is the removed cell.
     const references = Object.fromEntries(
       Object.entries(rubric.references)
         .filter(([, reference]) => reference.cell !== id)
@@ -883,7 +880,6 @@ export namespace Rubric {
     const blank = Assignment.Report.empty();
     const assignment = { ...rubric.assignment, report: blank };
     const { [referent]: _, ...references } = rubric.references;
-    void _;
     const points = cell.is === 'correctable'
       ? remaining.reduce((sum, id) => sum + references[id].points, 0)
       : cell.points;
