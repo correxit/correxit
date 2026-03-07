@@ -1037,6 +1037,36 @@ describe('Rubric', () => {
       expect(rubric.assignment.report.scores).toEqual({});
     });
 
+    it('refer binds reference.cell to the target id', () => {
+      const id = 'cell-1';
+      const base = Rubric.add(
+        create(),
+        {
+          id,
+          is: 'correctable',
+          payload: null,
+          points: 1,
+          references: ['ref-1']
+        },
+        [
+          {
+            cell: id,
+            referent: 'ref-1',
+            points: 1,
+            secret: true
+          }
+        ]
+      );
+
+      const rubric = Rubric.refer(base, id, {
+        cell: 'wrong-cell',
+        referent: 'ref-2',
+        points: 2,
+        secret: false
+      });
+      expect(rubric.references['ref-2'].cell).toBe(id);
+    });
+
     it('recomputes correctable points when adding references', () => {
       const id = 'cell-1';
       const base = Rubric.add(

@@ -824,14 +824,15 @@ export namespace Rubric {
       ...rubric.assignment,
       report: Assignment.Report.empty()
     };
-    const references = { ...rubric.references, [referent]: reference };
-    const constituents = [...cell.references, referent];
+    const bound = { ...reference, cell: id };
+    const references = { ...rubric.references, [referent]: bound };
+    const local = [...cell.references, referent];
     const points = cell.is === 'correctable'
-      ? constituents.reduce((sum, id) => sum + references[id].points, 0)
+      ? local.reduce((sum, id) => sum + references[id].points, 0)
       : cell.points;
     const cells = {
       ...rubric.cells,
-      [id]: { ...cell, points, references: constituents }
+      [id]: { ...cell, points, references: local }
     };
     return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
