@@ -1,15 +1,30 @@
 import { Workbook } from '..';
 
 type Certified = Workbook.Certified;
+type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 type Settled =
-  | { ok: true; grade: Certified }
-  | { ok: false; error: unknown; workbook: Headless };
+  | { status: 'fulfilled'; value: Certified }
+  | { status: 'rejected'; reason: unknown; workbook: Headless };
+
+export type Result = Result.Certified | Result.Failed;
+
+export namespace Result {
+  export type Certified = {
+    ok: true;
+    certified: Workbook.Certified;
+  };
+  export type Failed = {
+    ok: false;
+    grade: Grade;
+    workbook: Headless;
+  };
+}
 
 export type Actions = {
   correct: (workbook: Headless) => Promise<Certified>;
   exclude: (workbook: Headless) => Certified | null;
-  recover: (workbook: Headless) => Certified;
+  recover: (workbook: Headless) => Result.Failed;
 };
 
 /**
@@ -39,12 +54,12 @@ export type Actions = {
  * Graded workbooks are yielded in completion order (fastest first).
  * Failures are recovered and yielded so a bad workbook cannot stall the batch.
  */
-export async function* grader(
+export async function* grade(
   scanner: Iterable<Headless> | AsyncIterable<Headless>,
   actions: Actions,
   cap: number,
   retries: number = 0
-): AsyncGenerator<Certified> {
+): AsyncGenerator<Result> {
   let next: (() => void) | null = null;
   let inflight = 0;
   const max = Math.max(1, cap);
@@ -59,8 +74,8 @@ export async function* grader(
     const { correct } = actions;
     inflight++;
     correct(workbook)
-      .then(grade => queue.push({ ok: true, grade }))
-      .catch(error => queue.push({ ok: false, error, workbook }))
+      .then(value => queue.push({ status: 'fulfilled', value }))
+      .catch(reason => queue.push({ status: 'rejected', reason, workbook }))
       .finally(() => {
         inflight--;
         wake();
@@ -74,10 +89,11 @@ export async function* grader(
     }
     return queue.shift()!;
   };
-  const emit = async (): Promise<Certified | null> => {
+  const emit = async (): Promise<Result | null> => {
     const settled = await take();
     if (!settled) return null;
-    if (settled.ok) return settled.grade;
+    if (settled.status === 'fulfilled')
+      return { ok: true, certified: settled.value };
 
     const tried = (attempts.get(settled.workbook) ?? 0) + 1;
     if (tried <= retries) {
@@ -86,29 +102,29 @@ export async function* grader(
       return null;
     }
     attempts.delete(settled.workbook);
-    console.warn('grader error', settled.workbook.context.path, settled.error);
+    console.warn('grader error', settled.workbook.context.path, settled.reason);
     return actions.recover(settled.workbook);
   };
 
   for await (const workbook of scanner) {
     const cached = actions.exclude(workbook);
     if (cached) {
-      yield cached;
+      yield { ok: true, certified: cached };
       continue;
     }
     while (queue.length) {
-      const grade = await emit();
-      if (grade) yield grade;
+      const result = await emit();
+      if (result) yield result;
     }
     while (inflight >= max) {
-      const grade = await emit();
-      if (grade) yield grade;
+      const result = await emit();
+      if (result) yield result;
     }
     start(workbook);
   }
 
   while (inflight || queue.length) {
-    const grade = await emit();
-    if (grade) yield grade;
+    const result = await emit();
+    if (result) yield result;
   }
 }

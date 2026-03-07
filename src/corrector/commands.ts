@@ -9,12 +9,15 @@ import { folderIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
 import * as kernels from '../correxit/kernels';
 import { Corrector } from '.';
-import { Actions, grader } from './grader';
+import * as grader from './grader';
 
+type Actions = grader.Actions;
 type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
+type Failed = grader.Result.Failed;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
+type Result = grader.Result;
 
 export type Hollow = { hollow: true; context: { path: string } };
 
@@ -68,10 +71,17 @@ export function commands(
         const cap = kernels.cap();
         const retries = kernels.retries();
         const source = scanner({ commands }, handle);
-        return (async function* (grades: AsyncGenerator<Workbook.Certified>) {
-          for await (const { grade, workbook } of grades)
-            yield [grade.path, { grade, workbook: workbook as Headless }];
-        })(grader(source, actions, cap, retries));
+        return (async function* (results: AsyncGenerator<Result>) {
+          for await (const result of results) {
+            if (result.ok) {
+              const { grade, workbook } = result.certified;
+              yield [grade.path, { grade, workbook: workbook as Headless }];
+            } else {
+              const { grade, workbook } = result;
+              yield [grade.path, { grade, workbook }];
+            }
+          }
+        })(grader.grade(source, actions, cap, retries));
       }
     })
   );
@@ -192,7 +202,8 @@ export function commands(
 
 async function correct(workbook: Headless): Promise<Certified> {
   const rubric = open(workbook);
-  if (!rubric || rubric.locked) return recover(workbook);
+  if (!rubric || rubric.locked)
+    throw new Error('correct error: invalid rubric');
 
   const { interventions } = rubric.assignment.report;
   const pending = Object.values(rubric.cells)
@@ -206,6 +217,8 @@ async function correct(workbook: Headless): Promise<Certified> {
 
   const grade = await Workbook.correct(workbook);
   const identifier = Workbook.identifier(workbook);
+  if (!Workbook.Identifier.assigned(identifier))
+    throw new Error('correct error: unassigned');
   await Workbook.lock(workbook);
   await save(workbook);
   return { grade, identifier, workbook };
@@ -220,6 +233,8 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const { report } = assignment;
   const summary = Rubric.Assignment.summary(report);
   const identifier = Workbook.identifier(workbook);
+  if (!Workbook.Identifier.assigned(identifier)) return null;
+
   const grade = (spec: Grade['spec']): Certified => ({
     grade: { path, resolved: true, score: summary, spec },
     identifier,
@@ -262,25 +277,20 @@ function precertified(workbook: Headless): Certified | null {
 
   const grade: Grade = { path, resolved: true, score: summary, spec: kernel };
   const identifier = Workbook.identifier(workbook);
+  if (!Workbook.Identifier.assigned(identifier)) return null;
   return { grade, identifier, workbook };
 }
 
-function recover(workbook: Headless): Certified {
+function recover(workbook: Headless): Failed {
   const path = workbook.context.path;
   const unscored = { ...Rubric.Score.UNSCORED };
-  const grade: Grade = { path, resolved: false, score: unscored, spec: null };
-  let identifier: Workbook.Identifier;
-  try {
-    identifier = Workbook.identifier(workbook);
-  } catch {
-    identifier = {
-      assignee: null,
-      assignment: null,
-      rubric: '',
-      signature: null
-    };
-  }
-  return { grade, identifier, workbook };
+  const grade: Grade = {
+    path,
+    resolved: false,
+    score: unscored,
+    spec: null
+  };
+  return { ok: false, grade, workbook };
 }
 
 async function save(workbook: Headless | null) {

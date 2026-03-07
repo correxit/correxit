@@ -1,13 +1,14 @@
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Workbook } from '..';
-import { grader } from '../corrector/grader';
+import { grader, Result } from '../corrector/grader';
 
 type Certified = Workbook.Certified;
+type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 type Actions = {
   correct: (workbook: Headless) => Promise<Certified>;
   exclude: (workbook: Headless) => Certified | null;
-  recover: (workbook: Headless) => Certified;
+  recover: (workbook: Headless) => Result.Failed;
 };
 
 const workbook = (path: string): Headless =>
@@ -22,30 +23,24 @@ const grade = (workbook: Headless): Certified =>
       spec: null
     },
     identifier: {
-      assignee: null,
+      assignee: 'a',
       assignment: 'x',
       rubric: 'r',
-      signature: null
+      signature: 's'
     },
     workbook
   }) as unknown as Certified;
 
-const failed = (workbook: Headless): Certified =>
-  ({
-    grade: {
-      path: workbook.context.path,
-      resolved: false,
-      score: { status: 'unscored' },
-      spec: null
-    },
-    identifier: {
-      assignee: null,
-      assignment: null,
-      rubric: '',
-      signature: null
-    },
-    workbook
-  }) as unknown as Certified;
+const failed = (workbook: Headless): Result.Failed => ({
+  ok: false,
+  grade: {
+    path: workbook.context.path,
+    resolved: false,
+    score: { status: 'unscored' } as Grade['score'],
+    spec: null
+  },
+  workbook
+});
 
 const wait = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 
@@ -57,7 +52,7 @@ const source = async function* (paths: string[]): AsyncGenerator<Headless> {
 
 const actions = (
   correct: (workbook: Headless) => Promise<Certified>,
-  recover: (workbook: Headless) => Certified,
+  recover: (workbook: Headless) => Result.Failed,
   exclude: (workbook: Headless) => Certified | null = () => null
 ): Actions => ({ correct, exclude, recover });
 

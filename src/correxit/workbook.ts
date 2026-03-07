@@ -32,7 +32,7 @@ export namespace Workbook {
 
   export type Certified = {
     grade: Workbook.Grade;
-    identifier: Workbook.Identifier;
+    identifier: Workbook.Identifier.Assigned;
     workbook: Workbook;
   };
 
@@ -329,8 +329,13 @@ export namespace Workbook {
 
     const grade = await correct(workbook);
     const identifier = Workbook.identifier(workbook);
-    if (!grade.resolved)
-      throw new Error(`certify error: unresolved (${grade.score.status})`);
+    if (!Identifier.assigned(identifier))
+      throw new Error('certify error: unassigned');
+    if (!grade.resolved) {
+      throw new Error(
+        `certify error: unresolved (${grade.score.status})`
+      );
+    }
 
     const scored = open(workbook, quiet);
     if (!scored || scored.locked) throw new Error('certify error');

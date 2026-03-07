@@ -145,7 +145,7 @@ metadata, or `null` if the grade was not recorded.
 // Workbook.Certified
 type Certified = {
   grade: Workbook.Grade;
-  identifier: Workbook.Identifier;
+  identifier: Workbook.Identifier.Assigned;
   workbook: Workbook;
 };
 
@@ -171,9 +171,7 @@ type Unlocker = {
   store(id: string, key: string): Promise<void>;
   unlock(
     workbook: Workbook,
-    credentials: Partial<
-      Workbook.Credentials & { silent: boolean }
-    > | null
+    credentials: Partial<Workbook.Credentials & { silent: boolean }> | null
   ): Promise<Rubric.Unlocked | null>;
 };
 ```
