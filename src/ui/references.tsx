@@ -37,12 +37,16 @@ export const References: React.FC<{
     const cell = notebook.widgets.find(({ model }) => model.id === referent);
     if (cell) void notebook.scrollToCell(cell);
   };
+  const sources = references.map(reference => ({
+    ...reference,
+    source: source(reference.referent)
+  }));
 
   return (
     <div className="correxit-sidebar-references">
       <h5>{trans.__('References (%1)', references.length)}</h5>
       <ul className="correxit-sidebar-references-list">
-        {references.map(({ points, referent }) => (
+        {sources.map(({ points, referent, source }) => (
           <li className="correxit-sidebar-reference-item" key={referent}>
             <button
               className="correxit-sidebar-reference-locate"
@@ -52,18 +56,15 @@ export const References: React.FC<{
             >
               {referent.slice(0, 4)}
             </button>
-            <span
-              className="correxit-sidebar-reference-source"
-              title={source(referent)}
-            >
-              {source(referent)}
+            <span className="correxit-sidebar-reference-source" title={source}>
+              {source}
             </span>
             {correctable && (
               <span
                 className={'correxit-sidebar-reference-points'}
                 title={trans.__('Points')}
               >
-                {points}pt
+                {trans.__('%1pt', points)}
               </span>
             )}
             {editable && (
