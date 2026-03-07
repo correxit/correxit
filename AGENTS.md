@@ -5,7 +5,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 ## 1. Core Architecture
 
 - **No Backend**: Logic exists solely in the browser. Correxit is purely client-side.
-- **Two Modules**: `correxit/` (assignment authoring and distribution) and `corrector/` (grading and batch processing). Shared primitives (`Rubric`, `Workbook`, `Security`) live at the package root.
+- **Two Modules**: `correxit/` (assignment authoring and distribution) and `corrector/` (grading and batch processing). Shared primitives (`Rubric`, `Workbook`, `Security`) live in `correxit/` and are re-exported from the package root.
 - **MVC Pattern**:
   - **Model**: `rubric.ts` (immutable data), `workbook.ts` (notebook state).
   - **Controller**: `commands.ts` (orchestrates all mutations).
@@ -84,6 +84,6 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
 - `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`). The `Registrar` returns `Registration[]` objects (not raw strings).
 - `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, retries, timeout })`, `cap()`, `retries()`, and `timeout()` for settings-driven control.
-- `grader.ts`: Bounded-concurrency async generator for batch grading. Accepts a `recover` callback, `cap`, and `retries`. Scanner accepts `Iterable | AsyncIterable`; failures are recovered and yielded so nothing stalls the pipeline.
+- `corrector/grader.ts`: Bounded-concurrency async generator for batch grading. Accepts a `recover` callback, `cap`, and `retries`. Scanner accepts `Iterable | AsyncIterable`; failures are recovered and yielded so nothing stalls the pipeline.
 - `state.ts`: In-memory cache for active workbook and cell scores (`Map` with FIFO eviction).
 - `use-command.ts`: React hook bridging async generators to component state at ~60fps. Restarts the stream whenever `id` or serialized `args` changes; cleanup marks the prior stream interrupted.
