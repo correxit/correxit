@@ -24,8 +24,8 @@ export async function* propagate({ consumer, workbook }: {
       const { base, pwd } = location;
       for (const assignee of roster) {
         const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
-        const local = assignee.split('@')[0];
-        const hash = (await security.digest(assignee)).slice(0, 8);
+        const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
+        const hash = (await security.digest(assignee)).slice(0, 6);
         const file = `${base}-${local}-${hash}.ipynb`;
         const path = PathExt.join(pwd, file);
         const identifier = await reassign({ assignee, key, notebook, roster });
@@ -89,14 +89,8 @@ async function reassign({ assignee, key, notebook, roster }: {
     { assignment: Rubric.Assignment, revised: number };
   const { expiration, id, name, roster: encrypted } = metadata.assignment;
   const blank = Rubric.Assignment.Report.empty();
-  const unsigned = {
-    assignee,
-    ...lifecycle(expiration),
-    id,
-    name,
-    report: blank,
-    roster
-  };
+  const fresh = lifecycle(expiration);
+  const unsigned = { assignee, ...fresh, id, name, report: blank, roster };
   const signature = await Rubric.Assignment.sign(unsigned, key);
   metadata.assignment = { ...unsigned, roster: encrypted, signature };
   metadata.revised = Date.now();
