@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/QuantStack/correxit/compare/v1.6.1...v1.7.0) (2026-03-07)
+
+
+### Features
+
+* multi-reference correctable cells ([#49](https://github.com/QuantStack/correxit/issues/49)) ([2e3a111](https://github.com/QuantStack/correxit/commit/2e3a11120745d2b34ecd8389e28579e4ca92e3ad))
+
 ## [1.6.1](https://github.com/QuantStack/correxit/compare/v1.6.0...v1.6.1) (2026-03-05)
 
 
