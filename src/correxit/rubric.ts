@@ -594,12 +594,26 @@ export namespace Rubric {
   ): Unlocked {
     if (has(rubric, cell.id) || cell.id in rubric.references)
       throw new Error(`add error, rubric already has cell id ${cell.id}`);
-    for (const { referent } of references) {
+    for (const reference of references) {
+      const { cell: target, referent } = reference;
+      if (target !== cell.id)
+        throw new Error(`add error, reference ${referent} has wrong cell`);
       if (referent in rubric.references)
         throw new Error(`add error, reference ${referent} already exists`);
       if (referent in rubric.cells)
         throw new Error(`add error, reference ${referent} collides with cell`);
     }
+
+    const referents = references.map(({ referent }) => referent);
+    if (cell.references === null && references.length)
+      throw new Error('add error, cell does not accept references');
+    if (cell.references !== null) {
+      const expected = new Set(cell.references);
+      const mismatch = expected.size !== referents.length ||
+        !referents.every(id => expected.delete(id));
+      if (mismatch) throw new Error('add error, cell.references mismatch');
+    }
+
     const assignment = {
       ...rubric.assignment,
       report: Assignment.Report.empty()

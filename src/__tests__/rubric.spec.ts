@@ -170,6 +170,45 @@ describe('Rubric', () => {
       );
     });
 
+    it('throws when reference.cell mismatches cell.id', () => {
+      const cell: Rubric.Cell = {
+        id: 'a', is: 'comparable',
+        payload: null, points: 1, references: ['r']
+      };
+      const reference: Rubric.Cell.Reference = {
+        cell: 'wrong', referent: 'r',
+        points: 1, secret: false
+      };
+      expect(() => Rubric.add(create(), cell, [reference]))
+        .toThrow('wrong cell');
+    });
+
+    it('throws when cell.references is null but references given', () => {
+      const cell: Rubric.Cell = {
+        id: 'a', is: 'answerable',
+        payload: [], points: 1, references: null
+      };
+      const reference: Rubric.Cell.Reference = {
+        cell: 'a', referent: 'r',
+        points: 1, secret: false
+      };
+      expect(() => Rubric.add(create(), cell, [reference]))
+        .toThrow('does not accept references');
+    });
+
+    it('throws when cell.references mismatches provided references', () => {
+      const cell: Rubric.Cell = {
+        id: 'a', is: 'correctable',
+        payload: null, points: 1, references: ['x']
+      };
+      const reference: Rubric.Cell.Reference = {
+        cell: 'a', referent: 'y',
+        points: 1, secret: false
+      };
+      expect(() => Rubric.add(create(), cell, [reference]))
+        .toThrow('cell.references mismatch');
+    });
+
     it('normalizes a locked rubric', async () => {
       const rubric = await Rubric.lock(create());
       const normalized = Rubric.normalize(rubric);
