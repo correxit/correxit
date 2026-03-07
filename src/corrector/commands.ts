@@ -206,6 +206,7 @@ async function correct(workbook: Headless): Promise<Certified> {
 
   const grade = await Workbook.correct(workbook);
   const identifier = Workbook.identifier(workbook);
+  await Workbook.lock(workbook);
   await save(workbook);
   return { grade, identifier, workbook };
 }
@@ -235,7 +236,7 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const reviewing = Object.values(rubric.cells)
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
-  return reviewing ? grade(null) : null;
+  return reviewing ? grade(report.kernel) : null;
 }
 
 function open(workbook: Workbook): Rubric | null {

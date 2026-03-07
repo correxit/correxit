@@ -71,23 +71,16 @@
 }
 
 .correxit-sidebar-cell-config {
-  justify-content: center;
-  text-align: center;
   color: var(--jp-ui-font-color3);
+  display: flex;
+  gap: 4px;
+  text-align: center;
+}
 
-  .correxit-configure {
-    margin: 2px;
-    min-width: 45%;
-    padding: 0 1px;
-    width: auto;
-  }
-
-  .correxit-remove {
-    margin: 4px 0;
-    min-width: 90%;
-    padding: 0 1px;
-    width: auto;
-  }
+.correxit-sidebar-cell-config .jp-ToolbarButtonComponent {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
 }
 
 .correxit-sidebar-cell-actions .jp-ToolbarButtonComponent {
@@ -105,11 +98,7 @@
 .correxit-sidebar-cell-pair {
   display: grid;
   gap: 4px;
-  grid-template-columns: 1fr 1fr;
-}
-
-.correxit-sidebar-cell-pair + .correxit-sidebar-cell-pair {
-  margin-top: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(calc(50% - 2px), 1fr));
 }
 
 .correxit-sidebar-cell-pair .jp-ToolbarButtonComponent {
@@ -167,36 +156,11 @@
   margin: 5px 0;
 }
 
-.correxit-sidebar-footer {
-  margin-top: 6px;
-}
-
-.correxit-sidebar-footer .jp-ToolbarButtonComponent {
-  background-color: var(--jp-layout-color2);
-  border: 1px solid var(--jp-warn-color2);
-  margin: 0;
-  min-width: 0;
-  width: 100%;
-}
-
-.correxit-sidebar-footer .jp-ToolbarButtonComponent:hover {
-  background-color: var(--jp-layout-color3);
-  border-color: var(--jp-warn-color1);
-}
-
-.correxit-sidebar-footer .jp-ToolbarButtonComponent > span {
-  color: var(--jp-warn-color0);
-}
-
 .correxit-sidebar-inner-header {
   align-items: center;
   display: flex;
   justify-content: space-between;
   margin: 6px var(--correxit-sidebar-content-inset);
-
-  .jp-ToolbarButtonComponent:hover {
-    background-color: transparent;
-  }
 }
 
 .correxit-sidebar p {
@@ -389,14 +353,20 @@
   width: 72px;
 }
 
-.correxit-sidebar-cell-score-label {
+.correxit-sidebar-cell-score-comment {
   color: var(--jp-ui-font-color2);
   font-size: var(--correxit-sidebar-font-size);
   margin-top: 2px;
 }
 
+.correxit-sidebar-cell-score-comment > summary {
+  cursor: pointer;
+  user-select: none;
+}
+
 .correxit-sidebar-cell-score-textarea {
   font-size: var(--correxit-sidebar-font-size);
+  margin-top: 4px;
   resize: vertical;
   width: 100%;
 }
@@ -406,4 +376,105 @@
   font-size: var(--jp-ui-font-size0);
   line-height: 1.3;
   margin: 0;
+}
+
+.correxit-sidebar-references {
+  margin: 8px var(--correxit-sidebar-content-inset) 0;
+}
+
+.correxit-sidebar-references h5 {
+  margin-bottom: 4px;
+}
+
+.correxit-sidebar-references .jp-ToolbarButtonComponent {
+  margin: 4px 0 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.correxit-sidebar-references-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.correxit-sidebar-reference-item {
+  align-items: center;
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 3px;
+  display: flex;
+  gap: 4px;
+  margin-bottom: 2px;
+  padding: 2px 4px;
+}
+
+.correxit-sidebar-reference-locate {
+  background: none;
+  border: none;
+  color: var(--jp-content-link-color);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-family: var(--jp-code-font-family);
+  font-size: var(--jp-ui-font-size0);
+  padding: 2px 0;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.correxit-sidebar-reference-locate:hover {
+  opacity: 0.8;
+}
+
+.correxit-sidebar-reference-source {
+  color: var(--jp-ui-font-color2);
+  flex: 1;
+  font-family: var(--jp-code-font-family);
+  font-size: var(--jp-ui-font-size0);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correxit-sidebar-reference-points {
+  color: var(--jp-ui-font-color3);
+  flex: 0 0 auto;
+  font-size: var(--jp-ui-font-size0);
+  white-space: nowrap;
+}
+
+.correxit-sidebar-reference-item .jp-ToolbarButtonComponent {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0;
+  width: 24px;
+}
+
+.correxit-sidebar-footer {
+  margin-top: 6px;
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent {
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-warn-color2);
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent:hover {
+  background-color: var(--jp-layout-color3);
+  border-color: var(--jp-warn-color1);
+}
+
+.correxit-sidebar-footer .jp-ToolbarButtonComponent > span {
+  color: var(--jp-warn-color0);
+}
+
+.correxit-sidebar-inner-header .jp-ToolbarButtonComponent:hover {
+  background-color: transparent;
 }

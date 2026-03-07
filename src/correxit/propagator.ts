@@ -24,7 +24,9 @@ export async function* propagate({ consumer, workbook }: {
       const { base, pwd } = location;
       for (const assignee of roster) {
         const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
-        const file = `${base}-${encodeURIComponent(assignee)}.ipynb`;
+        const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
+        const hash = (await security.digest(assignee)).slice(0, 6);
+        const file = `${base}-${local}-${hash}.ipynb`;
         const path = PathExt.join(pwd, file);
         const identifier = await reassign({ assignee, key, notebook, roster });
         yield { identifier, notebook, path };
@@ -59,6 +61,17 @@ async function encrypt(
   delete cell.metadata.trusted;
 }
 
+/** @returns initialized lifecycle stages for a propagated assignment. */
+function lifecycle(expiration: number | null) {
+  return {
+    certification: null,
+    collected: null,
+    expiration,
+    submission: null,
+    submitted: null
+  };
+}
+
 /**
  * Reassigns a serialized workbook to an assignee using a given unlocked rubric.
  *
@@ -71,19 +84,13 @@ async function reassign({ assignee, key, notebook, roster }: {
   key: string;
   notebook: INotebookContent;
   roster: string[];
-}): Promise<Workbook.Identifier> {
+}): Promise<Workbook.Identifier.Assigned> {
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
     { assignment: Rubric.Assignment, revised: number };
   const { expiration, id, name, roster: encrypted } = metadata.assignment;
   const blank = Rubric.Assignment.Report.empty();
-  const unsigned = {
-    assignee,
-    ...stages(expiration),
-    id,
-    name,
-    report: blank,
-    roster
-  };
+  const fresh = lifecycle(expiration);
+  const unsigned = { assignee, ...fresh, id, name, report: blank, roster };
   const signature = await Rubric.Assignment.sign(unsigned, key);
   metadata.assignment = { ...unsigned, roster: encrypted, signature };
   metadata.revised = Date.now();
@@ -95,31 +102,16 @@ async function reassign({ assignee, key, notebook, roster }: {
   };
 }
 
-/** @returns initialized lifecycle stages for a propagated assignment. */
-function stages(expiration: number | null) {
-  return {
-    certification: null,
-    collected: null,
-    expiration,
-    submission: null,
-    submitted: null
-  };
-}
-
 async function template(
   workbook: Workbook,
   rubric: Rubric.Unlocked
 ): Promise<{ encrypted: string[]; notebook: INotebookContent }> {
   const encrypted: string[] = [];
   const notebook = workbook.context.model.sharedModel.toJSON();
-  for (const id in rubric.cells) {
-    const cell = rubric.cells[id];
-    if (cell.is !== 'comparable' && cell.is !== 'correctable')
-      continue;
-    if (!cell.secret) continue;
-    const [reference] = cell.reference;
-    await encrypt(notebook, reference, rubric.key);
-    encrypted.push(reference);
+  for (const reference of Object.values(rubric.references)) {
+    if (!reference.secret) continue;
+    await encrypt(notebook, reference.referent, rubric.key);
+    encrypted.push(reference.referent);
   }
   return { encrypted, notebook };
 }

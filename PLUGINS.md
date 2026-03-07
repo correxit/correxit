@@ -24,6 +24,15 @@ type Identifier = {
 };
 ```
 
+Plugins that operate on _assigned_ workbooks (consumer, submitter) receive
+`Identifier.Assigned`, which narrows `assignee` and `signature` to `string`:
+
+```typescript
+type Assigned = Identifier & { assignee: string; signature: string };
+```
+
+A type guard `Identifier.assigned(id)` bridges the two at runtime.
+
 An integrator uses these fields to look up a course, validate submission
 integrity, enforce deadlines, or record a grade to an external gradebook.
 
@@ -80,7 +89,7 @@ Called when an instructor triggers propagation. The consumer receives:
 ```typescript
 // Propagator.Notebook
 type Notebook = {
-  identifier: Workbook.Identifier;
+  identifier: Workbook.Identifier.Assigned;
   notebook: INotebookContent; // nbformat notebook, ready to save
   path: string; // intended destination path
 };
@@ -103,13 +112,14 @@ The consumer is responsible for delivering each notebook to its destination
 ```typescript
 type Submitter = (
   workbook: Workbook,
-  identifier: Workbook.Identifier
+  identifier: Workbook.Identifier.Assigned
 ) => Promise<string | null>;
 ```
 
 Called when a student submits a workbook. Returns an opaque submission receipt
 that Correxit stores in the workbook metadata, or `null` if the submission
-was not recorded.
+was not recorded. The identifier is guaranteed to have a non-null `assignee`
+and `signature`.
 
 The default implementation returns a random UUID. A server-backed submitter
 would POST the submission to an LMS, validate the assignee against the

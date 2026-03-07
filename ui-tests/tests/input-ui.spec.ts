@@ -41,7 +41,7 @@ test('selects a reference cell for comparison', async ({ page }) => {
   await page.waitForFunction(() => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
-    return metadata?.cells?.['source']?.reference?.[0] === 'target';
+    return metadata?.cells?.['source']?.references?.[0] === 'target';
   });
 
   await dispose();

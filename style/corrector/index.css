@@ -1,124 +1,48 @@
+/* Widget container */
+
 .correxit-corrector-widget {
   background-color: var(--jp-rendermime-table-row-background);
-}
 
-.correxit-corrector-widget-content {
-  overflow-y: auto;
-  height: 100%;
-  width: 100%;
-}
-
-.correxit-corrector-widget-content > progress {
-  display: block;
-  position: sticky;
-  top: 0;
-  width: 100%;
-  z-index: 1;
-}
-
-table.correxit-corrector {
-  --correxit-corrector-assignee-width: 150px;
-  --correxit-corrector-icon-size: 16px;
-  --correxit-corrector-icon-width: 32px;
-  --correxit-corrector-score-width: 100px;
-
-  border-collapse: collapse;
-  table-layout: fixed;
-  width: 100%;
-}
-
-table.correxit-corrector col.correxit-corrector-col-open,
-table.correxit-corrector col.correxit-corrector-col-lock,
-table.correxit-corrector col.correxit-corrector-col-assignment,
-table.correxit-corrector col.correxit-corrector-col-kernel {
-  width: var(--correxit-corrector-icon-width);
-}
-
-table.correxit-corrector col.correxit-corrector-col-assignee {
-  width: var(--correxit-corrector-assignee-width);
-}
-
-table.correxit-corrector col.correxit-corrector-col-score {
-  width: var(--correxit-corrector-score-width);
-}
-
-table.correxit-corrector img,
-table.correxit-corrector svg {
-  height: var(--correxit-corrector-icon-size);
-  width: var(--correxit-corrector-icon-size);
-}
-
-table.correxit-corrector tr {
-  background-color: var(--jp-rendermime-table-row-background);
-}
-
-table.correxit-corrector tr:hover {
-  background-color: var(--jp-rendermime-table-row-hover-background);
-}
-
-table.correxit-corrector tr td {
-  border-color: var(--jp-border-color0);
-  border-style: solid;
-  border-width: var(--jp-border-width);
-  height: 32px;
-  padding: 5px;
-}
-
-table.correxit-corrector tr.correxit-corrector-progress {
-  background-color: var(--jp-layout-color2);
-}
-
-table.correxit-corrector tr.correxit-corrector-progress td {
-  background-color: var(--jp-layout-color2);
-  height: 16px;
-  padding: 0;
-}
-
-table.correxit-corrector tr.correxit-corrector-progress td > progress {
-  display: block;
-  height: 100%;
-  width: 100%;
-}
-
-table.correxit-corrector tr.cxt-mod-pending td {
-  border-color: var(--jp-border-color0) transparent var(--jp-border-color0)
-    transparent;
-}
-
-table.correxit-corrector tr.cxt-mod-selected td {
-  background-color: var(--jp-brand-color1);
-  color: var(--jp-ui-inverse-font-color1);
-
-  .jp-icon-selectable[fill] {
-    fill: var(--jp-ui-inverse-font-color0);
+  &.cxt-mod-cd .jp-Dialog .jp-Dialog-content {
+    max-height: 80%;
+    max-width: 80%;
+    min-height: 80%;
+    min-width: 80%;
   }
 }
 
-td.correxit-corrector-assignment,
-td.correxit-corrector-kernel,
-td.correxit-corrector-lock,
-td.correxit-corrector-open {
-  width: var(--correxit-corrector-icon-width);
+.correxit-corrector-widget-content {
+  height: 100%;
+  overflow-y: auto;
+  width: 100%;
+}
 
+/* Cell styles */
+
+td {
   .correxit-corrector-icon {
     align-items: center;
     display: flex;
     height: 100%;
     justify-content: center;
   }
+
+  &.correxit-corrector-assignee {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &.correxit-corrector-breakdown {
+    overflow: hidden;
+  }
+
+  &.correxit-corrector-status {
+    text-align: right;
+  }
 }
 
-td.correxit-corrector-assignee {
-  width: var(--correxit-corrector-assignee-width);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-td.correxit-corrector-breakdown {
-  overflow: hidden;
-  width: 100%;
-}
+/* Score breakdown bar */
 
 .correxit-corrector-breakdown-bar {
   display: flex;
@@ -130,156 +54,230 @@ td.correxit-corrector-breakdown {
 .correxit-corrector-breakdown-segment {
   flex: 1;
   min-width: 2px;
-}
 
-.correxit-corrector-breakdown-correct {
-  background-color: var(--correxit-correct-color);
-  background-image: none;
-}
-
-.correxit-corrector-breakdown-incorrect {
-  background-color: var(--correxit-incorrect-color);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 2px,
-    rgb(0 0 0 / 15%) 2px,
-    rgb(0 0 0 / 15%) 4px
-  );
-}
-
-.correxit-corrector-breakdown-partial {
-  background-color: var(--correxit-partial-color);
-  background-image: none;
-}
-
-.correxit-corrector-breakdown-review {
-  background-color: var(--correxit-insistent-color);
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 2px,
-    rgb(255 255 255 / 30%) 2px,
-    rgb(255 255 255 / 30%) 4px
-  );
-}
-
-.correxit-corrector-breakdown-unscored {
-  background-color: var(--correxit-unscored-color);
-  background-image: none;
-}
-
-tr.cxt-mod-pending .correxit-corrector-breakdown-segment {
-  animation: correxit-corrector-pending-pulse 1.4s infinite ease-in-out;
-  opacity: 0.6;
-}
-
-@keyframes correxit-corrector-pending-pulse {
-  0%,
-  100% {
-    opacity: 0.8;
+  &.correxit-corrector-breakdown-correct {
+    background-color: var(--correxit-correct-color);
+    background-image: none;
   }
 
-  50% {
-    opacity: 0.3;
+  &.correxit-corrector-breakdown-incorrect {
+    background-color: var(--correxit-incorrect-color);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 2px,
+      rgb(0 0 0 / 15%) 2px,
+      rgb(0 0 0 / 15%) 4px
+    );
+  }
+
+  &.correxit-corrector-breakdown-partial {
+    background-color: var(--correxit-partial-color);
+    background-image: none;
+  }
+
+  &.correxit-corrector-breakdown-review {
+    background-color: var(--correxit-insistent-color);
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgb(255 255 255 / 30%) 2px,
+      rgb(255 255 255 / 30%) 4px
+    );
+  }
+
+  &.correxit-corrector-breakdown-unscored {
+    background-color: var(--correxit-unscored-color);
+    background-image: none;
   }
 }
 
-td.correxit-corrector-pending,
-td.correxit-corrector-failed {
-  overflow: hidden;
-  position: relative;
-  text-align: right;
-  width: 60px;
+/* Status chip */
+
+.correxit-corrector-chip {
+  border-left: 3px solid transparent;
+  border-radius: 2px;
+  box-sizing: border-box;
+  display: inline-block;
+  font-size: var(--jp-ui-font-size0);
+  line-height: 1.4;
+  padding: 1px 6px;
+  white-space: nowrap;
+  width: calc(var(--correxit-corrector-status-width) - 12px);
+
+  &.cxt-mod-certified {
+    background-color: color-mix(
+      in srgb,
+      var(--correxit-correct-color) 12%,
+      transparent
+    );
+    border-left-color: var(--correxit-correct-color);
+  }
+
+  &.cxt-mod-collected {
+    background-color: var(--correxit-correct-color);
+    border-left-color: var(--correxit-correct-color);
+    color: var(--jp-ui-inverse-font-color1);
+  }
+
+  &.cxt-mod-failed {
+    background-color: color-mix(
+      in srgb,
+      var(--jp-error-color1) 12%,
+      transparent
+    );
+    border-left-color: var(--jp-error-color1);
+    color: var(--jp-error-color1);
+  }
+
+  &.cxt-mod-pending {
+    align-items: center;
+    display: inline-flex;
+    gap: 2px;
+  }
+
+  &.cxt-mod-review {
+    background-color: color-mix(
+      in srgb,
+      var(--correxit-insistent-color) 12%,
+      transparent
+    );
+    border-left-color: var(--correxit-insistent-color);
+  }
 }
 
-td.correxit-corrector-failed {
-  width: 120px;
-}
-
-td.correxit-corrector-review {
-  overflow: hidden;
-  position: relative;
-  text-align: right;
-  width: 120px;
-}
-
-td.correxit-corrector-review > span {
-  color: var(--correxit-insistent-color);
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  align-items: center;
-  display: flex;
-  gap: 2px;
-  padding: 2px 4px;
-}
-
-td.correxit-corrector-score-report {
-  text-align: right;
-  width: var(--correxit-corrector-score-width);
-}
-
-td.correxit-corrector-pending > span,
-td.correxit-corrector-failed > span {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  align-items: center;
-  display: flex;
-  gap: 2px;
-  padding: 2px 4px;
-}
-
-td.correxit-corrector-failed > span {
-  color: var(--jp-error-color1);
-}
+/* Pending animation dots */
 
 .correxit-corrector-pending-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background-color: var(--jp-brand-color1);
   animation: correxit-corrector-pending-dot-bounce 1.4s infinite ease-in-out;
-}
+  background-color: var(--jp-brand-color1);
+  border-radius: 50%;
+  height: 4px;
+  width: 4px;
 
-.correxit-corrector-pending-dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.correxit-corrector-pending-dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-.correxit-corrector-pending-dot:nth-child(3) {
-  animation-delay: 0s;
-}
-
-@keyframes correxit-corrector-pending-dot-bounce {
-  0%,
-  80%,
-  100% {
-    transform: scale(0.8);
-    opacity: 0.5;
+  &:nth-child(1) {
+    animation-delay: -0.32s;
   }
 
-  40% {
-    transform: scale(1.2);
-    opacity: 1;
+  &:nth-child(2) {
+    animation-delay: -0.16s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0s;
   }
 }
 
-table.correxit-corrector tr.cxt-mod-failed td {
-  opacity: 0.6;
+/* Corrector table */
+
+table.correxit-corrector {
+  --correxit-corrector-assignee-width: 150px;
+  --correxit-corrector-icon-size: 16px;
+  --correxit-corrector-icon-width: 32px;
+  --correxit-corrector-status-width: 140px;
+
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+
+  col.correxit-corrector-col-assignment,
+  col.correxit-corrector-col-kernel,
+  col.correxit-corrector-col-lock,
+  col.correxit-corrector-col-open {
+    width: var(--correxit-corrector-icon-width);
+  }
+
+  col.correxit-corrector-col-assignee {
+    width: var(--correxit-corrector-assignee-width);
+  }
+
+  col.correxit-corrector-col-status {
+    width: var(--correxit-corrector-status-width);
+  }
+
+  img,
+  svg {
+    height: var(--correxit-corrector-icon-size);
+    width: var(--correxit-corrector-icon-size);
+  }
+
+  tr {
+    background-color: var(--jp-rendermime-table-row-background);
+
+    &:hover {
+      background-color: var(--jp-rendermime-table-row-hover-background);
+    }
+
+    td {
+      border-color: var(--jp-border-color0);
+      border-style: solid;
+      border-width: var(--jp-border-width);
+      height: 32px;
+      padding: 5px;
+    }
+
+    &.cxt-mod-failed td {
+      opacity: 0.6;
+    }
+
+    &.cxt-mod-pending {
+      td {
+        border-color: var(--jp-border-color0) transparent
+          var(--jp-border-color0) transparent;
+      }
+
+      .correxit-corrector-breakdown-segment {
+        animation: correxit-corrector-pending-pulse 1.4s infinite ease-in-out;
+        opacity: 0.6;
+      }
+    }
+
+    &.cxt-mod-selected {
+      td {
+        background-color: var(--jp-brand-color1);
+        color: var(--jp-ui-inverse-font-color1);
+
+        .jp-icon-selectable[fill] {
+          fill: var(--jp-ui-inverse-font-color0);
+        }
+      }
+
+      .correxit-corrector-chip {
+        border-left-color: currentcolor;
+
+        &.cxt-mod-collected {
+          background-color: var(--jp-ui-inverse-font-color1);
+          color: var(--jp-brand-color1);
+        }
+      }
+    }
+
+    &.correxit-corrector-progress {
+      background-color: var(--jp-layout-color2);
+
+      td {
+        background-color: var(--jp-layout-color2);
+        height: 16px;
+        padding: 0;
+
+        & > progress {
+          display: block;
+          height: 100%;
+          width: 100%;
+        }
+      }
+
+      &.cxt-mod-active td {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+    }
+  }
 }
 
-table.correxit-corrector tr.correxit-corrector-progress.cxt-mod-active td {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
+/* Mode controls */
 
 .correxit-corrector-mode {
   align-items: center;
@@ -326,20 +324,40 @@ table.correxit-corrector tr.correxit-corrector-progress.cxt-mod-active td {
   font-family: var(--jp-ui-font-family);
   font-size: var(--jp-ui-font-size1);
   padding: 2px 10px;
+
+  &:hover {
+    background-color: var(--jp-brand-color0);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--jp-brand-color1);
+    outline-offset: 2px;
+  }
 }
 
-.correxit-corrector-mode-go:hover {
-  background-color: var(--jp-brand-color0);
+/* Keyframes */
+
+@keyframes correxit-corrector-pending-pulse {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
 }
 
-.correxit-corrector-mode-go:focus-visible {
-  outline: 1px solid var(--jp-brand-color1);
-  outline-offset: 2px;
-}
+@keyframes correxit-corrector-pending-dot-bounce {
+  0%,
+  80%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
 
-.correxit-corrector-widget.cxt-mod-cd .jp-Dialog .jp-Dialog-content {
-  min-height: 80%;
-  max-height: 80%;
-  min-width: 80%;
-  max-width: 80%;
+  40% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
 }

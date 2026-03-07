@@ -34,9 +34,9 @@ async function propagate(
         is: 'comparable',
         payload: null,
         points: 1,
-        reference: ['ref'],
-        secret: true
-      }
+        references: ['ref']
+      },
+      [{ cell: 'target', referent: 'ref', points: 1, secret: true }]
     );
     await Workbook.update(panel, rubric);
     await app.commands.execute('correxit:assign', { roster });
