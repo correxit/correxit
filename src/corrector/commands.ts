@@ -282,12 +282,10 @@ function precertified(workbook: Headless): Certified | null {
 }
 
 function recover(workbook: Headless): Failed {
-  const path = workbook.context.path;
-  const unscored = { ...Rubric.Score.UNSCORED };
   const grade: Grade = {
-    path,
+    path: workbook.context.path,
     resolved: false,
-    score: unscored,
+    score: { ...Rubric.Score.UNSCORED },
     spec: null
   };
   return { ok: false, grade, workbook };
