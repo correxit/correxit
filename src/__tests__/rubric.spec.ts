@@ -611,6 +611,16 @@ describe('Rubric', () => {
         const score = await Rubric.Cell.score(rubric, id, outputs);
         expect(score.status).toBe('incorrect');
       });
+
+      it('surfaces missing-reference for absent output', async () => {
+        const id = 's';
+        const referent = 't';
+        const rubric = populate(id, referent);
+        const outputs: Rubric.Outputs = new Map([[id, []]]);
+        const score = await Rubric.Cell.score(rubric, id, outputs);
+        expect(score.code).toBe('missing-reference');
+        expect(score.points).toBe(0);
+      });
     });
 
     describe('Reviewable (Manual Intervention)', () => {

@@ -240,7 +240,6 @@ export namespace Rubric {
         return { ...score, id, points: points(score), possible };
       }
 
-      // Gather references for comparable/correctable.
       const references = Object.values(rubric.references)
         .filter(reference => reference.cell === id);
       const visible = rubric.locked
@@ -257,8 +256,8 @@ export namespace Rubric {
             ...Score.INCORRECT, code: 'missing-reference', id, possible
           };
         }
-        const points = ({ status }: Score) =>
-          status === 'correct' ? possible : 0;
+
+        const points = ({ status }: Score) => status === 'correct' ? possible : 0;
         const score = await compare(expected, given);
         return { ...score, id, points: points(score), possible };
       }
@@ -266,23 +265,22 @@ export namespace Rubric {
       if (cell.is === 'correctable') {
         if (!visible.length)
           return { ...Score.INCORRECT, code: 'locked', id, possible };
-        const total = visible.reduce(
-          (sum, reference) => sum + reference.points, 0
-        );
+
+        const total = visible.reduce((sum, { points }) => sum + points, 0);
         let earned = 0;
+        let missing = false;
         for (const reference of visible) {
           const expected = outputs.get(reference.referent);
-          if (!expected) continue;
+          if (!expected) { missing = true; continue; }
+
           const result = await correct(expected);
-          if (result.status === 'correct')
-            earned += reference.points;
+          if (result.status === 'correct') earned += reference.points;
         }
+        const code = missing ? 'missing-reference' : '';
         const status: Score.Status =
-          earned === total ? 'correct'
-          : earned === 0 ? 'incorrect'
-          : 'partial';
+          earned === total ? 'correct' : earned === 0 ? 'incorrect' : 'partial';
         return {
-          ...Score.CORRECT, code: '', id,
+          ...Score.CORRECT, code, id,
           points: earned, possible: total, status
         };
       }

@@ -580,8 +580,8 @@ export function commands(
       if (!commands.isEnabled(CommandIDs.share, args)) return undefined;
       const rubric = open(state.workbook())!;
       const id = state.cell(args);
-      const ref = rubric.references[id];
-      return ref.secret ? Icons.secret : Icons.shared;
+      const reference = rubric.references[id];
+      return reference.secret ? Icons.secret : Icons.shared;
     },
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
       const id = state.cell(args);
@@ -595,8 +595,8 @@ export function commands(
       if (!commands.isEnabled(CommandIDs.share, args)) return '';
       const rubric = open(state.workbook())!;
       const id = state.cell(args);
-      const ref = rubric.references[id];
-      return ref.secret
+      const reference = rubric.references[id];
+      return reference.secret
         ? trans.__('Mode: secret')
         : trans.__('Mode: shared');
     },
