@@ -50,6 +50,14 @@ export namespace Unlocker {
   }
 }
 
+/** Attempt to unlock a workbook with the given key. */
+async function attempt(
+  workbook: Workbook,
+  key: string
+): Promise<Rubric.Unlocked> {
+  return Workbook.unlock(workbook, key);
+}
+
 /** Yields candidate keys in priority order without user interaction. */
 async function* candidates(
   id: string,
@@ -66,25 +74,6 @@ async function* candidates(
   if (handle?.passphrase) yield await security.keygen(handle.passphrase, id);
   for (const passphrase of secrets.passphrases)
     yield await security.keygen(passphrase, id);
-}
-
-/** Iterates candidate keys, returning on first successful unlock. */
-async function resolve(
-  workbook: Workbook,
-  id: string,
-  handle: Workbook.Credentials | null,
-  secrets: Secrets
-): Promise<Rubric.Unlocked | null> {
-  for await (const key of candidates(id, handle, secrets)) {
-    try {
-      const unlocked = await attempt(workbook, key);
-      await Unlocker.store(id, key, secrets);
-      return unlocked;
-    } catch {
-      continue;
-    }
-  }
-  return null;
 }
 
 /**
@@ -112,13 +101,7 @@ async function inquire(
   return unlocked;
 }
 
-async function attempt(
-  workbook: Workbook,
-  key: string
-): Promise<Rubric.Unlocked> {
-  return Workbook.unlock(workbook, key);
-}
-
+/** Prompt the user for a passphrase. */
 async function prompt(
   workbook: Workbook,
   trans: IRenderMime.TranslationBundle
@@ -130,3 +113,21 @@ async function prompt(
   });
 }
 
+/** Iterates candidate keys, returning on first successful unlock. */
+async function resolve(
+  workbook: Workbook,
+  id: string,
+  handle: Workbook.Credentials | null,
+  secrets: Secrets
+): Promise<Rubric.Unlocked | null> {
+  for await (const key of candidates(id, handle, secrets)) {
+    try {
+      const unlocked = await attempt(workbook, key);
+      await Unlocker.store(id, key, secrets);
+      return unlocked;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}

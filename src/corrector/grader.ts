@@ -36,7 +36,7 @@ export namespace Result {
  *   `resolved: false` are not retried. Defaults to `0`.
  *
  * #### Notes
- * `grader` consumes `scanner` lazily: the next workbook is only fetched once a
+ * `grade()` consumes `scanner` lazily: the next workbook is only fetched once a
  * concurrency slot is free, so the kernel pool never grows faster than grading
  * can drain it.
  *
@@ -74,7 +74,6 @@ export async function* grade(
         wake();
       });
   };
-
   const take = async (): Promise<Settled | null> => {
     while (!queue.length) {
       if (!inflight) return null;
@@ -98,7 +97,6 @@ export async function* grade(
     console.warn('grader error', settled.workbook.context.path, settled.reason);
     return actions.recover(settled.workbook);
   };
-
   for await (const workbook of scanner) {
     const cached = actions.exclude(workbook);
     if (cached) {
@@ -115,7 +113,6 @@ export async function* grade(
     }
     start(workbook);
   }
-
   while (inflight || queue.length) {
     const result = await emit();
     if (result) yield result;
