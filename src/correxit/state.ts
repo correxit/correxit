@@ -4,9 +4,10 @@ import { Rubric, Workbook } from '.';
 export const LIMIT = 500;
 
 const state: {
+  cursor: string | null;
   report: Map<string, Rubric.Score>;
   workbook: Workbook | null;
-} = { report: new Map(), workbook: null };
+} = { cursor: null, report: new Map(), workbook: null };
 
 /**
  * Caches a cell score in memory.
@@ -56,10 +57,8 @@ export function workbook(update?: Workbook | null): Workbook | null {
   return state.workbook;
 }
 
-let _cursor: string | null = null;
-
 /** @returns the active reviewer cursor cell ID; caches the update if given. */
 export function cursor(update?: string | null): string | null {
-  _cursor = update === undefined ? _cursor : update;
-  return _cursor;
+  state.cursor = update === undefined ? state.cursor : update;
+  return state.cursor;
 }
