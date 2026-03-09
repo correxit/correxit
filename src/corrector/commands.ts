@@ -8,7 +8,7 @@ import { Contents } from '@jupyterlab/services';
 import { folderIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
 import * as kernels from '../correxit/kernels';
-import { Corrector } from '.';
+import { Corrector, Reviewer } from '.';
 import * as grader from './grader';
 
 type Actions = grader.Actions;
@@ -27,8 +27,13 @@ export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
   export const collect = 'correxit-corrector:collect';
+  export const down = 'correxit-reviewer:down';
   export const launch = 'correxit-corrector:launch';
+  export const left = 'correxit-reviewer:left';
+  export const review = 'correxit-reviewer:review';
+  export const right = 'correxit-reviewer:right';
   export const scan = 'correxit-corrector:scan';
+  export const up = 'correxit-reviewer:up';
 }
 
 export function commands(
@@ -38,7 +43,10 @@ export function commands(
     collector: Correxit.Collector;
     documents: IDocumentManager;
     indicator: Corrector.Status | null;
-    tracker: WidgetTracker<Corrector.Widget>;
+    tracker: {
+      corrector: WidgetTracker<Corrector.Widget>;
+      reviewer: WidgetTracker<Reviewer.Widget>;
+    };
     trans: IRenderMime.TranslationBundle;
     tree: INotebookTree | null;
   }
@@ -49,7 +57,8 @@ export function commands(
     commands.execute(Correxit.CommandIDs.fetch, { ...handle, silent });
   const { normalize } = Workbook.Credentials;
   const disposables = [];
-  let widget: Corrector.Widget | null = null;
+  let corrector: Corrector.Widget | null = null;
+  let reviewer: Reviewer.Widget | null = null;
   disposables.push(
     commands.addCommand(CommandIDs.batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
@@ -83,24 +92,25 @@ export function commands(
   disposables.push(
     commands.addCommand(CommandIDs.cd, {
       icon: folderIcon,
-      caption: () => trans.__('Change directory - current: %1', widget?.path),
-      label: () => `/ ${widget?.path.split('/').join(' / ')} /`,
+      caption: () =>
+        trans.__('Change directory - current: %1', corrector?.path),
+      label: () => `/ ${corrector?.path.split('/').join(' / ')} /`,
       execute: async ({ path }: { path?: string }) => {
-        if (!widget || widget.isDisposed) return;
+        if (!corrector || corrector.isDisposed) return;
 
-        widget.addClass('cxt-mod-cd');
+        corrector.addClass('cxt-mod-cd');
         if (typeof path !== 'string') {
           const title = trans.__('Correxit Corrector: change directory');
           const label = trans.__('Choose a directory for Correxit Corrector');
-          const defaultPath = widget.path;
-          const host = widget.node;
+          const defaultPath = corrector.path;
+          const host = corrector.node;
           const manager = browser?.model.manager || utilities.documents;
           const options = { defaultPath, host, label, manager, title };
           const pending = await FileDialog.getExistingDirectory(options);
           path = pending.value?.[0].path;
         }
-        if (typeof path === 'string') widget.path = path || '.';
-        widget.removeClass('cxt-mod-cd');
+        if (typeof path === 'string') corrector.path = path || '.';
+        corrector.removeClass('cxt-mod-cd');
       }
     })
   );
@@ -134,22 +144,26 @@ export function commands(
     commands.addCommand(CommandIDs.launch, {
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
-        if (!widget || widget.isDisposed) {
-          path ||= browser?.model.path || '.';
-          widget = new Corrector.Widget({ commands, path, indicator, trans });
-          widget.id = 'correxit-corrector-widget';
-          widget.title.label = trans.__('Correxit Corrector');
-          widget.title.closable = true;
-          disposables.push(widget);
+        if (!corrector || corrector.isDisposed) {
+          corrector = new Corrector.Widget({
+            commands,
+            path: path || browser?.model.path || '.',
+            indicator,
+            trans
+          });
+          corrector.id = 'correxit-corrector-widget';
+          corrector.title.label = trans.__('Correxit Corrector');
+          corrector.title.closable = true;
+          disposables.push(corrector);
         }
-        if (!tracker.has(widget)) tracker.add(widget);
+        if (!tracker.corrector.has(corrector)) tracker.corrector.add(corrector);
         if (tree) {
-          if (!widget.isAttached) tree.addWidget(widget);
-          tree.currentWidget = widget;
-        } else if (!widget.isAttached) {
-          shell.add(widget, 'main');
+          if (!corrector.isAttached) tree.addWidget(corrector);
+          tree.currentWidget = corrector;
+        } else if (!corrector.isAttached) {
+          shell.add(corrector, 'main');
         }
-        shell.activateById(widget.id);
+        shell.activateById(corrector.id);
       }
     })
   );
@@ -190,6 +204,49 @@ export function commands(
             }
           }
         })(normalize({ ...handle, path: handle.path || '.' }))
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.review, {
+      label: trans.__('Launch Correxit Reviewer'),
+      execute: (args: { path?: string; cell?: string }) => {
+        if (!reviewer || reviewer.isDisposed) {
+          reviewer = new Reviewer.Widget({ commands, trans });
+          reviewer.id = 'correxit-reviewer-widget';
+          reviewer.title.label = trans.__('Correxit Reviewer');
+          reviewer.title.closable = true;
+          disposables.push(reviewer);
+        }
+        if (!tracker.reviewer.has(reviewer)) tracker.reviewer.add(reviewer);
+        if (!reviewer.isAttached) shell.add(reviewer, 'main');
+        shell.activateById(reviewer.id);
+        if (args.path && args.cell)
+          reviewer.navigate({ path: args.path, cell: args.cell });
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.up, {
+      label: trans.__('Previous cell'),
+      execute: () => reviewer?.move('up')
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.down, {
+      label: trans.__('Next cell'),
+      execute: () => reviewer?.move('down')
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.left, {
+      label: trans.__('Previous workbook'),
+      execute: () => reviewer?.move('left')
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.right, {
+      label: trans.__('Next workbook'),
+      execute: () => reviewer?.move('right')
     })
   );
   return disposables;

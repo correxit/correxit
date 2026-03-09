@@ -9,6 +9,7 @@ import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
+import { publish, clear } from './bridge';
 import {
   commands as COMMANDS,
   CommandIDs as COMMAND_IDS,
@@ -214,11 +215,11 @@ export function Corrector(props: Corrector.Props) {
   const command = mode === 'grade' ? batch : mode === 'collect' ? collect : '';
   const auth = mode === 'grade';
   const config = { overwrite, path, ...(auth ? { unlock: true } : {}) };
-  const [grades, graded] = useCommand<Batched>(commands, command, config);
+  const [batched, graded] = useCommand<Batched>(commands, command, config);
   const loaded = useMemo(() => workbooks.filter(reified).length, [workbooks]);
-  const collated = useMemo(() => new Map(grades) as Collated, [grades]);
-  const resolved = useMemo(() => resolutions(collated), [collated]);
-  const memo = useMemo(() => merge(workbooks, collated), [workbooks, collated]);
+  const grades = useMemo(() => new Map(batched) as Collated, [batched]);
+  const resolved = useMemo(() => resolutions(grades), [grades]);
+  const memo = useMemo(() => merge(workbooks, grades), [workbooks, grades]);
   const cached = useRef({} as { [path: string]: Headless });
   const [selection, setSelection] = useState('');
   const workbook = useMemo(() => match(memo, selection), [memo, selection]);
@@ -229,6 +230,8 @@ export function Corrector(props: Corrector.Props) {
   useEffect(() => inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
   useEffect(() => reconcile(cached.current, memo, focus), [focus, memo]);
+  useEffect(() => publish({ workbooks: memo, grades }), [memo, grades]);
+  useEffect(() => () => clear(), []);
   return (
     <table className="correxit-corrector">
       <Columns />
@@ -236,7 +239,7 @@ export function Corrector(props: Corrector.Props) {
         <Progress {...{ ...progress, trans }} />
         {memo.map(workbook => {
           const { path } = workbook.context;
-          const grade = resolve(workbook, collated, graded);
+          const grade = resolve(workbook, grades, graded);
           const flags = { graded, selected: path === selection };
           const props = { commands, grade, select: setSelection, workbook };
           return <Row key={path} {...{ ...flags, ...props, trans }} />;
@@ -359,7 +362,7 @@ const Row: React.FC<{
       <Lock {...{ trans, workbook }} />
       <Assignment {...{ trans, workbook }} />
       <Assignee {...{ workbook }} />
-      <Breakdown {...{ failed, trans, workbook }} />
+      <Breakdown {...{ commands, failed, trans, workbook }} />
       <Kernel {...{ spec }} />
       <Status {...{ grade, graded, phase, title, trans }} />
     </tr>
@@ -367,10 +370,11 @@ const Row: React.FC<{
 });
 
 const Breakdown: React.FC<{
+  commands: CommandRegistry;
   failed: boolean;
   trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = ({ failed, trans, workbook }) => {
+}> = ({ commands, failed, trans, workbook }) => {
   if (failed) return <td className="correxit-corrector-breakdown" />;
 
   const rubric = open(workbook);
@@ -413,6 +417,13 @@ const Breakdown: React.FC<{
               aria-hidden="true"
               className={className}
               key={id}
+              onClick={event => {
+                event.stopPropagation();
+                commands.execute(COMMAND_IDS.review, {
+                  path: workbook.context.path,
+                  cell: id
+                });
+              }}
               title={label(id)}
             />
           );

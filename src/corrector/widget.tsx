@@ -9,6 +9,8 @@ import {
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Corrector } from '.';
+import { Reviewer } from './reviewer';
+import * as state from '../correxit/state';
 import { Message } from '@lumino/messaging';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
@@ -251,4 +253,63 @@ class ModeSelector extends ReactWidget {
     this.mode = mode;
     this.update();
   }
+}
+
+export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {
+  constructor({ commands, trans }: ReviewerWidget.IOptions) {
+    super({ content: new ReviewerContent({ commands, trans }) });
+    this.addClass('correxit-reviewer-widget');
+  }
+
+  navigate(cursor: { path: string; cell: string }) {
+    this.content.set({ cursor });
+  }
+
+  move(direction: 'up' | 'down' | 'left' | 'right') {
+    this.content.move(direction);
+  }
+
+  dispose() {
+    state.cursor(null);
+    super.dispose();
+  }
+}
+
+export namespace ReviewerWidget {
+  export interface IOptions {
+    commands: CommandRegistry;
+    trans: IRenderMime.TranslationBundle;
+  }
+}
+
+class ReviewerContent extends ReactWidget {
+  constructor(props: Pick<Reviewer.Props, 'commands' | 'trans'>) {
+    super();
+    this.props = {
+      ...props,
+      cursor: null,
+      onNavigate: ref => void (this.ref = ref)
+    };
+    this.ref = { current: () => {} };
+    this.addClass('correxit-reviewer-widget-content');
+  }
+
+  set(updates: Partial<{ cursor: { path: string; cell: string } }>) {
+    this.props = {
+      ...this.props,
+      cursor: updates.cursor ?? this.props.cursor
+    };
+    this.update();
+  }
+
+  move(direction: 'up' | 'down' | 'left' | 'right') {
+    this.ref.current(direction);
+  }
+
+  render() {
+    return <Reviewer {...this.props} />;
+  }
+
+  protected props: Reviewer.Props;
+  protected ref: React.MutableRefObject<(d: string) => void>;
 }

@@ -20,7 +20,7 @@ import { UUID } from '@lumino/coreutils';
 import { DisposableDelegate } from '@lumino/disposable';
 import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
-import { Corrector } from './corrector';
+import { Corrector, Reviewer } from './corrector';
 import { Correxit, Unlocker, Workbook } from './correxit';
 import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
@@ -104,13 +104,17 @@ const corrector: JupyterFrontEndPlugin<void> = {
       status: IStatusBar | null,
       translator: ITranslator | null
     ) => {
-      const name = 'correxit-corrector';
+      const corrector = 'correxit-corrector';
+      const reviewer = 'correxit-reviewer';
       const trans = (translator || nullTranslator).load('correxit');
-      const tracker = new WidgetTracker<Corrector.Widget>({ namespace: name });
+      const tracker = {
+        reviewer: new WidgetTracker<Reviewer.Widget>({ namespace: reviewer }),
+        corrector: new WidgetTracker<Corrector.Widget>({ namespace: corrector })
+      };
       const indicator = new Corrector.Status(trans);
       const active = new Signal<typeof tracker, void>(tracker);
-      tracker.currentChanged.connect(() => active.emit(undefined));
-      const { launch } = Corrector.CommandIDs;
+      tracker.corrector.currentChanged.connect(() => active.emit(undefined));
+      const { down, launch, left, review, right, up } = Corrector.CommandIDs;
       const added = Corrector.commands(app, {
         browser,
         collector,
@@ -124,16 +128,21 @@ const corrector: JupyterFrontEndPlugin<void> = {
         status.registerStatusItem('correxit-corrector:indicator', {
           item: indicator,
           align: 'right',
-          isActive: () => !!tracker.currentWidget,
+          isActive: () => !!tracker.corrector.currentWidget,
           activeStateChanged: active
         });
       }
       if (palette) palette.addItem({ category: 'correxit', command: launch });
+      if (palette) palette.addItem({ category: 'correxit', command: review });
       if (restorer) {
-        restorer.restore(tracker, {
+        restorer.restore(tracker.corrector, {
           command: launch,
           name: ({ id }) => id,
           args: ({ path }) => ({ path })
+        });
+        restorer.restore(tracker.reviewer, {
+          command: review,
+          name: ({ id }) => id
         });
       }
       if (registry) {
@@ -153,10 +162,25 @@ const corrector: JupyterFrontEndPlugin<void> = {
             console.warn(Correxit.CORRECTOR, 'settings error', reason)
           );
       }
+      // Reviewer keybindings scoped to the reviewer widget.
+      const selector = '.correxit-reviewer-widget';
+      const bindings = [
+        { keys: ['ArrowUp'], command: up, selector },
+        { keys: ['K'], command: up, selector },
+        { keys: ['ArrowDown'], command: down, selector },
+        { keys: ['J'], command: down, selector },
+        { keys: ['ArrowLeft'], command: left, selector },
+        { keys: ['H'], command: left, selector },
+        { keys: ['ArrowRight'], command: right, selector },
+        { keys: ['L'], command: right, selector }
+      ];
+      for (const binding of bindings)
+        added.push(app.commands.addKeyBinding(binding));
       deactivator = () => {
         added.forEach(command => command.dispose());
         indicator.dispose();
-        tracker.dispose();
+        tracker.corrector.dispose();
+        tracker.reviewer.dispose();
       };
     },
     deactivate: () => deactivator?.()

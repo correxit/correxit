@@ -55,3 +55,11 @@ export function workbook(update?: Workbook | null): Workbook | null {
   state.workbook = update === undefined ? state.workbook : update;
   return state.workbook;
 }
+
+let _cursor: string | null = null;
+
+/** @returns the active reviewer cursor cell ID; caches the update if given. */
+export function cursor(update?: string | null): string | null {
+  _cursor = update === undefined ? _cursor : update;
+  return _cursor;
+}

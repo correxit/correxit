@@ -3,6 +3,7 @@ import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit, Rubric, Workbook } from '..';
+import * as state from '../correxit/state';
 import { Score } from './cell';
 import { References } from './references';
 
@@ -18,11 +19,13 @@ export const Body: React.FC<{
 }> = ({ commands, trans, workbook }) => {
   const rubric = Workbook.open(workbook, true);
   const headed = !!workbook?.content;
-  if (!rubric || !headed || !workbook.content.activeCell)
+  const active = headed
+    ? workbook.content.activeCell?.model.id
+    : state.cursor();
+  if (!rubric || !active)
     return <section className="correxit-sidebar-body"></section>;
 
-  const { id } = workbook.content.activeCell.model || {};
-  if (!id) return <></>;
+  const id = active;
 
   const hints = {
     answerable: trans.__('Expected output has been set.'),

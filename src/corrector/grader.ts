@@ -74,6 +74,7 @@ export async function* grade(
         wake();
       });
   };
+
   const take = async (): Promise<Settled | null> => {
     while (!queue.length) {
       if (!inflight) return null;
@@ -97,6 +98,7 @@ export async function* grade(
     console.warn('grader error', settled.workbook.context.path, settled.reason);
     return actions.recover(settled.workbook);
   };
+
   for await (const workbook of scanner) {
     const cached = actions.exclude(workbook);
     if (cached) {
@@ -113,6 +115,7 @@ export async function* grade(
     }
     start(workbook);
   }
+
   while (inflight || queue.length) {
     const result = await emit();
     if (result) yield result;
