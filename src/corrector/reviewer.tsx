@@ -8,15 +8,14 @@ import React, {
   useRef,
   useState
 } from 'react';
-import { Correxit, Rubric, Workbook } from '..';
+import { Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { Corrector } from '.';
-import { navigate as bridge, useSnapshot } from './bridge';
+import { type Cursor, inject, navigate as bridge, useSnapshot } from './bridge';
 import { commands as COMMANDS, CommandIDs, Scanned } from './commands';
 import { ReviewerWidget } from './widget';
 
 type Collated = Corrector.Collated;
-type Cursor = { path: string; cell: string };
 type Headless = Workbook.Headless;
 type NavigateRef = React.MutableRefObject<(direction: string) => void>;
 type ScoreRef = React.MutableRefObject<(action: 'pass' | 'fail') => void>;
@@ -29,18 +28,7 @@ const open = (workbook: Scanned | null) =>
 /** A filter function that filters out hollow workbooks. */
 const reified = (workbook: Scanned): workbook is Headless => !workbook.hollow;
 
-/**
- * Injects a new workbook to be yielded by the Correxit monitor plugin.
- *
- * @returns a promise that resolves once the injection is complete.
- */
-const inject = (commands: CommandRegistry, workbook: Workbook | null) =>
-  (async (workbook: Workbook | null) =>
-    void (await commands.execute(Correxit.CommandIDs.inject))?.(workbook))(
-    workbook
-  );
-
-const whole = (value: string): number | '' => {
+const integer = (value: string): number | '' => {
   if (value === '') return '';
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return '';
@@ -335,7 +323,9 @@ export function Reviewer(props: Reviewer.Props) {
                     className="correxit-reviewer-score-input"
                     inputMode="numeric"
                     min="0"
-                    onChange={({ target: { value } }) => setScore(whole(value))}
+                    onChange={({ target: { value } }) =>
+                      setScore(integer(value))
+                    }
                     step="1"
                     type="number"
                     value={score}
@@ -389,9 +379,7 @@ export function Reviewer(props: Reviewer.Props) {
               </div>
               {type === 'code' && (
                 <button
-                  className={
-                    'correxit-reviewer-btn' + ' correxit-reviewer-btn-correct'
-                  }
+                  className="correxit-reviewer-btn correxit-reviewer-btn-correct"
                   disabled={busy}
                   onClick={rerun}
                   title={trans.__('Execute and correct cell')}
@@ -482,7 +470,7 @@ const CellSource: React.FC<{
     type === 'raw';
   if (unavailable) {
     return (
-      <div className={className}>
+      <div key="plain" className={className}>
         <pre>
           {source || (
             <span className="correxit-reviewer-source-blank">{empty}</span>
@@ -493,7 +481,7 @@ const CellSource: React.FC<{
   }
   if (!source) {
     return (
-      <div className={className}>
+      <div key="blank" className={className}>
         <pre>
           <span className="correxit-reviewer-source-blank">{empty}</span>
         </pre>
@@ -501,7 +489,7 @@ const CellSource: React.FC<{
     );
   }
 
-  return <div className={className} ref={host} />;
+  return <div key="rich" className={className} ref={host} />;
 };
 
 /**

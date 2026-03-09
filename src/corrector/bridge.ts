@@ -1,11 +1,14 @@
+import { CommandRegistry } from '@lumino/commands';
 import { useSyncExternalStore } from 'react';
 import { Corrector } from '.';
 import type { Scanned } from './commands';
 
 type Collated = Corrector.Collated;
 
+export type Cursor = { path: string; cell: string };
+
 export type Snapshot = Readonly<{
-  cursor: { path: string; cell: string } | null;
+  cursor: Cursor | null;
   workbooks: Scanned[];
   grades: Collated;
 }>;
@@ -35,6 +38,16 @@ export function navigate(cursor: Snapshot['cursor']) {
 export function clear() {
   snapshot = empty;
   emit();
+}
+
+/**
+ * Inject a workbook into the monitor stream.
+ *
+ * The `correxit:inject` command returns a single-emission
+ * function. Subsequent calls after the first are no-ops.
+ */
+export function inject(commands: CommandRegistry, workbook: unknown) {
+  void (async () => (await commands.execute('correxit:inject'))?.(workbook))();
 }
 
 export function useSnapshot(): Snapshot {

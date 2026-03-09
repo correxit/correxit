@@ -374,15 +374,9 @@ function ScoreBadge(props: {
 }) {
   const { report, cell, score, trans } = props;
   if (!score || score.status === 'unscored') {
-    return (
-      <span
-        className={
-          'correxit-reviewer-badge' + ' correxit-reviewer-badge-unscored'
-        }
-      >
-        {trans.__('Unscored')}
-      </span>
-    );
+    const className =
+      'correxit-reviewer-badge correxit-reviewer-badge-unscored';
+    return <span className={className}> {trans.__('Unscored')}</span>;
   }
 
   const { interventions } = { ...Rubric.Assignment.Report.empty(), ...report };

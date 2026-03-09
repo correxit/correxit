@@ -9,7 +9,7 @@ import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
-import { clear, publish } from './bridge';
+import { clear, inject, publish } from './bridge';
 import {
   commands as COMMANDS,
   CommandIDs as COMMAND_IDS,
@@ -71,18 +71,6 @@ const history = (workbook: Scanned, trans: TranslationBundle): string => {
   if (collected !== null) lines.push(trans.__('Collected: %1', collected));
   return lines.join('\n');
 };
-
-/**
- * Injects a new workbook to be yielded by the Correxit monitor plugin.
- *
- * #### Notes
- * The `correxit:inject` command returns a single-emission function that accepts
- * a workbook or `null`. If the single-emission function is invoked more than
- * once, all except the initial invocation is a no-op.
- */
-const inject = (commands: CommandRegistry, workbook: Workbook | null) =>
-  void (async workbook =>
-    (await commands.execute(Correxit.CommandIDs.inject))?.(workbook))(workbook);
 
 /** @returns the lifecycle phase of a workbook. */
 const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
