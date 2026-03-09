@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
-import { useSnapshot } from './bridge';
+import { navigate as bridgeNavigate, useSnapshot } from './bridge';
 import { commands as COMMANDS, Scanned } from './commands';
 import { ReviewerWidget } from './widget';
 
@@ -76,6 +76,7 @@ export function Reviewer(props: Reviewer.Props) {
   useEffect(() => {
     if (workbook) inject(commands, workbook);
     if (cursor) state.cursor(cursor.cell);
+    bridgeNavigate(cursor);
     return () => void state.cursor(null);
   }, [cursor?.path, cursor?.cell]);
 
@@ -102,9 +103,7 @@ export function Reviewer(props: Reviewer.Props) {
   ref.current = navigate;
   useEffect(() => props.onNavigate?.(ref), []);
 
-  const index = cursor ? rows.indexOf(cursor.cell) : -1;
   const cell = rubric && cursor ? rubric.cells[cursor.cell] : null;
-  const assignee = rubric?.assignment.assignee || '';
 
   // Cell source and type.
   const sharedCell = useMemo(() => {
@@ -161,8 +160,6 @@ export function Reviewer(props: Reviewer.Props) {
     },
     [cursor, cell, comment, commands]
   );
-
-  // Directional scoring.
   const scoring = useRef(false);
   const directional = useCallback(
     async (points: number, direction: 'down' | 'right') => {
@@ -177,18 +174,11 @@ export function Reviewer(props: Reviewer.Props) {
     },
     [commit, navigate]
   );
-
-  const failDown = () => void directional(0, 'down');
-  const failRight = () => void directional(0, 'right');
-  const passDown = () => {
+  const fail = (direction: 'down' | 'right') => void directional(0, direction);
+  const pass = (direction: 'down' | 'right') => {
     const value =
       typeof score === 'number' && score !== possible ? score : possible;
-    void directional(value, 'down');
-  };
-  const passRight = () => {
-    const value =
-      typeof score === 'number' && score !== possible ? score : possible;
-    void directional(value, 'right');
+    void directional(value, direction);
   };
 
   const doCorrect = () => {
@@ -221,43 +211,6 @@ export function Reviewer(props: Reviewer.Props) {
 
   return (
     <div className="correxit-reviewer">
-      <div className="correxit-reviewer-toolbar">
-        <div className="correxit-reviewer-nav">
-          <button
-            aria-label={trans.__('Previous workbook')}
-            onClick={() => navigate('left')}
-            title={trans.__('Previous workbook')}
-          >
-            ←
-          </button>
-          <button
-            aria-label={trans.__('Previous cell')}
-            onClick={() => navigate('up')}
-            title={trans.__('Previous cell')}
-          >
-            ↑
-          </button>
-          <button
-            aria-label={trans.__('Next cell')}
-            onClick={() => navigate('down')}
-            title={trans.__('Next cell')}
-          >
-            ↓
-          </button>
-          <button
-            aria-label={trans.__('Next workbook')}
-            onClick={() => navigate('right')}
-            title={trans.__('Next workbook')}
-          >
-            →
-          </button>
-        </div>
-        <span className="correxit-reviewer-info">
-          {assignee || workbook.context.path}
-          {' \u00b7 '}
-          {trans.__('Cell %1 of %2', index + 1, rows.length)}
-        </span>
-      </div>
       <div className="correxit-reviewer-body">
         <Minimap
           columns={columns}
@@ -293,7 +246,7 @@ export function Reviewer(props: Reviewer.Props) {
             <div className="correxit-reviewer-scoring-grid">
               <button
                 className="correxit-reviewer-btn correxit-reviewer-btn-fail"
-                onClick={failDown}
+                onClick={() => fail('down')}
                 title={trans.__('Fail and advance to next cell')}
               >
                 ↓ {trans.__('Fail')}
@@ -320,14 +273,14 @@ export function Reviewer(props: Reviewer.Props) {
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                onClick={passDown}
+                onClick={() => pass('down')}
                 title={trans.__('Pass and advance to next cell')}
               >
                 ↓ {partial ? trans.__('Partial') : trans.__('Pass')}
               </button>
               <button
                 className="correxit-reviewer-btn correxit-reviewer-btn-fail"
-                onClick={failRight}
+                onClick={() => fail('right')}
                 title={trans.__('Fail and advance to next workbook')}
               >
                 → {trans.__('Fail')}
@@ -340,7 +293,7 @@ export function Reviewer(props: Reviewer.Props) {
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                onClick={passRight}
+                onClick={() => pass('right')}
                 title={trans.__('Pass and advance to next workbook')}
               >
                 → {partial ? trans.__('Partial') : trans.__('Pass')}

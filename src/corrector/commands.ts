@@ -227,25 +227,29 @@ export function commands(
   );
   disposables.push(
     commands.addCommand(CommandIDs.up, {
-      label: trans.__('Previous cell'),
+      caption: trans.__('Previous cell'),
+      label: '↑',
       execute: () => reviewer?.move('up')
     })
   );
   disposables.push(
     commands.addCommand(CommandIDs.down, {
-      label: trans.__('Next cell'),
+      caption: trans.__('Next cell'),
+      label: '↓',
       execute: () => reviewer?.move('down')
     })
   );
   disposables.push(
     commands.addCommand(CommandIDs.left, {
-      label: trans.__('Previous workbook'),
+      caption: trans.__('Previous workbook'),
+      label: '←',
       execute: () => reviewer?.move('left')
     })
   );
   disposables.push(
     commands.addCommand(CommandIDs.right, {
-      label: trans.__('Next workbook'),
+      caption: trans.__('Next workbook'),
+      label: '→',
       execute: () => reviewer?.move('right')
     })
   );

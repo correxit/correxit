@@ -8,11 +8,16 @@ type Collated = Map<
 >;
 
 export type Snapshot = Readonly<{
+  cursor: { path: string; cell: string } | null;
   workbooks: Scanned[];
   grades: Collated;
 }>;
 
-const empty: Snapshot = Object.freeze({ workbooks: [], grades: new Map() });
+const empty: Snapshot = Object.freeze({
+  cursor: null,
+  workbooks: [],
+  grades: new Map()
+});
 const listeners = new Set<() => void>();
 let snapshot: Snapshot = empty;
 
@@ -20,13 +25,19 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
-export function publish(next: Snapshot) {
-  snapshot = next;
+export function publish(next: Omit<Snapshot, 'cursor'>) {
+  snapshot = { ...next, cursor: snapshot.cursor };
+  emit();
+}
+
+export function navigate(cursor: Snapshot['cursor']) {
+  snapshot = { ...snapshot, cursor };
   emit();
 }
 
 export function clear() {
-  publish(empty);
+  snapshot = empty;
+  emit();
 }
 
 export function useSnapshot(): Snapshot {

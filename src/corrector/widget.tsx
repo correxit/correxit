@@ -10,7 +10,10 @@ import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Corrector } from '.';
 import { Reviewer } from './reviewer';
+import { useSnapshot } from './bridge';
+import { CommandIDs, Scanned } from './commands';
 import * as state from '../correxit/state';
+import { Workbook } from '../correxit';
 import { Message } from '@lumino/messaging';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
@@ -259,6 +262,7 @@ export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {
   constructor({ commands, trans }: ReviewerWidget.IOptions) {
     super({ content: new ReviewerContent({ commands, trans }) });
     this.addClass('correxit-reviewer-widget');
+    this.initialize(commands, trans);
   }
 
   navigate(cursor: { path: string; cell: string }) {
@@ -273,6 +277,20 @@ export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {
     state.cursor(null);
     super.dispose();
   }
+
+  protected initialize(
+    commands: CommandRegistry,
+    trans: IRenderMime.TranslationBundle
+  ) {
+    const { toolbar } = this;
+    const button = (id: string) =>
+      new CommandToolbarButton({ commands, id, noFocusOnClick: true });
+    toolbar.addItem('left', button(CommandIDs.left));
+    toolbar.addItem('up', button(CommandIDs.up));
+    toolbar.addItem('down', button(CommandIDs.down));
+    toolbar.addItem('right', button(CommandIDs.right));
+    toolbar.addItem('info', new ReviewerInfo(trans));
+  }
 }
 
 export namespace ReviewerWidget {
@@ -280,6 +298,52 @@ export namespace ReviewerWidget {
     commands: CommandRegistry;
     trans: IRenderMime.TranslationBundle;
   }
+}
+
+class ReviewerInfo extends ReactWidget {
+  constructor(trans: IRenderMime.TranslationBundle) {
+    super();
+    this.trans = trans;
+    this.addClass('correxit-reviewer-info');
+  }
+
+  render() {
+    return <ReviewerInfoComponent trans={this.trans} />;
+  }
+
+  protected trans: IRenderMime.TranslationBundle;
+}
+
+function ReviewerInfoComponent({
+  trans
+}: {
+  trans: IRenderMime.TranslationBundle;
+}) {
+  const { cursor, workbooks } = useSnapshot();
+  if (!cursor) return null;
+
+  const workbook = workbooks.find(
+    (w): w is Exclude<Scanned, { hollow: true }> =>
+      !w.hollow && w.context.path === cursor.path
+  );
+  if (!workbook) return null;
+
+  const rubric = Workbook.open(workbook, true);
+  if (!rubric) return null;
+
+  const rows = workbook.context.model.sharedModel.cells
+    .map(c => c.id)
+    .filter(id => id in rubric.cells);
+  const index = rows.indexOf(cursor.cell);
+  const assignee = rubric.assignment.assignee || workbook.context.path;
+
+  return (
+    <span>
+      {assignee}
+      {' \u00b7 '}
+      {trans.__('Cell %1 of %2', index + 1, rows.length)}
+    </span>
+  );
 }
 
 class ReviewerContent extends ReactWidget {

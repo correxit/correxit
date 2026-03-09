@@ -31,36 +31,7 @@
   }
 }
 
-/* Toolbar */
-
-.correxit-reviewer-toolbar {
-  align-items: center;
-  background-color: var(--jp-layout-color2);
-  border-bottom: 1px solid var(--jp-border-color1);
-  display: flex;
-  gap: 8px;
-  padding: 4px 8px;
-}
-
-.correxit-reviewer-nav {
-  display: flex;
-  gap: 2px;
-
-  button {
-    background: none;
-    border: 1px solid var(--jp-border-color1);
-    border-radius: var(--jp-border-radius);
-    color: var(--jp-ui-font-color1);
-    cursor: pointer;
-    font-size: var(--jp-ui-font-size1);
-    line-height: 1;
-    padding: 2px 6px;
-
-    &:hover {
-      background-color: var(--jp-layout-color3);
-    }
-  }
-}
+/* Toolbar info */
 
 .correxit-reviewer-info {
   color: var(--jp-ui-font-color1);
