@@ -390,6 +390,7 @@ export function commands(
       if (!workbook || !id || !rubric) return;
       if (args.intervention !== undefined)
         await intervene(workbook, id, args.intervention);
+      await commands.execute(CommandIDs.save, { undo: false });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.lock, {

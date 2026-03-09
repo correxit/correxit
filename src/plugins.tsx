@@ -5,6 +5,7 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 import { ICommandPalette, WidgetTracker } from '@jupyterlab/apputils';
+import { IEditorServices } from '@jupyterlab/codeeditor';
 import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
@@ -13,6 +14,7 @@ import {
   NotebookModelFactory,
   NotebookPanel
 } from '@jupyterlab/notebook';
+import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStatusBar } from '@jupyterlab/statusbar';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
@@ -80,12 +82,14 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
 const corrector: JupyterFrontEndPlugin<void> = {
   id: Correxit.CORRECTOR,
   description: Correxit.DESCRIPTION.CORRECTOR,
-  requires: [Correxit.Collector, IDocumentManager],
+  requires: [Correxit.Collector, IDocumentManager, Correxit.Unlocker],
   optional: [
     ICommandPalette,
     IDefaultFileBrowser,
+    IEditorServices,
     ILayoutRestorer,
     INotebookTree,
+    IRenderMimeRegistry,
     ISettingRegistry,
     IStatusBar,
     ITranslator
@@ -96,10 +100,13 @@ const corrector: JupyterFrontEndPlugin<void> = {
       app: JupyterFrontEnd,
       collector: Correxit.Collector,
       documents: IDocumentManager,
+      unlocker: Correxit.Unlocker,
       palette: ICommandPalette | null,
       browser: IDefaultFileBrowser | null,
+      editorServices: IEditorServices | null,
       restorer: ILayoutRestorer | null,
       tree: INotebookTree | null,
+      rendermime: IRenderMimeRegistry | null,
       registry: ISettingRegistry | null,
       status: IStatusBar | null,
       translator: ITranslator | null
@@ -119,10 +126,13 @@ const corrector: JupyterFrontEndPlugin<void> = {
         browser,
         collector,
         documents,
+        editorServices,
         indicator,
+        rendermime,
         tracker,
         trans,
-        tree
+        tree,
+        unlocker
       });
       if (status) {
         status.registerStatusItem('correxit-corrector:indicator', {

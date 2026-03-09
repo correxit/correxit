@@ -1,4 +1,6 @@
+import { CodeEditor } from '@jupyterlab/codeeditor';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { CommandRegistry } from '@lumino/commands';
 import React, {
   useCallback,
@@ -10,7 +12,7 @@ import React, {
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { navigate as bridgeNavigate, useSnapshot } from './bridge';
-import { commands as COMMANDS, Scanned } from './commands';
+import { commands as COMMANDS, CommandIDs, Scanned } from './commands';
 import { ReviewerWidget } from './widget';
 
 type Collated = Map<string, { grade: Workbook.Grade; workbook: Headless }>;
@@ -28,10 +30,14 @@ const reified = (workbook: Scanned): workbook is Headless => !workbook.hollow;
 
 /**
  * Injects a new workbook to be yielded by the Correxit monitor plugin.
+ *
+ * @returns a promise that resolves once the injection is complete.
  */
 const inject = (commands: CommandRegistry, workbook: Workbook | null) =>
-  void (async workbook =>
-    (await commands.execute(Correxit.CommandIDs.inject))?.(workbook))(workbook);
+  (async (workbook: Workbook | null) =>
+    void (await commands.execute(Correxit.CommandIDs.inject))?.(workbook))(
+    workbook
+  );
 
 const whole = (value: string): number | '' => {
   if (value === '') return '';
@@ -41,7 +47,14 @@ const whole = (value: string): number | '' => {
 };
 
 export function Reviewer(props: Reviewer.Props) {
-  const { commands, trans, cursor: initial } = props;
+  const {
+    commands,
+    factory,
+    rendermime,
+    trans,
+    cursor: initial,
+    onWorkbook
+  } = props;
   const snapshot = useSnapshot();
   const { workbooks, grades } = snapshot;
   const empty = workbooks.length === 0;
@@ -74,11 +87,12 @@ export function Reviewer(props: Reviewer.Props) {
   }, [workbook, rubric]);
 
   useEffect(() => {
-    if (workbook) inject(commands, workbook);
+    onWorkbook?.(workbook);
+    if (workbook) void inject(commands, workbook);
     if (cursor) state.cursor(cursor.cell);
     bridgeNavigate(cursor);
     return () => void state.cursor(null);
-  }, [cursor?.path, cursor?.cell]);
+  }, [workbook, cursor?.path, cursor?.cell]);
 
   // Navigation helpers.
   const navigate = useCallback(
@@ -136,40 +150,39 @@ export function Reviewer(props: Reviewer.Props) {
         : null;
     setScore(r && r.status !== 'unscored' ? r.points : '');
     setComment(r?.comment ?? '');
+    setGrade(null);
   }, [cursor?.path, cursor?.cell, rubric?.id]);
 
   // Commit score and comment.
   const commit = useCallback(
     async (points: number) => {
-      if (!cursor || !cell) return;
+      if (!cursor || !cell || !workbook) return;
       const intervention = Rubric.Score.intervene(cursor.cell, {
         comment,
         points,
         possible: cell.points
       });
-      await commands.execute(Correxit.CommandIDs.intervene, {
+      await commands.execute(CommandIDs.intervene, {
         id: cursor.cell,
-        intervention
+        intervention,
+        ...(comment ? { comment } : {})
       });
-      if (comment) {
-        await commands.execute(Correxit.CommandIDs.comment, {
-          id: cursor.cell,
-          comment
-        });
-      }
     },
-    [cursor, cell, comment, commands]
+    [cursor, cell, comment, commands, workbook]
   );
   const scoring = useRef(false);
+  const [busy, setBusy] = useState(false);
   const directional = useCallback(
     async (points: number, direction: 'down' | 'right') => {
       if (scoring.current) return;
       scoring.current = true;
+      setBusy(true);
       try {
         await commit(points);
         navigate(direction);
       } finally {
         scoring.current = false;
+        setBusy(false);
       }
     },
     [commit, navigate]
@@ -181,11 +194,15 @@ export function Reviewer(props: Reviewer.Props) {
     void directional(value, direction);
   };
 
-  const doCorrect = () => {
-    if (cursor && cellType === 'code') {
-      void commands.execute(Correxit.CommandIDs.correct, {
-        id: cursor.cell
-      });
+  const [grade, setGrade] = useState<Rubric.Score | null>(null);
+  const doCorrect = async () => {
+    if (!cursor || !workbook || cellType !== 'code' || busy) return;
+    setBusy(true);
+    try {
+      const result = await Workbook.correct(workbook, cursor.cell);
+      setGrade(result.score);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -222,15 +239,16 @@ export function Reviewer(props: Reviewer.Props) {
           workbooks={workbooks}
         />
         <div className="correxit-reviewer-content">
-          <CellSource source={source} type={cellType} />
+          <CellSource
+            factory={factory}
+            rendermime={rendermime}
+            source={source}
+            type={cellType}
+          />
           {cellType === 'code' && outputs.length > 0 && (
             <div className="correxit-reviewer-outputs">
               {outputs.map((output: any, i: number) => (
-                <pre key={i} className="correxit-reviewer-output">
-                  {output.text?.join?.('') ??
-                    output.data?.['text/plain']?.join?.('') ??
-                    JSON.stringify(output)}
-                </pre>
+                <CellOutput key={i} output={output} rendermime={rendermime} />
               ))}
             </div>
           )}
@@ -246,10 +264,11 @@ export function Reviewer(props: Reviewer.Props) {
             <div className="correxit-reviewer-scoring-grid">
               <button
                 className="correxit-reviewer-btn correxit-reviewer-btn-fail"
+                disabled={busy}
                 onClick={() => fail('down')}
                 title={trans.__('Fail and advance to next cell')}
               >
-                ↓ {trans.__('Fail')}
+                <span>{trans.__('Fail')}</span> <span>↓</span>
               </button>
               <span className="correxit-reviewer-score-display">
                 <input
@@ -273,17 +292,20 @@ export function Reviewer(props: Reviewer.Props) {
                 ]
                   .filter(Boolean)
                   .join(' ')}
+                disabled={busy}
                 onClick={() => pass('down')}
                 title={trans.__('Pass and advance to next cell')}
               >
-                ↓ {partial ? trans.__('Partial') : trans.__('Pass')}
+                <span>{partial ? trans.__('Partial') : trans.__('Pass')}</span>{' '}
+                <span>↓</span>
               </button>
               <button
                 className="correxit-reviewer-btn correxit-reviewer-btn-fail"
+                disabled={busy}
                 onClick={() => fail('right')}
                 title={trans.__('Fail and advance to next workbook')}
               >
-                → {trans.__('Fail')}
+                <span>{trans.__('Fail')}</span> <span>→</span>
               </button>
               <span />
               <button
@@ -293,20 +315,35 @@ export function Reviewer(props: Reviewer.Props) {
                 ]
                   .filter(Boolean)
                   .join(' ')}
+                disabled={busy}
                 onClick={() => pass('right')}
                 title={trans.__('Pass and advance to next workbook')}
               >
-                → {partial ? trans.__('Partial') : trans.__('Pass')}
+                <span>{partial ? trans.__('Partial') : trans.__('Pass')}</span>{' '}
+                <span>→</span>
               </button>
             </div>
             {cellType === 'code' && (
               <button
                 className="correxit-reviewer-btn correxit-reviewer-btn-correct"
+                disabled={busy}
                 onClick={doCorrect}
                 title={trans.__('Execute and correct cell')}
               >
-                {trans.__('Correct')}
+                {busy ? trans.__('Correcting…') : trans.__('Correct')}
               </button>
+            )}
+            {grade && (
+              <div className="correxit-reviewer-grade">
+                {grade.status === 'unscored'
+                  ? trans.__('Unscored')
+                  : trans.__(
+                      '%1 of %2 (%3)',
+                      grade.points,
+                      grade.possible,
+                      grade.status
+                    )}
+              </div>
             )}
           </div>
         </div>
@@ -319,7 +356,10 @@ export namespace Reviewer {
   export type Props = {
     commands: CommandRegistry;
     cursor: Cursor | null;
+    factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
     onNavigate: ((ref: NavigateRef) => void) | null;
+    onWorkbook: ((workbook: Headless | null) => void) | null;
+    rendermime: IRenderMimeRegistry | null;
     trans: TranslationBundle;
   };
 
@@ -329,23 +369,100 @@ export namespace Reviewer {
 }
 
 const CellSource: React.FC<{
+  factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
+  rendermime: IRenderMimeRegistry | null;
   source: string;
   type: string;
-}> = ({ source, type }) => {
-  if (type === 'raw') {
+}> = ({ factory, rendermime, source, type }) => {
+  const host = useRef<HTMLDivElement>(null);
+  const editor = useRef<CodeEditor.IEditor | null>(null);
+  const className = `correxit-reviewer-source cxt-cell-${type}`;
+
+  // Code cells: use a read-only CodeMirror editor for syntax highlighting.
+  useEffect(() => {
+    if (type !== 'code' || !factory || !host.current) return;
+    host.current.textContent = '';
+    const model = new CodeEditor.Model({ mimeType: 'text/x-python' });
+    model.sharedModel.setSource(source);
+    const ed = factory({
+      host: host.current,
+      model,
+      config: { readOnly: true, lineNumbers: false }
+    });
+    editor.current = ed;
+    return () => {
+      editor.current = null;
+      ed.dispose();
+      model.dispose();
+    };
+  }, [source, type, factory]);
+
+  // Markdown cells: use rendermime for rich rendering.
+  useEffect(() => {
+    if (type !== 'markdown' || !rendermime || !host.current) return;
+    host.current.textContent = '';
+
+    const renderer = rendermime.createRenderer('text/markdown');
+    const model = rendermime.createModel({
+      data: { 'text/markdown': source },
+      trusted: true
+    });
+    void renderer.renderModel(model).then(() => {
+      if (host.current) {
+        host.current.textContent = '';
+        host.current.appendChild(renderer.node);
+      }
+    });
+    return () => renderer.dispose();
+  }, [source, type, rendermime]);
+
+  // Fallback for raw cells or when services are unavailable.
+  if (
+    (type === 'code' && !factory) ||
+    (type === 'markdown' && !rendermime) ||
+    type === 'raw'
+  ) {
     return (
-      <div className="correxit-reviewer-source">
-        <pre className="correxit-reviewer-raw">{source}</pre>
+      <div className={className}>
+        <pre>{source}</pre>
       </div>
     );
   }
-  // For code and markdown cells, render as preformatted text.
-  // CodeMirror / rendermime integration can be added later.
-  return (
-    <div className="correxit-reviewer-source">
-      <pre className="correxit-reviewer-code">{source}</pre>
-    </div>
-  );
+
+  return <div className={className} ref={host} />;
+};
+
+const CellOutput: React.FC<{
+  output: any;
+  rendermime: IRenderMimeRegistry | null;
+}> = ({ output, rendermime }) => {
+  const host = useRef<HTMLDivElement>(null);
+
+  const bundle: Record<string, string> =
+    output.data ?? (output.text ? { 'text/plain': output.text.join('') } : {});
+  const fallback =
+    bundle['text/plain'] ?? output.text?.join?.('') ?? JSON.stringify(output);
+
+  useEffect(() => {
+    if (!rendermime || !host.current) return;
+    const mimeType = rendermime.preferredMimeType(bundle, 'prefer');
+    if (!mimeType) return;
+    host.current.textContent = '';
+    const renderer = rendermime.createRenderer(mimeType);
+    const model = rendermime.createModel({ data: bundle, trusted: true });
+    void renderer.renderModel(model).then(() => {
+      if (host.current) {
+        host.current.textContent = '';
+        host.current.appendChild(renderer.node);
+      }
+    });
+    return () => renderer.dispose();
+  }, [output, rendermime]);
+
+  if (!rendermime)
+    return <pre className="correxit-reviewer-output">{fallback}</pre>;
+
+  return <div className="correxit-reviewer-output" ref={host} />;
 };
 
 const Minimap: React.FC<{
@@ -386,8 +503,8 @@ const Minimap: React.FC<{
       role="grid"
       aria-label={trans.__('Score minimap')}
       style={{
-        gridTemplateColumns: `repeat(${columns.length}, 4px)`,
-        gridTemplateRows: `repeat(${rows.length}, 4px)`
+        gridTemplateColumns: `repeat(${columns.length}, 1fr)`,
+        gridTemplateRows: `repeat(${rows.length}, 1fr)`
       }}
     >
       {grid.map((row, ri) =>

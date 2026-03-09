@@ -1,6 +1,8 @@
 import { MainAreaWidget } from '@jupyterlab/apputils';
 import { PathExt } from '@jupyterlab/coreutils';
+import { CodeEditor } from '@jupyterlab/codeeditor';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import {
   CommandToolbarButton,
   ReactWidget,
@@ -259,10 +261,14 @@ class ModeSelector extends ReactWidget {
 }
 
 export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {
-  constructor({ commands, trans }: ReviewerWidget.IOptions) {
-    super({ content: new ReviewerContent({ commands, trans }) });
+  constructor(options: ReviewerWidget.IOptions) {
+    super({ content: new ReviewerContent(options) });
     this.addClass('correxit-reviewer-widget');
-    this.initialize(commands, trans);
+    this.initialize(options.commands, options.trans);
+  }
+
+  get workbook(): Workbook.Headless | null {
+    return this.content.workbook;
   }
 
   navigate(cursor: { path: string; cell: string }) {
@@ -296,6 +302,8 @@ export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {
 export namespace ReviewerWidget {
   export interface IOptions {
     commands: CommandRegistry;
+    factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
+    rendermime: IRenderMimeRegistry | null;
     trans: IRenderMime.TranslationBundle;
   }
 }
@@ -336,27 +344,43 @@ function ReviewerInfoComponent({
     .filter(id => id in rubric.cells);
   const index = rows.indexOf(cursor.cell);
   const assignee = rubric.assignment.assignee || workbook.context.path;
+  const score = state.report(workbook, cursor.cell);
+  const label =
+    score && score.status !== 'unscored'
+      ? trans.__('%1 of %2', score.points, score.possible)
+      : null;
 
   return (
     <span>
       {assignee}
       {' \u00b7 '}
       {trans.__('Cell %1 of %2', index + 1, rows.length)}
+      {label && (
+        <>
+          {' \u00b7 '}
+          {label}
+        </>
+      )}
     </span>
   );
 }
 
 class ReviewerContent extends ReactWidget {
-  constructor(props: Pick<Reviewer.Props, 'commands' | 'trans'>) {
+  constructor(
+    props: Pick<Reviewer.Props, 'commands' | 'factory' | 'rendermime' | 'trans'>
+  ) {
     super();
     this.props = {
       ...props,
       cursor: null,
-      onNavigate: ref => void (this.ref = ref)
+      onNavigate: ref => void (this.ref = ref),
+      onWorkbook: workbook => void (this.workbook = workbook)
     };
     this.ref = { current: () => {} };
     this.addClass('correxit-reviewer-widget-content');
   }
+
+  workbook: Workbook.Headless | null = null;
 
   set(updates: Partial<{ cursor: { path: string; cell: string } }>) {
     this.props = {

@@ -1,9 +1,11 @@
 import { INotebookTree } from '@jupyter-notebook/tree';
 import { JupyterFrontEnd } from '@jupyterlab/application';
-import { WidgetTracker } from '@jupyterlab/apputils';
+import { showErrorMessage, WidgetTracker } from '@jupyterlab/apputils';
+import { IEditorServices } from '@jupyterlab/codeeditor';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
 import { folderIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
@@ -28,6 +30,7 @@ export namespace CommandIDs {
   export const cd = 'correxit-corrector:cd';
   export const collect = 'correxit-corrector:collect';
   export const down = 'correxit-reviewer:down';
+  export const intervene = 'correxit-reviewer:intervene';
   export const launch = 'correxit-corrector:launch';
   export const left = 'correxit-reviewer:left';
   export const review = 'correxit-reviewer:review';
@@ -42,17 +45,30 @@ export function commands(
     browser: IDefaultFileBrowser | null;
     collector: Correxit.Collector;
     documents: IDocumentManager;
+    editorServices: IEditorServices | null;
     indicator: Corrector.Status | null;
+    rendermime: IRenderMimeRegistry | null;
     tracker: {
       corrector: WidgetTracker<Corrector.Widget>;
       reviewer: WidgetTracker<Reviewer.Widget>;
     };
     trans: IRenderMime.TranslationBundle;
     tree: INotebookTree | null;
+    unlocker: Correxit.Unlocker;
   }
 ) {
   const { commands, serviceManager: manager, shell } = app;
-  const { browser, collector, indicator, tracker, trans, tree } = utilities;
+  const {
+    browser,
+    collector,
+    editorServices,
+    indicator,
+    rendermime,
+    tracker,
+    trans,
+    tree,
+    unlocker
+  } = utilities;
   const fetch = (handle: Credentials, silent = false) =>
     commands.execute(Correxit.CommandIDs.fetch, { ...handle, silent });
   const { normalize } = Workbook.Credentials;
@@ -211,7 +227,15 @@ export function commands(
       label: trans.__('Launch Correxit Reviewer'),
       execute: (args: { path?: string; cell?: string }) => {
         if (!reviewer || reviewer.isDisposed) {
-          reviewer = new Reviewer.Widget({ commands, trans });
+          reviewer = new Reviewer.Widget({
+            commands,
+            factory: editorServices
+              ? options =>
+                  editorServices.factoryService.newInlineEditor(options)
+              : null,
+            rendermime,
+            trans
+          });
           reviewer.id = 'correxit-reviewer-widget';
           reviewer.title.label = trans.__('Correxit Reviewer');
           reviewer.title.closable = true;
@@ -222,6 +246,38 @@ export function commands(
         shell.activateById(reviewer.id);
         if (args.path && args.cell)
           reviewer.navigate({ path: args.path, cell: args.cell });
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.intervene, {
+      label: trans.__('Intervene on reviewer cell'),
+      execute: async (
+        args: Partial<{
+          comment: string;
+          id: string;
+          intervention: Rubric.Score | null;
+        }>
+      ) => {
+        const workbook = reviewer?.workbook ?? null;
+        const { comment, id, intervention } = args;
+        if (!workbook || !id) return;
+
+        try {
+          const rubric = open(workbook);
+          if (!rubric) return;
+          if (rubric.locked) await unlocker.unlock(workbook, null);
+          if (intervention !== undefined)
+            await Workbook.intervene(workbook, id, intervention ?? null);
+          if (comment !== undefined)
+            await Workbook.comment(workbook, id, comment);
+          await save(workbook);
+        } catch (error) {
+          void showErrorMessage(
+            trans.__('Could not save intervention'),
+            error as Error
+          );
+        }
       }
     })
   );
