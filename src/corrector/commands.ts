@@ -37,6 +37,8 @@ export namespace CommandIDs {
   export const right = 'correxit-reviewer:right';
   export const scan = 'correxit-corrector:scan';
   export const up = 'correxit-reviewer:up';
+  export const pass = 'correxit-reviewer:pass';
+  export const fail = 'correxit-reviewer:fail';
 }
 
 export function commands(
@@ -272,6 +274,23 @@ export function commands(
           if (comment !== undefined)
             await Workbook.comment(workbook, id, comment);
           await save(workbook);
+
+          // Auto-certify if this was the last pending reviewable cell.
+          const updated = open(workbook);
+          if (updated && !updated.locked && !updated.assignment.certification) {
+            const pending = Object.values(updated.cells)
+              .filter(cell => cell.is === 'reviewable')
+              .some(cell => !updated.assignment.report.interventions[cell.id]);
+            if (!pending) {
+              try {
+                await Workbook.certify(workbook, true);
+                await save(workbook);
+              } catch {
+                // Certification may fail if auto-graded cells are unresolved;
+                // the workbook will be certified on the next batch pass.
+              }
+            }
+          }
         } catch (error) {
           void showErrorMessage(
             trans.__('Could not save intervention'),
@@ -307,6 +326,20 @@ export function commands(
       caption: trans.__('Next workbook'),
       label: '→',
       execute: () => reviewer?.move('right')
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.pass, {
+      caption: trans.__('Pass cell'),
+      label: trans.__('Pass'),
+      execute: () => reviewer?.score('pass')
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.fail, {
+      caption: trans.__('Fail cell'),
+      label: trans.__('Fail'),
+      execute: () => reviewer?.score('fail')
     })
   );
   return disposables;

@@ -142,6 +142,29 @@
   }
 }
 
+.correxit-reviewer-source-blank {
+  color: var(--jp-ui-font-color2);
+  font-style: italic;
+}
+
+/* Certified (inert) state */
+
+.correxit-reviewer-certified {
+  align-items: center;
+  border: 1px solid var(--jp-border-color1);
+  border-radius: var(--jp-border-radius);
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+
+  p {
+    color: var(--jp-ui-font-color2);
+    font-family: var(--jp-ui-font-family);
+    font-size: var(--jp-ui-font-size1);
+    margin: 0;
+  }
+}
+
 /* Outputs */
 
 .correxit-reviewer-outputs {
@@ -176,6 +199,7 @@
 .correxit-reviewer-comment {
   border: 1px solid var(--jp-border-color1);
   border-radius: var(--jp-border-radius);
+  box-sizing: border-box;
   font-family: var(--jp-ui-font-family);
   font-size: var(--jp-ui-font-size1);
   padding: 4px 8px;
@@ -243,7 +267,7 @@
 }
 
 .correxit-reviewer-btn-fail {
-  background-color: var(--correxit-incorrect-color);
+  background-color: color-mix(in oklch, var(--correxit-incorrect-color), black 20%);
   color: #fff;
 
   &:hover {
@@ -252,7 +276,7 @@
 }
 
 .correxit-reviewer-btn-pass {
-  background-color: var(--correxit-correct-color);
+  background-color: color-mix(in oklch, var(--correxit-correct-color), black 20%);
   color: #fff;
 
   &:hover {
@@ -260,13 +284,13 @@
   }
 
   &.cxt-mod-partial {
-    background-color: var(--correxit-partial-color);
+    background-color: color-mix(in oklch, var(--correxit-partial-color), black 25%);
   }
 }
 
 .correxit-reviewer-btn-correct {
-  background-color: var(--jp-brand-color1);
-  color: var(--jp-ui-inverse-font-color0, #fff);
+  background-color: color-mix(in oklch, var(--jp-brand-color1), black 20%);
+  color: #fff;
 
   &:hover {
     background-color: var(--jp-brand-color0);
@@ -279,6 +303,53 @@
   font-size: var(--jp-ui-font-size1);
   padding: 2px 0;
   text-align: center;
+}
+
+/* Score badge (toolbar) */
+
+.correxit-reviewer-badge {
+  align-items: center;
+  border-radius: 10px;
+  color: var(--jp-ui-inverse-font-color0, #fff);
+  display: inline-flex;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size0);
+  font-weight: 600;
+  gap: 4px;
+  line-height: 1;
+  padding: 2px 8px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.correxit-reviewer-badge-label {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.correxit-reviewer-badge-correct {
+  background-color: var(--correxit-correct-color);
+}
+
+.correxit-reviewer-badge-incorrect {
+  background-color: var(--correxit-incorrect-color);
+}
+
+.correxit-reviewer-badge-partial {
+  background-color: var(--correxit-partial-color);
+}
+
+.correxit-reviewer-badge-unscored {
+  background-color: var(--correxit-unscored-color);
+  color: var(--jp-ui-font-color2);
+}
+
+.correxit-reviewer-badge-manual {
+  border: 1.5px dashed var(--jp-ui-inverse-font-color2, rgba(255, 255, 255, 0.6));
+}
+
+.correxit-reviewer-badge-manual.correxit-reviewer-badge-unscored {
+  border-color: var(--jp-ui-font-color3);
 }
 
 /* Breakdown segments: make clickable when in corrector */

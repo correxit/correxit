@@ -15,7 +15,7 @@ import { Reviewer } from './reviewer';
 import { useSnapshot } from './bridge';
 import { CommandIDs, Scanned } from './commands';
 import * as state from '../correxit/state';
-import { Workbook } from '../correxit';
+import { Rubric, Workbook } from '../correxit';
 import { Message } from '@lumino/messaging';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
@@ -279,6 +279,10 @@ export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {
     this.content.move(direction);
   }
 
+  score(action: 'pass' | 'fail') {
+    this.content.score(action);
+  }
+
   dispose() {
     state.cursor(null);
     super.dispose();
@@ -344,23 +348,56 @@ function ReviewerInfoComponent({
     .filter(id => id in rubric.cells);
   const index = rows.indexOf(cursor.cell);
   const assignee = rubric.assignment.assignee || workbook.context.path;
-  const score = state.report(workbook, cursor.cell);
-  const label =
-    score && score.status !== 'unscored'
-      ? trans.__('%1 of %2', score.points, score.possible)
-      : null;
+  const score =
+    Rubric.Score.resolve(rubric.assignment.report, cursor.cell) ?? null;
 
   return (
     <span>
       {assignee}
       {' \u00b7 '}
       {trans.__('Cell %1 of %2', index + 1, rows.length)}
-      {label && (
-        <>
-          {' \u00b7 '}
-          {label}
-        </>
-      )}
+      {' \u00b7 '}
+      <ScoreBadge
+        report={rubric.assignment.report}
+        cell={cursor.cell}
+        score={score}
+        trans={trans}
+      />
+    </span>
+  );
+}
+
+function ScoreBadge(props: {
+  report: Partial<Rubric.Assignment.Report>;
+  cell: string;
+  score: Rubric.Score | null;
+  trans: IRenderMime.TranslationBundle;
+}) {
+  const { report, cell, score, trans } = props;
+  if (!score || score.status === 'unscored') {
+    return (
+      <span className="correxit-reviewer-badge correxit-reviewer-badge-unscored">
+        {trans.__('Unscored')}
+      </span>
+    );
+  }
+
+  const { interventions } = { ...Rubric.Assignment.Report.empty(), ...report };
+  const manual = cell in interventions;
+  const source = manual ? trans.__('Manual') : trans.__('Auto');
+  const status = score.status;
+  const className = [
+    'correxit-reviewer-badge',
+    `correxit-reviewer-badge-${status}`,
+    manual && 'correxit-reviewer-badge-manual'
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <span className={className} title={source}>
+      {trans.__('%1/%2', score.points, score.possible)}
+      <span className="correxit-reviewer-badge-label">{source}</span>
     </span>
   );
 }
@@ -374,9 +411,11 @@ class ReviewerContent extends ReactWidget {
       ...props,
       cursor: null,
       onNavigate: ref => void (this.ref = ref),
+      onScore: ref => void (this.scored = ref),
       onWorkbook: workbook => void (this.workbook = workbook)
     };
     this.ref = { current: () => {} };
+    this.scored = { current: () => {} };
     this.addClass('correxit-reviewer-widget-content');
   }
 
@@ -394,10 +433,15 @@ class ReviewerContent extends ReactWidget {
     this.ref.current(direction);
   }
 
+  score(action: 'pass' | 'fail') {
+    this.scored.current(action);
+  }
+
   render() {
     return <Reviewer {...this.props} />;
   }
 
   protected props: Reviewer.Props;
   protected ref: React.MutableRefObject<(d: string) => void>;
+  protected scored: React.MutableRefObject<(a: 'pass' | 'fail') => void>;
 }

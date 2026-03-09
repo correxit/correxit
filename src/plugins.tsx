@@ -121,7 +121,8 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const indicator = new Corrector.Status(trans);
       const active = new Signal<typeof tracker, void>(tracker);
       tracker.corrector.currentChanged.connect(() => active.emit(undefined));
-      const { down, launch, left, review, right, up } = Corrector.CommandIDs;
+      const { down, fail, launch, left, pass, review, right, up } =
+        Corrector.CommandIDs;
       const added = Corrector.commands(app, {
         browser,
         collector,
@@ -182,7 +183,9 @@ const corrector: JupyterFrontEndPlugin<void> = {
         { keys: ['ArrowLeft'], command: left, selector },
         { keys: ['H'], command: left, selector },
         { keys: ['ArrowRight'], command: right, selector },
-        { keys: ['L'], command: right, selector }
+        { keys: ['L'], command: right, selector },
+        { keys: ['P'], command: pass, selector },
+        { keys: ['F'], command: fail, selector }
       ];
       for (const binding of bindings)
         added.push(app.commands.addKeyBinding(binding));

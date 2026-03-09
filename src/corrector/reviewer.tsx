@@ -19,6 +19,7 @@ type Collated = Map<string, { grade: Workbook.Grade; workbook: Headless }>;
 type Cursor = { path: string; cell: string };
 type Headless = Workbook.Headless;
 type NavigateRef = React.MutableRefObject<(direction: string) => void>;
+type ScoreRef = React.MutableRefObject<(action: 'pass' | 'fail') => void>;
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 /** Open a workbook rubric quietly. */
@@ -79,6 +80,7 @@ export function Reviewer(props: Reviewer.Props) {
     [workbooks, cursor?.path]
   );
   const rubric = useMemo(() => open(workbook), [workbook]);
+  const certified = !!(rubric && rubric.assignment.certification);
   const rows = useMemo(() => {
     if (!workbook || !rubric) return [];
     return workbook.context.model.sharedModel.cells
@@ -103,11 +105,38 @@ export function Reviewer(props: Reviewer.Props) {
       if (col < 0 || row < 0) return;
 
       const next = { col, row };
-      if (direction === 'up') next.row = Math.max(0, row - 1);
-      if (direction === 'down') next.row = Math.min(rows.length - 1, row + 1);
-      if (direction === 'left') next.col = Math.max(0, col - 1);
-      if (direction === 'right')
-        next.col = Math.min(columns.length - 1, col + 1);
+      if (direction === 'up') {
+        if (row > 0) {
+          next.row = row - 1;
+        } else if (col > 0) {
+          next.col = col - 1;
+          next.row = rows.length - 1;
+        }
+      }
+      if (direction === 'down') {
+        if (row < rows.length - 1) {
+          next.row = row + 1;
+        } else if (col < columns.length - 1) {
+          next.col = col + 1;
+          next.row = 0;
+        }
+      }
+      if (direction === 'left') {
+        if (col > 0) {
+          next.col = col - 1;
+        } else if (row > 0) {
+          next.row = row - 1;
+          next.col = columns.length - 1;
+        }
+      }
+      if (direction === 'right') {
+        if (col < columns.length - 1) {
+          next.col = col + 1;
+        } else if (row < rows.length - 1) {
+          next.row = row + 1;
+          next.col = 0;
+        }
+      }
       setCursor({ path: columns[next.col], cell: rows[next.row] });
     },
     [cursor, columns, rows]
@@ -128,8 +157,14 @@ export function Reviewer(props: Reviewer.Props) {
 
   const cellType = sharedCell?.cell_type ?? 'code';
   const source = sharedCell?.getSource() ?? '';
-  const outputs =
+  const saved: any[] =
     cellType === 'code' ? ((sharedCell as any)?.outputs ?? []) : [];
+
+  // Correction outputs from verbose execution.
+  const [corrected, setCorrected] = useState<Rubric.Cell.Output[]>([]);
+  useEffect(() => void setCorrected([]), [cursor?.path, cursor?.cell]);
+
+  const outputs = corrected.length ? corrected : saved;
 
   // Score state.
   const report = rubric
@@ -144,19 +179,19 @@ export function Reviewer(props: Reviewer.Props) {
 
   // Reset score/comment on cursor navigation.
   useEffect(() => {
-    const r =
+    const resolved =
       rubric && cursor
         ? (Rubric.Score.resolve(rubric.assignment.report, cursor.cell) ?? null)
         : null;
-    setScore(r && r.status !== 'unscored' ? r.points : '');
-    setComment(r?.comment ?? '');
-    setGrade(null);
+    setScore(resolved && resolved.status !== 'unscored' ? resolved.points : '');
+    setComment(resolved?.comment ?? '');
   }, [cursor?.path, cursor?.cell, rubric?.id]);
 
   // Commit score and comment.
+  const [revision, setRevision] = useState(0);
   const commit = useCallback(
     async (points: number) => {
-      if (!cursor || !cell || !workbook) return;
+      if (!cursor || !cell || !workbook || certified) return;
       const intervention = Rubric.Score.intervene(cursor.cell, {
         comment,
         points,
@@ -167,6 +202,7 @@ export function Reviewer(props: Reviewer.Props) {
         intervention,
         ...(comment ? { comment } : {})
       });
+      setRevision(n => n + 1);
     },
     [cursor, cell, comment, commands, workbook]
   );
@@ -194,13 +230,36 @@ export function Reviewer(props: Reviewer.Props) {
     void directional(value, direction);
   };
 
-  const [grade, setGrade] = useState<Rubric.Score | null>(null);
+  const judge = useCallback(
+    async (action: 'pass' | 'fail') => {
+      if (scoring.current || certified) return;
+      scoring.current = true;
+      setBusy(true);
+      try {
+        const points =
+          action === 'fail'
+            ? 0
+            : typeof score === 'number' && score !== possible
+              ? score
+              : possible;
+        await commit(points);
+      } finally {
+        scoring.current = false;
+        setBusy(false);
+      }
+    },
+    [commit, score, possible]
+  );
+  const scored = useRef<(action: 'pass' | 'fail') => void>(a => judge(a));
+  scored.current = a => judge(a);
+  useEffect(() => props.onScore?.(scored), []);
+
   const doCorrect = async () => {
     if (!cursor || !workbook || cellType !== 'code' || busy) return;
     setBusy(true);
     try {
-      const result = await Workbook.correct(workbook, cursor.cell);
-      setGrade(result.score);
+      const result = await Workbook.correct(workbook, cursor.cell, true);
+      setCorrected(result.outputs.get(cursor.cell) ?? []);
     } finally {
       setBusy(false);
     }
@@ -233,6 +292,7 @@ export function Reviewer(props: Reviewer.Props) {
           columns={columns}
           cursor={cursor}
           grades={grades}
+          revision={revision}
           rows={rows}
           setCursor={setCursor}
           trans={trans}
@@ -241,6 +301,7 @@ export function Reviewer(props: Reviewer.Props) {
         <div className="correxit-reviewer-content">
           <CellSource
             factory={factory}
+            placeholder={trans.__('(blank)')}
             rendermime={rendermime}
             source={source}
             type={cellType}
@@ -252,100 +313,98 @@ export function Reviewer(props: Reviewer.Props) {
               ))}
             </div>
           )}
-          <div className="correxit-reviewer-scoring">
-            <textarea
-              className="correxit-reviewer-comment"
-              data-lm-suppress-shortcuts="true"
-              onChange={({ target: { value } }) => setComment(value)}
-              placeholder={trans.__('Comment...')}
-              rows={3}
-              value={comment}
-            />
-            <div className="correxit-reviewer-scoring-grid">
-              <button
-                className="correxit-reviewer-btn correxit-reviewer-btn-fail"
-                disabled={busy}
-                onClick={() => fail('down')}
-                title={trans.__('Fail and advance to next cell')}
-              >
-                <span>{trans.__('Fail')}</span> <span>↓</span>
-              </button>
-              <span className="correxit-reviewer-score-display">
-                <input
-                  className="correxit-reviewer-score-input"
-                  inputMode="numeric"
-                  min="0"
-                  onChange={({ target: { value } }) => setScore(whole(value))}
-                  step="1"
-                  type="number"
-                  value={score}
-                />
-                <span className="correxit-reviewer-score-sep">/</span>
-                <span className="correxit-reviewer-score-possible">
-                  {possible}
-                </span>
-              </span>
-              <button
-                className={[
-                  'correxit-reviewer-btn correxit-reviewer-btn-pass',
-                  partial && 'cxt-mod-partial'
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                disabled={busy}
-                onClick={() => pass('down')}
-                title={trans.__('Pass and advance to next cell')}
-              >
-                <span>{partial ? trans.__('Partial') : trans.__('Pass')}</span>{' '}
-                <span>↓</span>
-              </button>
-              <button
-                className="correxit-reviewer-btn correxit-reviewer-btn-fail"
-                disabled={busy}
-                onClick={() => fail('right')}
-                title={trans.__('Fail and advance to next workbook')}
-              >
-                <span>{trans.__('Fail')}</span> <span>→</span>
-              </button>
-              <span />
-              <button
-                className={[
-                  'correxit-reviewer-btn correxit-reviewer-btn-pass',
-                  partial && 'cxt-mod-partial'
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                disabled={busy}
-                onClick={() => pass('right')}
-                title={trans.__('Pass and advance to next workbook')}
-              >
-                <span>{partial ? trans.__('Partial') : trans.__('Pass')}</span>{' '}
-                <span>→</span>
-              </button>
+          {certified ? (
+            <div className="correxit-reviewer-certified">
+              <p>{trans.__('Certified')}</p>
             </div>
-            {cellType === 'code' && (
-              <button
-                className="correxit-reviewer-btn correxit-reviewer-btn-correct"
-                disabled={busy}
-                onClick={doCorrect}
-                title={trans.__('Execute and correct cell')}
-              >
-                {busy ? trans.__('Correcting…') : trans.__('Correct')}
-              </button>
-            )}
-            {grade && (
-              <div className="correxit-reviewer-grade">
-                {grade.status === 'unscored'
-                  ? trans.__('Unscored')
-                  : trans.__(
-                      '%1 of %2 (%3)',
-                      grade.points,
-                      grade.possible,
-                      grade.status
-                    )}
+          ) : (
+            <div className="correxit-reviewer-scoring">
+              <textarea
+                className="correxit-reviewer-comment"
+                data-lm-suppress-shortcuts="true"
+                onChange={({ target: { value } }) => setComment(value)}
+                placeholder={trans.__('Comment...')}
+                rows={3}
+                value={comment}
+              />
+              <div className="correxit-reviewer-scoring-grid">
+                <button
+                  className="correxit-reviewer-btn correxit-reviewer-btn-fail"
+                  disabled={busy}
+                  onClick={() => fail('down')}
+                  title={trans.__('Fail and advance to next cell')}
+                >
+                  <span>{trans.__('Fail')}</span> <span>↓</span>
+                </button>
+                <span className="correxit-reviewer-score-display">
+                  <input
+                    className="correxit-reviewer-score-input"
+                    inputMode="numeric"
+                    min="0"
+                    onChange={({ target: { value } }) => setScore(whole(value))}
+                    step="1"
+                    type="number"
+                    value={score}
+                  />
+                  <span className="correxit-reviewer-score-sep">/</span>
+                  <span className="correxit-reviewer-score-possible">
+                    {possible}
+                  </span>
+                </span>
+                <button
+                  className={[
+                    'correxit-reviewer-btn correxit-reviewer-btn-pass',
+                    partial && 'cxt-mod-partial'
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  disabled={busy}
+                  onClick={() => pass('down')}
+                  title={trans.__('Pass and advance to next cell')}
+                >
+                  <span>
+                    {partial ? trans.__('Partial') : trans.__('Pass')}
+                  </span>{' '}
+                  <span>↓</span>
+                </button>
+                <button
+                  className="correxit-reviewer-btn correxit-reviewer-btn-fail"
+                  disabled={busy}
+                  onClick={() => fail('right')}
+                  title={trans.__('Fail and advance to next workbook')}
+                >
+                  <span>{trans.__('Fail')}</span> <span>→</span>
+                </button>
+                <span />
+                <button
+                  className={[
+                    'correxit-reviewer-btn correxit-reviewer-btn-pass',
+                    partial && 'cxt-mod-partial'
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  disabled={busy}
+                  onClick={() => pass('right')}
+                  title={trans.__('Pass and advance to next workbook')}
+                >
+                  <span>
+                    {partial ? trans.__('Partial') : trans.__('Pass')}
+                  </span>{' '}
+                  <span>→</span>
+                </button>
               </div>
-            )}
-          </div>
+              {cellType === 'code' && (
+                <button
+                  className="correxit-reviewer-btn correxit-reviewer-btn-correct"
+                  disabled={busy}
+                  onClick={doCorrect}
+                  title={trans.__('Execute and correct cell')}
+                >
+                  {busy ? trans.__('Correcting…') : trans.__('Correct')}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -358,6 +417,7 @@ export namespace Reviewer {
     cursor: Cursor | null;
     factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
     onNavigate: ((ref: NavigateRef) => void) | null;
+    onScore: ((ref: ScoreRef) => void) | null;
     onWorkbook: ((workbook: Headless | null) => void) | null;
     rendermime: IRenderMimeRegistry | null;
     trans: TranslationBundle;
@@ -370,10 +430,11 @@ export namespace Reviewer {
 
 const CellSource: React.FC<{
   factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
+  placeholder: string;
   rendermime: IRenderMimeRegistry | null;
   source: string;
   type: string;
-}> = ({ factory, rendermime, source, type }) => {
+}> = ({ factory, placeholder, rendermime, source, type }) => {
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<CodeEditor.IEditor | null>(null);
   const className = `correxit-reviewer-source cxt-cell-${type}`;
@@ -416,20 +477,48 @@ const CellSource: React.FC<{
     return () => renderer.dispose();
   }, [source, type, rendermime]);
 
-  // Fallback for raw cells or when services are unavailable.
-  if (
+  const empty = placeholder;
+  const unavailable =
     (type === 'code' && !factory) ||
     (type === 'markdown' && !rendermime) ||
-    type === 'raw'
-  ) {
+    type === 'raw';
+  if (unavailable) {
     return (
       <div className={className}>
-        <pre>{source}</pre>
+        <pre>
+          {source || (
+            <span className="correxit-reviewer-source-blank">{empty}</span>
+          )}
+        </pre>
+      </div>
+    );
+  }
+  if (!source) {
+    return (
+      <div className={className}>
+        <pre>
+          <span className="correxit-reviewer-source-blank">{empty}</span>
+        </pre>
       </div>
     );
   }
 
   return <div className={className} ref={host} />;
+};
+
+/** Normalize an output (nbformat IOutput or kernel IIOPubMessage) to a bundle. */
+const bundle = (output: any): Record<string, string> => {
+  // Kernel message: content lives under output.content.
+  const content = output.content ?? output;
+  const data: Record<string, string> | undefined = content.data;
+  if (data) return data;
+  // Stream: text may be string or string[].
+  const text = content.text;
+  if (text !== null && text !== undefined) {
+    const joined = Array.isArray(text) ? text.join('') : String(text);
+    return { 'text/plain': joined };
+  }
+  return {};
 };
 
 const CellOutput: React.FC<{
@@ -438,18 +527,16 @@ const CellOutput: React.FC<{
 }> = ({ output, rendermime }) => {
   const host = useRef<HTMLDivElement>(null);
 
-  const bundle: Record<string, string> =
-    output.data ?? (output.text ? { 'text/plain': output.text.join('') } : {});
-  const fallback =
-    bundle['text/plain'] ?? output.text?.join?.('') ?? JSON.stringify(output);
+  const data = bundle(output);
+  const fallback = data['text/plain'] ?? JSON.stringify(output);
 
   useEffect(() => {
     if (!rendermime || !host.current) return;
-    const mimeType = rendermime.preferredMimeType(bundle, 'prefer');
+    const mimeType = rendermime.preferredMimeType(data, 'prefer');
     if (!mimeType) return;
     host.current.textContent = '';
     const renderer = rendermime.createRenderer(mimeType);
-    const model = rendermime.createModel({ data: bundle, trusted: true });
+    const model = rendermime.createModel({ data, trusted: true });
     void renderer.renderModel(model).then(() => {
       if (host.current) {
         host.current.textContent = '';
@@ -469,11 +556,12 @@ const Minimap: React.FC<{
   columns: string[];
   cursor: Cursor;
   grades: Collated;
+  revision: number;
   rows: string[];
   setCursor: (cursor: Cursor) => void;
   trans: TranslationBundle;
   workbooks: Scanned[];
-}> = ({ columns, cursor, grades, rows, setCursor, trans, workbooks }) => {
+}> = ({ columns, cursor, grades, revision, rows, setCursor, trans, workbooks }) => {
   const grid = useMemo(() => {
     return rows.map(cellId =>
       columns.map(path => {
@@ -495,7 +583,7 @@ const Minimap: React.FC<{
           : score.status;
       })
     );
-  }, [columns, rows, workbooks, grades]);
+  }, [columns, rows, workbooks, grades, revision]);
 
   return (
     <div

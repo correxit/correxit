@@ -64,6 +64,10 @@ export namespace Workbook {
     spec: KernelSpec.ISpecModel | null;
   };
 
+  export namespace Grade {
+    export type Verbose = Grade & { outputs: Rubric.Outputs; };
+  }
+
   export type Headed = {
     readonly content: Notebook;
     readonly context: DocumentRegistry.IContext<INotebookModel>;
@@ -316,8 +320,17 @@ export namespace Workbook {
     return update(workbook, Rubric.collect(rubric, receipt));
   }
 
-  /** Certify a workbook: correct, lock, and freeze. */
-  export async function certify(workbook: Workbook): Promise<Certified> {
+  /**
+   * Certify a workbook: correct, lock, and freeze.
+   *
+   * When `bypass` is true, skip kernel re-execution and build the grade
+   * from the existing report scores. Use this when all cells have already
+   * been graded and reviewed (e.g. after the last manual intervention).
+   */
+  export async function certify(
+    workbook: Workbook,
+    bypass = false
+  ): Promise<Certified> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error('certify error');
 
@@ -327,10 +340,18 @@ export namespace Workbook {
       .some(({ id }) => !interventions[id]);
     if (pending) throw new Error('certify error: pending review');
 
-    const grade = await correct(workbook);
     const identifier = Workbook.identifier(workbook);
     if (!Identifier.assigned(identifier))
       throw new Error('certify error: unassigned');
+
+    let grade: Grade;
+    if (bypass) {
+      const score = Rubric.Assignment.summary(rubric.assignment.report);
+      const resolved = score.status !== 'unscored';
+      grade = { path: workbook.context.path, resolved, score, spec: rubric.assignment.report.kernel };
+    } else {
+      grade = await correct(workbook);
+    }
     if (!grade.resolved)
       throw new Error(`certify error: unresolved: (${grade.score.status})`);
 
@@ -376,17 +397,27 @@ export namespace Workbook {
    */
   export async function correct(
     workbook: Workbook,
-    id?: string
-  ): Promise<Grade> {
+    id: string,
+    verbose: true
+  ): Promise<Grade.Verbose>;
+  export async function correct(
+    workbook: Workbook,
+    id?: string,
+    verbose?: false
+  ): Promise<Grade>;
+  export async function correct(
+    workbook: Workbook,
+    id?: string,
+    verbose?: boolean
+  ): Promise<Grade | Grade.Verbose> {
     const path = workbook.context.path;
     const opened = open(workbook, quiet);
+    const empty = new Map() as Rubric.Outputs;
     if (!opened) {
-      return {
-        path,
-        resolved: false,
-        score: { ...Rubric.Score.UNSCORED, code: 'missing-rubric' },
-        spec: null
-      };
+      const score: Rubric.Score =
+        { ...Rubric.Score.UNSCORED, code: 'missing-rubric' };
+      const outputs = verbose ? { outputs: empty } : {};
+      return { ...outputs, path, resolved: false, score, spec: null };
     }
 
     // Re-audit to get the pruned rubric: headed workbooks tolerate
@@ -394,7 +425,8 @@ export namespace Workbook {
     const audited = audit(workbook, opened);
     if (!audited.ok) {
       const score = { ...Rubric.Score.UNSCORED, comment: audited.error };
-      return { path, resolved: false, score, spec: null };
+      const outputs = verbose ? { outputs: empty } : {};
+      return { path, resolved: false, score, spec: null, ...outputs };
     }
 
     const rubric = audited.rubric;
@@ -408,12 +440,10 @@ export namespace Workbook {
       ? { spec: null, outputs: new Map() as Rubric.Outputs }
       : await execute(workbook, rubric, id);
     if (!result) {
-      return {
-        path,
-        resolved: false,
-        score: { ...Rubric.Score.UNSCORED, code: 'error-execute' },
-        spec: null
-      };
+      const score: Rubric.Score =
+        { ...Rubric.Score.UNSCORED, code: 'error-execute' };
+      const outputs = verbose ? { outputs: empty } : {};
+      return { ...outputs, path, resolved: false, score, spec: null };
     }
 
     const { score, summary } = Rubric.Assignment;
@@ -440,7 +470,7 @@ export namespace Workbook {
       : !cells.some(missing) && !cells.some(unresolved);
     if (resolved && !rubric.locked)
       await update(workbook, await Rubric.sign(rubric, report));
-    return { path, resolved, score: final, spec };
+    return { path, resolved, score: final, spec, ...(verbose && { outputs }) };
   }
 
    /**
