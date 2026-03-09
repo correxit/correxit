@@ -4,8 +4,7 @@ import { showErrorMessage, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
-import { IRenderMime } from '@jupyterlab/rendermime';
-import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
+import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
 import { folderIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
@@ -30,15 +29,15 @@ export namespace CommandIDs {
   export const cd = 'correxit-corrector:cd';
   export const collect = 'correxit-corrector:collect';
   export const down = 'correxit-reviewer:down';
+  export const fail = 'correxit-reviewer:fail';
   export const intervene = 'correxit-reviewer:intervene';
   export const launch = 'correxit-corrector:launch';
   export const left = 'correxit-reviewer:left';
+  export const pass = 'correxit-reviewer:pass';
   export const review = 'correxit-reviewer:review';
   export const right = 'correxit-reviewer:right';
   export const scan = 'correxit-corrector:scan';
   export const up = 'correxit-reviewer:up';
-  export const pass = 'correxit-reviewer:pass';
-  export const fail = 'correxit-reviewer:fail';
 }
 
 export function commands(
@@ -277,7 +276,8 @@ export function commands(
 
           // Auto-certify if this was the last pending reviewable cell.
           const updated = open(workbook);
-          if (updated && !updated.locked && !updated.assignment.certification) {
+          const { certification } = updated?.assignment ?? {};
+          if (updated && !updated.locked && !certification) {
             const pending = Object.values(updated.cells)
               .filter(cell => cell.is === 'reviewable')
               .some(cell => !updated.assignment.report.interventions[cell.id]);

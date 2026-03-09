@@ -9,7 +9,7 @@ import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
-import { publish, clear } from './bridge';
+import { clear, publish } from './bridge';
 import {
   commands as COMMANDS,
   CommandIDs as COMMAND_IDS,

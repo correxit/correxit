@@ -1,6 +1,5 @@
 import { CodeEditor } from '@jupyterlab/codeeditor';
-import { IRenderMime } from '@jupyterlab/rendermime';
-import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
+import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { CommandRegistry } from '@lumino/commands';
 import React, {
   useCallback,
@@ -105,39 +104,44 @@ export function Reviewer(props: Reviewer.Props) {
       if (col < 0 || row < 0) return;
 
       const next = { col, row };
-      if (direction === 'up') {
-        if (row > 0) {
-          next.row = row - 1;
-        } else if (col > 0) {
-          next.col = col - 1;
-          next.row = rows.length - 1;
-        }
+      switch (direction) {
+        case 'up':
+          if (row > 0) {
+            next.row = row - 1;
+          } else if (col > 0) {
+            next.col = col - 1;
+            next.row = rows.length - 1;
+          }
+          break;
+        case 'down':
+          if (row < rows.length - 1) {
+            next.row = row + 1;
+          } else if (col < columns.length - 1) {
+            next.col = col + 1;
+            next.row = 0;
+          }
+          break;
+        case 'left':
+          if (col > 0) {
+            next.col = col - 1;
+          } else if (row > 0) {
+            next.row = row - 1;
+            next.col = columns.length - 1;
+          }
+          break;
+        case 'right':
+          if (col < columns.length - 1) {
+            next.col = col + 1;
+          } else if (row < rows.length - 1) {
+            next.row = row + 1;
+            next.col = 0;
+          }
+          break;
       }
-      if (direction === 'down') {
-        if (row < rows.length - 1) {
-          next.row = row + 1;
-        } else if (col < columns.length - 1) {
-          next.col = col + 1;
-          next.row = 0;
-        }
-      }
-      if (direction === 'left') {
-        if (col > 0) {
-          next.col = col - 1;
-        } else if (row > 0) {
-          next.row = row - 1;
-          next.col = columns.length - 1;
-        }
-      }
-      if (direction === 'right') {
-        if (col < columns.length - 1) {
-          next.col = col + 1;
-        } else if (row < rows.length - 1) {
-          next.row = row + 1;
-          next.col = 0;
-        }
-      }
-      setCursor({ path: columns[next.col], cell: rows[next.row] });
+      setCursor({
+        path: columns[next.col],
+        cell: rows[next.row]
+      });
     },
     [cursor, columns, rows]
   );
@@ -149,31 +153,27 @@ export function Reviewer(props: Reviewer.Props) {
   const cell = rubric && cursor ? rubric.cells[cursor.cell] : null;
 
   // Cell source and type.
-  const sharedCell = useMemo(() => {
+  const model = useMemo(() => {
     if (!workbook || !cursor) return null;
     const cells = workbook.context.model.sharedModel.cells;
-    return cells.find(c => c.id === cursor.cell) ?? null;
+    return cells.find(cell => cell.id === cursor.cell) ?? null;
   }, [workbook, cursor?.cell]);
 
-  const cellType = sharedCell?.cell_type ?? 'code';
-  const source = sharedCell?.getSource() ?? '';
-  const saved: any[] =
-    cellType === 'code' ? ((sharedCell as any)?.outputs ?? []) : [];
+  const type = model?.cell_type ?? 'code';
+  const source = model?.getSource() ?? '';
+  const saved: any[] = type === 'code' ? ((model as any)?.outputs ?? []) : [];
 
   // Correction outputs from verbose execution.
   const [corrected, setCorrected] = useState<Rubric.Cell.Output[]>([]);
   useEffect(() => void setCorrected([]), [cursor?.path, cursor?.cell]);
 
   const outputs = corrected.length ? corrected : saved;
-
-  // Score state.
   const report = rubric
     ? (Rubric.Score.resolve(rubric.assignment.report, cursor?.cell ?? '') ??
       null)
     : null;
   const persisted = report && report.status !== 'unscored' ? report.points : '';
   const possible = cell ? cell.points : 0;
-
   const [score, setScore] = useState<number | ''>(persisted);
   const [comment, setComment] = useState(report?.comment ?? '');
 
@@ -254,8 +254,8 @@ export function Reviewer(props: Reviewer.Props) {
   scored.current = a => judge(a);
   useEffect(() => props.onScore?.(scored), []);
 
-  const doCorrect = async () => {
-    if (!cursor || !workbook || cellType !== 'code' || busy) return;
+  const rerun = async () => {
+    if (!cursor || !workbook || type !== 'code' || busy) return;
     setBusy(true);
     try {
       const result = await Workbook.correct(workbook, cursor.cell, true);
@@ -304,9 +304,9 @@ export function Reviewer(props: Reviewer.Props) {
             placeholder={trans.__('(blank)')}
             rendermime={rendermime}
             source={source}
-            type={cellType}
+            type={type}
           />
-          {cellType === 'code' && outputs.length > 0 && (
+          {type === 'code' && outputs.length > 0 && (
             <div className="correxit-reviewer-outputs">
               {outputs.map((output: any, i: number) => (
                 <CellOutput key={i} output={output} rendermime={rendermime} />
@@ -393,11 +393,13 @@ export function Reviewer(props: Reviewer.Props) {
                   <span>→</span>
                 </button>
               </div>
-              {cellType === 'code' && (
+              {type === 'code' && (
                 <button
-                  className="correxit-reviewer-btn correxit-reviewer-btn-correct"
+                  className={
+                    'correxit-reviewer-btn' + ' correxit-reviewer-btn-correct'
+                  }
                   disabled={busy}
-                  onClick={doCorrect}
+                  onClick={rerun}
                   title={trans.__('Execute and correct cell')}
                 >
                   {busy ? trans.__('Correcting…') : trans.__('Correct')}
@@ -506,7 +508,9 @@ const CellSource: React.FC<{
   return <div className={className} ref={host} />;
 };
 
-/** Normalize an output (nbformat IOutput or kernel IIOPubMessage) to a bundle. */
+/**
+ * Normalize an output to a renderable MIME bundle.
+ */
 const bundle = (output: any): Record<string, string> => {
   // Kernel message: content lives under output.content.
   const content = output.content ?? output;
@@ -583,13 +587,10 @@ const Minimap: React.FC<{
         const cell = rubric.cells[cellId];
         if (!cell) return 'unscored';
         const score = Rubric.Score.resolve(rubric.assignment.report, cellId);
-        if (!score) return cell.is === 'reviewable' ? 'review' : 'unscored';
-
-        return score.status === 'unscored'
-          ? cell.is === 'reviewable'
-            ? 'review'
-            : 'unscored'
-          : score.status;
+        const reviewable = cell.is === 'reviewable';
+        if (!score || score.status === 'unscored')
+          return reviewable ? 'review' : 'unscored';
+        return score.status;
       })
     );
   }, [columns, rows, workbooks, grades, revision]);

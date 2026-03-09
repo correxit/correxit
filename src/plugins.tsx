@@ -115,8 +115,12 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const reviewer = 'correxit-reviewer';
       const trans = (translator || nullTranslator).load('correxit');
       const tracker = {
-        reviewer: new WidgetTracker<Reviewer.Widget>({ namespace: reviewer }),
-        corrector: new WidgetTracker<Corrector.Widget>({ namespace: corrector })
+        corrector: new WidgetTracker<Corrector.Widget>({
+          namespace: corrector
+        }),
+        reviewer: new WidgetTracker<Reviewer.Widget>({
+          namespace: reviewer
+        })
       };
       const indicator = new Corrector.Status(trans);
       const active = new Signal<typeof tracker, void>(tracker);

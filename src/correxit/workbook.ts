@@ -346,9 +346,17 @@ export namespace Workbook {
 
     let grade: Grade;
     if (bypass) {
-      const score = Rubric.Assignment.summary(rubric.assignment.report);
-      const resolved = score.status !== 'unscored';
-      grade = { path: workbook.context.path, resolved, score, spec: rubric.assignment.report.kernel };
+      const { report } = rubric.assignment;
+      const score = Rubric.Assignment.summary(report);
+      const cells = Object.values(rubric.cells);
+      const ungraded = cells.some(cell =>
+        cell.is !== 'reviewable' &&
+        (!report.scores[cell.id] ||
+          report.scores[cell.id].status === 'unscored')
+      );
+      const resolved = !ungraded && score.status !== 'unscored';
+      const { path } = workbook.context;
+      grade = { path, resolved, score, spec: report.kernel };
     } else {
       grade = await correct(workbook);
     }

@@ -1,22 +1,21 @@
 import { MainAreaWidget } from '@jupyterlab/apputils';
-import { PathExt } from '@jupyterlab/coreutils';
 import { CodeEditor } from '@jupyterlab/codeeditor';
-import { IRenderMime } from '@jupyterlab/rendermime';
-import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
+import { PathExt } from '@jupyterlab/coreutils';
+import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import {
   CommandToolbarButton,
   ReactWidget,
   Toolbar
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
+import { Message } from '@lumino/messaging';
 import React from 'react';
+import { Rubric, Workbook } from '../correxit';
+import * as state from '../correxit/state';
 import { Corrector } from '.';
-import { Reviewer } from './reviewer';
 import { useSnapshot } from './bridge';
 import { CommandIDs, Scanned } from './commands';
-import * as state from '../correxit/state';
-import { Rubric, Workbook } from '../correxit';
-import { Message } from '@lumino/messaging';
+import { Reviewer } from './reviewer';
 
 export class CorrectorWidget extends MainAreaWidget<Content> {
   constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
@@ -376,7 +375,11 @@ function ScoreBadge(props: {
   const { report, cell, score, trans } = props;
   if (!score || score.status === 'unscored') {
     return (
-      <span className="correxit-reviewer-badge correxit-reviewer-badge-unscored">
+      <span
+        className={
+          'correxit-reviewer-badge' + ' correxit-reviewer-badge-unscored'
+        }
+      >
         {trans.__('Unscored')}
       </span>
     );

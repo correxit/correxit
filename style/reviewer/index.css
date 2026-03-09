@@ -340,15 +340,30 @@
 }
 
 .correxit-reviewer-badge-correct {
-  background-color: var(--correxit-correct-color);
+  background-color: color-mix(
+    in oklch,
+    var(--correxit-correct-color),
+    black 20%
+  );
+  color: #fff;
 }
 
 .correxit-reviewer-badge-incorrect {
-  background-color: var(--correxit-incorrect-color);
+  background-color: color-mix(
+    in oklch,
+    var(--correxit-incorrect-color),
+    black 20%
+  );
+  color: #fff;
 }
 
 .correxit-reviewer-badge-partial {
-  background-color: var(--correxit-partial-color);
+  background-color: color-mix(
+    in oklch,
+    var(--correxit-partial-color),
+    black 25%
+  );
+  color: #fff;
 }
 
 .correxit-reviewer-badge-unscored {

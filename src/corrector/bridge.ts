@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import type { Scanned } from './commands';
 import type { Workbook } from '../correxit';
+import type { Scanned } from './commands';
 
 type Collated = Map<
   string,
