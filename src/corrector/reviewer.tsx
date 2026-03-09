@@ -561,7 +561,16 @@ const Minimap: React.FC<{
   setCursor: (cursor: Cursor) => void;
   trans: TranslationBundle;
   workbooks: Scanned[];
-}> = ({ columns, cursor, grades, revision, rows, setCursor, trans, workbooks }) => {
+}> = ({
+  columns,
+  cursor,
+  grades,
+  revision,
+  rows,
+  setCursor,
+  trans,
+  workbooks
+}) => {
   const grid = useMemo(() => {
     return rows.map(cellId =>
       columns.map(path => {

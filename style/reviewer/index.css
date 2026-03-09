@@ -212,11 +212,6 @@
   gap: 4px;
   grid-template-columns: 1fr auto 1fr;
 
-  .correxit-reviewer-btn {
-    display: flex;
-    justify-content: space-between;
-  }
-
   .correxit-reviewer-score-display {
     align-items: center;
     display: flex;
@@ -255,6 +250,11 @@
   font-size: var(--jp-ui-font-size1);
   padding: 4px 10px;
 
+  .correxit-reviewer-scoring-grid & {
+    display: flex;
+    justify-content: space-between;
+  }
+
   &:disabled {
     cursor: default;
     opacity: 0.5;
@@ -267,7 +267,11 @@
 }
 
 .correxit-reviewer-btn-fail {
-  background-color: color-mix(in oklch, var(--correxit-incorrect-color), black 20%);
+  background-color: color-mix(
+    in oklch,
+    var(--correxit-incorrect-color),
+    black 20%
+  );
   color: #fff;
 
   &:hover {
@@ -276,7 +280,11 @@
 }
 
 .correxit-reviewer-btn-pass {
-  background-color: color-mix(in oklch, var(--correxit-correct-color), black 20%);
+  background-color: color-mix(
+    in oklch,
+    var(--correxit-correct-color),
+    black 20%
+  );
   color: #fff;
 
   &:hover {
@@ -284,7 +292,11 @@
   }
 
   &.cxt-mod-partial {
-    background-color: color-mix(in oklch, var(--correxit-partial-color), black 25%);
+    background-color: color-mix(
+      in oklch,
+      var(--correxit-partial-color),
+      black 25%
+    );
   }
 }
 
@@ -345,7 +357,7 @@
 }
 
 .correxit-reviewer-badge-manual {
-  border: 1.5px dashed var(--jp-ui-inverse-font-color2, rgba(255, 255, 255, 0.6));
+  border: 1.5px dashed var(--jp-ui-inverse-font-color2, rgb(255 255 255 / 60%));
 }
 
 .correxit-reviewer-badge-manual.correxit-reviewer-badge-unscored {
