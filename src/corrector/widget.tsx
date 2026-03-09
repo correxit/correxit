@@ -17,9 +17,9 @@ import { useSnapshot } from './bridge';
 import { CommandIDs, Scanned } from './commands';
 import { Reviewer } from './reviewer';
 
-export class CorrectorWidget extends MainAreaWidget<Content> {
+export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
   constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
-    super({ content: new Content({ commands, path, trans }) });
+    super({ content: new CorrectorContent({ commands, path, trans }) });
     this.commands = commands;
     this.indicator = indicator;
     this.trans = trans;
@@ -105,7 +105,7 @@ export class CorrectorStatus extends ReactWidget {
   protected trans: IRenderMime.TranslationBundle;
 }
 
-class Content extends ReactWidget {
+class CorrectorContent extends ReactWidget {
   constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
     super();
     this.props = {
@@ -426,6 +426,18 @@ class ReviewerContent extends ReactWidget {
 
   workbook: Workbook.Headless | null = null;
 
+  move(direction: 'up' | 'down' | 'left' | 'right') {
+    this.ref.current(direction);
+  }
+
+  render() {
+    return <Reviewer {...this.props} />;
+  }
+
+  score(action: 'pass' | 'fail') {
+    this.scored.current(action);
+  }
+
   set(updates: Partial<{ cursor: { path: string; cell: string } }>) {
     this.props = {
       ...this.props,
@@ -434,19 +446,7 @@ class ReviewerContent extends ReactWidget {
     this.update();
   }
 
-  move(direction: 'up' | 'down' | 'left' | 'right') {
-    this.ref.current(direction);
-  }
-
-  score(action: 'pass' | 'fail') {
-    this.scored.current(action);
-  }
-
-  render() {
-    return <Reviewer {...this.props} />;
-  }
-
   protected props: Reviewer.Props;
-  protected ref: React.MutableRefObject<(d: string) => void>;
-  protected scored: React.MutableRefObject<(a: 'pass' | 'fail') => void>;
+  protected ref: React.MutableRefObject<(direction: string) => void>;
+  protected scored: React.MutableRefObject<(action: 'pass' | 'fail') => void>;
 }
