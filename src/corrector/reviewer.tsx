@@ -10,11 +10,12 @@ import React, {
 } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
-import { navigate as bridgeNavigate, useSnapshot } from './bridge';
+import { Corrector } from '.';
+import { navigate as bridge, useSnapshot } from './bridge';
 import { commands as COMMANDS, CommandIDs, Scanned } from './commands';
 import { ReviewerWidget } from './widget';
 
-type Collated = Map<string, { grade: Workbook.Grade; workbook: Headless }>;
+type Collated = Corrector.Collated;
 type Cursor = { path: string; cell: string };
 type Headless = Workbook.Headless;
 type NavigateRef = React.MutableRefObject<(direction: string) => void>;
@@ -47,14 +48,7 @@ const whole = (value: string): number | '' => {
 };
 
 export function Reviewer(props: Reviewer.Props) {
-  const {
-    commands,
-    factory,
-    rendermime,
-    trans,
-    cursor: initial,
-    onWorkbook
-  } = props;
+  const { commands, factory, rendermime, trans, cursor: initial } = props;
   const snapshot = useSnapshot();
   const { workbooks, grades } = snapshot;
   const empty = workbooks.length === 0;
@@ -88,10 +82,10 @@ export function Reviewer(props: Reviewer.Props) {
   }, [workbook, rubric]);
 
   useEffect(() => {
-    onWorkbook?.(workbook);
+    props.on.workbook(workbook);
     if (workbook) void inject(commands, workbook);
     if (cursor) state.cursor(cursor.cell);
-    bridgeNavigate(cursor);
+    bridge(cursor);
     return () => void state.cursor(null);
   }, [workbook, cursor?.path, cursor?.cell]);
 
@@ -148,7 +142,7 @@ export function Reviewer(props: Reviewer.Props) {
 
   const ref = useRef<(direction: string) => void>(navigate);
   ref.current = navigate;
-  useEffect(() => props.onNavigate?.(ref), []);
+  useEffect(() => props.on.navigate(ref), []);
 
   const cell = rubric && cursor ? rubric.cells[cursor.cell] : null;
 
@@ -252,7 +246,7 @@ export function Reviewer(props: Reviewer.Props) {
   );
   const scored = useRef<(action: 'pass' | 'fail') => void>(a => judge(a));
   scored.current = a => judge(a);
-  useEffect(() => props.onScore?.(scored), []);
+  useEffect(() => props.on.score(scored), []);
 
   const rerun = async () => {
     if (!cursor || !workbook || type !== 'code' || busy) return;
@@ -418,9 +412,11 @@ export namespace Reviewer {
     commands: CommandRegistry;
     cursor: Cursor | null;
     factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
-    onNavigate: ((ref: NavigateRef) => void) | null;
-    onScore: ((ref: ScoreRef) => void) | null;
-    onWorkbook: ((workbook: Headless | null) => void) | null;
+    on: {
+      navigate: (ref: NavigateRef) => void;
+      score: (ref: ScoreRef) => void;
+      workbook: (workbook: Headless | null) => void;
+    };
     rendermime: IRenderMimeRegistry | null;
     trans: TranslationBundle;
   };

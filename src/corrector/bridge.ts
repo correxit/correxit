@@ -1,11 +1,8 @@
 import { useSyncExternalStore } from 'react';
-import type { Workbook } from '../correxit';
+import { Corrector } from '.';
 import type { Scanned } from './commands';
 
-type Collated = Map<
-  string,
-  { grade: Workbook.Grade; workbook: Workbook.Headless }
->;
+type Collated = Corrector.Collated;
 
 export type Snapshot = Readonly<{
   cursor: { path: string; cell: string } | null;

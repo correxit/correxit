@@ -18,7 +18,7 @@ import {
 import { CorrectorStatus, CorrectorWidget } from './widget';
 
 type Batched = [path: string, file: { grade: Grade; workbook: Headless }];
-type Collated = Map<string, { grade: Grade; workbook: Headless }>;
+type Collated = Corrector.Collated;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 type Phase =
@@ -250,6 +250,8 @@ export function Corrector(props: Corrector.Props) {
 }
 
 export namespace Corrector {
+  export type Collated = Map<string, { grade: Grade; workbook: Headless }>;
+
   export type Mode = 'collect' | 'grade' | 'scan';
 
   export type Notification = { graded: boolean; scanned: boolean; mode: Mode };

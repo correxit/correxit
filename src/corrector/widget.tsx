@@ -413,9 +413,11 @@ class ReviewerContent extends ReactWidget {
     this.props = {
       ...props,
       cursor: null,
-      onNavigate: ref => void (this.ref = ref),
-      onScore: ref => void (this.scored = ref),
-      onWorkbook: workbook => void (this.workbook = workbook)
+      on: {
+        navigate: ref => void (this.ref = ref),
+        score: ref => void (this.scored = ref),
+        workbook: workbook => void (this.workbook = workbook)
+      }
     };
     this.ref = { current: () => {} };
     this.scored = { current: () => {} };
