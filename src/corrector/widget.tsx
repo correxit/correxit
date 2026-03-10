@@ -77,34 +77,6 @@ export namespace CorrectorWidget {
   }
 }
 
-export class CorrectorStatus extends ReactWidget {
-  constructor(trans: IRenderMime.TranslationBundle) {
-    super();
-    this.trans = trans;
-    this.addClass('correxit-corrector-status');
-  }
-
-  render() {
-    const { graded, scanned, trans } = this;
-    const label = !scanned
-      ? trans.__('Scanning...')
-      : !graded
-        ? trans.__('Grading...')
-        : trans.__('Idle');
-    return <span className="jp-StatusBar-TextItem">{label}</span>;
-  }
-
-  set(updates: { graded: boolean; scanned: boolean }) {
-    this.graded = updates.graded;
-    this.scanned = updates.scanned;
-    this.update();
-  }
-
-  protected graded = true;
-  protected scanned = true;
-  protected trans: IRenderMime.TranslationBundle;
-}
-
 class CorrectorContent extends ReactWidget {
   constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
     super();
@@ -133,6 +105,34 @@ class CorrectorContent extends ReactWidget {
   }
 
   protected props: Corrector.Props & { key?: string };
+}
+
+export class CorrectorStatus extends ReactWidget {
+  constructor(trans: IRenderMime.TranslationBundle) {
+    super();
+    this.trans = trans;
+    this.addClass('correxit-corrector-status');
+  }
+
+  render() {
+    const { graded, scanned, trans } = this;
+    const label = !scanned
+      ? trans.__('Scanning...')
+      : !graded
+        ? trans.__('Grading...')
+        : trans.__('Idle');
+    return <span className="jp-StatusBar-TextItem">{label}</span>;
+  }
+
+  set(updates: { graded: boolean; scanned: boolean }) {
+    this.graded = updates.graded;
+    this.scanned = updates.scanned;
+    this.update();
+  }
+
+  protected graded = true;
+  protected scanned = true;
+  protected trans: IRenderMime.TranslationBundle;
 }
 
 class ModeSelector extends ReactWidget {
@@ -298,7 +298,7 @@ export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {
     toolbar.addItem('up', button(CommandIDs.up));
     toolbar.addItem('down', button(CommandIDs.down));
     toolbar.addItem('right', button(CommandIDs.right));
-    toolbar.addItem('info', new ReviewerInfo(trans));
+    toolbar.addItem('info', new ReviewerInfoWidget(trans));
   }
 }
 
@@ -311,7 +311,7 @@ export namespace ReviewerWidget {
   }
 }
 
-class ReviewerInfo extends ReactWidget {
+class ReviewerInfoWidget extends ReactWidget {
   constructor(trans: IRenderMime.TranslationBundle) {
     super();
     this.trans = trans;
@@ -319,17 +319,13 @@ class ReviewerInfo extends ReactWidget {
   }
 
   render() {
-    return <ReviewerInfoComponent trans={this.trans} />;
+    return <ReviewerInfo trans={this.trans} />;
   }
 
   protected trans: IRenderMime.TranslationBundle;
 }
 
-function ReviewerInfoComponent({
-  trans
-}: {
-  trans: IRenderMime.TranslationBundle;
-}) {
+function ReviewerInfo({ trans }: { trans: IRenderMime.TranslationBundle }) {
   const { cursor, workbooks } = useSnapshot();
   if (!cursor) return null;
 
@@ -343,7 +339,7 @@ function ReviewerInfoComponent({
   if (!rubric) return null;
 
   const rows = workbook.context.model.sharedModel.cells
-    .map(c => c.id)
+    .map(cell => cell.id)
     .filter(id => id in rubric.cells);
   const index = rows.indexOf(cursor.cell);
   const assignee = rubric.assignment.assignee || workbook.context.path;
@@ -390,7 +386,6 @@ function ScoreBadge(props: {
   ]
     .filter(Boolean)
     .join(' ');
-
   return (
     <span className={className} title={source}>
       {trans.__('%1/%2', score.points, score.possible)}

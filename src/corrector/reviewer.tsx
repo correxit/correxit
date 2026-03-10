@@ -53,11 +53,11 @@ export function Reviewer(props: Reviewer.Props) {
   );
   const workbook = useMemo(
     () =>
-      cursor
-        ? ((workbooks.find(w => !w.hollow && w.context.path === cursor.path) as
-            | Headless
-            | undefined) ?? null)
-        : null,
+      (cursor &&
+        workbooks
+          .filter(reified)
+          .find(({ context: { path } }) => path === cursor.path)) ??
+      null,
     [workbooks, cursor?.path]
   );
   const rubric = useMemo(() => open(workbook), [workbook]);
@@ -65,7 +65,7 @@ export function Reviewer(props: Reviewer.Props) {
   const rows = useMemo(() => {
     if (!workbook || !rubric) return [];
     return workbook.context.model.sharedModel.cells
-      .map(c => c.id)
+      .map(cell => cell.id)
       .filter(id => id in rubric.cells);
   }, [workbook, rubric]);
 
@@ -133,19 +133,14 @@ export function Reviewer(props: Reviewer.Props) {
   useEffect(() => props.on.navigate(ref), []);
 
   const cell = rubric && cursor ? rubric.cells[cursor.cell] : null;
-
-  // Cell source and type.
   const model = useMemo(() => {
     if (!workbook || !cursor) return null;
     const cells = workbook.context.model.sharedModel.cells;
     return cells.find(cell => cell.id === cursor.cell) ?? null;
   }, [workbook, cursor?.cell]);
-
   const type = model?.cell_type ?? 'code';
   const source = model?.getSource() ?? '';
   const saved: any[] = type === 'code' ? ((model as any)?.outputs ?? []) : [];
-
-  // Correction outputs from verbose execution.
   const [corrected, setCorrected] = useState<Rubric.Cell.Output[]>([]);
   useEffect(() => void setCorrected([]), [cursor?.path, cursor?.cell]);
 
@@ -158,8 +153,6 @@ export function Reviewer(props: Reviewer.Props) {
   const possible = cell ? cell.points : 0;
   const [score, setScore] = useState<number | ''>(persisted);
   const [comment, setComment] = useState(report?.comment ?? '');
-
-  // Reset score/comment on cursor navigation.
   useEffect(() => {
     const resolved =
       rubric && cursor
@@ -169,7 +162,6 @@ export function Reviewer(props: Reviewer.Props) {
     setComment(resolved?.comment ?? '');
   }, [cursor?.path, cursor?.cell, rubric?.id]);
 
-  // Commit score and comment.
   const [revision, setRevision] = useState(0);
   const commit = useCallback(
     async (points: number) => {
@@ -211,7 +203,6 @@ export function Reviewer(props: Reviewer.Props) {
       typeof score === 'number' && score !== possible ? score : possible;
     void directional(value, direction);
   };
-
   const judge = useCallback(
     async (action: 'pass' | 'fail') => {
       if (scoring.current || certified) return;
@@ -249,8 +240,6 @@ export function Reviewer(props: Reviewer.Props) {
 
   const partial =
     typeof score === 'number' && score !== possible && score !== persisted;
-
-  // Idle state.
   if (empty) {
     return (
       <div className="correxit-reviewer correxit-reviewer-idle">
@@ -258,7 +247,6 @@ export function Reviewer(props: Reviewer.Props) {
       </div>
     );
   }
-
   if (!cursor || !workbook || !rubric) {
     return (
       <div className="correxit-reviewer correxit-reviewer-idle">
@@ -266,7 +254,6 @@ export function Reviewer(props: Reviewer.Props) {
       </div>
     );
   }
-
   return (
     <div className="correxit-reviewer">
       <div className="correxit-reviewer-body">
@@ -431,15 +418,16 @@ const CellSource: React.FC<{
     host.current.textContent = '';
     const model = new CodeEditor.Model({ mimeType: 'text/x-python' });
     model.sharedModel.setSource(source);
-    const ed = factory({
+
+    const cached = factory({
       host: host.current,
       model,
       config: { readOnly: true, lineNumbers: false }
     });
-    editor.current = ed;
+    editor.current = cached;
     return () => {
       editor.current = null;
-      ed.dispose();
+      cached.dispose();
       model.dispose();
     };
   }, [source, type, factory]);
@@ -500,6 +488,7 @@ const bundle = (output: any): Record<string, string> => {
   const content = output.content ?? output;
   const data: Record<string, string> | undefined = content.data;
   if (data) return data;
+
   // Stream: text may be string or string[].
   const text = content.text;
   if (text !== null && text !== undefined) {
@@ -514,10 +503,8 @@ const CellOutput: React.FC<{
   rendermime: IRenderMimeRegistry | null;
 }> = ({ output, rendermime }) => {
   const host = useRef<HTMLDivElement>(null);
-
   const data = bundle(output);
   const fallback = data['text/plain'] ?? JSON.stringify(output);
-
   useEffect(() => {
     if (!rendermime || !host.current) return;
     const mimeType = rendermime.preferredMimeType(data, 'prefer');
@@ -533,10 +520,8 @@ const CellOutput: React.FC<{
     });
     return () => renderer.dispose();
   }, [output, rendermime]);
-
   if (!rendermime)
     return <pre className="correxit-reviewer-output">{fallback}</pre>;
-
   return <div className="correxit-reviewer-output" ref={host} />;
 };
 
@@ -590,10 +575,10 @@ const Minimap: React.FC<{
         gridTemplateRows: `repeat(${rows.length}, 1fr)`
       }}
     >
-      {grid.map((row, ri) =>
-        row.map((status, ci) => {
+      {grid.map((line, row) =>
+        line.map((status, col) => {
           const active =
-            cursor.cell === rows[ri] && cursor.path === columns[ci];
+            cursor.cell === rows[row] && cursor.path === columns[col];
           const className = [
             'correxit-reviewer-minimap-cell',
             `correxit-reviewer-minimap-${status}`,
@@ -603,10 +588,10 @@ const Minimap: React.FC<{
             .join(' ');
           return (
             <div
-              aria-label={`${columns[ci]} cell ${ri + 1}: ${status}`}
+              aria-label={`${columns[col]} cell ${row + 1}: ${status}`}
               className={className}
-              key={`${ri}-${ci}`}
-              onClick={() => setCursor({ path: columns[ci], cell: rows[ri] })}
+              key={`${row}-${col}`}
+              onClick={() => setCursor({ path: columns[col], cell: rows[row] })}
               role="gridcell"
             />
           );

@@ -46,7 +46,7 @@ export function commands(
     browser: IDefaultFileBrowser | null;
     collector: Correxit.Collector;
     documents: IDocumentManager;
-    editorServices: IEditorServices | null;
+    editors: IEditorServices | null;
     indicator: Corrector.Status | null;
     rendermime: IRenderMimeRegistry | null;
     tracker: {
@@ -62,7 +62,7 @@ export function commands(
   const {
     browser,
     collector,
-    editorServices,
+    editors,
     indicator,
     rendermime,
     tracker,
@@ -230,9 +230,8 @@ export function commands(
         if (!reviewer || reviewer.isDisposed) {
           reviewer = new Reviewer.Widget({
             commands,
-            factory: editorServices
-              ? options =>
-                  editorServices.factoryService.newInlineEditor(options)
+            factory: editors
+              ? options => editors.factoryService.newInlineEditor(options)
               : null,
             rendermime,
             trans
@@ -263,7 +262,6 @@ export function commands(
         const workbook = reviewer?.workbook ?? null;
         const { comment, id, intervention } = args;
         if (!workbook || !id) return;
-
         try {
           const rubric = open(workbook);
           if (!rubric) return;
