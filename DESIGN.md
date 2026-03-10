@@ -35,15 +35,16 @@ multiple UI surfaces:
 
 - the Correxit sidebar
 - the Corrector widget for batch grading
+- the Reviewer widget for per-cell manual review
 - cell and notebook toolbar buttons
 
 The architecture is divided into three layers:
 
-| Layer                     | Responsibility                                                                                                                              | Modules                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **User Interface**        | Display state, accept user input, and execute commands. Purely declarative except for minimalist use of `ReactWidget`.                      | `src/ui/`, `src/corrector/`, `src/correxit/input.ts`, `src/correxit/use-command.ts` |
-| **Commands**              | Defines all permissible actions and routes them to the business logic. Acts as an orchestrator of the Rubric/Workbook APIs.                 | `src/correxit/commands.ts`, `src/corrector/commands.ts`                             |
-| **`Rubric` & `Workbook`** | Manages mutable state (`Workbook`), immutable operations (`Rubric`), cryptographic operations, file manipulation, and kernel communication. | `src/correxit/rubric.ts`, `src/correxit/workbook.ts`, et al.                        |
+| Layer                     | Responsibility                                                                                                                              | Modules                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **User Interface**        | Display state, accept user input, and execute commands. Purely declarative except for minimalist use of `ReactWidget`.                      | `src/ui/`, `src/corrector/`, `src/correxit/input.ts`, `src/correxit/use-command.ts`, `src/corrector/bridge.ts` |
+| **Commands**              | Defines all permissible actions and routes them to the business logic. Acts as an orchestrator of the Rubric/Workbook APIs.                 | `src/correxit/commands.ts`, `src/corrector/commands.ts`                                                        |
+| **`Rubric` & `Workbook`** | Manages mutable state (`Workbook`), immutable operations (`Rubric`), cryptographic operations, file manipulation, and kernel communication. | `src/correxit/rubric.ts`, `src/correxit/workbook.ts`, et al.                                                   |
 
 **Principle:** _All state mutations and actions flow through commands._ UI
 components are declarative. They render state and execute commands, but never
@@ -82,7 +83,8 @@ backed by an active `NotebookPanel` (visible in the UI), exposing only its `cont
 
 `workbook.ts` uses a `WeakMap` to cache the current `Rubric` instance, avoiding
 repeated decryption. `state.ts` maintains an in-memory `Map` of cell scores
-with FIFO eviction.
+with FIFO eviction, the active reviewer cursor cell, and a `refreshed` signal
+that triggers sidebar re-renders when cursor or state changes.
 
 ### Active workbook
 
@@ -174,6 +176,15 @@ switches tabs. It is backed by a Lumino `Stream`.
 `useCommand` bridges async generators and React. It executes a command, iterates
 its output via `for await`, buffers results, and flushes to component state at
 ~60fps via a `Throttler`. It handles cleanup on unmount.
+
+### Reviewer bridge (`bridge.ts`)
+
+The Corrector and Reviewer are separate widgets that share state: the Corrector
+owns the list of scanned workbooks and collated grades, while the Reviewer owns
+the navigation cursor. `bridge.ts` is a lightweight `useSyncExternalStore`-based
+external store that lets the Corrector `publish()` workbook/grade snapshots and
+the Reviewer `navigate()` to a cursor position. The Reviewer subscribes via
+`useSnapshot()`. This avoids coupling the two widgets through props or context.
 
 ## Kernel pool concurrency model
 
