@@ -36,7 +36,7 @@ export namespace Result {
  *   `resolved: false` are not retried. Defaults to `0`.
  *
  * #### Notes
- * `grader` consumes `scanner` lazily: the next workbook is only fetched once a
+ * `grade()` consumes `scanner` lazily: the next workbook is only fetched once a
  * concurrency slot is free, so the kernel pool never grows faster than grading
  * can drain it.
  *

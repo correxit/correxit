@@ -1,5 +1,6 @@
 @import url('corrector/index.css');
 @import url('monitor/index.css');
+@import url('reviewer/index.css');
 @import url('ui/sidebar.css');
 @import url('ui/toolbars.css');
 
@@ -8,5 +9,5 @@
   --correxit-incorrect-color: var(--jp-error-color1);
   --correxit-insistent-color: var(--md-blue-400);
   --correxit-partial-color: var(--jp-warn-color0);
-  --correxit-unscored-color: var(--jp-border-color2);
+  --correxit-unscored-color: var(--jp-border-color1);
 }

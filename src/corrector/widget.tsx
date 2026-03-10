@@ -1,19 +1,25 @@
 import { MainAreaWidget } from '@jupyterlab/apputils';
+import { CodeEditor } from '@jupyterlab/codeeditor';
 import { PathExt } from '@jupyterlab/coreutils';
-import { IRenderMime } from '@jupyterlab/rendermime';
+import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import {
   CommandToolbarButton,
   ReactWidget,
   Toolbar
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React from 'react';
-import { Corrector } from '.';
 import { Message } from '@lumino/messaging';
+import React from 'react';
+import { Rubric, Workbook } from '../correxit';
+import * as state from '../correxit/state';
+import { Corrector } from '.';
+import { useSnapshot } from './bridge';
+import { CommandIDs, Scanned } from './commands';
+import { Reviewer } from './reviewer';
 
-export class CorrectorWidget extends MainAreaWidget<Content> {
+export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
   constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
-    super({ content: new Content({ commands, path, trans }) });
+    super({ content: new CorrectorContent({ commands, path, trans }) });
     this.commands = commands;
     this.indicator = indicator;
     this.trans = trans;
@@ -71,35 +77,7 @@ export namespace CorrectorWidget {
   }
 }
 
-export class CorrectorStatus extends ReactWidget {
-  constructor(trans: IRenderMime.TranslationBundle) {
-    super();
-    this.trans = trans;
-    this.addClass('correxit-corrector-status');
-  }
-
-  render() {
-    const { graded, scanned, trans } = this;
-    const label = !scanned
-      ? trans.__('Scanning...')
-      : !graded
-        ? trans.__('Grading...')
-        : trans.__('Idle');
-    return <span className="jp-StatusBar-TextItem">{label}</span>;
-  }
-
-  set(updates: { graded: boolean; scanned: boolean }) {
-    this.graded = updates.graded;
-    this.scanned = updates.scanned;
-    this.update();
-  }
-
-  protected graded = true;
-  protected scanned = true;
-  protected trans: IRenderMime.TranslationBundle;
-}
-
-class Content extends ReactWidget {
+class CorrectorContent extends ReactWidget {
   constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
     super();
     this.props = {
@@ -127,6 +105,34 @@ class Content extends ReactWidget {
   }
 
   protected props: Corrector.Props & { key?: string };
+}
+
+export class CorrectorStatus extends ReactWidget {
+  constructor(trans: IRenderMime.TranslationBundle) {
+    super();
+    this.trans = trans;
+    this.addClass('correxit-corrector-status');
+  }
+
+  render() {
+    const { graded, scanned, trans } = this;
+    const label = !scanned
+      ? trans.__('Scanning...')
+      : !graded
+        ? trans.__('Grading...')
+        : trans.__('Idle');
+    return <span className="jp-StatusBar-TextItem">{label}</span>;
+  }
+
+  set(updates: { graded: boolean; scanned: boolean }) {
+    this.graded = updates.graded;
+    this.scanned = updates.scanned;
+    this.update();
+  }
+
+  protected graded = true;
+  protected scanned = true;
+  protected trans: IRenderMime.TranslationBundle;
 }
 
 class ModeSelector extends ReactWidget {
@@ -251,4 +257,185 @@ class ModeSelector extends ReactWidget {
     this.mode = mode;
     this.update();
   }
+}
+
+export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {
+  constructor(options: ReviewerWidget.IOptions) {
+    super({ content: new ReviewerContent(options) });
+    this.addClass('correxit-reviewer-widget');
+    this.initialize(options.commands, options.trans);
+  }
+
+  get workbook(): Workbook.Headless | null {
+    return this.content.workbook;
+  }
+
+  navigate(cursor: { path: string; cell: string }) {
+    this.content.set({ cursor });
+  }
+
+  move(direction: 'up' | 'down' | 'left' | 'right') {
+    this.content.move(direction);
+  }
+
+  score(action: 'pass' | 'fail') {
+    this.content.score(action);
+  }
+
+  dispose() {
+    state.cursor(null);
+    super.dispose();
+  }
+
+  protected initialize(
+    commands: CommandRegistry,
+    trans: IRenderMime.TranslationBundle
+  ) {
+    const { toolbar } = this;
+    const button = (id: string) =>
+      new CommandToolbarButton({ commands, id, noFocusOnClick: true });
+    toolbar.addItem('left', button(CommandIDs.left));
+    toolbar.addItem('up', button(CommandIDs.up));
+    toolbar.addItem('down', button(CommandIDs.down));
+    toolbar.addItem('right', button(CommandIDs.right));
+    toolbar.addItem('info', new ReviewerInfoWidget(trans));
+  }
+}
+
+export namespace ReviewerWidget {
+  export interface IOptions {
+    commands: CommandRegistry;
+    factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
+    rendermime: IRenderMimeRegistry | null;
+    trans: IRenderMime.TranslationBundle;
+  }
+}
+
+class ReviewerInfoWidget extends ReactWidget {
+  constructor(trans: IRenderMime.TranslationBundle) {
+    super();
+    this.trans = trans;
+    this.addClass('correxit-reviewer-info');
+  }
+
+  render() {
+    return <ReviewerInfo trans={this.trans} />;
+  }
+
+  protected trans: IRenderMime.TranslationBundle;
+}
+
+function ReviewerInfo({ trans }: { trans: IRenderMime.TranslationBundle }) {
+  const { cursor, workbooks } = useSnapshot();
+  if (!cursor) return null;
+
+  const workbook = workbooks.find(
+    (w): w is Exclude<Scanned, { hollow: true }> =>
+      !w.hollow && w.context.path === cursor.path
+  );
+  if (!workbook) return null;
+
+  const rubric = Workbook.open(workbook, true);
+  if (!rubric) return null;
+
+  const rows = workbook.context.model.sharedModel.cells
+    .map(cell => cell.id)
+    .filter(id => id in rubric.cells);
+  const index = rows.indexOf(cursor.cell);
+  const assignee = rubric.assignment.assignee || workbook.context.path;
+  const score =
+    Rubric.Score.resolve(rubric.assignment.report, cursor.cell) ?? null;
+
+  return (
+    <span>
+      {assignee}
+      {' \u00b7 '}
+      {trans.__('Cell %1 of %2', index + 1, rows.length)}
+      {' \u00b7 '}
+      <ScoreBadge
+        report={rubric.assignment.report}
+        cell={cursor.cell}
+        score={score}
+        trans={trans}
+      />
+    </span>
+  );
+}
+
+function ScoreBadge(props: {
+  report: Partial<Rubric.Assignment.Report>;
+  cell: string;
+  score: Rubric.Score | null;
+  trans: IRenderMime.TranslationBundle;
+}) {
+  const { report, cell, score, trans } = props;
+  if (!score || score.status === 'unscored') {
+    const className =
+      'correxit-reviewer-badge correxit-reviewer-badge-unscored';
+    return <span className={className}> {trans.__('Unscored')}</span>;
+  }
+
+  const { interventions } = { ...Rubric.Assignment.Report.empty(), ...report };
+  const manual = cell in interventions;
+  const source = manual ? trans.__('Manual') : trans.__('Auto');
+  const status = score.status;
+  const className = [
+    'correxit-reviewer-badge',
+    `correxit-reviewer-badge-${status}`,
+    manual && 'correxit-reviewer-badge-manual'
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return (
+    <span className={className} title={source}>
+      {trans.__('%1/%2', score.points, score.possible)}
+      <span className="correxit-reviewer-badge-label">{source}</span>
+    </span>
+  );
+}
+
+class ReviewerContent extends ReactWidget {
+  constructor(
+    props: Pick<Reviewer.Props, 'commands' | 'factory' | 'rendermime' | 'trans'>
+  ) {
+    super();
+    this.props = {
+      ...props,
+      cursor: null,
+      on: {
+        navigate: ref => void (this.ref = ref),
+        score: ref => void (this.scored = ref),
+        workbook: workbook => void (this.workbook = workbook)
+      }
+    };
+    this.ref = { current: () => {} };
+    this.scored = { current: () => {} };
+    this.addClass('correxit-reviewer-widget-content');
+  }
+
+  workbook: Workbook.Headless | null = null;
+
+  move(direction: 'up' | 'down' | 'left' | 'right') {
+    this.ref.current(direction);
+  }
+
+  render() {
+    return <Reviewer {...this.props} />;
+  }
+
+  score(action: 'pass' | 'fail') {
+    this.scored.current(action);
+  }
+
+  set(updates: Partial<{ cursor: { path: string; cell: string } }>) {
+    this.props = {
+      ...this.props,
+      cursor: updates.cursor ?? this.props.cursor
+    };
+    this.update();
+  }
+
+  protected props: Reviewer.Props;
+  protected ref: React.MutableRefObject<(direction: string) => void>;
+  protected scored: React.MutableRefObject<(action: 'pass' | 'fail') => void>;
 }

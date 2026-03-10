@@ -4,6 +4,7 @@ import { ReactWidget } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit, Workbook } from '..';
+import * as state from '../correxit/state';
 import { Sidebar } from '.';
 
 export class SidebarWidget extends ReactWidget {
@@ -12,6 +13,7 @@ export class SidebarWidget extends ReactWidget {
     this.addClass('correxit-sidebar');
     this.commands = commands;
     this.trans = trans;
+    state.refreshed.connect(this.update, this);
     void this.initialize(settings);
     void this.subscribe(monitor);
   }

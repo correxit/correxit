@@ -1,12 +1,14 @@
+import { Signal } from '@lumino/signaling';
 import { Rubric, Workbook } from '.';
 
 /** Upper bound for in-memory cache of cell scores. */
 export const LIMIT = 500;
 
 const state: {
+  cursor: string | null;
   report: Map<string, Rubric.Score>;
   workbook: Workbook | null;
-} = { report: new Map(), workbook: null };
+} = { cursor: null, report: new Map(), workbook: null };
 
 /**
  * Caches a cell score in memory.
@@ -55,3 +57,21 @@ export function workbook(update?: Workbook | null): Workbook | null {
   state.workbook = update === undefined ? state.workbook : update;
   return state.workbook;
 }
+
+const refreshed = new Signal<object, void>({});
+
+/** Notify the sidebar to re-render. */
+export function refresh() {
+  refreshed.emit(void 0);
+}
+
+/** @returns the active reviewer cursor cell ID; caches the update if given. */
+export function cursor(update?: string | null): string | null {
+  if (update !== undefined && update !== state.cursor) {
+    state.cursor = update;
+    refreshed.emit(void 0);
+  }
+  return state.cursor;
+}
+
+export { refreshed };

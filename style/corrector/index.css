@@ -118,7 +118,7 @@ td {
   &.cxt-mod-collected {
     background-color: var(--correxit-correct-color);
     border-left-color: var(--correxit-correct-color);
-    color: var(--jp-ui-inverse-font-color1);
+    color: #fff;
   }
 
   &.cxt-mod-failed {
