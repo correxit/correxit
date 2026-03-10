@@ -421,11 +421,12 @@ export namespace Workbook {
     const path = workbook.context.path;
     const opened = open(workbook, quiet);
     const empty = new Map() as Rubric.Outputs;
+    const expand = (grade: Grade, outputs: Rubric.Outputs) =>
+      verbose ? { ...grade, outputs } : grade;
     if (!opened) {
       const score: Rubric.Score =
         { ...Rubric.Score.UNSCORED, code: 'missing-rubric' };
-      const outputs = verbose ? { outputs: empty } : {};
-      return { ...outputs, path, resolved: false, score, spec: null };
+      return expand({ path, resolved: false, score, spec: null }, empty);
     }
 
     // Re-audit to get the pruned rubric: headed workbooks tolerate
@@ -433,8 +434,7 @@ export namespace Workbook {
     const audited = audit(workbook, opened);
     if (!audited.ok) {
       const score = { ...Rubric.Score.UNSCORED, comment: audited.error };
-      const outputs = verbose ? { outputs: empty } : {};
-      return { path, resolved: false, score, spec: null, ...outputs };
+      return expand({ path, resolved: false, score, spec: null }, empty);
     }
 
     const rubric = audited.rubric;
@@ -450,8 +450,7 @@ export namespace Workbook {
     if (!result) {
       const score: Rubric.Score =
         { ...Rubric.Score.UNSCORED, code: 'error-execute' };
-      const outputs = verbose ? { outputs: empty } : {};
-      return { ...outputs, path, resolved: false, score, spec: null };
+      return expand({ path, resolved: false, score, spec: null }, empty);
     }
 
     const { score, summary } = Rubric.Assignment;
@@ -478,7 +477,7 @@ export namespace Workbook {
       : !cells.some(missing) && !cells.some(unresolved);
     if (resolved && !rubric.locked)
       await update(workbook, await Rubric.sign(rubric, report));
-    return { path, resolved, score: final, spec, ...(verbose && { outputs }) };
+    return expand({ path, resolved, score: final, spec }, outputs);
   }
 
    /**
