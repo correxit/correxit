@@ -452,7 +452,7 @@ const CellSource: React.FC<{
     const renderer = rendermime.createRenderer('text/markdown');
     const model = rendermime.createModel({
       data: { 'text/markdown': source },
-      trusted: true
+      trusted: false
     });
     void renderer.renderModel(model).then(() => {
       if (host.current) {
@@ -524,7 +524,7 @@ const CellOutput: React.FC<{
     if (!mimeType) return;
     host.current.textContent = '';
     const renderer = rendermime.createRenderer(mimeType);
-    const model = rendermime.createModel({ data, trusted: true });
+    const model = rendermime.createModel({ data, trusted: false });
     void renderer.renderModel(model).then(() => {
       if (host.current) {
         host.current.textContent = '';
