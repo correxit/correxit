@@ -304,11 +304,7 @@ export function commands(
       });
       if (workbook.content.activeCell)
         workbook.content.scrollToCell(workbook.content.activeCell);
-      // Manually trigger a refresh.
-      if (rubric.locked) {
-        injector(null);
-        injector(workbook);
-      }
+      if (rubric.locked) state.refresh();
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.dereference, {

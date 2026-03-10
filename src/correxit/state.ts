@@ -1,3 +1,4 @@
+import { Signal } from '@lumino/signaling';
 import { Rubric, Workbook } from '.';
 
 /** Upper bound for in-memory cache of cell scores. */
@@ -57,8 +58,20 @@ export function workbook(update?: Workbook | null): Workbook | null {
   return state.workbook;
 }
 
+const refreshed = new Signal<object, void>({});
+
+/** Notify the sidebar to re-render. */
+export function refresh() {
+  refreshed.emit(void 0);
+}
+
 /** @returns the active reviewer cursor cell ID; caches the update if given. */
 export function cursor(update?: string | null): string | null {
-  state.cursor = update === undefined ? state.cursor : update;
+  if (update !== undefined && update !== state.cursor) {
+    state.cursor = update;
+    refreshed.emit(void 0);
+  }
   return state.cursor;
 }
+
+export { refreshed };
