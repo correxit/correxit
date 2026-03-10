@@ -560,17 +560,18 @@ const Minimap: React.FC<{
   workbooks
 }) => {
   const grid = useMemo(() => {
-    return rows.map(cellId =>
+    const rubrics = new Map(
+      workbooks
+        .filter(reified)
+        .map(workbook => [workbook.context.path, open(workbook)] as const)
+    );
+    return rows.map(id =>
       columns.map(path => {
-        const workbook = workbooks.find(
-          w => !w.hollow && w.context.path === path
-        ) as Headless | undefined;
-        if (!workbook) return 'unscored';
-        const rubric = open(workbook);
+        const rubric = rubrics.get(path) ?? null;
         if (!rubric) return 'unscored';
-        const cell = rubric.cells[cellId];
+        const cell = rubric.cells[id];
         if (!cell) return 'unscored';
-        const score = Rubric.Score.resolve(rubric.assignment.report, cellId);
+        const score = Rubric.Score.resolve(rubric.assignment.report, id);
         const reviewable = cell.is === 'reviewable';
         if (!score || score.status === 'unscored')
           return reviewable ? 'review' : 'unscored';
