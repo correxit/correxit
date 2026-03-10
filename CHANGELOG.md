@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/QuantStack/correxit/compare/v1.7.0...v1.8.0) (2026-03-10)
+
+
+### Features
+
+* Reviewer ([#51](https://github.com/QuantStack/correxit/issues/51)) ([079fd53](https://github.com/QuantStack/correxit/commit/079fd5365a648f887f027dd926b322b47a94be84))
+
 # [1.7.0](https://github.com/QuantStack/correxit/compare/v1.6.1...v1.7.0) (2026-03-07)
 
 
