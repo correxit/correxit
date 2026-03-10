@@ -390,6 +390,7 @@ const Breakdown: React.FC<{
     if (resolution === 'unscored') return trans.__('%1: unscored', type);
     return trans.__('%1: %2 of %3', type, points, possible);
   };
+  const { review } = COMMAND_IDS;
   return (
     <td className="correxit-corrector-breakdown">
       <span
@@ -409,7 +410,7 @@ const Breakdown: React.FC<{
               key={id}
               onClick={event => {
                 event.stopPropagation();
-                commands.execute(COMMAND_IDS.review, {
+                void commands.execute(review, {
                   path: workbook.context.path,
                   cell: id
                 });
