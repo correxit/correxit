@@ -241,10 +241,7 @@ const Expiration: React.FC<{
       ? 'correxit-assignment-expiration cxt-mod-expired'
       : 'correxit-assignment-expiration';
   if (locked) {
-    const label =
-      expiration !== null
-        ? trans.__('Due %1', new Date(expiration).toLocaleString())
-        : trans.__('No deadline');
+    const label = Rubric.date(expiration, trans.__('No deadline'));
     return (
       <div className={className}>
         <div className="correxit-monospace">{label}</div>
@@ -350,25 +347,18 @@ const Enrollment: React.FC<{
     );
   }
 
-  const due =
-    expiration !== null
-      ? new Date(expiration).toLocaleString()
-      : trans.__('No deadline');
-  const active = all.find(c =>
-    c.assignments.some(r => identify(r) === selected)
+  const due = Rubric.date(expiration, trans.__('No deadline'));
+  const active = all.find(course =>
+    course.assignments.some(record => identify(record) === selected)
   );
+  const { group } = active || {};
   const line = locked
-    ? active?.group
-      ? trans.__('%1: %2 (%3)', active.group, name, due)
+    ? group
+      ? trans.__('%1: %2 (%3)', group, name, due)
       : trans.__('%1 (%2)', name, due)
     : active?.group
-      ? trans.__(
-          '%1: %2 (%3) roster: %4',
-          active.group, name, due, roster.length
-        )
-      : trans.__(
-          '%1 (%2) roster: %3', name, due, roster.length
-        );
+      ? trans.__('%1: %2 (%3) roster: %4', group, name, due, roster.length)
+      : trans.__('%1 (%2) roster: %3', name, due, roster.length);
   const unassigned = trans.__('Template - unassigned');
   return (
     <>

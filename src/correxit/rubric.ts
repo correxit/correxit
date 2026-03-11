@@ -738,6 +738,16 @@ export namespace Rubric {
     return { ...rubric, assignment, revised };
   }
 
+  export function date(timestamp: number | null, empty = ''): string {
+    return timestamp ? new Date(timestamp).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    }) : empty;
+  }
+
   /** @returns the cell for `id`, or `null`. */
   export function get(rubric: Rubric, id: string): Cell | null {
     return rubric.cells[id] || null;
