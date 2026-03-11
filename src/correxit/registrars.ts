@@ -68,11 +68,10 @@ export const moodle: Correxit.Registrar = async (workbook, identifier) => {
     [...new Set(records.filter(student).map(identify))]
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b));
-  const records: { courses: Course[] } = await request(
-    'mod_assign_get_assignments'
-  );
-  const courses = records.courses
-    .filter(({ assignments }) => assignments.length > 0)
+  const action = 'mod_assign_get_assignments';
+  const records: { courses: Course[] } = await request(action);
+  const populated = ({ assignments }: Course) => assignments.length > 0;
+  const courses = records.courses.filter(populated)
     .sort(
       (a, b) =>
         a.id - b.id ||
@@ -83,10 +82,9 @@ export const moodle: Correxit.Registrar = async (workbook, identifier) => {
 
   const rosters = await Promise.all(
     courses.map(async ({ id }) => {
-      const users: User[] = await request(
-        'core_enrol_get_enrolled_users',
-        `&courseid=${id}`
-      );
+      const action = 'core_enrol_get_enrolled_users';
+      const query = `&courseid=${id}`;
+      const users: User[] = await request(action, query);
       return [id, normalize(users)] as const;
     })
   );
@@ -106,14 +104,5 @@ export const moodle: Correxit.Registrar = async (workbook, identifier) => {
       ),
     group: course.fullname || course.shortname || String(course.id)
   }));
-  const selected = identifier.assignment;
-  if (!selected)
-    return registered.flatMap(({ assignments }) => assignments);
-
-  const grouped = registered.find(({ assignments }) =>
-    assignments.some(
-      ({ id, name }) => id === selected || name === selected
-    )
-  );
-  return grouped || registered.flatMap(({ assignments }) => assignments);
+  return registered;
 };

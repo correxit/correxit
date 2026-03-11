@@ -14,7 +14,7 @@ type Enrolled = {
   registered: Registered;
 };
 type Registration = Rubric.Assignment.Registration;
-type Course = Exclude<Registered, Registration[] | null>;
+type Course = { assignments: Registration[]; group: string };
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const TTL = 60_000;
@@ -37,10 +37,14 @@ const freeze = (assignment: Assignment, active: Registration): Assignment => ({
     ? assignment.assignee
     : ''
 });
-const grouped = (registered: Registered): registered is Course =>
-  registered !== null && !Array.isArray(registered);
-const assignments = (r: Registered): Registration[] | null =>
-  r === null ? null : Array.isArray(r) ? r : r.assignments;
+const courses = (registered: Registered): Course[] | null =>
+  registered === null
+    ? null
+    : registered.length && 'group' in registered[0]
+      ? (registered as Course[])
+      : [{ assignments: registered as Registration[], group: '' }];
+const flat = (course: Course[]): Registration[] =>
+  course.flatMap(({ assignments }) => assignments);
 const option = (registration: Registration) => (
   <option key={identify(registration)} value={identify(registration)}>
     {registration.name}
@@ -56,6 +60,7 @@ export const Assignment: React.FC<{
   const { locked, revised } = rubric;
   const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
   const [registered, setRegistered] = useState<Registered>(null);
+  const [pending, setPending] = useState(!locked);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
   const cached = rubric.id;
@@ -87,18 +92,21 @@ export const Assignment: React.FC<{
     const current = enrolled.get(workbook);
     if (current && current.cached === cached && now < current.expires) {
       store(current.registered);
+      setPending(false);
       return;
     }
     const result = await commands.execute(enroll).catch(_ => null);
     const registered = result as Registered;
     enrolled.set(workbook, { cached, expires: now + TTL, registered });
     store(registered);
+    setPending(false);
   };
   useEffect(() => void request(), [cached, workbook]);
   useEffect(() => keep(rubric.assignment), [rubric.assignment]);
   useEffect(() => {
     if (locked) return;
-    const roster = assignments(registered);
+    const resolved = courses(registered);
+    const roster = resolved ? flat(resolved) : null;
     if (roster === null) {
       pick(null);
       return;
@@ -111,7 +119,7 @@ export const Assignment: React.FC<{
     }
 
     const matched = selected
-      ? roster.find(record => identify(record) === selected)
+      ? roster.find(r => identify(r) === selected)
       : selected === ''
         ? null
         : roster.find(record => identify(record) === rubric.assignment.id) ||
@@ -126,11 +134,13 @@ export const Assignment: React.FC<{
   }, [locked, registered, selected]);
   useEffect(() => void reassign(assignment, locked), [assignment, locked]);
 
-  const roster =
-    assignments(registered) ?? (locked ? [rubric.assignment] : null);
-  const course = grouped(registered) ? registered : null;
+  const all =
+    courses(registered) ??
+    (locked ? [{ assignments: [rubric.assignment], group: '' }] : null);
+  const roster = all ? flat(all) : null;
   const manual = roster === null;
   const multiple = !!roster && roster.length > 1;
+  if (pending) return <div className="correxit-assignment" />;
   return (
     <div className="correxit-assignment">
       {manual ? (
@@ -142,8 +152,8 @@ export const Assignment: React.FC<{
       ) : (
         <Enrollment
           {...{
+            all: all!,
             assignment,
-            course,
             locked,
             multiple,
             registered: roster,
@@ -310,8 +320,8 @@ const Roster: React.FC<{
 };
 
 const Enrollment: React.FC<{
+  all: Course[];
   assignment: Assignment;
-  course: Course | null;
   locked: boolean;
   multiple: boolean;
   registered: Registration[];
@@ -320,8 +330,8 @@ const Enrollment: React.FC<{
   trans: TranslationBundle;
 }> = props => {
   const {
+    all,
     assignment: { assignee, expiration, name, roster },
-    course,
     locked,
     multiple,
     registered,
@@ -344,9 +354,21 @@ const Enrollment: React.FC<{
     expiration !== null
       ? new Date(expiration).toLocaleString()
       : trans.__('No deadline');
-  const line = course
-    ? trans.__('%1: %2 (%3) roster: %4', course.group, name, due, roster.length)
-    : trans.__('%1 (%2) roster: %3', name, due, roster.length);
+  const active = all.find(c =>
+    c.assignments.some(r => identify(r) === selected)
+  );
+  const line = locked
+    ? active?.group
+      ? trans.__('%1: %2 (%3)', active.group, name, due)
+      : trans.__('%1 (%2)', name, due)
+    : active?.group
+      ? trans.__(
+          '%1: %2 (%3) roster: %4',
+          active.group, name, due, roster.length
+        )
+      : trans.__(
+          '%1 (%2) roster: %3', name, due, roster.length
+        );
   const unassigned = trans.__('Template - unassigned');
   return (
     <>
@@ -363,13 +385,13 @@ const Enrollment: React.FC<{
               value={selected ?? ''}
             >
               <option value="">{trans.__('No assignment')}</option>
-              {course ? (
-                <optgroup label={course.group}>
-                  {course.assignments.map(option)}
-                </optgroup>
-              ) : (
-                registered.map(option)
-              )}
+              {all.some(c => c.group)
+                ? all.map(c => (
+                    <optgroup key={c.group} label={c.group}>
+                      {c.assignments.map(option)}
+                    </optgroup>
+                  ))
+                : registered.map(option)}
             </select>
           </div>
         </div>

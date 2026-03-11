@@ -349,13 +349,14 @@ export namespace Rubric {
     >;
 
     export namespace Equal {
-      type Grouped = {
+      type Course = {
         assignments: Registration[];
         group: string;
       };
-      type Registered = Registration[] | Grouped | null;
-      const grouped = (r: Registered): r is Grouped =>
-        r !== null && !Array.isArray(r);
+      type Registered = Registration[] | Course[] | null;
+      const course = (x: Course, y: Course): boolean =>
+        x.group === y.group &&
+        registrations(x.assignments, y.assignments);
       const registration = (x: Registration, y: Registration): boolean => (
         x.expiration === y.expiration &&
         x.id === y.id &&
@@ -378,11 +379,15 @@ export namespace Rubric {
       ): boolean {
         if (x === y) return true;
         if (x === null || y === null) return false;
-        if (Array.isArray(x) && Array.isArray(y))
-          return registrations(x, y);
-        if (!grouped(x) || !grouped(y)) return false;
-        return x.group === y.group &&
-          registrations(x.assignments, y.assignments);
+        if (x.length !== y.length) return false;
+        if (!x.length) return true;
+        return 'group' in x[0] && 'group' in y[0]
+          ? (x as Course[]).every(
+              (c, i) => course(c, (y as Course[])[i])
+            )
+          : registrations(
+              x as Registration[], y as Registration[]
+            );
       }
     }
 
