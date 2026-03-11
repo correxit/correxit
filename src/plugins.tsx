@@ -26,6 +26,7 @@ import { Corrector, Reviewer } from './corrector';
 import { Correxit, Unlocker, Workbook } from './correxit';
 import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
+import * as registrars from './correxit/registrars';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
 
@@ -295,14 +296,21 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
   }))()
 };
 
-/** The default Correxit roster registrar. */
+/** The Moodle-backed Correxit roster registrar. */
 const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
   id: Correxit.REGISTRAR,
   description: Correxit.DESCRIPTION.REGISTRAR,
   autoStart: true,
+  optional: [ISettingRegistry],
   ...((deactivator?: () => void) => ({
     provides: Correxit.Registrar,
-    activate: (): Correxit.Registrar => async _ => null,
+    activate: async (
+      _: JupyterFrontEnd,
+      registry: ISettingRegistry | null
+    ): Promise<Correxit.Registrar> => {
+      deactivator = await registrars.initialize(registry);
+      return registrars.moodle;
+    },
     deactivate: () => deactivator?.()
   }))()
 };

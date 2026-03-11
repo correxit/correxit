@@ -1,0 +1,20 @@
+{
+  "title": "Correxit Registrar",
+  "description": "Settings for the Correxit assignment registrar",
+  "type": "object",
+  "properties": {
+    "url": {
+      "title": "Moodle URL",
+      "description": "Base URL of the Moodle instance (e.g. http://localhost:8000)",
+      "type": "string",
+      "default": ""
+    },
+    "token": {
+      "title": "Moodle API token",
+      "description": "Web service token for Moodle REST API access",
+      "type": "string",
+      "default": ""
+    }
+  },
+  "additionalProperties": false
+}
