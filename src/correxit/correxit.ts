@@ -50,7 +50,11 @@ export namespace Correxit {
   export type Registrar = (
     workbook: Workbook,
     identifier: Workbook.Identifier
-  ) => Promise<Rubric.Assignment.Registration[] | null>;
+  ) => Promise<
+    | Rubric.Assignment.Registration[]
+    | { group: string; assignments: Rubric.Assignment.Registration[] }
+    | null
+  >;
 
   export type Injector = (workbook: Workbook | null) => void;
 

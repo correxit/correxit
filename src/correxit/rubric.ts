@@ -349,12 +349,22 @@ export namespace Rubric {
     >;
 
     export namespace Equal {
+      type Grouped = {
+        assignments: Registration[];
+        group: string;
+      };
+      type Registered = Registration[] | Grouped | null;
+      const grouped = (r: Registered): r is Grouped =>
+        r !== null && !Array.isArray(r);
       const registration = (x: Registration, y: Registration): boolean => (
         x.expiration === y.expiration &&
         x.id === y.id &&
         x.name === y.name &&
         roster(x.roster, y.roster)
       );
+      const registrations = (x: Registration[], y: Registration[]): boolean =>
+        x.length === y.length &&
+        x.every((a, i) => registration(a, y[i]));
       const roster = (x: string[], y: string[]): boolean =>
         x.length === y.length &&
         x.every((record, i) => record === y[i]);
@@ -364,13 +374,15 @@ export namespace Rubric {
       }
 
       export function registered(
-        x: Registration[] | null,
-        y: Registration[] | null
+        x: Registered, y: Registered
       ): boolean {
         if (x === y) return true;
         if (x === null || y === null) return false;
-        if (x.length !== y.length) return false;
-        return x.every((item, i) => registration(item, y[i]));
+        if (Array.isArray(x) && Array.isArray(y))
+          return registrations(x, y);
+        if (!grouped(x) || !grouped(y)) return false;
+        return x.group === y.group &&
+          registrations(x.assignments, y.assignments);
       }
     }
 

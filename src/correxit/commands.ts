@@ -42,7 +42,6 @@ type Cell = Rubric.Cell;
 type CellToolbar = Rubric.Cell.Toolbar;
 type Credentials = Workbook.Credentials;
 type Headless = Workbook.Headless;
-type Registration = Rubric.Assignment.Registration;
 type Reified =
   { handle: Credentials | null; rubric: null; workbook: null; } |
   { handle: Credentials | null; rubric: null; workbook: Workbook; } |
@@ -442,7 +441,7 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.enroll, {
     execute: async (
       args: Partial<Credentials>
-    ): Promise<Registration[] | null> => {
+    ): ReturnType<Correxit.Registrar> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric) return null;
 
