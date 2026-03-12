@@ -357,6 +357,10 @@ export namespace Rubric {
       const course = (x: Course, y: Course): boolean =>
         x.group === y.group &&
         registrations(x.assignments, y.assignments);
+      const normalize = (x: (Registration | Course)[]): Course[] =>
+        x.length && 'group' in x[0]
+          ? (x as Course[])
+          : [{ assignments: x as Registration[], group: '' }];
       const registration = (x: Registration, y: Registration): boolean => (
         x.expiration === y.expiration &&
         x.id === y.id &&
@@ -381,13 +385,9 @@ export namespace Rubric {
         if (x === null || y === null) return false;
         if (x.length !== y.length) return false;
         if (!x.length) return true;
-        return 'group' in x[0] && 'group' in y[0]
-          ? (x as Course[]).every(
-              (c, i) => course(c, (y as Course[])[i])
-            )
-          : registrations(
-              x as Registration[], y as Registration[]
-            );
+        const a = normalize(x), b = normalize(y);
+        return a.length === b.length &&
+          a.every((c, i) => course(c, b[i]));
       }
     }
 

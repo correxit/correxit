@@ -1,4 +1,4 @@
-import { Correxit } from './correxit';
+import { Correxit, Workbook } from '.';
 
 export type Provider = 'manual' | 'moodle';
 
@@ -6,8 +6,11 @@ export type Settings = { moodle: { token: string; url: string } };
 
 export const manual: Correxit.Registrar = async () => null;
 
-export function moodle(settings: Settings['moodle']): Correxit.Registrar {
-  return async (workbook, identifier) => {
+export async function moodle(
+  workbook: Workbook,
+  identifier: Workbook.Identifier,
+  settings: Settings['moodle']
+): ReturnType<Correxit.Registrar> {
     type Assignment = { duedate: number; id: number; name: string };
     type Course = {
       assignments: Assignment[];
@@ -91,5 +94,4 @@ export function moodle(settings: Settings['moodle']): Correxit.Registrar {
       group: course.fullname || course.shortname || String(course.id)
     }));
     return registered;
-  };
 }

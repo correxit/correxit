@@ -309,7 +309,7 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
     const registrar: Correxit.Registrar = (workbook, identifier) => {
       switch (provider) {
         case 'moodle':
-          return registrars.moodle(settings.moodle)(workbook, identifier);
+          return registrars.moodle(workbook, identifier, settings.moodle);
         default:
           return registrars.manual(workbook, identifier);
       }
