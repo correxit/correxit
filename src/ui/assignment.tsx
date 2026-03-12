@@ -88,18 +88,21 @@ export const Assignment: React.FC<{
       void commands.execute(assign, assignment).catch(_ => {});
   };
   const request = async () => {
-    const now = Date.now();
-    const current = enrolled.get(workbook);
-    if (current && current.cached === cached && now < current.expires) {
-      store(current.registered);
+    setPending(true);
+    try {
+      const now = Date.now();
+      const current = enrolled.get(workbook);
+      if (current && current.cached === cached && now < current.expires) {
+        store(current.registered);
+        return;
+      }
+      const result = await commands.execute(enroll).catch(_ => null);
+      const registered = result as Registered;
+      enrolled.set(workbook, { cached, expires: now + TTL, registered });
+      store(registered);
+    } finally {
       setPending(false);
-      return;
     }
-    const result = await commands.execute(enroll).catch(_ => null);
-    const registered = result as Registered;
-    enrolled.set(workbook, { cached, expires: now + TTL, registered });
-    store(registered);
-    setPending(false);
   };
   useEffect(() => void request(), [cached, workbook]);
   useEffect(() => keep(rubric.assignment), [rubric.assignment]);
@@ -348,8 +351,9 @@ const Enrollment: React.FC<{
   }
 
   const due = Rubric.date(expiration, trans.__('No deadline'));
+  const lookup = locked ? props.assignment.id : selected;
   const active = all.find(course =>
-    course.assignments.some(record => identify(record) === selected)
+    course.assignments.some(record => identify(record) === lookup)
   );
   const { group } = active || {};
   const line = locked
