@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/QuantStack/correxit/compare/v1.8.0...v1.9.0) (2026-03-12)
+
+
+### Features
+
+* configurable registrar: `manual` or `moodle` ([#52](https://github.com/QuantStack/correxit/issues/52)) ([1d734fa](https://github.com/QuantStack/correxit/commit/1d734fa6ed29bc6d17ba433a735fde103d8f2b18))
+
 # [1.8.0](https://github.com/QuantStack/correxit/compare/v1.7.0...v1.8.0) (2026-03-10)
 
 
