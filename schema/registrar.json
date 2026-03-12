@@ -1,6 +1,7 @@
 {
   "title": "Correxit Registrar",
   "description": "Settings for the Correxit assignment registrar",
+  "jupyter.lab.transform": true,
   "type": "object",
   "properties": {
     "provider": {
@@ -23,7 +24,7 @@
         },
         "token": {
           "title": "API token",
-          "description": "Web service token for Moodle REST API access",
+          "description": "Web service token for Moodle REST API access. Entered values are moved to the secrets manager and never stored on disk.",
           "type": "string",
           "default": ""
         }

@@ -2,14 +2,14 @@ import { Correxit, Workbook } from '.';
 
 export type Provider = 'manual' | 'moodle';
 
-export type Settings = { moodle: { token: string; url: string } };
+export type Settings = { moodle: { url: string } };
 
 export const manual: Correxit.Registrar = async () => null;
 
 export async function moodle(
   workbook: Workbook,
   identifier: Workbook.Identifier,
-  settings: Settings['moodle']
+  settings: Settings['moodle'] & { token: string }
 ): ReturnType<Correxit.Registrar> {
     type Assignment = { duedate: number; id: number; name: string };
     type Course = {
