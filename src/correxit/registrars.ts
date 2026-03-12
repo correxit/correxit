@@ -31,14 +31,14 @@ export async function moodle(
     const url = settings.url.replace(/\/+$/, '');
     if (!token || !url) return null;
 
-    const endpoint = `${url}/webservice/rest/server.php`;
-    const query = (action: string, params = '') =>
-      `${endpoint}?wstoken=${encodeURIComponent(token)}` +
-      `&wsfunction=${action}` +
-      `&moodlewsrestformat=json${params}`;
-
     async function request<T>(action: string, params = ''): Promise<T> {
-      const response = await fetch(query(action, params));
+      const endpoint = `${url}/webservice/rest/server.php`;
+      const body = new URLSearchParams(params);
+      body.set('wstoken', token);
+      body.set('wsfunction', action);
+      body.set('moodlewsrestformat', 'json');
+
+      const response = await fetch(endpoint, { method: 'POST', body });
       if (!response.ok)
         throw new Error(`${action} failed (status ${response.status})`);
 
