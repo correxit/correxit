@@ -323,7 +323,3 @@ not need admin access to _use_ a token, only to _create_ one.
 | Network error / CORS         | Moodle is not returning `Access-Control-Allow-Origin` for the JupyterLab origin.               |
 | `Invalid token`              | Token is expired, revoked, or pasted incorrectly.                                              |
 | Students missing from roster | The student is not enrolled in the course, or their enrolment is suspended.                    |
-
-```
-
-```
