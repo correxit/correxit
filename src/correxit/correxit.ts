@@ -25,6 +25,8 @@ export namespace Correxit {
     export type Emission = { slots: (string | number)[]; type: string; };
   }
 
+  export type Injector = (workbook: Workbook | null) => void;
+
   /** Connects/disconnects workbooks and yields them to plugins. */
   export type Monitor = AsyncIterable<Workbook | null>;
 
@@ -50,9 +52,11 @@ export namespace Correxit {
   export type Registrar = (
     workbook: Workbook,
     identifier: Workbook.Identifier
-  ) => Promise<Rubric.Assignment.Registration[] | null>;
-
-  export type Injector = (workbook: Workbook | null) => void;
+  ) => Promise<
+    | Rubric.Assignment.Registration[]
+    | { group: string; assignments: Rubric.Assignment.Registration[] }[]
+    | null
+  >;
 
   export type Submitter = (
     workbook: Workbook,

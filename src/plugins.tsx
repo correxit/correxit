@@ -26,8 +26,20 @@ import { Corrector, Reviewer } from './corrector';
 import { Correxit, Unlocker, Workbook } from './correxit';
 import * as kernels from './correxit/kernels';
 import * as io from './correxit/io';
+import * as registrars from './correxit/registrars';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
+
+/** The default Correxit grade collector, returns a UUID. */
+const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
+  id: Correxit.COLLECTOR,
+  description: Correxit.DESCRIPTION.COLLECTOR,
+  provides: Correxit.Collector,
+  ...((deactivator?: () => void) => ({
+    activate: (): Correxit.Collector => async _ => UUID.uuid4(),
+    deactivate: () => deactivator?.()
+  }))()
+};
 
 /** The default (file-based) Correxit assignment propagation consumer. */
 const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
@@ -63,17 +75,6 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
         yield { type: 'success', slots: [total] };
       };
     },
-    deactivate: () => deactivator?.()
-  }))()
-};
-
-/** The default Correxit grade collector, returns a UUID. */
-const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
-  id: Correxit.COLLECTOR,
-  description: Correxit.DESCRIPTION.COLLECTOR,
-  provides: Correxit.Collector,
-  ...((deactivator?: () => void) => ({
-    activate: (): Correxit.Collector => async _ => UUID.uuid4(),
     deactivate: () => deactivator?.()
   }))()
 };
@@ -295,17 +296,84 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
   }))()
 };
 
-/** The default Correxit roster registrar. */
-const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
-  id: Correxit.REGISTRAR,
-  description: Correxit.DESCRIPTION.REGISTRAR,
-  autoStart: true,
-  ...((deactivator?: () => void) => ({
-    provides: Correxit.Registrar,
-    activate: (): Correxit.Registrar => async _ => null,
-    deactivate: () => deactivator?.()
-  }))()
-};
+/** The Correxit assignment registrar dispatches to the configured provider. */
+const registrar: JupyterFrontEndPlugin<Correxit.Registrar> =
+  SecretsManager.sign(Correxit.REGISTRAR, token => {
+    if (!token) throw new Error('Secrets manager token unavailable');
+    return {
+      id: Correxit.REGISTRAR,
+      description: Correxit.DESCRIPTION.REGISTRAR,
+      autoStart: true,
+      requires: [ISecretsManager],
+      optional: [ISettingRegistry],
+      provides: Correxit.Registrar,
+      ...((deactivator?: () => void) => {
+        let provider: registrars.Provider = 'manual';
+        let settings: registrars.Settings = { moodle: { url: '' } };
+        let secret = '';
+        const namespace = Correxit.REGISTRAR;
+        const id = 'moodle-token';
+        const registrar: Correxit.Registrar = (workbook, identifier) => {
+          switch (provider) {
+            case 'moodle':
+              return registrars.moodle(workbook, identifier, {
+                token: secret,
+                url: settings.moodle.url
+              });
+            default:
+              return registrars.manual(workbook, identifier);
+          }
+        };
+        return {
+          activate: async (
+            _: JupyterFrontEnd,
+            secrets: ISecretsManager,
+            registry: ISettingRegistry | null
+          ): Promise<Correxit.Registrar> => {
+            const stored = await secrets.get(token, namespace, id);
+            if (stored?.value) secret = stored.value;
+            if (!registry) return registrar;
+            try {
+              registry.transform(Correxit.REGISTRAR, {
+                compose: plugin => {
+                  const raw = JSON.parse(plugin.raw);
+                  const value = raw.moodle?.token;
+                  if (value) {
+                    secret = value;
+                    raw.moodle = { ...raw.moodle, token: '' };
+                    plugin.raw = JSON.stringify(raw, null, 2);
+                    secrets.set(token, namespace, id, { namespace, id, value });
+                  }
+                  if (secret && plugin.data?.composite) {
+                    const composite = plugin.data.composite as any;
+                    composite.moodle = { ...composite.moodle, token: secret };
+                  }
+                  return plugin;
+                }
+              });
+              const loaded = await registry.load(Correxit.REGISTRAR);
+              const reconfigure = () => {
+                const composite = loaded.composite as {
+                  moodle: { token: string; url: string };
+                  provider: registrars.Provider;
+                };
+                provider = composite.provider;
+                settings = { moodle: { url: composite.moodle.url } };
+                if (composite.moodle.token) secret = composite.moodle.token;
+              };
+              loaded.changed.connect(reconfigure);
+              reconfigure();
+              deactivator = () => void loaded.changed.disconnect(reconfigure);
+            } catch (reason) {
+              console.warn(Correxit.REGISTRAR, 'settings error', reason);
+            }
+            return registrar;
+          },
+          deactivate: () => deactivator?.()
+        };
+      })()
+    };
+  });
 
 /** The default Correxit assignment submitter, returns a UUID. */
 const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
@@ -352,34 +420,39 @@ const ui: JupyterFrontEndPlugin<void> = {
 /** The default Correxit unlocker, signed by the Jupyter secrets manager. */
 const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
   Correxit.UNLOCKER,
-  token => ({
-    id: Correxit.UNLOCKER,
-    description: Correxit.DESCRIPTION.UNLOCKER,
-    autoStart: true,
-    provides: Correxit.Unlocker,
-    optional: [ISecretsManager, ITranslator],
-    ...((deactivator?: () => void) => ({
-      activate: (
-        _: JupyterFrontEnd,
-        manager: ISecretsManager | null,
-        translator: ITranslator | null
-      ) => {
-        const trans = (translator || nullTranslator).load('correxit');
-        const secrets = {
-          manager,
-          passphrases: new Set<string>(),
-          pending: null as Promise<string | null> | null,
-          token
-        };
-        return {
-          store: (id: string, key: string) => Unlocker.store(id, key, secrets),
-          unlock: async (workbook, credentials) =>
-            Unlocker.unlock(workbook, credentials, secrets, trans)
-        } as Correxit.Unlocker;
-      },
-      deactivate: () => deactivator?.()
-    }))()
-  })
+  token => {
+    if (!token) throw new Error('Secrets manager token unavailable');
+    return {
+      id: Correxit.UNLOCKER,
+      description: Correxit.DESCRIPTION.UNLOCKER,
+      autoStart: true,
+      provides: Correxit.Unlocker,
+      requires: [ISecretsManager],
+      optional: [ITranslator],
+      ...((deactivator?: () => void) => ({
+        activate: (
+          _: JupyterFrontEnd,
+          manager: ISecretsManager,
+          translator: ITranslator | null
+        ) => {
+          const trans = (translator || nullTranslator).load('correxit');
+          const secrets = {
+            manager,
+            passphrases: new Set<string>(),
+            pending: null as Promise<string | null> | null,
+            token
+          };
+          return {
+            store: (id: string, key: string) =>
+              Unlocker.store(id, key, secrets),
+            unlock: async (workbook, credentials) =>
+              Unlocker.unlock(workbook, credentials, secrets, trans)
+          } as Correxit.Unlocker;
+        },
+        deactivate: () => deactivator?.()
+      }))()
+    };
+  }
 );
 
 export const plugins = [

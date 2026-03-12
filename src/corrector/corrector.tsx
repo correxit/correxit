@@ -60,14 +60,12 @@ const history = (workbook: Scanned, trans: TranslationBundle): string => {
   if (!rubric) return '';
 
   const { certification, collected, submission, submitted } = rubric.assignment;
-  const date = (timestamp: number | null) =>
-    timestamp !== null ? new Date(timestamp).toLocaleString() : '';
   const lines: string[] = [];
   if (submission !== null)
-    lines.push(trans.__('Submission %1', date(submission)));
+    lines.push(trans.__('Submission %1', Rubric.date(submission)));
   if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
   if (certification !== null)
-    lines.push(trans.__('Certification %1', date(certification)));
+    lines.push(trans.__('Certification %1', Rubric.date(certification)));
   if (collected !== null) lines.push(trans.__('Collected: %1', collected));
   return lines.join('\n');
 };

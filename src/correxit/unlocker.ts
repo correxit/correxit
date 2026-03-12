@@ -5,19 +5,17 @@ import * as input from './input';
 import * as security from './security';
 
 type Secrets = {
-  manager: ISecretsManager | null;
+  manager: ISecretsManager;
   passphrases: Set<string>;
   pending: Promise<string | null> | null;
-  token: symbol | null;
+  token: symbol;
 };
 
 export namespace Unlocker {
   export async function store(id: string, key: string, secrets: Secrets) {
     const { manager, token } = secrets;
-    if (manager && token) {
-      const secret = { namespace: Correxit.UNLOCKER, id, value: key };
-      await manager.set(token, Correxit.UNLOCKER, id, secret);
-    }
+    const secret = { namespace: Correxit.UNLOCKER, id, value: key };
+    await manager.set(token, Correxit.UNLOCKER, id, secret);
   }
 
   /**
@@ -67,10 +65,8 @@ async function* candidates(
   if (handle?.key) yield handle.key;
 
   const { manager, token } = secrets;
-  if (manager && token) {
-    const stored = await manager.get(token, Correxit.UNLOCKER, id);
-    if (stored?.value) yield stored.value;
-  }
+  const stored = await manager.get(token, Correxit.UNLOCKER, id);
+  if (stored?.value) yield stored.value;
   if (handle?.passphrase) yield await security.keygen(handle.passphrase, id);
   for (const passphrase of secrets.passphrases)
     yield await security.keygen(passphrase, id);

@@ -349,12 +349,27 @@ export namespace Rubric {
     >;
 
     export namespace Equal {
+      type Course = {
+        assignments: Registration[];
+        group: string;
+      };
+      type Registered = Registration[] | Course[] | null;
+      const course = (x: Course, y: Course): boolean =>
+        x.group === y.group &&
+        registrations(x.assignments, y.assignments);
+      const normalize = (x: (Registration | Course)[]): Course[] =>
+        x.length && 'group' in x[0]
+          ? (x as Course[])
+          : [{ assignments: x as Registration[], group: '' }];
       const registration = (x: Registration, y: Registration): boolean => (
         x.expiration === y.expiration &&
         x.id === y.id &&
         x.name === y.name &&
         roster(x.roster, y.roster)
       );
+      const registrations = (x: Registration[], y: Registration[]): boolean =>
+        x.length === y.length &&
+        x.every((a, i) => registration(a, y[i]));
       const roster = (x: string[], y: string[]): boolean =>
         x.length === y.length &&
         x.every((record, i) => record === y[i]);
@@ -364,13 +379,15 @@ export namespace Rubric {
       }
 
       export function registered(
-        x: Registration[] | null,
-        y: Registration[] | null
+        x: Registered, y: Registered
       ): boolean {
         if (x === y) return true;
         if (x === null || y === null) return false;
         if (x.length !== y.length) return false;
-        return x.every((item, i) => registration(item, y[i]));
+        if (!x.length) return true;
+        const a = normalize(x), b = normalize(y);
+        return a.length === b.length &&
+          a.every((c, i) => course(c, b[i]));
       }
     }
 
@@ -719,6 +736,16 @@ export namespace Rubric {
     const revised = Date.now();
     const assignment = { ...rubric.assignment, collected: receipt };
     return { ...rubric, assignment, revised };
+  }
+
+  export function date(timestamp: number | null, empty = ''): string {
+    return timestamp !== null ? new Date(timestamp).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    }) : empty;
   }
 
   /** @returns the cell for `id`, or `null`. */
