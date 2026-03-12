@@ -296,23 +296,51 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
   }))()
 };
 
-/** The Moodle-backed Correxit roster registrar. */
+/** The Correxit assignment registrar dispatches to the configured provider. */
 const registrar: JupyterFrontEndPlugin<Correxit.Registrar> = {
   id: Correxit.REGISTRAR,
   description: Correxit.DESCRIPTION.REGISTRAR,
   autoStart: true,
   optional: [ISettingRegistry],
-  ...((deactivator?: () => void) => ({
-    provides: Correxit.Registrar,
-    activate: async (
-      _: JupyterFrontEnd,
-      registry: ISettingRegistry | null
-    ): Promise<Correxit.Registrar> => {
-      deactivator = await registrars.initialize(registry);
-      return registrars.moodle;
-    },
-    deactivate: () => deactivator?.()
-  }))()
+  provides: Correxit.Registrar,
+  ...((deactivator?: () => void) => {
+    let provider: registrars.Provider = 'manual';
+    let settings: registrars.Settings = { moodle: { token: '', url: '' } };
+    const registrar: Correxit.Registrar = (workbook, identifier) => {
+      switch (provider) {
+        case 'moodle':
+          return registrars.moodle(settings.moodle)(workbook, identifier);
+        default:
+          return registrars.manual(workbook, identifier);
+      }
+    };
+    return {
+      activate: async (
+        _: JupyterFrontEnd,
+        registry: ISettingRegistry | null
+      ): Promise<Correxit.Registrar> => {
+        if (!registry) return registrar;
+        try {
+          const loaded = await registry.load(Correxit.REGISTRAR);
+          const reconfigure = () => {
+            const composite = loaded.composite as {
+              moodle: { token: string; url: string };
+              provider: registrars.Provider;
+            };
+            provider = composite.provider;
+            settings = { moodle: composite.moodle };
+          };
+          loaded.changed.connect(reconfigure);
+          reconfigure();
+          deactivator = () => void loaded.changed.disconnect(reconfigure);
+        } catch (reason) {
+          console.warn(Correxit.REGISTRAR, 'settings error', reason);
+        }
+        return registrar;
+      },
+      deactivate: () => deactivator?.()
+    };
+  })()
 };
 
 /** The default Correxit assignment submitter, returns a UUID. */

@@ -209,3 +209,121 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   }
 };
 ```
+
+---
+
+## Moodle Integration
+
+Correxit includes a built-in Moodle registrar that pulls assignment metadata
+and course rosters via the Moodle REST API. This requires some one-time
+setup by a Moodle administrator before a teacher can use it.
+
+The integration uses two moving parts:
+
+1. A **Moodle external service** with a curated set of web service functions.
+2. An **API token** scoped to that service and assigned to a teacher account.
+
+The teacher enters their Moodle server URL and token in the Correxit
+registrar settings (Settings → Correxit Registrar → Moodle). Correxit then
+fetches the teacher's courses, assignments, and enrolled students directly
+from the browser — no backend required.
+
+### Administrator setup
+
+These steps are performed once by whoever administers the Moodle instance.
+
+#### 1. Enable web services
+
+- **Site administration → Advanced features** — check _Enable web services_.
+- **Site administration → Server → Web services → Manage protocols** —
+  enable _REST protocol_.
+
+#### 2. Create the external service
+
+- **Site administration → Server → Web services → External services →
+  Add**.
+- Name it **Correxit** (or any name your institution prefers).
+- Check _Enabled_. Leave _Authorised users only_ unchecked unless you want
+  to maintain an explicit allowlist.
+
+#### 3. Add functions to the service
+
+Open the Correxit service and add the functions listed below. This list
+tracks exactly what the current Correxit code calls — nothing more.
+
+| Function                        | Used by                                           |
+| ------------------------------- | ------------------------------------------------- |
+| `mod_assign_get_assignments`    | Registrar — lists assignments the teacher can see |
+| `core_enrol_get_enrolled_users` | Registrar — fetches the roster for each course    |
+
+> As Correxit gains consumer, submitter, and collector support for Moodle,
+> additional functions will be added to this table.
+
+#### 4. Create a token for the teacher
+
+A token must be created by an account with the _moodle/webservice:createtoken_
+capability (typically an admin) and assigned to the teacher's account.
+
+- **Site administration → Server → Web services → Manage tokens → Create
+  token**.
+- Select the **teacher's user account**.
+- Select the **Correxit** service.
+- Optionally set an expiry date.
+
+Give the resulting token to the teacher. The teacher will paste it into
+Correxit's settings; it is never written to disk by Correxit.
+
+#### 5. Configure CORS
+
+Because Correxit runs entirely in the browser, the Moodle server must return
+CORS headers that allow requests from the origin where JupyterLab is served
+(e.g. `http://localhost:8888`).
+
+How you achieve this depends on your deployment:
+
+- **Apache** — add an `Access-Control-Allow-Origin` header to the
+  webservice endpoint via a `.conf` snippet or `.htaccess`.
+- **Nginx reverse proxy** — add the header in the `location` block that
+  proxies to Moodle.
+- **Docker (moodle-docker)** — mount a CORS config file into the Apache
+  container. The `local.yml` override in the moodle-docker repo is one way.
+
+A wildcard (`*`) is acceptable for development. In production, restrict the
+origin to the domain that serves your Jupyter environment.
+
+### Teacher setup
+
+Once the administrator has completed the steps above and provided a token:
+
+1. Open JupyterLab.
+2. **Settings → Settings Editor → Correxit Registrar**.
+3. Set **Provider** to `moodle`.
+4. Enter the **Moodle URL** (e.g. `https://moodle.example.edu`).
+5. Paste the **API token**.
+
+When the teacher opens a workbook that has not yet been assigned, Correxit
+will fetch their courses and assignments from Moodle and present them in a
+dropdown.
+
+### Minimum permissions
+
+The teacher account needs the standard **editingteacher** role in each
+course they teach. No additional capabilities beyond the role defaults are
+required — the two web service functions above operate within the teacher's
+normal course-level permissions.
+
+The token and external service are administrative objects; the teacher does
+not need admin access to _use_ a token, only to _create_ one.
+
+### Troubleshooting
+
+| Symptom                      | Likely cause                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| Dropdown is empty            | The token user has no courses with assignments, or the external service is missing a function. |
+| Network error / CORS         | Moodle is not returning `Access-Control-Allow-Origin` for the JupyterLab origin.               |
+| `Invalid token`              | Token is expired, revoked, or pasted incorrectly.                                              |
+| Students missing from roster | The student is not enrolled in the course, or their enrolment is suspended.                    |
+
+```
+
+```

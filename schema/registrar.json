@@ -3,17 +3,33 @@
   "description": "Settings for the Correxit assignment registrar",
   "type": "object",
   "properties": {
-    "url": {
-      "title": "Moodle URL",
-      "description": "Base URL of the Moodle instance (e.g. http://localhost:8000)",
+    "provider": {
+      "title": "Registrar provider",
+      "description": "Which registrar to use for assignment registration",
       "type": "string",
-      "default": ""
+      "enum": ["manual", "moodle"],
+      "default": "manual"
     },
-    "token": {
-      "title": "Moodle API token",
-      "description": "Web service token for Moodle REST API access",
-      "type": "string",
-      "default": ""
+    "moodle": {
+      "title": "Moodle",
+      "description": "Moodle registrar settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "title": "URL",
+          "description": "Base URL of the Moodle instance (e.g. http://localhost:8000)",
+          "type": "string",
+          "default": ""
+        },
+        "token": {
+          "title": "API token",
+          "description": "Web service token for Moodle REST API access",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false,
+      "default": {}
     }
   },
   "additionalProperties": false
