@@ -739,7 +739,7 @@ export namespace Rubric {
   }
 
   export function date(timestamp: number | null, empty = ''): string {
-    return timestamp ? new Date(timestamp).toLocaleString(undefined, {
+    return timestamp !== null ? new Date(timestamp).toLocaleString(undefined, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
