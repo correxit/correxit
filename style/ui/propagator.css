@@ -1,0 +1,79 @@
+.correxit-propagator {
+  padding: 8px;
+  height: 100%;
+}
+
+.correxit-propagator-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.correxit-propagator-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.correxit-propagator-title {
+  flex: 1;
+  font-size: var(--jp-ui-font-size1);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correxit-propagator-content pre {
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color2);
+  color: var(--jp-ui-font-color2);
+  flex: 1;
+  font-size: var(--jp-ui-font-size0);
+  min-height: 80px;
+  overflow: hidden auto;
+  padding: 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correxit-propagator-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.correxit-propagator-controls progress {
+  flex: 1;
+}
+
+.correxit-propagator-progress {
+  align-items: center;
+  display: flex;
+  font-size: var(--jp-ui-font-size0);
+  gap: 6px;
+}
+
+.correxit-propagator-cancel {
+  appearance: none;
+  background-color: var(--jp-error-color1);
+  border: none;
+  border-radius: 2px;
+  color: white;
+  cursor: pointer;
+  font-size: var(--jp-ui-font-size1);
+  padding: 6px 0;
+  width: 100%;
+}
+
+.correxit-propagator-cancel:hover {
+  background-color: var(--jp-error-color0);
+}
+
+.correxit-propagator-notice {
+  color: var(--jp-ui-font-color2);
+  display: block;
+  font-size: var(--jp-ui-font-size0);
+  padding: 4px 0;
+}

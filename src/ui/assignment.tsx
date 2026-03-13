@@ -1,9 +1,8 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { checkIcon, ToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import { useCommand } from '../correxit/use-command';
 import { Toggle } from './toggle';
 
 type Assignment = Rubric.Assignment;
@@ -18,7 +17,7 @@ type Course = { assignments: Registration[]; group: string };
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const throttle = 5_000;
-const { assign, enroll } = Correxit.CommandIDs;
+const { assign, enroll, propagate, propagator: reveal } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
 const enrolled = new WeakMap<Workbook, Enrolled>();
 const identify = ({ id, name }: Registration) => id || name;
@@ -66,7 +65,7 @@ export const Assignment: React.FC<{
   workbook: Workbook;
 }> = ({ commands, trans, workbook }) => {
   const rubric = Workbook.open(workbook, true)!;
-  const { locked, revised } = rubric;
+  const { locked } = rubric;
   const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
   const [registered, setRegistered] = useState<Registered>(null);
   const [pending, setPending] = useState(false);
@@ -174,7 +173,19 @@ export const Assignment: React.FC<{
         />
       )}
       {manual && <Expiration {...{ assignment, locked, toggle, trans }} />}
-      {!locked && <Propagate {...{ commands, revised, trans }} />}
+      {!locked && (
+        <div className="correxit-assignment-propagate">
+          <ToolbarButtonComponent
+            {...{
+              enabled: commands.isEnabled(propagate),
+              icon: Correxit.Icons.assignment,
+              label: commands.label(propagate),
+              onClick: () => void commands.execute(reveal)
+            }}
+            noFocusOnClick
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -396,67 +407,3 @@ const Enrollment: React.FC<{
     </>
   );
 };
-
-const Propagate: React.FC<{
-  commands: CommandRegistry;
-  revised: number;
-  trans: TranslationBundle;
-}> = ({ commands, revised, trans }) => {
-  type Message = [string, Correxit.Emitter.Emission];
-  const { propagate } = Correxit.CommandIDs;
-  const [command, setCommand] = useState('');
-  const [timestamp, setTimestamp] = useState(revised);
-  const [log, done] = useCommand<Message>(commands, command, { timestamp });
-  const messages = log
-    .filter(([, { type }]) => type !== 'progress')
-    .map(([message]) => message);
-  const [value, max]: [number, number] = log.reduce(
-    (progress, [, { type, slots }]) =>
-      type === 'progress' ? (slots as [number, number]) : progress,
-    [0, 1]
-  );
-  const progress = trans.__('%1 of %2', value, max);
-  return (
-    <div className="correxit-assignment-propagate">
-      <Log {...{ done, messages }} />
-      <ToolbarButtonComponent
-        {...{
-          enabled: done && commands.isEnabled(propagate),
-          icon: Correxit.Icons.assignment,
-          label: commands.label(propagate),
-          onClick: () => {
-            setCommand(propagate);
-            setTimestamp(Date.now());
-          }
-        }}
-        noFocusOnClick
-      />
-      {!done && <progress {...{ max, value }}>{progress}</progress>}
-    </div>
-  );
-};
-
-const Log: React.FC<{
-  done: boolean;
-  messages: string[];
-}> = ({ done, messages }) => {
-  const ref = useRef<HTMLPreElement | null>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [messages.length]);
-  if (done && !messages.length) return <></>;
-  return (
-    <pre ref={ref}>
-      {messages.map((message, key) => (
-        <Message {...{ key, message }} />
-      ))}
-    </pre>
-  );
-};
-
-const Message: React.FC<{ message: string }> = React.memo(({ message }) => (
-  <span title={message}>
-    {message}
-    <br />
-  </span>
-));

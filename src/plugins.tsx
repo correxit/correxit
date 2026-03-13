@@ -28,7 +28,7 @@ import * as dispatcher from './correxit/dispatcher';
 import * as kernels from './correxit/kernels';
 import * as registrars from './correxit/registrars';
 import * as state from './correxit/state';
-import { Sidebar } from './ui';
+import { Propagator, Sidebar } from './ui';
 
 /** The default Correxit grade collector, returns a UUID. */
 const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
@@ -333,7 +333,32 @@ const ui: JupyterFrontEndPlugin<void> = {
       widget.title.icon = Correxit.Icons.correct;
       shell.add(widget, 'right', {});
       if (restorer) restorer.add(widget, widget.id);
-      deactivator = () => widget.dispose();
+
+      let serial = 0;
+      const propagator = commands.addCommand(Correxit.CommandIDs.propagator, {
+        label: trans.__('Create assigned workbooks'),
+        isEnabled: () => commands.isEnabled(Correxit.CommandIDs.propagate),
+        isVisible: () => commands.isEnabled(Correxit.CommandIDs.propagator),
+        execute: () => {
+          const rubric = Workbook.open(state.workbook(), true);
+          const name = rubric?.assignment.name || '';
+          const roster = rubric?.assignment.roster.length || 0;
+          const title = roster
+            ? trans.__('%1 (roster: %2)', name, roster)
+            : name || trans.__('Creating assigned workbooks');
+          const widget = new Propagator.Widget({ commands, title, trans });
+          widget.id = `correxit-propagator-${++serial}`;
+          widget.title.caption = trans.__('Creating assigned workbooks');
+          widget.title.icon = Correxit.Icons.assignment;
+          shell.add(widget, 'right', {});
+          shell.activateById(widget.id);
+        }
+      });
+
+      deactivator = () => {
+        propagator.dispose();
+        widget.dispose();
+      };
     },
     deactivate: () => deactivator?.()
   }))()

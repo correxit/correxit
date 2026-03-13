@@ -254,25 +254,6 @@
   }
 }
 
-.correxit-assignment-propagate {
-  pre {
-    background-color: var(--jp-layout-color2);
-    border: 1px solid var(--jp-border-color2);
-    color: var(--jp-ui-font-color2);
-    font-size: var(--jp-ui-font-size0);
-    height: 250px;
-    overflow: hidden auto;
-    padding: 2px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    width: var(--correxit-sidebar-control-width);
-  }
-
-  progress {
-    width: var(--correxit-sidebar-control-width);
-  }
-}
-
 .correxit-toggle.jp-mod-minimal {
   margin-right: 3px;
   min-height: 20px;

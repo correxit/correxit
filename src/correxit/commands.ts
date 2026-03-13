@@ -27,6 +27,7 @@ export namespace CommandIDs {
   export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
+  export const propagator = 'correxit:propagator';
   export const refer = 'correxit:refer';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
