@@ -82,7 +82,7 @@ export async function moodle(
       assignments: course.assignments
         .map(assignment => ({
           expiration: assignment.duedate ? assignment.duedate * 1000 : null,
-          id: String(assignment.id),
+          id: `${course.id}:${assignment.id}`,
           name: assignment.name,
           roster: roster[course.id] ?? []
         }))

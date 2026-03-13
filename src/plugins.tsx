@@ -6,7 +6,6 @@ import {
 } from '@jupyterlab/application';
 import { ICommandPalette, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
-import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import {
@@ -24,8 +23,8 @@ import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector, Reviewer } from './corrector';
 import { Correxit, Unlocker, Workbook } from './correxit';
+import * as consumers from './correxit/consumers';
 import * as kernels from './correxit/kernels';
-import * as io from './correxit/io';
 import * as registrars from './correxit/registrars';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
@@ -41,43 +40,91 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
   }))()
 };
 
-/** The default (file-based) Correxit assignment propagation consumer. */
-const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = {
-  id: Correxit.CONSUMER,
-  description: Correxit.DESCRIPTION.CONSUMER,
-  provides: Correxit.Consumer,
-  ...((deactivator?: () => void) => ({
-    activate: ({ commands, serviceManager: manager }): Correxit.Consumer => {
-      const factory = new NotebookModelFactory();
-      const mkdir = async (path: string) => {
-        const parent = PathExt.dirname(path);
-        const base = PathExt.basename(path, '.ipynb');
-        const potential = await io.folder(manager, parent, base);
-        const directory = await io.mkdir(manager, parent, potential);
-        const pwd = directory.path;
-        return { directory, location: { base, pwd } };
-      };
-      deactivator = () => factory.dispose();
-      return async function* consumer({ path, rubric, stream }) {
-        let progress = 0;
-        const total = rubric.assignment.roster.length;
-        const { directory, location } = await mkdir(path);
-        yield { type: 'mkdir', slots: [directory.path] };
-        for await (const propagated of await stream(location)) {
-          const { identifier, notebook, path } = propagated;
-          const created = await io.create({ factory, manager, notebook, path });
-          yield { type: 'separator', slots: [] };
-          yield { type: 'assigned', slots: [identifier.assignee] };
-          yield { type: created ? 'saved' : 'create-error', slots: [path] };
-          yield { type: 'progress', slots: [++progress, total] };
-        }
-        await io.cd(commands, directory.path);
-        yield { type: 'success', slots: [total] };
-      };
-    },
-    deactivate: () => deactivator?.()
-  }))()
-};
+/** The Correxit assignment consumer dispatches to the configured provider. */
+const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = SecretsManager.sign(
+  Correxit.CONSUMER,
+  token => {
+    if (!token) throw new Error('Secrets manager token unavailable');
+    return {
+      id: Correxit.CONSUMER,
+      description: Correxit.DESCRIPTION.CONSUMER,
+      autoStart: true,
+      requires: [ISecretsManager],
+      optional: [ISettingRegistry],
+      provides: Correxit.Consumer,
+      ...((deactivator?: () => void) => {
+        let provider: consumers.Provider = 'manual';
+        let settings: consumers.Settings = { moodle: { url: '' } };
+        let secret = '';
+        const namespace = Correxit.CONSUMER;
+        const id = 'moodle-token';
+        return {
+          activate: async (
+            app: JupyterFrontEnd,
+            secrets: ISecretsManager,
+            registry: ISettingRegistry | null
+          ): Promise<Correxit.Consumer> => {
+            const factory = new NotebookModelFactory();
+            const { commands, serviceManager: manager } = app;
+            const consumer: Correxit.Consumer = output => {
+              switch (provider) {
+                case 'moodle':
+                  return consumers.moodle({
+                    token: secret,
+                    url: settings.moodle.url
+                  })(output);
+                default:
+                  return consumers.manual(commands, factory, manager)(output);
+              }
+            };
+            const stored = await secrets.get(token, namespace, id);
+            if (stored?.value) secret = stored.value;
+            if (!registry) return consumer;
+            try {
+              registry.transform(Correxit.CONSUMER, {
+                compose: plugin => {
+                  const raw = JSON.parse(plugin.raw);
+                  const value = raw.moodle?.token;
+                  if (value) {
+                    secret = value;
+                    raw.moodle = { ...raw.moodle, token: '' };
+                    plugin.raw = JSON.stringify(raw, null, 2);
+                    secrets.set(token, namespace, id, { namespace, id, value });
+                  }
+                  if (secret && plugin.data?.composite) {
+                    const composite = plugin.data.composite as any;
+                    composite.moodle = { ...composite.moodle, token: secret };
+                  }
+                  return plugin;
+                }
+              });
+              const loaded = await registry.load(Correxit.CONSUMER);
+              const reconfigure = () => {
+                const composite = loaded.composite as {
+                  moodle: { token: string; url: string };
+                  provider: consumers.Provider;
+                };
+                provider = composite.provider;
+                settings = { moodle: { url: composite.moodle.url } };
+                if (composite.moodle.token) secret = composite.moodle.token;
+              };
+              loaded.changed.connect(reconfigure);
+              reconfigure();
+              deactivator = () => {
+                factory.dispose();
+                loaded.changed.disconnect(reconfigure);
+              };
+            } catch (reason) {
+              console.warn(Correxit.CONSUMER, 'settings error', reason);
+            }
+            return consumer;
+          },
+          deactivate: () => deactivator?.()
+        };
+      })()
+    };
+  }
+);
 
 /** The Correxit Corrector UI. */
 const corrector: JupyterFrontEndPlugin<void> = {

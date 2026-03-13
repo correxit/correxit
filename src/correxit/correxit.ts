@@ -31,7 +31,7 @@ export namespace Correxit {
   export type Monitor = AsyncIterable<Workbook | null>;
 
   /** An async propagator of assigned workbook content. */
-  export type Propagator = (location: { base: string; pwd: string }) =>
+  export type Propagator = (location: { base: string; pwd: string } | null) =>
     Promise<AsyncIterable<Propagator.Notebook>>;
 
   export namespace Propagator {

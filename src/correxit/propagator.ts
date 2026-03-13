@@ -20,8 +20,9 @@ export async function* propagate({ consumer, workbook }: {
     for (const reference of encrypted)
       yield { type: 'encrypted', slots: [reference] };
 
-    const loop = async function* (location: { base: string; pwd: string }) {
-      const { base, pwd } = location;
+    type Location = { base: string; pwd: string } | null;
+    const loop = async function* (location: Location) {
+      const { base, pwd } = location || { base: '', pwd: '' };
       for (const assignee of roster) {
         const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
         const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
@@ -32,7 +33,7 @@ export async function* propagate({ consumer, workbook }: {
         yield { identifier, notebook, path };
       }
     };
-    const stream = async (location: { base: string; pwd: string }) =>
+    const stream = async (location: { base: string; pwd: string } | null) =>
       loop(location);
     yield* consumer({ path, rubric, stream });
   } catch (error) {

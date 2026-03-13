@@ -1,0 +1,37 @@
+{
+  "title": "Correxit Consumer",
+  "description": "Settings for the Correxit assignment propagation consumer",
+  "jupyter.lab.transform": true,
+  "type": "object",
+  "properties": {
+    "provider": {
+      "title": "Consumer provider",
+      "description": "Which consumer to use for assignment distribution",
+      "type": "string",
+      "enum": ["manual", "moodle"],
+      "default": "manual"
+    },
+    "moodle": {
+      "title": "Moodle",
+      "description": "Moodle consumer settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "title": "URL",
+          "description": "Base URL of the Moodle instance (e.g. http://localhost:8000)",
+          "type": "string",
+          "default": ""
+        },
+        "token": {
+          "title": "API token",
+          "description": "Web service token for Moodle REST API access. Entered values are moved to the secrets manager and never stored on disk.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false,
+      "default": {}
+    }
+  },
+  "additionalProperties": false
+}
