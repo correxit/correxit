@@ -62,10 +62,16 @@ export function moodle(
     }
 
     const request = Moodle.request(url, token);
-    const users: Moodle.User[] = await request(
-      'core_enrol_get_enrolled_users',
-      `&courseid=${course}`
-    );
+    const action = 'core_enrol_get_enrolled_users';
+    let users: Moodle.User[];
+    try {
+      users = await request(action, `&courseid=${course}`);
+    } catch (error) {
+      const message = String(error instanceof Error ? error.message : error);
+      yield { type: 'error', slots: [message] };
+      return;
+    }
+
     const roster = users.map(user => ({
       label: Moodle.identify(user),
       id: user.id

@@ -11,45 +11,28 @@ import { useCommand } from '../correxit/use-command';
 
 type LogEntry = [string, Correxit.Emitter.Emission];
 type TranslationBundle = IRenderMime.TranslationBundle;
+type Options = Omit<Propagator.Props, 'close' | 'title'>;
 
 class PropagatorWidget extends ReactWidget {
-  constructor(options: PropagatorWidget.IOptions) {
+  constructor(protected readonly options: Options) {
     super();
     this.addClass('correxit-propagator');
-    this.commands = options.commands;
-    this.refocus = options.refocus;
-    this.release = options.release;
-    this.trans = options.trans;
   }
 
   dispose() {
-    this.release();
+    this.options.release();
     super.dispose();
   }
 
   onCloseRequest(msg: import('@lumino/messaging').Message) {
     super.onCloseRequest(msg);
-    this.refocus();
+    this.options.refocus();
   }
 
   protected render() {
-    const { commands, release, trans } = this;
     const close = () => this.close();
     const title = this.title.caption;
-    return <Propagator {...{ close, commands, release, title, trans }} />;
-  }
-  private commands: CommandRegistry;
-  private refocus: () => void;
-  private release: () => void;
-  private trans: TranslationBundle;
-}
-
-namespace PropagatorWidget {
-  export interface IOptions {
-    commands: CommandRegistry;
-    refocus: () => void;
-    release: () => void;
-    trans: TranslationBundle;
+    return <Propagator {...{ ...this.options, close, title }} />;
   }
 }
 
@@ -62,7 +45,7 @@ export function Propagator(props: Propagator.Props) {
   const [log, done] = useCommand<LogEntry>(commands, command, { timestamp });
   const started = useRef(false);
   if (!done) started.current = true;
-  useEffect(() => void (done && started.current && release()), [done]);
+  useEffect(() => void (done && started.current && release()), [done, release]);
 
   const messages = log
     .filter(([, { type }]) => type !== 'progress')
@@ -114,6 +97,7 @@ export namespace Propagator {
   export type Props = {
     close: () => void;
     commands: CommandRegistry;
+    refocus: () => void;
     release: () => void;
     title: string;
     trans: TranslationBundle;

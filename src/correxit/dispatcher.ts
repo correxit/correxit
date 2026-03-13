@@ -78,7 +78,7 @@ function anonymize({ id, plugin, secrets, state, token }: {
   }
   if (state.secret && plugin.data?.composite) {
     const composite = plugin.data.composite as any;
-    composite.moodle = { ...composite.moodle, token: state.secret };
+    composite.moodle = { ...(composite.moodle ?? {}), token: state.secret };
   }
   return plugin;
 }

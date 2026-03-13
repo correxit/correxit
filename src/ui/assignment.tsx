@@ -19,7 +19,7 @@ type Registration = Rubric.Assignment.Registration;
 type Course = { assignments: Registration[]; group: string };
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const throttle = 5_000;
+const TTL = 10_000;
 const { assign, enroll, track } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
 const enrolled = new WeakMap<Workbook, Enrolled>();
@@ -32,15 +32,6 @@ const blank = (assignment: Assignment): Assignment => ({
   name: '',
   roster: []
 });
-const format = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-};
 const freeze = (assignment: Assignment, active: Registration): Assignment => ({
   ...assignment,
   ...active,
@@ -107,7 +98,7 @@ export const Assignment: React.FC<{
     try {
       const result = await commands.execute(enroll).catch(_ => null);
       const registered = result as Registered;
-      enrolled.set(workbook, { cached, expires: now + throttle, registered });
+      enrolled.set(workbook, { cached, expires: now + TTL, registered });
       store(registered);
     } finally {
       setPending(false);
@@ -254,6 +245,16 @@ const Expiration: React.FC<{
       </div>
     );
   }
+
+  const format = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
   const update = (value: string) => {
     const expiration = value ? new Date(value).getTime() : null;
     toggle('assignee', { ...assignment, expiration });
