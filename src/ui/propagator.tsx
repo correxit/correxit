@@ -12,30 +12,32 @@ import { useCommand } from '../correxit/use-command';
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 class PropagatorWidget extends ReactWidget {
-  constructor({ commands, title, trans }: PropagatorWidget.IOptions) {
+  constructor({ commands, refocus, trans }: PropagatorWidget.IOptions) {
     super();
     this.addClass('correxit-propagator');
     this.commands = commands;
-    this._title = title;
+    this.refocus = refocus;
     this.trans = trans;
   }
 
   protected render() {
     const { commands, trans } = this;
-    const close = () => this.close();
-    const title = this._title;
+    const close = () => {
+      this.close();
+      this.refocus();
+    };
+    const title = this.title.caption;
     return <Propagator {...{ close, commands, title, trans }} />;
   }
-
   private commands: CommandRegistry;
-  private _title: string;
+  private refocus: () => void;
   private trans: TranslationBundle;
 }
 
 namespace PropagatorWidget {
   export interface IOptions {
     commands: CommandRegistry;
-    title: string;
+    refocus: () => void;
     trans: TranslationBundle;
   }
 }
@@ -46,11 +48,10 @@ export function Propagator({
   title,
   trans
 }: Propagator.Props) {
-  type Message = [string, Correxit.Emitter.Emission];
   const { propagate } = Correxit.CommandIDs;
   const [cancelled, setCancelled] = useState(false);
   const [started] = useState(Date.now);
-  const [log, done] = useCommand<Message>(
+  const [log, done] = useCommand<[string, Correxit.Emitter.Emission]>(
     commands,
     cancelled ? '' : propagate,
     { timestamp: started }
@@ -121,7 +122,7 @@ const Log: React.FC<{
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [messages.length]);
-  if (done && !messages.length) return <></>;
+  if (done && !messages.length) return null;
   return (
     <pre ref={ref}>
       {messages.map((message, key) => (

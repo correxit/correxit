@@ -346,9 +346,10 @@ const ui: JupyterFrontEndPlugin<void> = {
           const title = roster
             ? trans.__('%1 (roster: %2)', name, roster)
             : name || trans.__('Creating assigned workbooks');
-          const widget = new Propagator.Widget({ commands, title, trans });
+          const refocus = () => shell.activateById('correxit-sidebar');
+          const widget = new Propagator.Widget({ commands, refocus, trans });
           widget.id = `correxit-propagator-${++serial}`;
-          widget.title.caption = trans.__('Creating assigned workbooks');
+          widget.title.caption = title;
           widget.title.icon = Correxit.Icons.assignment;
           shell.add(widget, 'right', {});
           shell.activateById(widget.id);
