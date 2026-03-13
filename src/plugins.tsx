@@ -293,7 +293,7 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> =
             return registrars.manual(workbook, identifier);
         }
       };
-      return registrar;
+      return [registrar, () => {}];
     }
   );
 

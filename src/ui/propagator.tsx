@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Correxit } from '..';
 import { useCommand } from '../correxit/use-command';
 
+type LogEntry = [string, Correxit.Emitter.Emission];
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 class PropagatorWidget extends ReactWidget {
@@ -42,20 +43,13 @@ namespace PropagatorWidget {
   }
 }
 
-export function Propagator({
-  close,
-  commands,
-  title,
-  trans
-}: Propagator.Props) {
+export function Propagator(props: Propagator.Props) {
+  const { close, commands, title, trans } = props;
   const { propagate } = Correxit.CommandIDs;
   const [cancelled, setCancelled] = useState(false);
-  const [started] = useState(Date.now);
-  const [log, done] = useCommand<[string, Correxit.Emitter.Emission]>(
-    commands,
-    cancelled ? '' : propagate,
-    { timestamp: started }
-  );
+  const command = cancelled ? '' : propagate;
+  const [timestamp] = useState(Date.now);
+  const [log, done] = useCommand<LogEntry>(commands, command, { timestamp });
   const messages = log
     .filter(([, { type }]) => type !== 'progress')
     .map(([message]) => message);

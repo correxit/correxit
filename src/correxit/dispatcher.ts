@@ -6,7 +6,6 @@ import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { Token } from '@lumino/coreutils';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 
-type Dispatcher<T> = T | [value: T, dispose: () => void];
 type Provider = 'manual' | 'moodle';
 type Provision = {
   moodle: () => { token: string; url: string };
@@ -14,15 +13,15 @@ type Provision = {
 };
 type State = { active: Provider; secret: string; url: string };
 
-export function dispatch<T>(
+export function dispatch<Plugin>(
   id: string,
   description: string,
-  provides: Token<T>,
-  create: (app: JupyterFrontEnd, provision: Provision) => Dispatcher<T>
-): JupyterFrontEndPlugin<T> {
+  provides: Token<Plugin>,
+  create: (app: JupyterFrontEnd, provision: Provision) => [Plugin, () => void]
+): JupyterFrontEndPlugin<Plugin> {
   return SecretsManager.sign(id, token => {
     if (!token) throw new Error('Secrets manager token unavailable');
-    let deactivator: (() => void) | undefined;
+    let deactivator = () => {};
     const state: State = { active: 'manual', secret: '', url: '' };
     const provision: Provision = {
       moodle: () => ({ token: state.secret, url: state.url }),
@@ -39,11 +38,8 @@ export function dispatch<T>(
         app: JupyterFrontEnd,
         secrets: ISecretsManager,
         registry: ISettingRegistry | null
-      ): Promise<T> => {
-        const created = create(app, provision);
-        const [plugin, deactivate] = Array.isArray(created)
-          ? created
-          : [created, undefined];
+      ): Promise<Plugin> => {
+        const [plugin, deactivate] = create(app, provision);
         const stored = await secrets.get(token, id, 'moodle-token');
         if (stored?.value) state.secret = stored.value;
         if (!registry) return plugin;
@@ -52,25 +48,25 @@ export function dispatch<T>(
           const unsubscribe = await subscribe({ registry, ...subscriber });
           deactivator = () => {
             unsubscribe();
-            deactivate?.();
+            deactivate();
           };
         } catch (reason) {
           console.warn(id, 'settings error', reason);
         }
         return plugin;
       },
-      deactivate: () => deactivator?.()
+      deactivate: () => deactivator()
     };
   });
 }
 
-function anonymize(
-  plugin: ISettingRegistry.IPlugin,
+function anonymize({ id, plugin, secrets, state, token }: {
   id: string,
-  token: symbol,
+  plugin: ISettingRegistry.IPlugin,
+  secrets: ISecretsManager,
   state: State,
-  secrets: ISecretsManager
-): ISettingRegistry.IPlugin {
+  token: symbol
+}): ISettingRegistry.IPlugin {
   const raw = JSON.parse(plugin.raw);
   const found = raw.moodle?.token;
   if (found) {
@@ -88,15 +84,15 @@ function anonymize(
 }
 
 async function subscribe({ id, registry, secrets, state, token }: {
-  registry: ISettingRegistry,
   id: string,
-  token: symbol,
+  registry: ISettingRegistry,
+  secrets: ISecretsManager,
   state: State,
-  secrets: ISecretsManager
+  token: symbol
 }): Promise<() => void> {
-  const compose: ISettingRegistry.IPlugin.Transform =
-     plugin => anonymize(plugin, id, token, state, secrets);
-  registry.transform(id, { compose });
+  registry.transform(id, {
+    compose: plugin => anonymize({ id, plugin, secrets, state, token })
+  });
 
   const loaded = await registry.load(id);
   const reconfigure = () => {
