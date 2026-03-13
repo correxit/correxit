@@ -24,6 +24,7 @@ import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector, Reviewer } from './corrector';
 import { Correxit, Unlocker, Workbook } from './correxit';
 import * as consumers from './correxit/consumers';
+import * as dispatcher from './correxit/dispatcher';
 import * as kernels from './correxit/kernels';
 import * as registrars from './correxit/registrars';
 import * as state from './correxit/state';
@@ -41,88 +42,22 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
 };
 
 /** The Correxit assignment consumer dispatches to the configured provider. */
-const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = SecretsManager.sign(
+const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = dispatcher.dispatch(
   Correxit.CONSUMER,
-  token => {
-    if (!token) throw new Error('Secrets manager token unavailable');
-    return {
-      id: Correxit.CONSUMER,
-      description: Correxit.DESCRIPTION.CONSUMER,
-      autoStart: true,
-      requires: [ISecretsManager],
-      optional: [ISettingRegistry],
-      provides: Correxit.Consumer,
-      ...((deactivator?: () => void) => {
-        let provider: consumers.Provider = 'manual';
-        let settings: consumers.Settings = { moodle: { url: '' } };
-        let secret = '';
-        const namespace = Correxit.CONSUMER;
-        const id = 'moodle-token';
-        return {
-          activate: async (
-            app: JupyterFrontEnd,
-            secrets: ISecretsManager,
-            registry: ISettingRegistry | null
-          ): Promise<Correxit.Consumer> => {
-            const factory = new NotebookModelFactory();
-            const { commands, serviceManager: manager } = app;
-            const consumer: Correxit.Consumer = output => {
-              switch (provider) {
-                case 'moodle':
-                  return consumers.moodle({
-                    token: secret,
-                    url: settings.moodle.url
-                  })(output);
-                default:
-                  return consumers.manual(commands, factory, manager)(output);
-              }
-            };
-            const stored = await secrets.get(token, namespace, id);
-            if (stored?.value) secret = stored.value;
-            if (!registry) return consumer;
-            try {
-              registry.transform(Correxit.CONSUMER, {
-                compose: plugin => {
-                  const raw = JSON.parse(plugin.raw);
-                  const value = raw.moodle?.token;
-                  if (value) {
-                    secret = value;
-                    raw.moodle = { ...raw.moodle, token: '' };
-                    plugin.raw = JSON.stringify(raw, null, 2);
-                    secrets.set(token, namespace, id, { namespace, id, value });
-                  }
-                  if (secret && plugin.data?.composite) {
-                    const composite = plugin.data.composite as any;
-                    composite.moodle = { ...composite.moodle, token: secret };
-                  }
-                  return plugin;
-                }
-              });
-              const loaded = await registry.load(Correxit.CONSUMER);
-              const reconfigure = () => {
-                const composite = loaded.composite as {
-                  moodle: { token: string; url: string };
-                  provider: consumers.Provider;
-                };
-                provider = composite.provider;
-                settings = { moodle: { url: composite.moodle.url } };
-                if (composite.moodle.token) secret = composite.moodle.token;
-              };
-              loaded.changed.connect(reconfigure);
-              reconfigure();
-              deactivator = () => {
-                factory.dispose();
-                loaded.changed.disconnect(reconfigure);
-              };
-            } catch (reason) {
-              console.warn(Correxit.CONSUMER, 'settings error', reason);
-            }
-            return consumer;
-          },
-          deactivate: () => deactivator?.()
-        };
-      })()
+  Correxit.DESCRIPTION.CONSUMER,
+  Correxit.Consumer,
+  (app, { moodle, provider }) => {
+    const factory = new NotebookModelFactory();
+    const { commands, serviceManager: manager } = app;
+    const consumer: Correxit.Consumer = output => {
+      switch (provider()) {
+        case 'moodle':
+          return consumers.moodle(moodle())(output);
+        default:
+          return consumers.manual(commands, factory, manager)(output);
+      }
     };
+    return [consumer, () => factory.dispose()];
   }
 );
 
@@ -345,82 +280,22 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
 
 /** The Correxit assignment registrar dispatches to the configured provider. */
 const registrar: JupyterFrontEndPlugin<Correxit.Registrar> =
-  SecretsManager.sign(Correxit.REGISTRAR, token => {
-    if (!token) throw new Error('Secrets manager token unavailable');
-    return {
-      id: Correxit.REGISTRAR,
-      description: Correxit.DESCRIPTION.REGISTRAR,
-      autoStart: true,
-      requires: [ISecretsManager],
-      optional: [ISettingRegistry],
-      provides: Correxit.Registrar,
-      ...((deactivator?: () => void) => {
-        let provider: registrars.Provider = 'manual';
-        let settings: registrars.Settings = { moodle: { url: '' } };
-        let secret = '';
-        const namespace = Correxit.REGISTRAR;
-        const id = 'moodle-token';
-        const registrar: Correxit.Registrar = (workbook, identifier) => {
-          switch (provider) {
-            case 'moodle':
-              return registrars.moodle(workbook, identifier, {
-                token: secret,
-                url: settings.moodle.url
-              });
-            default:
-              return registrars.manual(workbook, identifier);
-          }
-        };
-        return {
-          activate: async (
-            _: JupyterFrontEnd,
-            secrets: ISecretsManager,
-            registry: ISettingRegistry | null
-          ): Promise<Correxit.Registrar> => {
-            const stored = await secrets.get(token, namespace, id);
-            if (stored?.value) secret = stored.value;
-            if (!registry) return registrar;
-            try {
-              registry.transform(Correxit.REGISTRAR, {
-                compose: plugin => {
-                  const raw = JSON.parse(plugin.raw);
-                  const value = raw.moodle?.token;
-                  if (value) {
-                    secret = value;
-                    raw.moodle = { ...raw.moodle, token: '' };
-                    plugin.raw = JSON.stringify(raw, null, 2);
-                    secrets.set(token, namespace, id, { namespace, id, value });
-                  }
-                  if (secret && plugin.data?.composite) {
-                    const composite = plugin.data.composite as any;
-                    composite.moodle = { ...composite.moodle, token: secret };
-                  }
-                  return plugin;
-                }
-              });
-              const loaded = await registry.load(Correxit.REGISTRAR);
-              const reconfigure = () => {
-                const composite = loaded.composite as {
-                  moodle: { token: string; url: string };
-                  provider: registrars.Provider;
-                };
-                provider = composite.provider;
-                settings = { moodle: { url: composite.moodle.url } };
-                if (composite.moodle.token) secret = composite.moodle.token;
-              };
-              loaded.changed.connect(reconfigure);
-              reconfigure();
-              deactivator = () => void loaded.changed.disconnect(reconfigure);
-            } catch (reason) {
-              console.warn(Correxit.REGISTRAR, 'settings error', reason);
-            }
-            return registrar;
-          },
-          deactivate: () => deactivator?.()
-        };
-      })()
-    };
-  });
+  dispatcher.dispatch(
+    Correxit.REGISTRAR,
+    Correxit.DESCRIPTION.REGISTRAR,
+    Correxit.Registrar,
+    (_, { moodle, provider }) => {
+      const registrar: Correxit.Registrar = (workbook, identifier) => {
+        switch (provider()) {
+          case 'moodle':
+            return registrars.moodle(workbook, identifier, moodle());
+          default:
+            return registrars.manual(workbook, identifier);
+        }
+      };
+      return registrar;
+    }
+  );
 
 /** The default Correxit assignment submitter, returns a UUID. */
 const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
