@@ -13,25 +13,34 @@ type LogEntry = [string, Correxit.Emitter.Emission];
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 class PropagatorWidget extends ReactWidget {
-  constructor({ commands, refocus, trans }: PropagatorWidget.IOptions) {
+  constructor(options: PropagatorWidget.IOptions) {
     super();
     this.addClass('correxit-propagator');
-    this.commands = commands;
-    this.refocus = refocus;
-    this.trans = trans;
+    this.commands = options.commands;
+    this.refocus = options.refocus;
+    this.release = options.release;
+    this.trans = options.trans;
+  }
+
+  dispose() {
+    this.release();
+    super.dispose();
+  }
+
+  onCloseRequest(msg: import('@lumino/messaging').Message) {
+    super.onCloseRequest(msg);
+    this.refocus();
   }
 
   protected render() {
-    const { commands, trans } = this;
-    const close = () => {
-      this.close();
-      this.refocus();
-    };
+    const { commands, release, trans } = this;
+    const close = () => this.close();
     const title = this.title.caption;
-    return <Propagator {...{ close, commands, title, trans }} />;
+    return <Propagator {...{ close, commands, release, title, trans }} />;
   }
   private commands: CommandRegistry;
   private refocus: () => void;
+  private release: () => void;
   private trans: TranslationBundle;
 }
 
@@ -39,17 +48,22 @@ namespace PropagatorWidget {
   export interface IOptions {
     commands: CommandRegistry;
     refocus: () => void;
+    release: () => void;
     trans: TranslationBundle;
   }
 }
 
 export function Propagator(props: Propagator.Props) {
-  const { close, commands, title, trans } = props;
+  const { close, commands, release, title, trans } = props;
   const { propagate } = Correxit.CommandIDs;
   const [cancelled, setCancelled] = useState(false);
   const command = cancelled ? '' : propagate;
   const [timestamp] = useState(Date.now);
   const [log, done] = useCommand<LogEntry>(commands, command, { timestamp });
+  const started = useRef(false);
+  if (!done) started.current = true;
+  useEffect(() => void (done && started.current && release()), [done]);
+
   const messages = log
     .filter(([, { type }]) => type !== 'progress')
     .map(([message]) => message);
@@ -100,6 +114,7 @@ export namespace Propagator {
   export type Props = {
     close: () => void;
     commands: CommandRegistry;
+    release: () => void;
     title: string;
     trans: TranslationBundle;
   };

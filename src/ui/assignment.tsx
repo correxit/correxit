@@ -1,5 +1,8 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { checkIcon, ToolbarButtonComponent } from '@jupyterlab/ui-components';
+import {
+  checkIcon,
+  CommandToolbarButtonComponent
+} from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
@@ -17,7 +20,7 @@ type Course = { assignments: Registration[]; group: string };
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const throttle = 5_000;
-const { assign, enroll, propagate, propagator: reveal } = Correxit.CommandIDs;
+const { assign, enroll, track } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
 const enrolled = new WeakMap<Workbook, Enrolled>();
 const identify = ({ id, name }: Registration) => id || name;
@@ -175,15 +178,7 @@ export const Assignment: React.FC<{
       {manual && <Expiration {...{ assignment, locked, toggle, trans }} />}
       {!locked && (
         <div className="correxit-assignment-propagate">
-          <ToolbarButtonComponent
-            {...{
-              enabled: commands.isEnabled(propagate),
-              icon: Correxit.Icons.assignment,
-              label: commands.label(propagate),
-              onClick: () => void commands.execute(reveal)
-            }}
-            noFocusOnClick
-          />
+          <CommandToolbarButtonComponent commands={commands} id={track} />
         </div>
       )}
     </div>
