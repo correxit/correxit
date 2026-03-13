@@ -30,6 +30,15 @@ const blank = (assignment: Assignment): Assignment => ({
   name: '',
   roster: []
 });
+const format = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
 const freeze = (assignment: Assignment, active: Registration): Assignment => ({
   ...assignment,
   ...active,
@@ -220,16 +229,6 @@ const Assignee: React.FC<{
       </div>
     </div>
   );
-};
-
-const format = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 const Expiration: React.FC<{
