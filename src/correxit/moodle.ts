@@ -30,4 +30,26 @@ export namespace Moodle {
       return payload as T;
     };
   }
+
+  export async function upload(
+    url: string,
+    token: string,
+    content: string,
+    filename: string
+  ): Promise<number | null> {
+    const form = new FormData();
+    const blob = new Blob([content], { type: 'application/json' });
+    form.append('token', token);
+    form.append('filearea', 'draft');
+    form.append('itemid', '0');
+    form.append('file_1', blob, filename);
+
+    const response = await fetch(`${url}/webservice/upload.php`, {
+      method: 'POST',
+      body: form
+    });
+    const draft = await response.json();
+    if (!Array.isArray(draft) || !draft[0]?.itemid) return null;
+    return draft[0].itemid;
+  }
 }

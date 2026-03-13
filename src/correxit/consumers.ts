@@ -85,30 +85,14 @@ export function moodle(
 
       const content = JSON.stringify(notebook);
       const filename = `${assignee.split('@')[0]}.ipynb`;
-
-      // Upload file to Moodle user draft area.
-      const form = new FormData();
-      const json = { type: 'application/json' };
-      form.append('token', token);
-      form.append('filearea', 'draft');
-      form.append('itemid', '0');
-      form.append('file_1', new Blob([content], json), filename);
-
-      const draft = await fetch(
-        `${url}/webservice/upload.php`,
-        { method: 'POST', body: form }
-      ).then(response => response.json());
-      if (!Array.isArray(draft) || !draft[0]?.itemid) {
-        const reason = draft?.error || draft?.message || 'unknown error';
+      const item = await Moodle.upload(url, token, content, filename);
+      if (!item) {
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`Upload failed for ${assignee}: ${reason}`] };
+        yield { type: 'error', slots: [`Upload failed for ${assignee}`] };
         yield { type: 'progress', slots: [++progress, total] };
         continue;
       }
-
-      // Attach the notebook as feedback on the student's assignment.
-      const item = draft[0].itemid;
       await request(
         'mod_assign_save_grade',
         [
