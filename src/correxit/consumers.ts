@@ -72,16 +72,15 @@ export function moodle(
       return;
     }
 
-    const roster = users.map(user => ({
-      label: Moodle.identify(user),
-      id: user.id
-    }));
+    const participants = new Map(users.map(
+      user => [Moodle.identify(user), user.id]
+    ));
     const total = rubric.assignment.roster.length;
     let progress = 0;
     for await (const { identifier, notebook } of await stream(null)) {
       const { assignee } = identifier;
-      const participant = roster.find(({ label }) => label === assignee);
-      if (!participant) {
+      const uid = participants.get(assignee);
+      if (uid === undefined) {
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
         yield { type: 'error', slots: [`No Moodle user for ${assignee}`] };
@@ -103,7 +102,7 @@ export function moodle(
         'mod_assign_save_grade',
         [
           `assignmentid=${assignment}`,
-          `userid=${participant.id}`,
+          `userid=${uid}`,
           'grade=-1',
           'attemptnumber=-1',
           'addattempt=0',

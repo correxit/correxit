@@ -42,7 +42,10 @@ export function dispatch<Plugin>(
         const [plugin, deactivate] = create(app, provision);
         const stored = await secrets.get(token, id, 'moodle-token');
         if (stored?.value) state.secret = stored.value;
-        if (!registry) return plugin;
+        if (!registry) {
+          deactivator = deactivate;
+          return plugin;
+        }
         try {
           const subscriber = { id, secrets, state, token };
           const unsubscribe = await subscribe({ registry, ...subscriber });
