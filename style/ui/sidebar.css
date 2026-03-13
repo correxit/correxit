@@ -193,6 +193,22 @@
   padding: 4px 0;
 }
 
+.correxit-assignment.cxt-mod-pending {
+  animation: correxit-pulse 1.5s ease-in-out infinite;
+  min-height: 28px;
+}
+
+@keyframes correxit-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
 .correxit-assignment-assignee,
 .correxit-assignment-roster {
   display: flex;

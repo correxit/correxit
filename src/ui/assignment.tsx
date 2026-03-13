@@ -143,7 +143,7 @@ export const Assignment: React.FC<{
   const roster = all ? flat(all) : null;
   const manual = roster === null;
   const multiple = !!roster && roster.length > 1;
-  if (pending) return <div className="correxit-assignment" />;
+  if (pending) return <div className="correxit-assignment cxt-mod-pending" />;
   return (
     <div className="correxit-assignment">
       {manual ? (
