@@ -4,6 +4,7 @@ import { ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit } from '.';
 import * as io from './io';
+import { Moodle } from './moodle';
 
 export type Provider = 'manual' | 'moodle';
 
@@ -60,39 +61,15 @@ export function moodle(
       return;
     }
 
-    async function request<T>(action: string, params = ''): Promise<T> {
-      const endpoint = `${url}/webservice/rest/server.php`;
-      const body = new URLSearchParams(params);
-      body.set('wstoken', token);
-      body.set('wsfunction', action);
-      body.set('moodlewsrestformat', 'json');
-
-      const response = await fetch(endpoint, { method: 'POST', body });
-      if (!response.ok)
-        throw new Error(`${action} failed (status ${response.status})`);
-
-      const payload = await response.json();
-      if (payload && typeof payload === 'object' && 'exception' in payload)
-        throw new Error(payload.message as string || `${action} failed`);
-      return payload as T;
-    }
-
-    type User = {
-      email?: string;
-      fullname?: string;
-      id: number;
-      idnumber?: string;
-      username?: string;
-    };
-    const users: User[] = await request(
+    const request = Moodle.request(url, token);
+    const users: Moodle.User[] = await request(
       'core_enrol_get_enrolled_users',
       `&courseid=${course}`
     );
-    const identify = ({ email, fullname, id, idnumber, username }: User) => ({
-      label: username || email || idnumber || fullname || `${id}`,
-      id
-    });
-    const roster = users.map(identify);
+    const roster = users.map(user => ({
+      label: Moodle.identify(user),
+      id: user.id
+    }));
     const total = rubric.assignment.roster.length;
     let progress = 0;
     for await (const { identifier, notebook } of await stream(null)) {

@@ -1,4 +1,5 @@
 import { Correxit, Workbook } from '.';
+import { Moodle } from './moodle';
 
 export type Provider = 'manual' | 'moodle';
 
@@ -18,43 +19,18 @@ export async function moodle(
       id: number;
       shortname?: string;
     };
-    type User = {
-      email?: string;
-      fullname?: string;
-      id: number;
-      idnumber?: string;
-      roles?: { shortname?: string }[];
-      username?: string;
-    };
 
     const token = settings.token;
     const url = settings.url.replace(/\/+$/, '');
     if (!token || !url) return null;
 
-    async function request<T>(action: string, params = ''): Promise<T> {
-      const endpoint = `${url}/webservice/rest/server.php`;
-      const body = new URLSearchParams(params);
-      body.set('wstoken', token);
-      body.set('wsfunction', action);
-      body.set('moodlewsrestformat', 'json');
+    const request = Moodle.request(url, token);
 
-      const response = await fetch(endpoint, { method: 'POST', body });
-      if (!response.ok)
-        throw new Error(`${action} failed (status ${response.status})`);
-
-      const payload = await response.json();
-      if (payload && typeof payload === 'object' && 'exception' in payload)
-        throw new Error(payload.message as string || `${action} failed`);
-      return payload as T;
-    }
-
-    const student = ({ roles = [] }: User): boolean =>
+    const student = ({ roles = [] }: Moodle.User): boolean =>
       !roles.length ||
       roles.some(({ shortname }) => shortname === 'student');
-    const identify = ({ email, fullname, id, idnumber, username }: User) =>
-      username || email || idnumber || fullname || `${id}`;
-    const normalize = (records: User[]): string[] =>
-      [...new Set(records.filter(student).map(identify))]
+    const normalize = (records: Moodle.User[]): string[] =>
+      [...new Set(records.filter(student).map(Moodle.identify))]
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b));
     const action = 'mod_assign_get_assignments';
@@ -73,7 +49,7 @@ export async function moodle(
       courses.map(async ({ id }) => {
         const action = 'core_enrol_get_enrolled_users';
         const query = `&courseid=${id}`;
-        const users: User[] = await request(action, query);
+        const users: Moodle.User[] = await request(action, query);
         return [id, normalize(users)] as const;
       })
     );
