@@ -17,7 +17,7 @@ type Registration = Rubric.Assignment.Registration;
 type Course = { assignments: Registration[]; group: string };
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const TTL = 60_000;
+const throttle = 5_000;
 const { assign, enroll } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
 const enrolled = new WeakMap<Workbook, Enrolled>();
@@ -69,7 +69,7 @@ export const Assignment: React.FC<{
   const { locked, revised } = rubric;
   const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
   const [registered, setRegistered] = useState<Registered>(null);
-  const [pending, setPending] = useState(!locked);
+  const [pending, setPending] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
   const cached = rubric.id;
@@ -97,17 +97,15 @@ export const Assignment: React.FC<{
       void commands.execute(assign, assignment).catch(_ => {});
   };
   const request = async () => {
-    setPending(true);
+    const now = Date.now();
+    const current = enrolled.get(workbook);
+    if (current?.cached === cached) store(current.registered);
+    setPending(!current);
+    if (current?.cached === cached && now < current.expires) return;
     try {
-      const now = Date.now();
-      const current = enrolled.get(workbook);
-      if (current && current.cached === cached && now < current.expires) {
-        store(current.registered);
-        return;
-      }
       const result = await commands.execute(enroll).catch(_ => null);
       const registered = result as Registered;
-      enrolled.set(workbook, { cached, expires: now + TTL, registered });
+      enrolled.set(workbook, { cached, expires: now + throttle, registered });
       store(registered);
     } finally {
       setPending(false);

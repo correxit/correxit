@@ -41,18 +41,18 @@ export function dispatch<T>(
         registry: ISettingRegistry | null
       ): Promise<T> => {
         const created = create(app, provision);
-        const [plugin, dispose] = Array.isArray(created)
+        const [plugin, deactivate] = Array.isArray(created)
           ? created
           : [created, undefined];
         const stored = await secrets.get(token, id, 'moodle-token');
         if (stored?.value) state.secret = stored.value;
         if (!registry) return plugin;
         try {
-          const subscription = subscribe(registry, id, token, state, secrets);
-          const disconnect = await subscription;
+          const subscriber = { id, secrets, state, token };
+          const unsubscribe = await subscribe({ registry, ...subscriber });
           deactivator = () => {
-            dispose?.();
-            disconnect();
+            unsubscribe();
+            deactivate?.();
           };
         } catch (reason) {
           console.warn(id, 'settings error', reason);
@@ -87,13 +87,13 @@ function anonymize(
   return plugin;
 }
 
-async function subscribe(
+async function subscribe({ id, registry, secrets, state, token }: {
   registry: ISettingRegistry,
   id: string,
   token: symbol,
   state: State,
   secrets: ISecretsManager
-): Promise<() => void> {
+}): Promise<() => void> {
   const compose: ISettingRegistry.IPlugin.Transform =
      plugin => anonymize(plugin, id, token, state, secrets);
   registry.transform(id, { compose });
