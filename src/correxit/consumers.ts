@@ -5,6 +5,7 @@ import { CommandRegistry } from '@lumino/commands';
 import { Correxit } from '.';
 import * as io from './io';
 import { Moodle } from './moodle';
+import * as security from './security';
 
 export type Provider = 'manual' | 'moodle';
 
@@ -112,7 +113,10 @@ export function moodle(
       }
 
       const content = JSON.stringify(notebook);
-      const filename = `${assignee.split('@')[0]}.ipynb`;
+      const name = rubric.assignment.name.replace(/[^\w.-]/g, '');
+      const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
+      const hash = (await security.digest(assignee)).slice(0, 4);
+      const filename = `${name}-${local}-${hash}.ipynb`;
 
       let item: number | null = null;
       try {
