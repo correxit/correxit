@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/QuantStack/correxit/compare/v1.9.0...v1.10.0) (2026-03-14)
+
+
+### Features
+
+* moodle consumer, better propagator ([#53](https://github.com/QuantStack/correxit/issues/53)) ([41393ef](https://github.com/QuantStack/correxit/commit/41393ef283ccd6ee03187e9b2788a879699a22f0))
+
 # [1.9.0](https://github.com/QuantStack/correxit/compare/v1.8.0...v1.9.0) (2026-03-12)
 
 
