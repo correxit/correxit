@@ -48,8 +48,17 @@ export namespace Moodle {
       method: 'POST',
       body: form
     });
+    if (!response.ok) {
+      const reason = await response.text().catch(() => '');
+      const message = reason ||
+        `Upload failed (${response.status} ${response.statusText})`;
+      throw new Error(reason || message);
+    }
+
     const draft = await response.json();
-    if (!Array.isArray(draft) || !draft[0]?.itemid) return null;
-    return draft[0].itemid;
+    if (Array.isArray(draft) && draft[0]?.itemid) return draft[0].itemid;
+
+    const reason = draft?.error || draft?.message || 'Upload returned no item';
+    throw new Error(reason);
   }
 }
