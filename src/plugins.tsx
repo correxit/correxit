@@ -26,6 +26,7 @@ import { Correxit, Unlocker, Workbook } from './correxit';
 import * as consumers from './correxit/consumers';
 import * as dispatcher from './correxit/dispatcher';
 import * as kernels from './correxit/kernels';
+import { Moodle } from './correxit/providers/moodle';
 import * as registrars from './correxit/registrars';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
@@ -46,13 +47,13 @@ const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = dispatcher.dispatch(
   Correxit.CONSUMER,
   Correxit.DESCRIPTION.CONSUMER,
   Correxit.Consumer,
-  (app, { moodle, provider }) => {
+  (app, { moodle: settings, provider }) => {
     const factory = new NotebookModelFactory();
     const { commands, serviceManager: manager } = app;
     const consumer: Correxit.Consumer = output => {
       switch (provider()) {
         case 'moodle':
-          return consumers.moodle(moodle())(output);
+          return Moodle.consumer(output, settings());
         default:
           return consumers.manual(commands, factory, manager)(output);
       }
@@ -284,11 +285,11 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> =
     Correxit.REGISTRAR,
     Correxit.DESCRIPTION.REGISTRAR,
     Correxit.Registrar,
-    (_, { moodle, provider }) => {
+    (_, { moodle: settings, provider }) => {
       const registrar: Correxit.Registrar = (workbook, identifier) => {
         switch (provider()) {
           case 'moodle':
-            return registrars.moodle(workbook, identifier, moodle());
+            return Moodle.registrar(workbook, identifier, settings());
           default:
             return registrars.manual(workbook, identifier);
         }
