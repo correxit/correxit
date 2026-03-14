@@ -319,8 +319,8 @@ dropdown.
 
 ### Assignment ID convention
 
-The Moodle registrar encodes the assignment `id` as `courseId:assignmentId`
-(e.g. `2:5`). The Moodle consumer parses this compound ID to directly look
+The Moodle registrar encodes the assignment `id` as `courseId:assignmentId:cmid`
+(e.g. `2:5:3`). The Moodle consumer parses this compound ID to directly look
 up the course's enrolled users without re-fetching all assignments. Other
 LMS integrations may adopt a similar colon-delimited convention. Registrars
 that do not use an LMS (e.g. manual mode) store a plain opaque string —
@@ -330,7 +330,7 @@ the core treats `id` as `string | null` and never interprets it.
 
 The teacher account needs the standard **editingteacher** role in each
 course they teach. No additional capabilities beyond the role defaults are
-required — the two web service functions above operate within the teacher's
+required — the web service functions above operate within the teacher's
 normal course-level permissions.
 
 The token and external service are administrative objects; the teacher does

@@ -68,7 +68,7 @@ export namespace Moodle {
       const reason = await response.text().catch(() => '');
       const message = reason ||
         `Upload failed (${response.status} ${response.statusText})`;
-      throw new Error(reason || message);
+      throw new Error(message);
     }
 
     const draft = await response.json();
