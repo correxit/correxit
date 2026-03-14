@@ -6,6 +6,7 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '..';
+import { Propagator } from '../ui/propagator';
 import * as input from './input';
 import * as io from './io';
 import * as propagator from './propagator';
@@ -34,6 +35,7 @@ export namespace CommandIDs {
   export const save = 'correxit:save';
   export const share = 'correxit:share';
   export const submit = 'correxit:submit';
+  export const track = 'correxit:track';
   export const unlock = 'correxit:unlock';
 }
 
@@ -67,7 +69,7 @@ export function commands(
     unlocker: Correxit.Unlocker;
   }
 ) {
-  const { commands, serviceManager: manager } = app;
+  const { commands, serviceManager: manager, shell } = app;
   const { Icons } = Correxit;
   const {
     collector, consumer, injector, registrar, submitter, unlocker
@@ -438,6 +440,40 @@ export function commands(
       return (async function* empty() {})();
     }
   }));
+
+  let busy = false;
+  let serial = 0;
+  disposables.push(commands.addCommand(CommandIDs.track, {
+    icon: Icons.assignment,
+    label: () => commands.label(CommandIDs.propagate),
+    isEnabled: () =>
+      !busy && commands.isEnabled(CommandIDs.propagate),
+    isVisible: () => commands.isEnabled(CommandIDs.propagate),
+    execute: () => {
+      if (busy) return;
+      busy = true;
+      commands.notifyCommandChanged(CommandIDs.track);
+
+      const rubric = open(state.workbook());
+      const name = rubric?.assignment.name || '';
+      const roster = rubric?.assignment.roster.length || 0;
+      const title = roster
+        ? trans.__('%1 (roster: %2)', name, roster)
+        : name || trans.__('Creating assigned workbooks');
+      const release = () => {
+        if (!busy) return;
+        busy = false;
+        commands.notifyCommandChanged(CommandIDs.track);
+      };
+      const refocus = () => shell.activateById('correxit-sidebar');
+      const widget = new Propagator.Widget({ commands, refocus, release, trans });
+      widget.id = `correxit-propagator-${++serial}`;
+      widget.title.caption = title;
+      widget.title.icon = Icons.assignment;
+      shell.add(widget, 'right', {});
+      shell.activateById(widget.id);
+    }
+  }));
   disposables.push(commands.addCommand(CommandIDs.enroll, {
     execute: async (
       args: Partial<Credentials>
@@ -691,6 +727,7 @@ async function* translate(
       'create-error': trans.__('Create ERROR %1', ...slots),
       'encrypted': trans.__('Encrypted cell %1', ...slots),
       'error': trans.__('ERROR %1', ...slots),
+      'max-score': trans.__('Set maximum score: %1', ...slots),
       'mkdir': trans.__('Created directory %1', ...slots),
       'progress': trans.__('%1 of %2', ...slots),
       'saved': trans.__('Saved %1', ...slots),

@@ -214,9 +214,10 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
 
 ## Moodle Integration
 
-Correxit includes a built-in Moodle registrar that pulls assignment metadata
-and course rosters via the Moodle REST API. This requires some one-time
-setup by a Moodle administrator before a teacher can use it.
+Correxit includes built-in Moodle plugins for the **registrar** (assignment
+metadata and rosters) and **consumer** (distributing workbooks to students
+via the Moodle file and submission APIs). Both operate via the Moodle REST
+API and require some one-time setup by a Moodle administrator.
 
 The integration uses two moving parts:
 
@@ -245,19 +246,24 @@ These steps are performed once by whoever administers the Moodle instance.
 - Name it **Correxit** (or any name your institution prefers).
 - Check _Enabled_. Leave _Authorised users only_ unchecked unless you want
   to maintain an explicit allowlist.
+- Check **Can upload files** and **Can download files**.
 
 #### 3. Add functions to the service
 
 Open the Correxit service and add the functions listed below. This list
 tracks exactly what the current Correxit code calls — nothing more.
 
-| Function                        | Used by                                           |
-| ------------------------------- | ------------------------------------------------- |
-| `mod_assign_get_assignments`    | Registrar — lists assignments the teacher can see |
-| `core_enrol_get_enrolled_users` | Registrar — fetches the roster for each course    |
+| Function                        | Used by                                                  |
+| ------------------------------- | -------------------------------------------------------- |
+| `mod_assign_get_assignments`    | Registrar — lists assignments the teacher can see        |
+| `core_enrol_get_enrolled_users` | Registrar & Consumer — fetches the roster / user IDs     |
+| `core_grades_update_grades`     | Consumer — sets the assignment's maximum grade           |
+| `mod_assign_save_grade`         | Consumer — attaches the notebook as feedback per student |
 
-> As Correxit gains consumer, submitter, and collector support for Moodle,
-> additional functions will be added to this table.
+The external service must also have **Can upload files** and
+**Can download files** enabled (checkboxes on the service edit page).
+The consumer uploads each workbook notebook to the Moodle draft area
+before attaching it to the student's submission.
 
 #### 4. Create a token for the teacher
 
@@ -300,16 +306,31 @@ Once the administrator has completed the steps above and provided a token:
 3. Set **Provider** to `moodle`.
 4. Enter the **Moodle URL** (e.g. `https://moodle.example.edu`).
 5. Paste the **API token**.
+6. **Settings → Settings Editor → Correxit Consumer**.
+7. Set **Provider** to `moodle`.
+8. Enter the same **Moodle URL** and **API token**.
+
+The registrar and consumer maintain independent settings and secrets so
+that each can be configured (or disabled) separately.
 
 When the teacher opens a workbook that has not yet been assigned, Correxit
 will fetch their courses and assignments from Moodle and present them in a
 dropdown.
 
+### Assignment ID convention
+
+The Moodle registrar encodes the assignment `id` as `courseId:assignmentId:cmid`
+(e.g. `2:5:3`). The Moodle consumer parses this compound ID to directly look
+up the course's enrolled users without re-fetching all assignments. Other
+LMS integrations may adopt a similar colon-delimited convention. Registrars
+that do not use an LMS (e.g. manual mode) store a plain opaque string —
+the core treats `id` as `string | null` and never interprets it.
+
 ### Minimum permissions
 
 The teacher account needs the standard **editingteacher** role in each
 course they teach. No additional capabilities beyond the role defaults are
-required — the two web service functions above operate within the teacher's
+required — the web service functions above operate within the teacher's
 normal course-level permissions.
 
 The token and external service are administrative objects; the teacher does
@@ -317,9 +338,13 @@ not need admin access to _use_ a token, only to _create_ one.
 
 ### Troubleshooting
 
-| Symptom                      | Likely cause                                                                                   |
-| ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| Dropdown is empty            | The token user has no courses with assignments, or the external service is missing a function. |
-| Network error / CORS         | Moodle is not returning `Access-Control-Allow-Origin` for the JupyterLab origin.               |
-| `Invalid token`              | Token is expired, revoked, or pasted incorrectly.                                              |
-| Students missing from roster | The student is not enrolled in the course, or their enrolment is suspended.                    |
+| Symptom                        | Likely cause                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Dropdown is empty              | The token user has no courses with assignments, or the external service is missing a function. |
+| Network error / CORS           | Moodle is not returning `Access-Control-Allow-Origin` for the JupyterLab origin.               |
+| `Invalid token`                | Token is expired, revoked, or pasted incorrectly.                                              |
+| Students missing from roster   | The student is not enrolled in the course, or their enrolment is suspended.                    |
+| `Upload failed` / access error | The external service does not have **Can upload files** enabled.                               |
+| `mod_assign_save_grade`        | The function is not added to the external service's function list.                             |
+| `No Moodle user for …`         | The assignee string in the roster does not match any Moodle `username`.                        |
+| `Invalid assignment ID format` | The workbook was registered with the manual registrar, not the Moodle one.                     |

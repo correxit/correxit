@@ -261,10 +261,19 @@ table.correxit-corrector {
         height: 16px;
         padding: 0;
 
-        & > progress {
-          display: block;
+        & > .correxit-corrector-progress-bar {
+          align-items: center;
+          display: flex;
+          font-size: var(--jp-ui-font-size0);
+          gap: 6px;
           height: 100%;
           width: 100%;
+
+          & > progress {
+            display: block;
+            flex: 1;
+            height: 100%;
+          }
         }
       }
 

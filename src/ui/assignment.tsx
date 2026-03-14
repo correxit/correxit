@@ -1,9 +1,11 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { checkIcon, ToolbarButtonComponent } from '@jupyterlab/ui-components';
+import {
+  checkIcon,
+  CommandToolbarButtonComponent
+} from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import { useCommand } from '../correxit/use-command';
 import { Toggle } from './toggle';
 
 type Assignment = Rubric.Assignment;
@@ -17,8 +19,8 @@ type Registration = Rubric.Assignment.Registration;
 type Course = { assignments: Registration[]; group: string };
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const TTL = 60_000;
-const { assign, enroll } = Correxit.CommandIDs;
+const TTL = 10_000;
+const { assign, enroll, track } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
 const enrolled = new WeakMap<Workbook, Enrolled>();
 const identify = ({ id, name }: Registration) => id || name;
@@ -57,10 +59,10 @@ export const Assignment: React.FC<{
   workbook: Workbook;
 }> = ({ commands, trans, workbook }) => {
   const rubric = Workbook.open(workbook, true)!;
-  const { locked, revised } = rubric;
+  const { locked } = rubric;
   const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
   const [registered, setRegistered] = useState<Registered>(null);
-  const [pending, setPending] = useState(!locked);
+  const [pending, setPending] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
   const cached = rubric.id;
@@ -88,14 +90,12 @@ export const Assignment: React.FC<{
       void commands.execute(assign, assignment).catch(_ => {});
   };
   const request = async () => {
-    setPending(true);
+    const now = Date.now();
+    const current = enrolled.get(workbook);
+    if (current?.cached === cached) store(current.registered);
+    setPending(!current);
+    if (current?.cached === cached && now < current.expires) return;
     try {
-      const now = Date.now();
-      const current = enrolled.get(workbook);
-      if (current && current.cached === cached && now < current.expires) {
-        store(current.registered);
-        return;
-      }
       const result = await commands.execute(enroll).catch(_ => null);
       const registered = result as Registered;
       enrolled.set(workbook, { cached, expires: now + TTL, registered });
@@ -143,7 +143,7 @@ export const Assignment: React.FC<{
   const roster = all ? flat(all) : null;
   const manual = roster === null;
   const multiple = !!roster && roster.length > 1;
-  if (pending) return <div className="correxit-assignment" />;
+  if (pending) return <div className="correxit-assignment cxt-mod-pending" />;
   return (
     <div className="correxit-assignment">
       {manual ? (
@@ -167,7 +167,11 @@ export const Assignment: React.FC<{
         />
       )}
       {manual && <Expiration {...{ assignment, locked, toggle, trans }} />}
-      {!locked && <Propagate {...{ commands, revised, trans }} />}
+      {!locked && (
+        <div className="correxit-assignment-propagate">
+          <CommandToolbarButtonComponent commands={commands} id={track} />
+        </div>
+      )}
     </div>
   );
 };
@@ -222,16 +226,6 @@ const Assignee: React.FC<{
   );
 };
 
-const format = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-};
-
 const Expiration: React.FC<{
   assignment: Assignment;
   locked: boolean;
@@ -251,6 +245,16 @@ const Expiration: React.FC<{
       </div>
     );
   }
+
+  const format = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
   const update = (value: string) => {
     const expiration = value ? new Date(value).getTime() : null;
     toggle('assignee', { ...assignment, expiration });
@@ -399,67 +403,3 @@ const Enrollment: React.FC<{
     </>
   );
 };
-
-const Propagate: React.FC<{
-  commands: CommandRegistry;
-  revised: number;
-  trans: TranslationBundle;
-}> = ({ commands, revised, trans }) => {
-  type Message = [string, Correxit.Emitter.Emission];
-  const { propagate } = Correxit.CommandIDs;
-  const [command, setCommand] = useState('');
-  const [timestamp, setTimestamp] = useState(revised);
-  const [log, done] = useCommand<Message>(commands, command, { timestamp });
-  const messages = log
-    .filter(([, { type }]) => type !== 'progress')
-    .map(([message]) => message);
-  const [value, max]: [number, number] = log.reduce(
-    (progress, [, { type, slots }]) =>
-      type === 'progress' ? (slots as [number, number]) : progress,
-    [0, 1]
-  );
-  const progress = trans.__('%1 of %2', value, max);
-  return (
-    <div className="correxit-assignment-propagate">
-      <Log {...{ done, messages }} />
-      <ToolbarButtonComponent
-        {...{
-          enabled: done && commands.isEnabled(propagate),
-          icon: Correxit.Icons.assignment,
-          label: commands.label(propagate),
-          onClick: () => {
-            setCommand(propagate);
-            setTimestamp(Date.now());
-          }
-        }}
-        noFocusOnClick
-      />
-      {!done && <progress {...{ max, value }}>{progress}</progress>}
-    </div>
-  );
-};
-
-const Log: React.FC<{
-  done: boolean;
-  messages: string[];
-}> = ({ done, messages }) => {
-  const ref = useRef<HTMLPreElement | null>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [messages.length]);
-  if (done && !messages.length) return <></>;
-  return (
-    <pre ref={ref}>
-      {messages.map((message, key) => (
-        <Message {...{ key, message }} />
-      ))}
-    </pre>
-  );
-};
-
-const Message: React.FC<{ message: string }> = React.memo(({ message }) => (
-  <span title={message}>
-    {message}
-    <br />
-  </span>
-));

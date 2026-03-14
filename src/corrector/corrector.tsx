@@ -280,7 +280,7 @@ const Progress: React.FC<{
   peak.current = Math.max(peak.current, grading ? resolved : loaded);
 
   const progress = active ? peak.current : 0;
-  const text = trans.__('%1 of %2', progress, total);
+  const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
   const className = active
     ? 'correxit-corrector-progress cxt-mod-active'
     : 'correxit-corrector-progress';
@@ -288,9 +288,10 @@ const Progress: React.FC<{
     <tr className={className}>
       <td colSpan={7}>
         {active ? (
-          <progress max={total} value={progress}>
-            {text}
-          </progress>
+          <div className="correxit-corrector-progress-bar">
+            <progress max={total} value={progress} />
+            <span>{trans.__('%1%', percent)}</span>
+          </div>
         ) : null}
       </td>
     </tr>

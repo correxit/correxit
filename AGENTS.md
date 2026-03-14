@@ -80,6 +80,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing (with `bypass` mode to skip re-execution when all cells are already scored), `correct()` with verbose overloads returning `Grade.Verbose` (including cell outputs), and `collect()` for recording a collection receipt.
 - `security.ts`: `openpgp` & `window.crypto` wrappers.
 - `commands.ts`: The central controller registry. Defines `Reified` type for safe workbook resolution.
+- `dispatcher.ts`: Plugin factory for provider-dispatched plugins (Consumer, Registrar). The `create` callback returns a `[Plugin, () => void]` tuple. Handles Moodle settings and intercepts secrets via a settings registry transform, moving them to the secrets manager so they never reach disk.
 - `propagator.ts`: Async generator for assignment distribution to rosters.
 - `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
 - `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`). The `Registrar` returns `Registration[]` objects (not raw strings).

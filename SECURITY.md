@@ -30,6 +30,17 @@ scope and enter via user input, dying with the browser tab. The
 `key: null`. Notebook metadata only stores locked rubrics, the key
 is structurally absent from anything on disk.
 
+### Settings Secrets
+
+Provider-dispatched plugins (Consumer, Registrar) may receive API
+tokens via the JupyterLab settings editor. The `dispatcher.ts`
+module registers a settings registry `compose` transform that
+intercepts any token value, moves it to the `SecretsManager`
+(in-memory), and blanks it from the persisted JSON before it
+reaches disk. On subsequent loads the transform re-injects the
+stored secret into the composite settings so that plugin code
+sees the token without it ever being written to a settings file.
+
 ## Integrity
 
 ### Assignment Signature
