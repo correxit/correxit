@@ -12,7 +12,7 @@ export async function moodle(
   identifier: Workbook.Identifier,
   settings: Settings['moodle'] & { token: string }
 ): ReturnType<Correxit.Registrar> {
-    type Assignment = { duedate: number; id: number; name: string };
+    type Assignment = { cmid: number; duedate: number; id: number; name: string };
     type Course = {
       assignments: Assignment[];
       fullname?: string;
@@ -58,7 +58,7 @@ export async function moodle(
       assignments: course.assignments
         .map(assignment => ({
           expiration: assignment.duedate ? assignment.duedate * 1000 : null,
-          id: `${course.id}:${assignment.id}`,
+          id: `${course.id}:${assignment.id}:${assignment.cmid}`,
           name: assignment.name,
           roster: roster[course.id] ?? []
         }))

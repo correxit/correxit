@@ -43,9 +43,11 @@ export function Propagator(props: Propagator.Props) {
   const command = cancelled ? '' : propagate;
   const [timestamp] = useState(Date.now);
   const [log, done] = useCommand<LogEntry>(commands, command, { timestamp });
-  const started = useRef(false);
-  if (!done) started.current = true;
-  useEffect(() => void (done && started.current && release()), [done, release]);
+  const [attempted, setAttempted] = useState(false);
+  useEffect(() => void (command && setAttempted(true)), [command]);
+  useEffect(() => {
+    if (done && attempted) release();
+  }, [attempted, done, release]);
 
   const messages = log
     .filter(([, { type }]) => type !== 'progress')

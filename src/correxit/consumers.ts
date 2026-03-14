@@ -55,13 +55,36 @@ export function moodle(
       return;
     }
 
-    const [course, assignment] = compound.split(':');
-    if (!course || !assignment) {
+    const [course, assignment, cmid] = compound.split(':');
+    if (!course || !assignment || !cmid) {
       yield { type: 'error', slots: ['Invalid assignment ID format'] };
       return;
     }
 
+    const possible = Object.values(rubric.cells).reduce(
+      (sum, cell) => sum + cell.points, 0
+    );
+
     const request = Moodle.request(url, token);
+    try {
+      await request(
+        'core_grades_update_grades',
+        [
+          'source=correxit',
+          `courseid=${course}`,
+          'component=mod_assign',
+          `activityid=${cmid}`,
+          'itemnumber=0',
+          `itemdetails[grademax]=${possible}`
+        ].join('&')
+      );
+    } catch (error) {
+      const message = String(error instanceof Error ? error.message : error);
+      yield { type: 'error', slots: [`Set maximum grade failed: ${message}`] };
+      return;
+    }
+    yield { type: 'max-score', slots: [possible] };
+
     const action = 'core_enrol_get_enrolled_users';
     let users: Moodle.User[];
     try {
@@ -90,7 +113,19 @@ export function moodle(
 
       const content = JSON.stringify(notebook);
       const filename = `${assignee.split('@')[0]}.ipynb`;
-      const item = await Moodle.upload(url, token, content, filename);
+
+      let item: number | null = null;
+      try {
+        item = await Moodle.upload(url, token, content, filename);
+      } catch (error) {
+        const message = String(error instanceof Error ? error.message : error);
+        yield { type: 'separator', slots: [] };
+        yield { type: 'assigned', slots: [assignee] };
+        yield { type: 'error', slots: [`Upload failed: ${message}`] };
+        yield { type: 'progress', slots: [++progress, total] };
+        continue;
+      }
+
       if (!item) {
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
@@ -98,19 +133,29 @@ export function moodle(
         yield { type: 'progress', slots: [++progress, total] };
         continue;
       }
-      await request(
-        'mod_assign_save_grade',
-        [
-          `assignmentid=${assignment}`,
-          `userid=${uid}`,
-          'grade=-1',
-          'attemptnumber=-1',
-          'addattempt=0',
-          'workflowstate=',
-          'applytoall=0',
-          `plugindata[files_filemanager]=${item}`
-        ].join('&')
-      );
+
+      try {
+        await request(
+          'mod_assign_save_grade',
+          [
+            `assignmentid=${assignment}`,
+            `userid=${uid}`,
+            'grade=-1',
+            'attemptnumber=-1',
+            'addattempt=0',
+            'workflowstate=',
+            'applytoall=0',
+            `plugindata[files_filemanager]=${item}`
+          ].join('&')
+        );
+      } catch (error) {
+        const message = String(error instanceof Error ? error.message : error);
+        yield { type: 'separator', slots: [] };
+        yield { type: 'assigned', slots: [assignee] };
+        yield { type: 'error', slots: [`Grade save failed: ${message}`] };
+        yield { type: 'progress', slots: [++progress, total] };
+        continue;
+      }
 
       yield { type: 'separator', slots: [] };
       yield { type: 'assigned', slots: [assignee] };

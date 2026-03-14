@@ -63,27 +63,32 @@ export function dispatch<Plugin>(
   });
 }
 
-function anonymize({ id, plugin, secrets, state, token }: {
+function anonymize({ id, secrets, state, token }: {
   id: string,
-  plugin: ISettingRegistry.IPlugin,
   secrets: ISecretsManager,
   state: State,
   token: symbol
-}): ISettingRegistry.IPlugin {
-  const raw = JSON.parse(plugin.raw);
-  const found = raw.moodle?.token;
-  if (found) {
-    const secret = { namespace: id, id: 'moodle-token', value: found };
-    state.secret = found;
-    raw.moodle = { ...raw.moodle, token: '' };
-    plugin.raw = JSON.stringify(raw);
-    secrets.set(token, id, 'moodle-token', secret);
-  }
-  if (state.secret && plugin.data?.composite) {
-    const composite = plugin.data.composite as any;
-    composite.moodle = { ...(composite.moodle ?? {}), token: state.secret };
-  }
-  return plugin;
+}): ISettingRegistry.IPlugin.Transform {
+  let pending = Promise.resolve();
+  return plugin => {
+    const user = plugin.data.user as Record<string, any> | undefined;
+    const found = user?.moodle?.token;
+    if (found) {
+      state.secret = found;
+      delete user!.moodle.token;
+      plugin.raw = JSON.stringify(user);
+      pending = pending.then(() =>
+        secrets.set(token, id, 'moodle-token', {
+          namespace: id, id: 'moodle-token', value: found
+        }).catch(reason => console.warn(id, 'secret set failed', reason))
+      );
+    }
+    if (plugin.data.composite) {
+      const composite = plugin.data.composite as any;
+      composite.moodle = { ...(composite.moodle ?? {}), token: state.secret };
+    }
+    return plugin;
+  };
 }
 
 async function subscribe({ id, registry, secrets, state, token }: {
@@ -94,7 +99,7 @@ async function subscribe({ id, registry, secrets, state, token }: {
   token: symbol
 }): Promise<() => void> {
   registry.transform(id, {
-    compose: plugin => anonymize({ id, plugin, secrets, state, token })
+    compose: anonymize({ id, secrets, state, token })
   });
 
   const loaded = await registry.load(id);
@@ -105,7 +110,7 @@ async function subscribe({ id, registry, secrets, state, token }: {
     };
     state.active = composite.provider;
     state.url = composite.moodle.url;
-    if (composite.moodle.token) state.secret = composite.moodle.token;
+    state.secret = composite.moodle.token ?? '';
   };
   loaded.changed.connect(reconfigure);
   reconfigure();

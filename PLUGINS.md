@@ -257,6 +257,7 @@ tracks exactly what the current Correxit code calls — nothing more.
 | ------------------------------- | -------------------------------------------------------- |
 | `mod_assign_get_assignments`    | Registrar — lists assignments the teacher can see        |
 | `core_enrol_get_enrolled_users` | Registrar & Consumer — fetches the roster / user IDs     |
+| `core_grades_update_grades`     | Consumer — sets the assignment's maximum grade           |
 | `mod_assign_save_grade`         | Consumer — attaches the notebook as feedback per student |
 
 The external service must also have **Can upload files** and
