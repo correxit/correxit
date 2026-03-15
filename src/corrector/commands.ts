@@ -11,6 +11,7 @@ import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import { Corrector, Reviewer } from '.';
 import * as bridge from './bridge';
+import * as csv from './csv';
 import * as grader from './grader';
 
 type Actions = grader.Actions;
@@ -141,7 +142,7 @@ export function commands(
       execute: async () => {
         if (!corrector || corrector.isDisposed) return;
         const { workbooks, grades } = bridge.peek();
-        const content = csv(workbooks, grades);
+        const content = csv.generate(workbooks, grades);
         const pwd = corrector.path;
         const { contents } = manager;
         const target = await io.available({ contents }, pwd, 'grades', '.csv');
@@ -468,59 +469,4 @@ async function* scanner(
 
 function unexecuted({ code }: Rubric.Score): boolean {
   return code === 'missing-given' || code === 'missing-reference';
-}
-
-function csv(
-  workbooks: readonly Scanned[],
-  grades: ReadonlyMap<string, { grade: Grade }>
-): string {
-  const { summary } = Rubric.Assignment;
-  const identity = ['assignee', 'assignment', 'expiration', 'title', 'rubric'];
-  const resolution = ['signature', 'points', 'possible'];
-  const lifecycle = ['submission', 'submitted', 'certification', 'collected'];
-  const diagnostic = ['resolved', 'path'];
-  const header = [...identity, ...resolution, ...lifecycle, ...diagnostic];
-  const reified = workbooks.filter(workbook => !workbook.hollow);
-  const rows = reified.map(workbook => {
-    const rubric = Workbook.open(workbook as Headless, true);
-    const path = workbook.context.path;
-    const grade = grades.get(path)?.grade ?? null;
-    const assignee = rubric?.assignment.assignee || '';
-    const assignment = rubric?.assignment.id || '';
-    const title = rubric?.assignment.name || '';
-    const signature = rubric?.assignment.signature || '';
-    const { points, possible } =
-      grade?.score ??
-      (rubric ? summary(rubric.assignment.report) : null) ??
-      Rubric.Score.UNSCORED;
-    const expiration = rubric?.assignment.expiration ?? null;
-    const submission = rubric?.assignment.submission ?? null;
-    const submitted = rubric?.assignment.submitted ?? null;
-    const certification = rubric?.assignment.certification ?? null;
-    const collected = rubric?.assignment.collected ?? null;
-    const resolved = grade?.resolved ?? false;
-    const unscored = points === 0 && possible === 0;
-    return [
-      assignee,
-      assignment,
-      Rubric.date(expiration),
-      title,
-      rubric?.id || '',
-      signature,
-      unscored ? '' : String(points),
-      unscored ? '' : String(possible),
-      Rubric.date(submission),
-      submitted ?? '',
-      Rubric.date(certification),
-      collected ?? '',
-      String(resolved),
-      path
-    ];
-  });
-  const escape = (field: string) =>
-    /[",\r\n]/.test(field) ? `"${field.replace(/"/g, '""')}"` : field;
-  const body = [header, ...rows]
-    .map(row => row.map(escape).join(','))
-    .join('\r\n');
-  return '\uFEFF' + body;
 }
