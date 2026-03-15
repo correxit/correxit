@@ -116,9 +116,13 @@ td {
   }
 
   &.cxt-mod-collected {
-    background-color: var(--correxit-correct-color);
+    background-color: color-mix(
+      in srgb,
+      var(--correxit-correct-color) 20%,
+      transparent
+    );
     border-left-color: var(--correxit-correct-color);
-    color: #fff;
+    color: var(--correxit-correct-color);
   }
 
   &.cxt-mod-failed {
@@ -181,9 +185,7 @@ table.correxit-corrector {
   table-layout: fixed;
   width: 100%;
 
-  col.correxit-corrector-col-assignment,
   col.correxit-corrector-col-kernel,
-  col.correxit-corrector-col-lock,
   col.correxit-corrector-col-open {
     width: var(--correxit-corrector-icon-width);
   }

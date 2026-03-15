@@ -286,7 +286,7 @@ const Progress: React.FC<{
     : 'correxit-corrector-progress';
   return (
     <tr className={className}>
-      <td colSpan={7}>
+      <td colSpan={5}>
         {active ? (
           <div className="correxit-corrector-progress-bar">
             <progress max={total} value={progress} />
@@ -301,8 +301,6 @@ const Progress: React.FC<{
 const Columns: React.FC = () => (
   <colgroup>
     <col className="correxit-corrector-col-open" />
-    <col className="correxit-corrector-col-lock" />
-    <col className="correxit-corrector-col-assignment" />
     <col className="correxit-corrector-col-assignee" />
     <col className="correxit-corrector-col-breakdown" />
     <col className="correxit-corrector-col-kernel" />
@@ -316,8 +314,6 @@ const HollowRow: React.FC<{
 }> = ({ className, path }) => (
   <tr {...{ className }}>
     <td className="correxit-corrector-open" />
-    <td className="correxit-corrector-lock" />
-    <td className="correxit-corrector-assignment" />
     <td className="correxit-corrector-assignee">{basename(path)}</td>
     <td className="correxit-corrector-breakdown" />
     <td className="correxit-corrector-kernel" />
@@ -348,8 +344,6 @@ const Row: React.FC<{
   return (
     <tr className={className} onClick={() => select(selected ? '' : path)}>
       <Notebook {...{ commands, trans, workbook }} />
-      <Lock {...{ trans, workbook }} />
-      <Assignment {...{ trans, workbook }} />
       <Assignee {...{ workbook }} />
       <Breakdown {...{ commands, failed, trans, workbook }} />
       <Kernel {...{ spec }} />
@@ -448,50 +442,6 @@ const Notebook: React.FC<{
           {...{ args, caption, commands, icon: notebookIcon, id, label: '' }}
           noFocusOnClick
         />
-      </div>
-    </td>
-  );
-};
-
-const Lock: React.FC<{
-  trans: TranslationBundle;
-  workbook: Workbook.Headless;
-}> = ({ trans, workbook }) => {
-  const locked = open(workbook)?.locked ?? true;
-  const icon = locked ? Correxit.Icons.locked : Correxit.Icons.unlocked;
-  const title = locked ? trans.__('Locked') : trans.__('Unlocked');
-  return (
-    <td className="correxit-corrector-lock">
-      <div className="correxit-corrector-icon">
-        <icon.react tag="span" title={title} />
-      </div>
-    </td>
-  );
-};
-
-const Assignment: React.FC<{
-  trans: TranslationBundle;
-  workbook: Workbook.Headless;
-}> = ({ trans, workbook }) => {
-  const rubric = open(workbook);
-  if (!rubric) return <td className="correxit-corrector-assignment" />;
-
-  const { assignment, locked } = rubric;
-  const { assignee, roster } = assignment;
-  const icon = assignee
-    ? Correxit.Icons.assignee
-    : roster.length && !locked
-      ? Correxit.Icons.assignment
-      : Correxit.Icons.template;
-  const title = assignee
-    ? trans.__('Assigned to: %1', assignee)
-    : roster.length && !locked
-      ? trans.__('Template - unassigned (roster: %1)', roster.length)
-      : trans.__('Template - unassigned (empty roster)');
-  return (
-    <td className="correxit-corrector-assignment">
-      <div className="correxit-corrector-icon">
-        <icon.react tag="span" title={title} />
       </div>
     </td>
   );
