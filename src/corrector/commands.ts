@@ -138,7 +138,7 @@ export function commands(
     commands.addCommand(CommandIDs.csv, {
       icon: spreadsheetIcon,
       caption: trans.__('Export to CSV'),
-      isEnabled: () => !!indicator?.idle,
+      isEnabled: () => (indicator ? indicator.idle : false),
       execute: async () => {
         if (!corrector || corrector.isDisposed) return;
         const { workbooks, grades } = bridge.peek();

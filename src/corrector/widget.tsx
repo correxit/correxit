@@ -8,8 +8,7 @@ import {
   Toolbar
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { Message, MessageLoop } from '@lumino/messaging';
-import { Widget } from '@lumino/widgets';
+import { Message } from '@lumino/messaging';
 import React from 'react';
 import { Rubric, Workbook } from '../correxit';
 import * as state from '../correxit/state';
@@ -25,7 +24,6 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     this.indicator = indicator;
     this.trans = trans;
     this.addClass('correxit-corrector-widget');
-    void this.initialize();
   }
 
   get path(): string {
@@ -52,7 +50,7 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     const notify = (updates: Corrector.Notification) => {
       indicator?.set(updates);
       selector?.set(updates);
-      this.nudge();
+      commands.notifyCommandChanged(CommandIDs.csv);
     };
     const cd = new CommandToolbarButton({
       commands,
@@ -72,15 +70,15 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     content.set({ notify });
   }
 
-  protected nudge() {
-    const { clientHeight, clientWidth } = this.toolbar.node;
-    const dimensions = new Widget.ResizeMessage(clientWidth, clientHeight);
-    MessageLoop.postMessage(this.toolbar, dimensions);
-    this.commands.notifyCommandChanged(CommandIDs.csv);
+  protected onBeforeShow(msg: Message): void {
+    if (!this.initialized)
+      this.initialize().then(() => void (this.initialized = true));
+    super.onBeforeShow(msg);
   }
 
   protected commands: CommandRegistry;
   protected indicator: CorrectorStatus | null;
+  protected initialized = false;
   protected selector: ModeSelector | null = null;
   protected trans: IRenderMime.TranslationBundle;
 }
