@@ -71,8 +71,11 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
   }
 
   protected onBeforeShow(msg: Message): void {
-    if (!this.initialized)
-      this.initialize().then(() => void (this.initialized = true));
+    if (!this.initialized) {
+      this.initialize()
+        .catch(_ => {})
+        .finally(() => void (this.initialized = true));
+    }
     super.onBeforeShow(msg);
   }
 

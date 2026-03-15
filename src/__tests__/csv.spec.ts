@@ -17,7 +17,7 @@ type Grade = {
   path: string;
   resolved: boolean;
   score: Rubric.Score;
-  spec: null
+  spec: null;
 };
 type Headless = { content: null; context: { path: string } };
 
@@ -34,7 +34,9 @@ const report = (): Rubric.Assignment.Report => ({
   scores: {}
 });
 
-const assignment = (overrides: Partial<Rubric.Assignment> = {}): Rubric.Assignment => ({
+const assignment = (
+  overrides: Partial<Rubric.Assignment> = {}
+): Rubric.Assignment => ({
   assignee: '',
   certification: null,
   collected: null,
@@ -79,8 +81,10 @@ const parse = (output: string) => {
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (quoted) {
-        if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-        else if (ch === '"') quoted = false;
+        if (ch === '"' && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else if (ch === '"') quoted = false;
         else current += ch;
       } else if (ch === '"') {
         quoted = true;
@@ -125,15 +129,17 @@ describe('csv', () => {
 
   it('populates identity fields from rubric', () => {
     const wb = workbook('hw/alice.ipynb');
-    openMock.mockReturnValue(rubric({
-      id: 'r-42',
-      assignment: assignment({
-        assignee: 'Alice',
-        id: 'hw-1',
-        name: 'Homework 1',
-        signature: 'sig-abc'
+    openMock.mockReturnValue(
+      rubric({
+        id: 'r-42',
+        assignment: assignment({
+          assignee: 'Alice',
+          id: 'hw-1',
+          name: 'Homework 1',
+          signature: 'sig-abc'
+        })
       })
-    }));
+    );
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     const [, row] = rows;
     expect(row[0]).toBe('Alice');
@@ -145,12 +151,18 @@ describe('csv', () => {
 
   it('uses grade score when provided', () => {
     const wb = workbook('hw/bob.ipynb');
-    openMock.mockReturnValue(rubric({
-      assignment: assignment({ assignee: 'Bob' })
-    }));
+    openMock.mockReturnValue(
+      rubric({
+        assignment: assignment({ assignee: 'Bob' })
+      })
+    );
     const score: Rubric.Score = {
-      code: '', comment: '', id: '',
-      points: 8, possible: 10, status: 'correct'
+      code: '',
+      comment: '',
+      id: '',
+      points: 8,
+      possible: 10,
+      status: 'correct'
     };
     const grades = new Map([
       ['hw/bob.ipynb', { grade: grade('hw/bob.ipynb', score) }]
@@ -166,13 +178,19 @@ describe('csv', () => {
     const wb = workbook('hw/carol.ipynb');
     const scores: Record<string, Rubric.Score> = {
       'cell-1': {
-        code: '', comment: '', id: 'cell-1',
-        points: 3, possible: 5, status: 'correct'
+        code: '',
+        comment: '',
+        id: 'cell-1',
+        points: 3,
+        possible: 5,
+        status: 'correct'
       }
     };
-    openMock.mockReturnValue(rubric({
-      assignment: assignment({ report: { ...report(), scores } })
-    }));
+    openMock.mockReturnValue(
+      rubric({
+        assignment: assignment({ report: { ...report(), scores } })
+      })
+    );
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     const [, row] = rows;
     expect(row[6]).toBe('3');
@@ -181,9 +199,11 @@ describe('csv', () => {
 
   it('escapes commas in fields', () => {
     const wb = workbook('hw/student.ipynb');
-    openMock.mockReturnValue(rubric({
-      assignment: assignment({ name: 'Last, First' })
-    }));
+    openMock.mockReturnValue(
+      rubric({
+        assignment: assignment({ name: 'Last, First' })
+      })
+    );
     const output = generate([wb as unknown as Scanned], new Map());
     expect(output).toContain('"Last, First"');
     const rows = parse(output);
@@ -192,18 +212,22 @@ describe('csv', () => {
 
   it('escapes double quotes in fields', () => {
     const wb = workbook('hw/student.ipynb');
-    openMock.mockReturnValue(rubric({
-      assignment: assignment({ name: 'Say "hello"' })
-    }));
+    openMock.mockReturnValue(
+      rubric({
+        assignment: assignment({ name: 'Say "hello"' })
+      })
+    );
     const output = generate([wb as unknown as Scanned], new Map());
     expect(output).toContain('"Say ""hello"""');
   });
 
   it('sanitizes formula injection characters', () => {
     const wb = workbook('hw/evil.ipynb');
-    openMock.mockReturnValue(rubric({
-      assignment: assignment({ assignee: '=CMD()' })
-    }));
+    openMock.mockReturnValue(
+      rubric({
+        assignment: assignment({ assignee: '=CMD()' })
+      })
+    );
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     expect(rows[1][0]).toBe("'=CMD()");
   });
@@ -211,9 +235,11 @@ describe('csv', () => {
   it('sanitizes plus, minus, at, and tab prefixes', () => {
     for (const prefix of ['+', '-', '@', '\t']) {
       const wb = workbook('hw/x.ipynb');
-      openMock.mockReturnValue(rubric({
-        assignment: assignment({ assignee: `${prefix}payload` })
-      }));
+      openMock.mockReturnValue(
+        rubric({
+          assignment: assignment({ assignee: `${prefix}payload` })
+        })
+      );
       const rows = parse(generate([wb as unknown as Scanned], new Map()));
       expect(rows[1][0]).toBe(`'${prefix}payload`);
     }
@@ -221,7 +247,7 @@ describe('csv', () => {
 
   it('starts with a UTF-8 BOM', () => {
     const output = generate([], new Map());
-    expect(output.charCodeAt(0)).toBe(0xFEFF);
+    expect(output.charCodeAt(0)).toBe(0xfeff);
   });
 
   it('uses CRLF line endings', () => {
@@ -234,14 +260,16 @@ describe('csv', () => {
 
   it('includes lifecycle timestamps when present', () => {
     const wb = workbook('hw/dated.ipynb');
-    openMock.mockReturnValue(rubric({
-      assignment: assignment({
-        certification: 1700000000000,
-        collected: 'receipt-abc',
-        submission: 1699000000000,
-        submitted: 'sub-xyz'
+    openMock.mockReturnValue(
+      rubric({
+        assignment: assignment({
+          certification: 1700000000000,
+          collected: 'receipt-abc',
+          submission: 1699000000000,
+          submitted: 'sub-xyz'
+        })
       })
-    }));
+    );
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     const [, row] = rows;
     expect(row[8]).not.toBe('');
@@ -256,7 +284,9 @@ describe('csv', () => {
     const c = hollow('c.ipynb');
     const d = workbook('d.ipynb');
     openMock.mockReturnValue(null);
-    const rows = parse(generate([a, b, c, d] as unknown as Scanned[], new Map()));
+    const rows = parse(
+      generate([a, b, c, d] as unknown as Scanned[], new Map())
+    );
     expect(rows).toHaveLength(3);
     expect(rows[1][rows[1].length - 1]).toBe('b.ipynb');
     expect(rows[2][rows[2].length - 1]).toBe('d.ipynb');
