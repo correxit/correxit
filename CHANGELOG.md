@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/QuantStack/correxit/compare/v1.10.0...v1.11.0) (2026-03-15)
+
+
+### Features
+
+* CSV export ([#54](https://github.com/QuantStack/correxit/issues/54)) ([31a287f](https://github.com/QuantStack/correxit/commit/31a287f16384e9a97ca97136bfda9e2e21e5e34f))
+
 # [1.10.0](https://github.com/QuantStack/correxit/compare/v1.9.0...v1.10.0) (2026-03-14)
 
 
