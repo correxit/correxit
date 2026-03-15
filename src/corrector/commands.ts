@@ -141,11 +141,12 @@ export function commands(
       isEnabled: () => !!indicator?.idle,
       execute: async () => {
         if (!corrector || corrector.isDisposed) return;
+
+        const { contents } = manager;
+        const { path } = corrector;
         const { workbooks, grades } = bridge.peek();
         const content = csv.generate(workbooks, grades);
-        const pwd = corrector.path;
-        const { contents } = manager;
-        const target = await io.available({ contents }, pwd, 'grades', '.csv');
+        const target = await io.available(manager, path, 'grades', '.csv');
         await contents.save(target, { type: 'file', format: 'text', content });
         void commands.execute('docmanager:open', { path: target });
       }
