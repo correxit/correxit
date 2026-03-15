@@ -8,12 +8,13 @@ import {
   Toolbar
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { Message } from '@lumino/messaging';
+import { Message, MessageLoop } from '@lumino/messaging';
+import { Widget } from '@lumino/widgets';
 import React from 'react';
 import { Rubric, Workbook } from '../correxit';
 import * as state from '../correxit/state';
 import { Corrector } from '.';
-import { useSnapshot } from './bridge';
+import * as bridge from './bridge';
 import { CommandIDs, Scanned } from './commands';
 import { Reviewer } from './reviewer';
 
@@ -37,7 +38,9 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
   }
 
   dispose() {
-    this.indicator?.set({ graded: true, scanned: true });
+    if (this.isDisposed) return;
+    if (this.indicator && !this.indicator.isDisposed)
+      this.indicator.set({ graded: true, scanned: true });
     super.dispose();
   }
 
@@ -49,17 +52,31 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     const notify = (updates: Corrector.Notification) => {
       indicator?.set(updates);
       selector?.set(updates);
+      this.nudge();
     };
     const cd = new CommandToolbarButton({
       commands,
       id: Corrector.CommandIDs.cd,
       noFocusOnClick: true
     });
+    const csv = new CommandToolbarButton({
+      commands,
+      id: Corrector.CommandIDs.csv,
+      noFocusOnClick: true
+    });
     this.selector = selector;
     toolbar.addItem('cd', cd);
+    toolbar.addItem('csv', csv);
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
     toolbar.addItem('mode', selector);
     content.set({ notify });
+  }
+
+  protected nudge() {
+    const { clientHeight, clientWidth } = this.toolbar.node;
+    const dimensions = new Widget.ResizeMessage(clientWidth, clientHeight);
+    MessageLoop.postMessage(this.toolbar, dimensions);
+    this.commands.notifyCommandChanged(CommandIDs.csv);
   }
 
   protected commands: CommandRegistry;
@@ -122,6 +139,10 @@ export class CorrectorStatus extends ReactWidget {
         ? trans.__('Grading...')
         : trans.__('Idle');
     return <span className="jp-StatusBar-TextItem">{label}</span>;
+  }
+
+  get idle(): boolean {
+    return this.graded && this.scanned;
   }
 
   set(updates: { graded: boolean; scanned: boolean }) {
@@ -326,7 +347,7 @@ class ReviewerInfoWidget extends ReactWidget {
 }
 
 function ReviewerInfo({ trans }: { trans: IRenderMime.TranslationBundle }) {
-  const { cursor, workbooks } = useSnapshot();
+  const { cursor, workbooks } = bridge.useSnapshot();
   if (!cursor) return null;
 
   const workbook = workbooks.find(

@@ -2,14 +2,16 @@ import { INotebookTree } from '@jupyter-notebook/tree';
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { showErrorMessage, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
+import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
-import { folderIcon } from '@jupyterlab/ui-components';
+import { folderIcon, spreadsheetIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
 import * as kernels from '../correxit/kernels';
 import { Corrector, Reviewer } from '.';
+import * as bridge from './bridge';
 import * as grader from './grader';
 
 type Actions = grader.Actions;
@@ -28,6 +30,7 @@ export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
   export const collect = 'correxit-corrector:collect';
+  export const csv = 'correxit-corrector:csv';
   export const down = 'correxit-reviewer:down';
   export const fail = 'correxit-reviewer:fail';
   export const intervene = 'correxit-reviewer:intervene';
@@ -128,6 +131,23 @@ export function commands(
         }
         if (typeof path === 'string') corrector.path = path || '.';
         corrector.removeClass('cxt-mod-cd');
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.csv, {
+      icon: spreadsheetIcon,
+      caption: trans.__('Export to CSV'),
+      isEnabled: () => !!indicator?.idle,
+      execute: async () => {
+        if (!corrector || corrector.isDisposed) return;
+        const { workbooks, grades } = bridge.peek();
+        const content = csv(workbooks, grades);
+        const pwd = corrector.path;
+        const { contents } = manager;
+        const target = await unique(contents, pwd, 'grades', '.csv');
+        await contents.save(target, { type: 'file', format: 'text', content });
+        void commands.execute('docmanager:open', { path: target });
       }
     })
   );
@@ -449,4 +469,77 @@ async function* scanner(
 
 function unexecuted({ code }: Rubric.Score): boolean {
   return code === 'missing-given' || code === 'missing-reference';
+}
+
+function csv(
+  workbooks: readonly Scanned[],
+  grades: ReadonlyMap<string, { grade: Grade }>
+): string {
+  const { summary } = Rubric.Assignment;
+  const identity = ['assignee', 'assignment', 'expiration', 'title', 'rubric'];
+  const resolution = ['signature', 'points', 'possible'];
+  const lifecycle = ['submission', 'submitted', 'certification', 'collected'];
+  const diagnostic = ['resolved', 'path'];
+  const header = [...identity, ...resolution, ...lifecycle, ...diagnostic];
+  const reified = workbooks.filter(workbook => !workbook.hollow);
+  const rows = reified.map(workbook => {
+    const rubric = Workbook.open(workbook as Headless, true);
+    const path = workbook.context.path;
+    const grade = grades.get(path)?.grade ?? null;
+    const assignee = rubric?.assignment.assignee || '';
+    const assignment = rubric?.assignment.id || '';
+    const title = rubric?.assignment.name || '';
+    const signature = rubric?.assignment.signature || '';
+    const { points, possible } =
+      grade?.score ??
+      (rubric ? summary(rubric.assignment.report) : null) ??
+      Rubric.Score.UNSCORED;
+    const expiration = rubric?.assignment.expiration ?? null;
+    const submission = rubric?.assignment.submission ?? null;
+    const submitted = rubric?.assignment.submitted ?? null;
+    const certification = rubric?.assignment.certification ?? null;
+    const collected = rubric?.assignment.collected ?? null;
+    const resolved = grade?.resolved ?? false;
+    const unscored = points === 0 && possible === 0;
+    return [
+      assignee,
+      assignment,
+      Rubric.date(expiration),
+      title,
+      rubric?.id || '',
+      signature,
+      unscored ? '' : String(points),
+      unscored ? '' : String(possible),
+      Rubric.date(submission),
+      submitted ?? '',
+      Rubric.date(certification),
+      collected ?? '',
+      String(resolved),
+      path
+    ];
+  });
+  const escape = (field: string) =>
+    /[",\r\n]/.test(field) ? `"${field.replace(/"/g, '""')}"` : field;
+  const body = [header, ...rows]
+    .map(row => row.map(escape).join(','))
+    .join('\r\n');
+  return '\uFEFF' + body;
+}
+
+async function unique(
+  contents: Contents.IManager,
+  pwd: string,
+  seed: string,
+  ext: string
+): Promise<string> {
+  const response = await contents.get(pwd);
+  const paths = (response.content as Contents.IModel[]).map(({ path }) => path);
+  const parent = new Set(paths);
+  for (let suffix = 0; ; suffix++) {
+    const name = PathExt.join(
+      pwd,
+      suffix ? `${seed}-${suffix}${ext}` : `${seed}${ext}`
+    );
+    if (!parent.has(name)) return name;
+  }
 }

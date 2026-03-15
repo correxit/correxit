@@ -11,11 +11,12 @@ import React, {
 import { Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { Corrector } from '.';
-import { type Cursor, inject, navigate as bridge, useSnapshot } from './bridge';
+import * as bridge from './bridge';
 import { commands as COMMANDS, CommandIDs, Scanned } from './commands';
 import { ReviewerWidget } from './widget';
 
 type Collated = Corrector.Collated;
+type Cursor = bridge.Cursor;
 type Headless = Workbook.Headless;
 type NavigateRef = React.MutableRefObject<(direction: string) => void>;
 type ScoreRef = React.MutableRefObject<(action: 'pass' | 'fail') => void>;
@@ -37,7 +38,7 @@ const integer = (value: string): number | '' => {
 
 export function Reviewer(props: Reviewer.Props) {
   const { commands, factory, rendermime, trans, cursor: initial } = props;
-  const snapshot = useSnapshot();
+  const snapshot = bridge.useSnapshot();
   const { workbooks, grades } = snapshot;
   const empty = workbooks.length === 0;
 
@@ -71,9 +72,9 @@ export function Reviewer(props: Reviewer.Props) {
 
   useEffect(() => {
     props.on.workbook(workbook);
-    if (workbook) void inject(commands, workbook);
+    if (workbook) void bridge.inject(commands, workbook);
     if (cursor) state.cursor(cursor.cell);
-    bridge(cursor);
+    bridge.navigate(cursor);
     return () => void state.cursor(null);
   }, [workbook, cursor?.path, cursor?.cell]);
 

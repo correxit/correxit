@@ -9,7 +9,7 @@ import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
-import { clear, inject, publish } from './bridge';
+import * as bridge from './bridge';
 import {
   commands as COMMANDS,
   CommandIDs as COMMAND_IDS,
@@ -213,11 +213,11 @@ export function Corrector(props: Corrector.Props) {
   const total = memo.length;
   const progress = { graded, grading, loaded, resolved, scanned, total };
   useEffect(() => () => dispose(Object.values(cached.current)), []);
-  useEffect(() => inject(commands, workbook), [workbook]);
+  useEffect(() => bridge.inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
   useEffect(() => reconcile(cached.current, memo, focus), [focus, memo]);
-  useEffect(() => publish({ workbooks: memo, grades }), [memo, grades]);
-  useEffect(() => () => clear(), []);
+  useEffect(() => bridge.publish({ workbooks: memo, grades }), [memo, grades]);
+  useEffect(() => () => bridge.clear(), []);
   return (
     <table className="correxit-corrector">
       <Columns />
