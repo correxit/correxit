@@ -7,7 +7,6 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
-import { folderIcon, spreadsheetIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
 import * as kernels from '../correxit/kernels';
 import { Corrector, Reviewer } from '.';
@@ -73,6 +72,7 @@ export function commands(
     tree,
     unlocker
   } = utilities;
+  const { Icons } = Correxit;
   const fetch = (handle: Credentials, silent = false) =>
     commands.execute(Correxit.CommandIDs.fetch, { ...handle, silent });
   const { normalize } = Workbook.Credentials;
@@ -111,7 +111,7 @@ export function commands(
   );
   disposables.push(
     commands.addCommand(CommandIDs.cd, {
-      icon: folderIcon,
+      icon: Icons.folder,
       caption: () =>
         trans.__('Change directory - current: %1', corrector?.path),
       label: () => `/ ${corrector?.path.split('/').join(' / ')} /`,
@@ -136,9 +136,9 @@ export function commands(
   );
   disposables.push(
     commands.addCommand(CommandIDs.csv, {
-      icon: spreadsheetIcon,
+      icon: Icons.csv,
       caption: trans.__('Export to CSV'),
-      isEnabled: () => (indicator ? indicator.idle : false),
+      isEnabled: () => !!indicator?.idle,
       execute: async () => {
         if (!corrector || corrector.isDisposed) return;
         const { workbooks, grades } = bridge.peek();
