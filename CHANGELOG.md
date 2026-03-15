@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/QuantStack/correxit/compare/v1.11.0...v1.11.1) (2026-03-15)
+
+
+### Bug Fixes
+
+* update example xsql workbook ([#55](https://github.com/QuantStack/correxit/issues/55)) ([3d69e28](https://github.com/QuantStack/correxit/commit/3d69e28f95f292f0dc173c999717ec27a3e672c9))
+
 # [1.11.0](https://github.com/QuantStack/correxit/compare/v1.10.0...v1.11.0) (2026-03-15)
 
 
