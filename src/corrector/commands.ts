@@ -2,12 +2,12 @@ import { INotebookTree } from '@jupyter-notebook/tree';
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { showErrorMessage, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
-import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
 import { Correxit, Rubric, Workbook } from '..';
+import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import { Corrector, Reviewer } from '.';
 import * as bridge from './bridge';
@@ -87,15 +87,14 @@ export function commands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
         const actions: Actions = {
-          correct: workbook => correct(workbook),
+          correct,
           exclude: workbook => exclude(workbook, overwrite),
           recover
         };
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
-        if (!handle)
-          throw new Error(`batch failed, args: ${JSON.stringify(args)}`);
+        if (!handle) throw new Error(`batch error, ${JSON.stringify(args)}`);
 
         const cap = kernels.cap();
         const retries = kernels.retries();
@@ -145,7 +144,7 @@ export function commands(
         const content = csv(workbooks, grades);
         const pwd = corrector.path;
         const { contents } = manager;
-        const target = await unique(contents, pwd, 'grades', '.csv');
+        const target = await io.available({ contents }, pwd, 'grades', '.csv');
         await contents.save(target, { type: 'file', format: 'text', content });
         void commands.execute('docmanager:open', { path: target });
       }
@@ -524,22 +523,4 @@ function csv(
     .map(row => row.map(escape).join(','))
     .join('\r\n');
   return '\uFEFF' + body;
-}
-
-async function unique(
-  contents: Contents.IManager,
-  pwd: string,
-  seed: string,
-  ext: string
-): Promise<string> {
-  const response = await contents.get(pwd);
-  const paths = (response.content as Contents.IModel[]).map(({ path }) => path);
-  const parent = new Set(paths);
-  for (let suffix = 0; ; suffix++) {
-    const name = PathExt.join(
-      pwd,
-      suffix ? `${seed}-${suffix}${ext}` : `${seed}${ext}`
-    );
-    if (!parent.has(name)) return name;
-  }
 }

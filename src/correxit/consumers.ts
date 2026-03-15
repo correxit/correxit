@@ -15,7 +15,7 @@ export function manual(
     const total = rubric.assignment.roster.length;
     const parent = PathExt.dirname(path);
     const base = PathExt.basename(path, '.ipynb');
-    const potential = await io.folder(manager, parent, base);
+    const potential = await io.available(manager, parent, base);
     const directory = await io.mkdir(manager, parent, potential);
     const pwd = directory.path;
     const location = { base, pwd };
