@@ -70,7 +70,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 ## 6. Testing Strategy
 
 - **Unit Tests (`src/__tests__/`)**: For pure logic and isolated modules. The following have Jest unit tests:
-  - `rubric.ts`, `state.ts`, `kernels.ts`, `unlocker.ts`, `grader.ts`
+  - `rubric.ts`, `state.ts`, `kernels.ts`, `unlocker.ts`, `grader.ts`, `csv.ts`
 - **Playwright Tests (`ui-tests/`)**: For modules that require a live JupyterLab environment. These serve as the effective unit tests for the following. Do not attempt to Jest-mock them:
   - `workbook.ts`, `commands.ts` (both `correxit/` and `corrector/`), `corrector.tsx`, `reviewer.tsx`, `widget.tsx`
 
@@ -82,7 +82,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `commands.ts`: The central controller registry. Defines `Reified` type for safe workbook resolution.
 - `dispatcher.ts`: Plugin factory for provider-dispatched plugins (Consumer, Registrar). The `create` callback returns a `[Plugin, () => void]` tuple. Handles Moodle settings and intercepts secrets via a settings registry transform, moving them to the secrets manager so they never reach disk.
 - `propagator.ts`: Async generator for assignment distribution to rosters.
-- `io.ts`: File system operations (create, mkdir, folder naming, workbook fetching).
+- `io.ts`: File system operations (`available`, `cd`, `create`, `mkdir`, workbook fetching).
 - `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`). The `Registrar` returns `Registration[]` objects (not raw strings).
 - `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, retries, timeout })`, `cap()`, `retries()`, and `timeout()` for settings-driven control.
 - `corrector/grader.ts`: Bounded-concurrency async generator for batch grading. Accepts a `recover` callback, `cap`, and `retries`. Scanner accepts `Iterable | AsyncIterable`; failures are recovered and yielded so nothing stalls the pipeline.
@@ -90,4 +90,5 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `use-command.ts`: React hook bridging async generators to component state at ~60fps. Restarts the stream whenever `id` or serialized `args` changes; cleanup marks the prior stream interrupted.
 - `corrector/bridge.ts`: `useSyncExternalStore`-based external store bridging Corrector and Reviewer state. The Corrector `publish()`es workbook/grade snapshots; the Reviewer reads them via `useSnapshot()` and writes cursor changes via `navigate()`.
 - `corrector/reviewer.tsx`: Per-cell manual review UI. Renders cell source, outputs, a scoring grid (pass/fail/partial with directional advance), a comment field, and a score minimap. Navigation is keyboard-driven (arrow keys / HJKL). Auto-certifies when all reviewable cells are scored.
-- `corrector/commands.ts`: Registers both Corrector commands (`batch`, `scan`, `collect`, `launch`, `cd`) and Reviewer commands (`review`, `intervene`, `up`/`down`/`left`/`right`, `pass`, `fail`). The `intervene` command saves scores, writes comments, and auto-certifies when the last pending reviewable cell is scored.
+- `corrector/csv.ts`: CSV export generator for scanned workbooks and grades. Uses `Rubric.Score.status` to detect unscored workbooks.
+- `corrector/commands.ts`: Registers Corrector commands (`batch`, `scan`, `collect`, `csv`, `launch`, `cd`) and Reviewer commands (`review`, `intervene`, `up`/`down`/`left`/`right`, `pass`, `fail`). The `intervene` command saves scores, writes comments, and auto-certifies when the last pending reviewable cell is scored.

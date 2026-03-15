@@ -6,10 +6,12 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { Contents } from '@jupyterlab/services';
-import { folderIcon } from '@jupyterlab/ui-components';
 import { Correxit, Rubric, Workbook } from '..';
+import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import { Corrector, Reviewer } from '.';
+import * as bridge from './bridge';
+import * as csv from './csv';
 import * as grader from './grader';
 
 type Actions = grader.Actions;
@@ -28,6 +30,7 @@ export namespace CommandIDs {
   export const batch = 'correxit-corrector:batch';
   export const cd = 'correxit-corrector:cd';
   export const collect = 'correxit-corrector:collect';
+  export const csv = 'correxit-corrector:csv';
   export const down = 'correxit-reviewer:down';
   export const fail = 'correxit-reviewer:fail';
   export const intervene = 'correxit-reviewer:intervene';
@@ -70,6 +73,7 @@ export function commands(
     tree,
     unlocker
   } = utilities;
+  const { Icons } = Correxit;
   const fetch = (handle: Credentials, silent = false) =>
     commands.execute(Correxit.CommandIDs.fetch, { ...handle, silent });
   const { normalize } = Workbook.Credentials;
@@ -84,15 +88,14 @@ export function commands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
         const actions: Actions = {
-          correct: workbook => correct(workbook),
+          correct,
           exclude: workbook => exclude(workbook, overwrite),
           recover
         };
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
-        if (!handle)
-          throw new Error(`batch failed, args: ${JSON.stringify(args)}`);
+        if (!handle) throw new Error(`batch error, ${JSON.stringify(args)}`);
 
         const cap = kernels.cap();
         const retries = kernels.retries();
@@ -108,7 +111,7 @@ export function commands(
   );
   disposables.push(
     commands.addCommand(CommandIDs.cd, {
-      icon: folderIcon,
+      icon: Icons.folder,
       caption: () =>
         trans.__('Change directory - current: %1', corrector?.path),
       label: () => `/ ${corrector?.path.split('/').join(' / ')} /`,
@@ -128,6 +131,24 @@ export function commands(
         }
         if (typeof path === 'string') corrector.path = path || '.';
         corrector.removeClass('cxt-mod-cd');
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.csv, {
+      icon: Icons.csv,
+      caption: trans.__('Export to CSV'),
+      isEnabled: () => !!indicator?.idle,
+      execute: async () => {
+        if (!corrector || corrector.isDisposed) return;
+
+        const { contents } = manager;
+        const { path } = corrector;
+        const { workbooks, grades } = bridge.peek();
+        const content = csv.generate(workbooks, grades);
+        const target = await io.available(manager, path, 'grades', '.csv');
+        await contents.save(target, { type: 'file', format: 'text', content });
+        void commands.execute('docmanager:open', { path: target });
       }
     })
   );

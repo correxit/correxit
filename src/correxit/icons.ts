@@ -1,8 +1,10 @@
 import {
   addIcon,
+  folderIcon,
   LabIcon,
   notebookIcon,
-  saveIcon
+  saveIcon,
+  spreadsheetIcon
 } from '@jupyterlab/ui-components';
 import ANSWERABLE from '../../style/monitor/icons/answerable.svg';
 import ASSIGNEE from '../../style/monitor/icons/assignee.svg';
@@ -43,6 +45,8 @@ export namespace Icons {
     new LabIcon({ name: 'correxit:correct', svgstr: CORRECT });
   export const correctable =
     new LabIcon({ name: 'correxit:correctable', svgstr: CORRECTABLE });
+  export const csv = spreadsheetIcon;
+  export const folder = folderIcon;
   export const kernel =
     new LabIcon({ name: 'correxit:kernel', svgstr: KERNEL });
   export const key = new LabIcon({ name: 'correxit:key', svgstr: KEY });

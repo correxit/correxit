@@ -6,6 +6,26 @@ import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
 
+/** @returns an available path in pwd for the given seed name. */
+export async function available(
+  { contents }: Pick<ServiceManager.IManager, 'contents'>,
+  pwd: string,
+  seed: string,
+  ext = ''
+): Promise<string> {
+  const response = await contents.get(pwd);
+  if (response.type !== 'directory') throw new Error(`Not a directory: ${pwd}`);
+
+  const paths = (response.content as Contents.IModel[]).map(({ path }) => path);
+  const parent = new Set(paths);
+  for (let suffix = 0; ; suffix++) {
+    const file = suffix ? `${seed}-${suffix}${ext}` : `${seed}${ext}`;
+    const path = PathExt.join(pwd, file);
+    if (!parent.has(path)) return path;
+  }
+}
+
+/** Navigates the file browser to path. */
 export async function cd(commands: CommandRegistry, path: string) {
   const command = 'filebrowser:go-to-path';
   if (commands.hasCommand(command)) commands.execute(command, { path });
@@ -41,24 +61,7 @@ export async function create(options: {
   }
 }
 
-export async function folder(
-  { contents }: ServiceManager.IManager,
-  pwd: string,
-  seed: string
-): Promise<string> {
-  const response = await contents.get(pwd);
-  if (response.type !== 'directory')
-    throw new Error(`not a directory(${pwd}, ${seed})`);
-
-  const paths = (response.content as Contents.IModel[]).map(({ path }) => path);
-  const parent = new Set(paths);
-  for (let suffix = 0; ; suffix++) {
-    const name = PathExt.join(pwd, suffix ? `${seed}-${suffix}` : seed);
-    if (parent.has(name)) continue;
-    return name;
-  }
-}
-
+/** Creates a directory at path inside pwd. */
 export async function mkdir(
   { contents }: ServiceManager.IManager,
   pwd: string,
@@ -68,6 +71,7 @@ export async function mkdir(
   return await contents.rename(untitled.path, path);
 }
 
+/** @returns a headless workbook, optionally unlocked, or null. */
 export async function request(
   handle: Workbook.Credentials,
   factory: NotebookModelFactory,

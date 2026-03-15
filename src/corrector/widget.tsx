@@ -13,7 +13,7 @@ import React from 'react';
 import { Rubric, Workbook } from '../correxit';
 import * as state from '../correxit/state';
 import { Corrector } from '.';
-import { useSnapshot } from './bridge';
+import * as bridge from './bridge';
 import { CommandIDs, Scanned } from './commands';
 import { Reviewer } from './reviewer';
 
@@ -24,7 +24,6 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     this.indicator = indicator;
     this.trans = trans;
     this.addClass('correxit-corrector-widget');
-    void this.initialize();
   }
 
   get path(): string {
@@ -37,7 +36,9 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
   }
 
   dispose() {
-    this.indicator?.set({ graded: true, scanned: true });
+    if (this.isDisposed) return;
+    if (this.indicator && !this.indicator.isDisposed)
+      this.indicator.set({ graded: true, scanned: true });
     super.dispose();
   }
 
@@ -49,21 +50,37 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     const notify = (updates: Corrector.Notification) => {
       indicator?.set(updates);
       selector?.set(updates);
+      commands.notifyCommandChanged(CommandIDs.csv);
     };
     const cd = new CommandToolbarButton({
       commands,
       id: Corrector.CommandIDs.cd,
       noFocusOnClick: true
     });
+    const csv = new CommandToolbarButton({
+      commands,
+      id: Corrector.CommandIDs.csv,
+      noFocusOnClick: true
+    });
     this.selector = selector;
     toolbar.addItem('cd', cd);
+    toolbar.addItem('csv', csv);
     toolbar.addItem('spacer', Toolbar.createSpacerItem());
     toolbar.addItem('mode', selector);
     content.set({ notify });
   }
 
+  protected onBeforeShow(msg: Message): void {
+    if (!this.initialized) {
+      this.initialized = true;
+      void this.initialize().catch(_ => {});
+    }
+    super.onBeforeShow(msg);
+  }
+
   protected commands: CommandRegistry;
   protected indicator: CorrectorStatus | null;
+  protected initialized = false;
   protected selector: ModeSelector | null = null;
   protected trans: IRenderMime.TranslationBundle;
 }
@@ -122,6 +139,10 @@ export class CorrectorStatus extends ReactWidget {
         ? trans.__('Grading...')
         : trans.__('Idle');
     return <span className="jp-StatusBar-TextItem">{label}</span>;
+  }
+
+  get idle(): boolean {
+    return this.graded && this.scanned;
   }
 
   set(updates: { graded: boolean; scanned: boolean }) {
@@ -326,7 +347,7 @@ class ReviewerInfoWidget extends ReactWidget {
 }
 
 function ReviewerInfo({ trans }: { trans: IRenderMime.TranslationBundle }) {
-  const { cursor, workbooks } = useSnapshot();
+  const { cursor, workbooks } = bridge.useSnapshot();
   if (!cursor) return null;
 
   const workbook = workbooks.find(

@@ -21,23 +21,13 @@ const empty: Snapshot = Object.freeze({
 const listeners = new Set<() => void>();
 let snapshot: Snapshot = empty;
 
-function emit() {
-  for (const listener of listeners) listener();
-}
-
-export function publish(next: Omit<Snapshot, 'cursor'>) {
-  snapshot = { ...next, cursor: snapshot.cursor };
-  emit();
-}
-
-export function navigate(cursor: Snapshot['cursor']) {
-  snapshot = { ...snapshot, cursor };
-  emit();
-}
-
 export function clear() {
   snapshot = empty;
   emit();
+}
+
+function emit() {
+  for (const listener of listeners) listener();
 }
 
 /**
@@ -48,6 +38,20 @@ export function clear() {
  */
 export function inject(commands: CommandRegistry, workbook: unknown) {
   void (async () => (await commands.execute('correxit:inject'))?.(workbook))();
+}
+
+export function navigate(cursor: Snapshot['cursor']) {
+  snapshot = { ...snapshot, cursor };
+  emit();
+}
+
+export function peek(): Snapshot {
+  return snapshot;
+}
+
+export function publish(next: Omit<Snapshot, 'cursor'>) {
+  snapshot = { ...next, cursor: snapshot.cursor };
+  emit();
 }
 
 export function useSnapshot(): Snapshot {
