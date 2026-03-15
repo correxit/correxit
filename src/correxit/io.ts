@@ -6,6 +6,7 @@ import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
 
+/** @returns an available path in pwd for the given seed name. */
 export async function available(
   { contents }: Pick<ServiceManager.IManager, 'contents'>,
   pwd: string,
@@ -24,6 +25,7 @@ export async function available(
   }
 }
 
+/** Navigates the file browser to path. */
 export async function cd(commands: CommandRegistry, path: string) {
   const command = 'filebrowser:go-to-path';
   if (commands.hasCommand(command)) commands.execute(command, { path });
@@ -59,6 +61,7 @@ export async function create(options: {
   }
 }
 
+/** Creates a directory at path inside pwd. */
 export async function mkdir(
   { contents }: ServiceManager.IManager,
   pwd: string,
@@ -68,6 +71,7 @@ export async function mkdir(
   return await contents.rename(untitled.path, path);
 }
 
+/** @returns a headless workbook, optionally unlocked, or null. */
 export async function request(
   handle: Workbook.Credentials,
   factory: NotebookModelFactory,
