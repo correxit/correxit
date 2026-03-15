@@ -23,7 +23,7 @@ export function generate(
     const assignment = rubric?.assignment.id || '';
     const title = rubric?.assignment.name || '';
     const signature = rubric?.assignment.signature || '';
-    const { points, possible } =
+    const { points, possible, status } =
       grade?.score ??
       (rubric ? summary(rubric.assignment.report) : null) ??
       Rubric.Score.UNSCORED;
@@ -33,7 +33,7 @@ export function generate(
     const certification = rubric?.assignment.certification ?? null;
     const collected = rubric?.assignment.collected ?? null;
     const resolved = grade?.resolved ?? false;
-    const unscored = points === 0 && possible === 0;
+    const unscored = status === 'unscored';
     return [
       assignee,
       assignment,

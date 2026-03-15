@@ -123,8 +123,8 @@ describe('csv', () => {
     const [, row] = rows;
     expect(row[0]).toBe('');
     expect(row[row.length - 1]).toBe('dir/student.ipynb');
-    expect(row[6]).toBe("'-1");
-    expect(row[7]).toBe("'-1");
+    expect(row[6]).toBe('');
+    expect(row[7]).toBe('');
   });
 
   it('populates identity fields from rubric', () => {
