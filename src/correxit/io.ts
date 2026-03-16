@@ -14,7 +14,7 @@ export async function available(
   seed: string,
   ext = ''
 ): Promise<string> {
-  const response = await contents.get(pwd);
+  const response = await contents.get(pwd, { content: true });
   if (response.type !== 'directory') throw new Error(`Not a directory: ${pwd}`);
 
   const paths = (response.content as Contents.IModel[]).map(({ path }) => path);
