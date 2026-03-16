@@ -1,0 +1,37 @@
+{
+  "title": "Correxit Collector",
+  "description": "Settings for the Correxit grade collector",
+  "jupyter.lab.transform": true,
+  "type": "object",
+  "properties": {
+    "provider": {
+      "title": "Collector provider",
+      "description": "Which collector to use for grade collection",
+      "type": "string",
+      "enum": ["manual", "moodle"],
+      "default": "manual"
+    },
+    "moodle": {
+      "title": "Moodle",
+      "description": "Moodle collector settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "title": "URL",
+          "description": "Base URL of the Moodle instance (e.g. http://localhost:8000)",
+          "type": "string",
+          "default": ""
+        },
+        "token": {
+          "title": "API token",
+          "description": "Web service token for Moodle REST API access. Entered values are moved to the secrets manager and never stored on disk.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false,
+      "default": {}
+    }
+  },
+  "additionalProperties": false
+}

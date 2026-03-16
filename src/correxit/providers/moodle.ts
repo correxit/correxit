@@ -1,3 +1,4 @@
+import { URLExt } from '@jupyterlab/coreutils';
 import { Correxit, Workbook } from '..';
 import * as security from '../security';
 
@@ -77,13 +78,72 @@ export namespace Moodle {
     const reason = draft?.error || draft?.message || 'Upload returned no item';
     throw new Error(reason);
   };
+  const filename = async (assignment: string, assignee: string) => {
+    const name = assignment.replace(/[^\w.-]/g, '');
+    const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
+    const hash = (await security.digest(assignee)).slice(0, 4);
+    return `${name}-${local}-${hash}.ipynb`;
+  };
+
+
+  export async function collector(
+    certified: Workbook.Certified,
+    settings: Settings
+  ): Promise<string | null> {
+    const { token, url: raw } = settings;
+    const url = URLExt.normalize(raw);
+    if (!token || !url) throw new Error('Moodle URL or token not configured');
+
+    const rubric = Workbook.open(certified.workbook, true);
+    if (!rubric) throw new Error('collector error: no rubric');
+
+    const compound = rubric.assignment.id;
+    if (!compound) throw new Error('collector error: no external assignment ID');
+
+    const [course, assignment] = compound.split(':');
+    if (!course || !assignment)
+      throw new Error('collector error: invalid assignment ID format');
+
+    const request = api(url, token);
+    const { assignee } = certified.identifier;
+    const users: User[] = await request(
+      'core_enrol_get_enrolled_users',
+      `&courseid=${course}`
+    );
+    const uid = users.find(user => identify(user) === assignee)?.id;
+    if (uid === undefined)
+      throw new Error(`collector error: no Moodle user for ${assignee}`);
+
+    const notebook = certified.workbook.context.model.sharedModel.toJSON();
+    const content = JSON.stringify(notebook);
+    const file = await filename(rubric.assignment.name, assignee);
+    const item = await upload(url, token, content, file);
+    if (!item) throw new Error(`collector error: upload failed (${assignee})`);
+
+    const { points } = certified.grade.score;
+    await request(
+      'mod_assign_save_grade',
+      [
+        `assignmentid=${assignment}`,
+        `userid=${uid}`,
+        `grade=${points}`,
+        'attemptnumber=-1',
+        'addattempt=0',
+        'workflowstate=',
+        'applytoall=0',
+        `plugindata[files_filemanager]=${item}`
+      ].join('&')
+    );
+
+    return `moodle:${assignment}:${uid}:${item}`;
+  }
 
   export async function* consumer(
     { rubric, stream }: Parameters<Correxit.Consumer>[0],
     settings: Settings
   ): ReturnType<Correxit.Consumer> {
     const token = settings.token;
-    const url = settings.url.replace(/\/+$/, '');
+    const url = URLExt.normalize(settings.url);
     if (!token || !url) {
       yield { type: 'error', slots: ['Moodle URL or token not configured'] };
       return;
@@ -150,13 +210,10 @@ export namespace Moodle {
       }
 
       const content = JSON.stringify(notebook);
-      const name = rubric.assignment.name.replace(/[^\w.-]/g, '');
-      const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
-      const hash = (await security.digest(assignee)).slice(0, 4);
-      const filename = `${name}-${local}-${hash}.ipynb`;
+      const file = await filename(rubric.assignment.name, assignee);
       let item: number | null = null;
       try {
-        item = await upload(url, token, content, filename);
+        item = await upload(url, token, content, file);
       } catch (error) {
         const message = String(error instanceof Error ? error.message : error);
         yield { type: 'separator', slots: [] };
@@ -196,7 +253,7 @@ export namespace Moodle {
       }
       yield { type: 'separator', slots: [] };
       yield { type: 'assigned', slots: [assignee] };
-      yield { type: 'saved', slots: [filename] };
+      yield { type: 'saved', slots: [file] };
       yield { type: 'progress', slots: [++progress, total] };
     }
     yield { type: 'success', slots: [total] };
@@ -208,7 +265,7 @@ export namespace Moodle {
     settings: Settings
   ): ReturnType<Correxit.Registrar> {
     const token = settings.token;
-    const url = settings.url.replace(/\/+$/, '');
+    const url = URLExt.normalize(settings.url);
     if (!token || !url) return null;
 
     const request = api(url, token);
