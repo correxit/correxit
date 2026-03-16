@@ -1,8 +1,9 @@
+import { URLExt } from '@jupyterlab/coreutils';
 import { Correxit, Workbook } from '..';
-import * as security from '../security';
+import * as io from '../io';
 
 export namespace Moodle {
-  type Assignment = { cmid: number; duedate: number; id: number; name: string };
+  type Assignment = { duedate: number; grade: number; id: number; name: string };
 
   type Course = {
     assignments: Assignment[];
@@ -77,13 +78,106 @@ export namespace Moodle {
     const reason = draft?.error || draft?.message || 'Upload returned no item';
     throw new Error(reason);
   };
+  const TTL = 5 * 60_000;
+  const participants: Map<
+    string,
+    { expiry: number; users: Map<string, number> }
+  > = new Map();
+
+  const scales: Map<string, { expiry: number; max: number }> = new Map();
+
+  const scale = async (
+    request: ReturnType<typeof api>,
+    course: string,
+    assignment: string
+  ): Promise<number> => {
+    const key = `${course}:${assignment}`;
+    const cached = scales.get(key);
+    if (cached && cached.expiry > Date.now()) return cached.max;
+    const records: { courses: Course[] } = await request(
+      'mod_assign_get_assignments',
+      `courseids[0]=${course}`
+    );
+    const found = records.courses
+      .flatMap(course => course.assignments)
+      .find(({ id }) => String(id) === assignment);
+    const max = found && found.grade > 0 ? found.grade : 100;
+    scales.set(key, { expiry: Date.now() + TTL, max });
+    return max;
+  };
+
+  const enroll = async (
+    request: ReturnType<typeof api>,
+    course: string
+  ): Promise<Map<string, number>> => {
+    const cached = participants.get(course);
+    if (cached && cached.expiry > Date.now()) return cached.users;
+    const users: User[] = await request(
+      'core_enrol_get_enrolled_users',
+      `&courseid=${course}`
+    );
+    const enrolled = new Map(users.map(user => [identify(user), user.id]));
+    participants.set(course, { expiry: Date.now() + TTL, users: enrolled });
+    return enrolled;
+  };
+
+  export async function collector(
+    certified: Workbook.Certified,
+    settings: Settings
+  ): Promise<string | null> {
+    const { token, url: raw } = settings;
+    const url = URLExt.normalize(raw);
+    if (!token || !url) throw new Error('Moodle URL or token not configured');
+
+    const rubric = Workbook.open(certified.workbook, true);
+    if (!rubric) throw new Error('collector error: no rubric');
+
+    const compound = rubric.assignment.id;
+    if (!compound) throw new Error('collector error: no external assignment ID');
+
+    const [course, assignment] = compound.split(':');
+    if (!course || !assignment)
+      throw new Error('collector error: invalid assignment ID format');
+
+    const request = api(url, token);
+    const { assignee } = certified.identifier;
+    const enrolled = await enroll(request, course);
+    const uid = enrolled.get(assignee);
+    if (uid === undefined)
+      throw new Error(`collector error: no Moodle user for ${assignee}`);
+
+    const notebook = certified.workbook.context.model.sharedModel.toJSON();
+    const content = JSON.stringify(notebook);
+    const file = await io.assigned(rubric.assignment.name, assignee);
+    const item = await upload(url, token, content, file);
+    if (!item) throw new Error(`collector error: upload failed (${assignee})`);
+
+    const { points, possible } = certified.grade.score;
+    const max = await scale(request, course, assignment);
+    const grade = possible > 0 ? (points / possible) * max : 0;
+    await request(
+      'mod_assign_save_grade',
+      [
+        `assignmentid=${assignment}`,
+        `userid=${uid}`,
+        `grade=${grade}`,
+        'attemptnumber=-1',
+        'addattempt=0',
+        'workflowstate=',
+        'applytoall=0',
+        `plugindata[files_filemanager]=${item}`
+      ].join('&')
+    );
+
+    return `moodle:${assignment}:${uid}:${item}`;
+  }
 
   export async function* consumer(
     { rubric, stream }: Parameters<Correxit.Consumer>[0],
     settings: Settings
   ): ReturnType<Correxit.Consumer> {
     const token = settings.token;
-    const url = settings.url.replace(/\/+$/, '');
+    const url = URLExt.normalize(settings.url);
     if (!token || !url) {
       yield { type: 'error', slots: ['Moodle URL or token not configured'] };
       return;
@@ -95,34 +189,13 @@ export namespace Moodle {
       return;
     }
 
-    const [course, assignment, cmid] = compound.split(':');
-    if (!course || !assignment || !cmid) {
+    const [course, assignment] = compound.split(':');
+    if (!course || !assignment) {
       yield { type: 'error', slots: ['Invalid assignment ID format'] };
       return;
     }
 
-    const possible = Object.values(rubric.cells)
-      .reduce((sum, cell) => sum + cell.points, 0);
     const request = api(url, token);
-    try {
-      await request(
-        'core_grades_update_grades',
-        [
-          'source=correxit',
-          `courseid=${course}`,
-          'component=mod_assign',
-          `activityid=${cmid}`,
-          'itemnumber=0',
-          `itemdetails[grademax]=${possible}`
-        ].join('&')
-      );
-    } catch (error) {
-      const message = String(error instanceof Error ? error.message : error);
-      yield { type: 'error', slots: [`Set maximum grade failed: ${message}`] };
-      return;
-    }
-    yield { type: 'max-score', slots: [possible] };
-
     let users: User[];
     try {
       users = await request(
@@ -150,13 +223,10 @@ export namespace Moodle {
       }
 
       const content = JSON.stringify(notebook);
-      const name = rubric.assignment.name.replace(/[^\w.-]/g, '');
-      const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
-      const hash = (await security.digest(assignee)).slice(0, 4);
-      const filename = `${name}-${local}-${hash}.ipynb`;
+      const file = await io.assigned(rubric.assignment.name, assignee);
       let item: number | null = null;
       try {
-        item = await upload(url, token, content, filename);
+        item = await upload(url, token, content, file);
       } catch (error) {
         const message = String(error instanceof Error ? error.message : error);
         yield { type: 'separator', slots: [] };
@@ -196,7 +266,7 @@ export namespace Moodle {
       }
       yield { type: 'separator', slots: [] };
       yield { type: 'assigned', slots: [assignee] };
-      yield { type: 'saved', slots: [filename] };
+      yield { type: 'saved', slots: [file] };
       yield { type: 'progress', slots: [++progress, total] };
     }
     yield { type: 'success', slots: [total] };
@@ -208,7 +278,7 @@ export namespace Moodle {
     settings: Settings
   ): ReturnType<Correxit.Registrar> {
     const token = settings.token;
-    const url = settings.url.replace(/\/+$/, '');
+    const url = URLExt.normalize(settings.url);
     if (!token || !url) return null;
 
     const request = api(url, token);
@@ -238,15 +308,17 @@ export namespace Moodle {
       assignments: course.assignments
         .map(assignment => ({
           expiration: assignment.duedate ? assignment.duedate * 1000 : null,
-          id: `${course.id}:${assignment.id}:${assignment.cmid}`,
+          id: `${course.id}:${assignment.id}`,
           name: assignment.name,
           roster: roster[course.id] ?? []
         }))
-        .sort(
-          (a, b) =>
-            Number(a.id || 0) - Number(b.id || 0) ||
-            a.name.localeCompare(b.name)
-        ),
+        .sort((a, b) => {
+          if (a.expiration && b.expiration)
+            return a.expiration - b.expiration || a.name.localeCompare(b.name);
+          if (a.expiration) return -1;
+          if (b.expiration) return 1;
+          return a.name.localeCompare(b.name);
+        }),
       group: course.fullname || course.shortname || String(course.id)
     }));
   }

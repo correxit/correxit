@@ -1,0 +1,7 @@
+name: correxit
+channels:
+  - https://prefix.dev/emscripten-forge-4x
+  - conda-forge
+dependencies:
+  - xeus-python
+  - xeus-sqlite

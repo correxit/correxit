@@ -16,15 +16,15 @@ export namespace Rubric {
   /** Assignment integrity, lifecycle, and grading metadata. */
   export type Assignment = Readonly<{
     assignee: string;
-    certification: number | null;
+    certification: Timestamp;
     collected: string | null;
-    expiration: number | null;
+    expiration: Timestamp;
     id: string | null;
     name: string;
     report: Assignment.Report;
     roster: string[];
     signature: string;
-    submission: number | null;
+    submission: Timestamp;
     submitted: string | null;
   }>;
 
@@ -339,6 +339,8 @@ export namespace Rubric {
     possible: number;
     status: Score.Status;
   }>;
+
+  export type Timestamp = number | null;
 
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
@@ -738,16 +740,6 @@ export namespace Rubric {
     return { ...rubric, assignment, revised };
   }
 
-  export function date(timestamp: number | null, empty = ''): string {
-    return timestamp !== null ? new Date(timestamp).toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit'
-    }) : empty;
-  }
-
   /** @returns the cell for `id`, or `null`. */
   export function get(rubric: Rubric, id: string): Cell | null {
     return rubric.cells[id] || null;
@@ -884,6 +876,17 @@ export namespace Rubric {
     const submission = Date.now();
     const assignment = { ...rubric.assignment, submission };
     return { ...rubric, assignment, revised: submission };
+  }
+
+  /** @returns a formatted rendition of a rubric timestamp. */
+  export function timestamp(timestamp: Timestamp, empty = ''): string {
+    return timestamp !== null ? new Date(timestamp).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    }) : empty;
   }
 
   /** @returns a rubric with a reference's secret flag toggled. */

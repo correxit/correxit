@@ -214,7 +214,7 @@ export function commands(
           let response: Contents.IModel;
           if (!directory) return;
           try {
-            response = await manager.contents.get(directory);
+            response = await manager.contents.get(directory, { content: true });
           } catch (error) {
             console.warn(CommandIDs.scan, directory, error);
             return;
@@ -224,10 +224,11 @@ export function commands(
             return;
           }
 
+          const { content } = response;
           const notebook = ({ type }: Contents.IModel) => type === 'notebook';
           const lexical = (a: { name: string }, b: { name: string }) =>
             a.name.localeCompare(b.name);
-          const notebooks = response.content.filter(notebook).sort(lexical);
+          const notebooks = (content || []).filter(notebook).sort(lexical);
           for (const { path } of notebooks)
             yield { hollow: true, context: { path } };
 

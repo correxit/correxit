@@ -2,6 +2,7 @@ import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { findIndex } from '@lumino/algorithm';
 import { Correxit, Rubric, Workbook } from '.';
+import * as io from './io';
 import * as security from './security';
 
 export async function* propagate({ consumer, workbook }: {
@@ -25,9 +26,7 @@ export async function* propagate({ consumer, workbook }: {
       const { base, pwd } = location || { base: '', pwd: '' };
       for (const assignee of roster) {
         const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
-        const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
-        const hash = (await security.digest(assignee)).slice(0, 4);
-        const file = `${base}-${local}-${hash}.ipynb`;
+        const file = await io.assigned(base, assignee);
         const path = PathExt.join(pwd, file);
         const identifier = await reassign({ assignee, key, notebook, roster });
         yield { identifier, notebook, path };
@@ -63,7 +62,7 @@ async function encrypt(
 }
 
 /** @returns initialized lifecycle stages for a propagated assignment. */
-function lifecycle(expiration: number | null) {
+function lifecycle(expiration: Rubric.Timestamp) {
   return {
     certification: null,
     collected: null,

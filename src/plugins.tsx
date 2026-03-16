@@ -23,6 +23,7 @@ import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector, Reviewer } from './corrector';
 import { Correxit, Unlocker, Workbook } from './correxit';
+import * as collectors from './correxit/collectors';
 import * as consumers from './correxit/consumers';
 import * as dispatcher from './correxit/dispatcher';
 import * as kernels from './correxit/kernels';
@@ -31,16 +32,24 @@ import * as registrars from './correxit/registrars';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
 
-/** The default Correxit grade collector, returns a UUID. */
-const collector: JupyterFrontEndPlugin<Correxit.Collector> = {
-  id: Correxit.COLLECTOR,
-  description: Correxit.DESCRIPTION.COLLECTOR,
-  provides: Correxit.Collector,
-  ...((deactivator?: () => void) => ({
-    activate: (): Correxit.Collector => async _ => UUID.uuid4(),
-    deactivate: () => deactivator?.()
-  }))()
-};
+/** The Correxit grade collector dispatches to the configured provider. */
+const collector: JupyterFrontEndPlugin<Correxit.Collector> =
+  dispatcher.dispatch(
+    Correxit.COLLECTOR,
+    Correxit.DESCRIPTION.COLLECTOR,
+    Correxit.Collector,
+    (_, { moodle: settings, provider }) => {
+      const collector: Correxit.Collector = certified => {
+        switch (provider()) {
+          case 'moodle':
+            return Moodle.collector(certified, settings());
+          default:
+            return collectors.manual(certified);
+        }
+      };
+      return [collector, () => {}];
+    }
+  );
 
 /** The Correxit assignment consumer dispatches to the configured provider. */
 const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = dispatcher.dispatch(

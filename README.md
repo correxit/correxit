@@ -103,6 +103,48 @@ locally and available in your running JupyterLab. Refresh JupyterLab to load the
 change in your browser (you may need to wait several seconds for the extension
 to be rebuilt).
 
+### JupyterLite development
+
+Correxit runs entirely in the browser, so you can develop against JupyterLite
+instead of a full Jupyter Server. The workflow uses two watch processes and a
+symlink so that every saved TypeScript change is immediately available after a
+browser refresh.
+
+**1. Build the JupyterLite site once:**
+
+```bash
+jlpm build:lite
+```
+
+This pre-compiles the xeus Wasm kernels, copies example content into the static
+site, mounts content files into the kernel virtual filesystem, and runs
+`jlpm link:lite` to symlink the built extension back to `correxit/labextension`.
+Because of the symlink, subsequent TypeScript rebuilds are picked up without
+re-running `build:lite`.
+
+**2. Start two terminals:**
+
+```bash
+# Terminal 1 — rebuild on every save
+jlpm watch
+
+# Terminal 2 — serve the static site at http://localhost:8888
+jlpm serve
+```
+
+**3. Open `http://localhost:8888` and refresh after each rebuild.**
+
+If you rebuild the labextension outside of `build:lite` (e.g. after a clean),
+run `jlpm link:lite` to re-establish the symlink and patch the manifest hash.
+
+The `lite/` directory contains:
+
+| File                       | Purpose                                                                           |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `jupyter_lite_config.json` | Build configuration: contents directory, Service Worker toggle                    |
+| `environment.yml`          | Wasm kernel environment (xeus-python, xeus-sqlite) resolved from emscripten-forge |
+| `link.mjs`                 | Post-build script that symlinks the dev extension and patches the manifest hash   |
+
 By default, the `jlpm build` command generates the source maps for this
 extension to make it easier to debug using the browser dev tools. To also
 generate source maps for the JupyterLab core extensions, you can run the

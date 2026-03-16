@@ -119,8 +119,12 @@ dmypy.json
 
 # End of https://www.gitignore.io/api/python
 
+# JupyterLite
+lite/_output/
+
 # OSX files
 .DS_Store
 
 # Yarn cache
 .yarn/
+lite/.jupyterlite.doit.db

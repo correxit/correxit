@@ -157,6 +157,7 @@ export const Assignment: React.FC<{
           {...{
             all: all!,
             assignment,
+            commands,
             locked,
             multiple,
             registered: roster,
@@ -238,7 +239,7 @@ const Expiration: React.FC<{
       ? 'correxit-assignment-expiration cxt-mod-expired'
       : 'correxit-assignment-expiration';
   if (locked) {
-    const label = Rubric.date(expiration, trans.__('No deadline'));
+    const label = Rubric.timestamp(expiration, trans.__('No deadline'));
     return (
       <div className={className}>
         <div className="correxit-monospace">{label}</div>
@@ -323,9 +324,12 @@ const Roster: React.FC<{
   );
 };
 
+const { unassign } = Correxit.CommandIDs;
+
 const Enrollment: React.FC<{
   all: Course[];
   assignment: Assignment;
+  commands: CommandRegistry;
   locked: boolean;
   multiple: boolean;
   registered: Registration[];
@@ -336,6 +340,7 @@ const Enrollment: React.FC<{
   const {
     all,
     assignment: { assignee, expiration, name, roster },
+    commands,
     locked,
     multiple,
     registered,
@@ -354,7 +359,7 @@ const Enrollment: React.FC<{
     );
   }
 
-  const due = Rubric.date(expiration, trans.__('No deadline'));
+  const due = Rubric.timestamp(expiration, trans.__('No deadline'));
   const lookup = locked ? props.assignment.id : selected;
   const active = all.find(course =>
     course.assignments.some(record => identify(record) === lookup)
@@ -377,16 +382,17 @@ const Enrollment: React.FC<{
               {trans.__('Assignment')}
             </label>
             <select
+              disabled={!!assignee}
               id="correxit-assignment-registration"
               name="correxit-assignment-registration"
               onChange={({ target: { value } }) => setSelected(value)}
               value={selected ?? ''}
             >
               <option value="">{trans.__('No assignment')}</option>
-              {all.some(c => c.group)
-                ? all.map(c => (
-                    <optgroup key={c.group} label={c.group}>
-                      {c.assignments.map(option)}
+              {all.some(({ group }) => group)
+                ? all.map(({ assignments, group }) => (
+                    <optgroup key={group} label={group}>
+                      {assignments.map(option)}
                     </optgroup>
                   ))
                 : registered.map(option)}
@@ -399,6 +405,9 @@ const Enrollment: React.FC<{
       </div>
       <div className="correxit-assignment-assignee">
         <div className="correxit-monospace">{assignee || unassigned}</div>
+        <CommandToolbarButtonComponent
+          {...{ commands, id: unassign, label: '' }}
+        />
       </div>
     </>
   );

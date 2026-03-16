@@ -37,15 +37,15 @@ export function generate(
     return [
       assignee,
       assignment,
-      Rubric.date(expiration),
+      Rubric.timestamp(expiration),
       title,
       rubric?.id || '',
       signature,
       unscored ? '' : String(points),
       unscored ? '' : String(possible),
-      Rubric.date(submission),
+      Rubric.timestamp(submission),
       submitted ?? '',
-      Rubric.date(certification),
+      Rubric.timestamp(certification),
       collected ?? '',
       String(resolved),
       path
