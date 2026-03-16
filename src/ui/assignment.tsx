@@ -389,10 +389,10 @@ const Enrollment: React.FC<{
               value={selected ?? ''}
             >
               <option value="">{trans.__('No assignment')}</option>
-              {all.some(c => c.group)
-                ? all.map(c => (
-                    <optgroup key={c.group} label={c.group}>
-                      {c.assignments.map(option)}
+              {all.some(({ group }) => group)
+                ? all.map(({ assignments, group }) => (
+                    <optgroup key={group} label={group}>
+                      {assignments.map(option)}
                     </optgroup>
                   ))
                 : registered.map(option)}
