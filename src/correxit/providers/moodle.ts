@@ -3,7 +3,7 @@ import { Correxit, Workbook } from '..';
 import * as io from '../io';
 
 export namespace Moodle {
-  type Assignment = { cmid: number; duedate: number; id: number; name: string };
+  type Assignment = { duedate: number; id: number; name: string };
 
   type Course = {
     assignments: Assignment[];
@@ -131,12 +131,15 @@ export namespace Moodle {
     if (!item) throw new Error(`collector error: upload failed (${assignee})`);
 
     const { points } = certified.grade.score;
+    const possible = Object.values(rubric.cells)
+      .reduce((sum, cell) => sum + cell.points, 0);
+    const grade = possible > 0 ? (points / possible) * 100 : 0;
     await request(
       'mod_assign_save_grade',
       [
         `assignmentid=${assignment}`,
         `userid=${uid}`,
-        `grade=${points}`,
+        `grade=${grade}`,
         'attemptnumber=-1',
         'addattempt=0',
         'workflowstate=',
@@ -165,34 +168,13 @@ export namespace Moodle {
       return;
     }
 
-    const [course, assignment, cmid] = compound.split(':');
-    if (!course || !assignment || !cmid) {
+    const [course, assignment] = compound.split(':');
+    if (!course || !assignment) {
       yield { type: 'error', slots: ['Invalid assignment ID format'] };
       return;
     }
 
-    const possible = Object.values(rubric.cells)
-      .reduce((sum, cell) => sum + cell.points, 0);
     const request = api(url, token);
-    try {
-      await request(
-        'core_grades_update_grades',
-        [
-          'source=correxit',
-          `courseid=${course}`,
-          'component=mod_assign',
-          `activityid=${cmid}`,
-          'itemnumber=0',
-          `itemdetails[grademax]=${possible}`
-        ].join('&')
-      );
-    } catch (error) {
-      const message = String(error instanceof Error ? error.message : error);
-      yield { type: 'error', slots: [`Set maximum grade failed: ${message}`] };
-      return;
-    }
-    yield { type: 'max-score', slots: [possible] };
-
     let users: User[];
     try {
       users = await request(
@@ -305,7 +287,7 @@ export namespace Moodle {
       assignments: course.assignments
         .map(assignment => ({
           expiration: assignment.duedate ? assignment.duedate * 1000 : null,
-          id: `${course.id}:${assignment.id}:${assignment.cmid}`,
+          id: `${course.id}:${assignment.id}`,
           name: assignment.name,
           roster: roster[course.id] ?? []
         }))
