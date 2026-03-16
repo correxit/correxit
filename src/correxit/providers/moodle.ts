@@ -78,6 +78,26 @@ export namespace Moodle {
     const reason = draft?.error || draft?.message || 'Upload returned no item';
     throw new Error(reason);
   };
+  const TTL = 5 * 60_000;
+  const participants: Map<
+    string,
+    { expiry: number; users: Map<string, number> }
+  > = new Map();
+
+  const enroll = async (
+    request: ReturnType<typeof api>,
+    course: string
+  ): Promise<Map<string, number>> => {
+    const cached = participants.get(course);
+    if (cached && cached.expiry > Date.now()) return cached.users;
+    const users: User[] = await request(
+      'core_enrol_get_enrolled_users',
+      `&courseid=${course}`
+    );
+    const enrolled = new Map(users.map(user => [identify(user), user.id]));
+    participants.set(course, { expiry: Date.now() + TTL, users: enrolled });
+    return enrolled;
+  };
 
   export async function collector(
     certified: Workbook.Certified,
@@ -99,11 +119,8 @@ export namespace Moodle {
 
     const request = api(url, token);
     const { assignee } = certified.identifier;
-    const users: User[] = await request(
-      'core_enrol_get_enrolled_users',
-      `&courseid=${course}`
-    );
-    const uid = users.find(user => identify(user) === assignee)?.id;
+    const enrolled = await enroll(request, course);
+    const uid = enrolled.get(assignee);
     if (uid === undefined)
       throw new Error(`collector error: no Moodle user for ${assignee}`);
 
