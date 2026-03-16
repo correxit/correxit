@@ -139,11 +139,11 @@ run `jlpm link:lite` to re-establish the symlink and patch the manifest hash.
 
 The `lite/` directory contains:
 
-| File | Purpose |
-| --- | --- |
-| `jupyter_lite_config.json` | Build configuration: contents directory, Service Worker toggle |
-| `environment.yml` | Wasm kernel environment (xeus-python, xeus-sqlite) resolved from emscripten-forge |
-| `link.mjs` | Post-build script that symlinks the dev extension and patches the manifest hash |
+| File                       | Purpose                                                                           |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `jupyter_lite_config.json` | Build configuration: contents directory, Service Worker toggle                    |
+| `environment.yml`          | Wasm kernel environment (xeus-python, xeus-sqlite) resolved from emscripten-forge |
+| `link.mjs`                 | Post-build script that symlinks the dev extension and patches the manifest hash   |
 
 By default, the `jlpm build` command generates the source maps for this
 extension to make it easier to debug using the browser dev tools. To also
