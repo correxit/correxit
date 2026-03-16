@@ -157,6 +157,7 @@ export const Assignment: React.FC<{
           {...{
             all: all!,
             assignment,
+            commands,
             locked,
             multiple,
             registered: roster,
@@ -323,9 +324,12 @@ const Roster: React.FC<{
   );
 };
 
+const { unassign } = Correxit.CommandIDs;
+
 const Enrollment: React.FC<{
   all: Course[];
   assignment: Assignment;
+  commands: CommandRegistry;
   locked: boolean;
   multiple: boolean;
   registered: Registration[];
@@ -336,6 +340,7 @@ const Enrollment: React.FC<{
   const {
     all,
     assignment: { assignee, expiration, name, roster },
+    commands,
     locked,
     multiple,
     registered,
@@ -377,6 +382,7 @@ const Enrollment: React.FC<{
               {trans.__('Assignment')}
             </label>
             <select
+              disabled={!!assignee}
               id="correxit-assignment-registration"
               name="correxit-assignment-registration"
               onChange={({ target: { value } }) => setSelected(value)}
@@ -399,6 +405,9 @@ const Enrollment: React.FC<{
       </div>
       <div className="correxit-assignment-assignee">
         <div className="correxit-monospace">{assignee || unassigned}</div>
+        <CommandToolbarButtonComponent
+          {...{ commands, id: unassign, label: '' }}
+        />
       </div>
     </>
   );

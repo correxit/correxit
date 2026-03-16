@@ -36,6 +36,7 @@ export namespace CommandIDs {
   export const share = 'correxit:share';
   export const submit = 'correxit:submit';
   export const track = 'correxit:track';
+  export const unassign = 'correxit:unassign';
   export const unlock = 'correxit:unlock';
 }
 
@@ -95,6 +96,26 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
       await assign(workbook, args);
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.unassign, {
+    icon: Icons.remove,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!rubric && !rubric.locked && !!rubric.assignment.assignee;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.unassign),
+    label: trans.__('Clear assignee'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric) return;
+      const title = trans.__('Clear assignee');
+      const body = trans.__(
+        'Clear assignee "%1"?', rubric.assignment.assignee
+      );
+      const { button } = await showDialog({ body, title });
+      if (!button.accept) return;
+      await assign(workbook, { assignee: '' });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.certify, {
@@ -563,7 +584,10 @@ export function commands(
   }));
   disposables.push(commands.addCommand(CommandIDs.reset, {
     icon: Icons.reset,
-    isEnabled: () => open(state.workbook())?.locked === false,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return rubric?.locked === false && !rubric.assignment.assignee;
+    },
     isVisible: () => commands.isEnabled(CommandIDs.reset),
     caption: trans.__('Deletes Correxit metadata, keeps notebook content'),
     label: trans.__('Revert to notebook...'),

@@ -11,5 +11,5 @@ export async function manual(certified: Workbook.Certified): Promise<string> {
   const payload = JSON.stringify({
     assignee, certification, points, possible, rubric: id, signature
   });
-  return security.digest(payload);
+  return `manual:${await security.digest(payload)}`;
 }
