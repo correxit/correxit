@@ -181,6 +181,8 @@ export namespace Workbook {
     {
       assignee = assignment.assignee,
       expiration = assignment.expiration,
+      id = assignment.id,
+      name = assignment.name,
       submission = assignment.submission,
       submitted = assignment.submitted,
       roster = assignment.roster,
@@ -189,6 +191,8 @@ export namespace Workbook {
   ): boolean => (
     assignee !== assignment.assignee ||
     expiration !== assignment.expiration ||
+    id !== assignment.id ||
+    name !== assignment.name ||
     submission !== assignment.submission ||
     submitted !== assignment.submitted ||
     (roster !== assignment.roster &&

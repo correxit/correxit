@@ -1,0 +1,8 @@
+{
+  "LiteBuildConfig": {
+    "contents": ["../examples"]
+  },
+  "ServiceWorkerAddon": {
+    "enabled": true
+  }
+}
