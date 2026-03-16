@@ -36,7 +36,7 @@
         "build:labextension:dev": "jupyter labextension build --development True .",
         "build:lib": "tsc --sourceMap",
         "build:lib:prod": "tsc",
-        "build:lite": "rimraf lite/_output/extensions/@quantstack/correxit && cd lite && jupyter lite build --output-dir _output && jlpm link:lite",
+        "build:lite": "rimraf lite/_output/extensions/@quantstack/correxit && cd lite && jupyter lite build --output-dir _output --XeusAddon.mount_jupyterlite_content=True && jlpm link:lite",
         "link:lite": "node lite/link.mjs",
         "clean": "jlpm clean:lib",
         "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
