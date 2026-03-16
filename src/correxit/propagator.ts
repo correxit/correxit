@@ -62,7 +62,7 @@ async function encrypt(
 }
 
 /** @returns initialized lifecycle stages for a propagated assignment. */
-function lifecycle(expiration: number | null) {
+function lifecycle(expiration: Rubric.Timestamp) {
   return {
     certification: null,
     collected: null,

@@ -70,10 +70,10 @@ const Lifecycle: React.FC<{
   } = rubric;
   const lines: string[] = [];
   if (submission !== null)
-    lines.push(trans.__('Submission %1', Rubric.date(submission)));
+    lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
   if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
   if (certification !== null)
-    lines.push(trans.__('Certification %1', Rubric.date(certification)));
+    lines.push(trans.__('Certification %1', Rubric.timestamp(certification)));
   if (collected !== null) lines.push(trans.__('Collected: %1', collected));
 
   const label = lines.length

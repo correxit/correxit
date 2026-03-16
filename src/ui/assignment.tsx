@@ -239,7 +239,7 @@ const Expiration: React.FC<{
       ? 'correxit-assignment-expiration cxt-mod-expired'
       : 'correxit-assignment-expiration';
   if (locked) {
-    const label = Rubric.date(expiration, trans.__('No deadline'));
+    const label = Rubric.timestamp(expiration, trans.__('No deadline'));
     return (
       <div className={className}>
         <div className="correxit-monospace">{label}</div>
@@ -359,7 +359,7 @@ const Enrollment: React.FC<{
     );
   }
 
-  const due = Rubric.date(expiration, trans.__('No deadline'));
+  const due = Rubric.timestamp(expiration, trans.__('No deadline'));
   const lookup = locked ? props.assignment.id : selected;
   const active = all.find(course =>
     course.assignments.some(record => identify(record) === lookup)
