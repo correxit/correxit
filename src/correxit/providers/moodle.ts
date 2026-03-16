@@ -3,7 +3,7 @@ import { Correxit, Workbook } from '..';
 import * as io from '../io';
 
 export namespace Moodle {
-  type Assignment = { duedate: number; id: number; name: string };
+  type Assignment = { duedate: number; grade: number; id: number; name: string };
 
   type Course = {
     assignments: Assignment[];
@@ -84,6 +84,28 @@ export namespace Moodle {
     { expiry: number; users: Map<string, number> }
   > = new Map();
 
+  const scales: Map<string, { expiry: number; max: number }> = new Map();
+
+  const scale = async (
+    request: ReturnType<typeof api>,
+    course: string,
+    assignment: string
+  ): Promise<number> => {
+    const key = `${course}:${assignment}`;
+    const cached = scales.get(key);
+    if (cached && cached.expiry > Date.now()) return cached.max;
+    const records: { courses: Course[] } = await request(
+      'mod_assign_get_assignments',
+      `courseids[0]=${course}`
+    );
+    const found = records.courses
+      .flatMap(course => course.assignments)
+      .find(({ id }) => String(id) === assignment);
+    const max = found && found.grade > 0 ? found.grade : 100;
+    scales.set(key, { expiry: Date.now() + TTL, max });
+    return max;
+  };
+
   const enroll = async (
     request: ReturnType<typeof api>,
     course: string
@@ -130,10 +152,9 @@ export namespace Moodle {
     const item = await upload(url, token, content, file);
     if (!item) throw new Error(`collector error: upload failed (${assignee})`);
 
-    const { points } = certified.grade.score;
-    const possible = Object.values(rubric.cells)
-      .reduce((sum, cell) => sum + cell.points, 0);
-    const grade = possible > 0 ? (points / possible) * 100 : 0;
+    const { points, possible } = certified.grade.score;
+    const max = await scale(request, course, assignment);
+    const grade = possible > 0 ? (points / possible) * max : 0;
     await request(
       'mod_assign_save_grade',
       [
@@ -291,11 +312,13 @@ export namespace Moodle {
           name: assignment.name,
           roster: roster[course.id] ?? []
         }))
-        .sort(
-          (a, b) =>
-            Number(a.id || 0) - Number(b.id || 0) ||
-            a.name.localeCompare(b.name)
-        ),
+        .sort((a, b) => {
+          if (a.expiration && b.expiration)
+            return a.expiration - b.expiration || a.name.localeCompare(b.name);
+          if (a.expiration) return -1;
+          if (b.expiration) return 1;
+          return a.name.localeCompare(b.name);
+        }),
       group: course.fullname || course.shortname || String(course.id)
     }));
   }
