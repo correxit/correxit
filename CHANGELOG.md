@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/QuantStack/correxit/compare/v1.11.1...v1.12.0) (2026-03-16)
+
+
+### Features
+
+* manual and moodle collectors ([#56](https://github.com/QuantStack/correxit/issues/56)) ([b6a4f9f](https://github.com/QuantStack/correxit/commit/b6a4f9f2dcf8a34ad492bbe0dcd769765f4d27b8))
+
 ## [1.11.1](https://github.com/QuantStack/correxit/compare/v1.11.0...v1.11.1) (2026-03-15)
 
 
