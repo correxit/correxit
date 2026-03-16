@@ -1,6 +1,6 @@
 import { URLExt } from '@jupyterlab/coreutils';
 import { Correxit, Workbook } from '..';
-import * as security from '../security';
+import * as io from '../io';
 
 export namespace Moodle {
   type Assignment = { cmid: number; duedate: number; id: number; name: string };
@@ -78,13 +78,6 @@ export namespace Moodle {
     const reason = draft?.error || draft?.message || 'Upload returned no item';
     throw new Error(reason);
   };
-  const filename = async (assignment: string, assignee: string) => {
-    const name = assignment.replace(/[^\w.-]/g, '');
-    const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
-    const hash = (await security.digest(assignee)).slice(0, 4);
-    return `${name}-${local}-${hash}.ipynb`;
-  };
-
 
   export async function collector(
     certified: Workbook.Certified,
@@ -116,7 +109,7 @@ export namespace Moodle {
 
     const notebook = certified.workbook.context.model.sharedModel.toJSON();
     const content = JSON.stringify(notebook);
-    const file = await filename(rubric.assignment.name, assignee);
+    const file = await io.assigned(rubric.assignment.name, assignee);
     const item = await upload(url, token, content, file);
     if (!item) throw new Error(`collector error: upload failed (${assignee})`);
 
@@ -210,7 +203,7 @@ export namespace Moodle {
       }
 
       const content = JSON.stringify(notebook);
-      const file = await filename(rubric.assignment.name, assignee);
+      const file = await io.assigned(rubric.assignment.name, assignee);
       let item: number | null = null;
       try {
         item = await upload(url, token, content, file);

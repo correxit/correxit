@@ -5,6 +5,7 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
+import * as security from './security';
 
 /** @returns an available path in pwd for the given seed name. */
 export async function available(
@@ -23,6 +24,14 @@ export async function available(
     const path = PathExt.join(pwd, file);
     if (!parent.has(path)) return path;
   }
+}
+
+/** @returns a deterministic filename for an assigned workbook. */
+export async function assigned(assignment: string, assignee: string) {
+  const name = assignment.replace(/[^\w.-]/g, '');
+  const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
+  const hash = (await security.digest(assignee)).slice(0, 4);
+  return `${name}-${local}-${hash}.ipynb`;
 }
 
 /** Navigates the file browser to path. */
