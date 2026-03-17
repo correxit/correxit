@@ -70,7 +70,7 @@ and type the expected output in the prompt.
 ### Comparable
 
 The student's output is compared structurally to the output of a
-*reference cell*, another code cell in the notebook that produces the
+_reference cell_, another code cell in the notebook that produces the
 correct answer. Both cells are executed during grading, and their last
 output messages are compared (data payloads for rich output, or stream
 content for text).
@@ -84,7 +84,7 @@ secret by default.
 
 ### Correctable
 
-Like comparable, but each reference cell is a *test*: an assertion or
+Like comparable, but each reference cell is a _test_: an assertion or
 check that passes (no error) or fails (raises an error). A correctable
 cell can have multiple references, each worth a fraction of the total
 points.
@@ -114,10 +114,10 @@ is an ordinary code cell in the notebook that you link to a graded cell.
 
 References have two modes, toggled via the **Share** button in the sidebar:
 
-| Mode       | During authoring    | After distribution                   |
-| ---------- | ------------------- | ------------------------------------ |
-| **Secret** | Visible, editable   | Encrypted (PGP), hidden, read-only   |
-| **Shared** | Visible, editable   | Visible, read-only                   |
+| Mode       | During authoring  | After distribution                 |
+| ---------- | ----------------- | ---------------------------------- |
+| **Secret** | Visible, editable | Encrypted (PGP), hidden, read-only |
+| **Shared** | Visible, editable | Visible, read-only                 |
 
 Secret is the default. Use it when the reference reveals the answer
 (e.g., the correct SQL query). Use shared when the reference is not
@@ -270,10 +270,10 @@ Double-clicking a read-only markdown cell will not switch it to edit mode
 
 ## Locking and unlocking
 
-| Action     | What happens                                                   |
-| ---------- | -------------------------------------------------------------- |
-| **Lock**   | Encrypts secret references, encrypts roster, erases the key.   |
-| **Unlock** | Prompts for passphrase, decrypts references, re-enables editing.|
+| Action     | What happens                                                     |
+| ---------- | ---------------------------------------------------------------- |
+| **Lock**   | Encrypts secret references, encrypts roster, erases the key.     |
+| **Unlock** | Prompts for passphrase, decrypts references, re-enables editing. |
 
 Lock before distributing. You can lock and unlock freely during
 authoring to preview what students will see.
