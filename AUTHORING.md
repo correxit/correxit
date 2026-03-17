@@ -2,7 +2,7 @@
 
 This guide is for the person writing the assignment. It explains how to
 turn a Jupyter notebook into a Correxit workbook that can be distributed,
-completed by students, and graded — all without a backend.
+completed by students, and graded, all without a backend.
 
 Everything a student receives is contained in a single `.ipynb` file.
 Everything the grader needs is too. There is no database, no server, no
@@ -26,7 +26,7 @@ a question, the code cell immediately below is where the student answers.
 ```
 
 When a human grader reviews a student's work, the Reviewer shows the
-preceding markdown cell as context — the question — so the grader
+preceding markdown cell as context (the question) so the grader
 never has to scroll back to remember what was asked. This only works
 when the question cell is directly above the answer cell, so the
 order matters.
@@ -70,7 +70,7 @@ and type the expected output in the prompt.
 ### Comparable
 
 The student's output is compared structurally to the output of a
-*reference cell* — another code cell in the notebook that produces the
+*reference cell*, another code cell in the notebook that produces the
 correct answer. Both cells are executed during grading, and their last
 output messages are compared (data payloads for rich output, or stream
 content for text).
@@ -84,7 +84,7 @@ secret by default.
 
 ### Correctable
 
-Like comparable, but each reference cell is a *test* — an assertion or
+Like comparable, but each reference cell is a *test*: an assertion or
 check that passes (no error) or fails (raises an error). A correctable
 cell can have multiple references, each worth a fraction of the total
 points.
@@ -142,8 +142,8 @@ Every graded cell has a point value. The default is 1. Change it by
 editing the **Points possible** field in the sidebar.
 
 For comparable cells, points are set directly on the cell. For
-correctable cells, points are derived from the sum of reference weights
-— you adjust them per-reference, not on the cell itself.
+correctable cells, points are derived from the sum of reference weights;
+you adjust them per-reference, not on the cell itself.
 
 ## Notebook structure
 
@@ -164,7 +164,7 @@ code           Setup/boilerplate (not graded, read-only for students)
 There are no hard structural requirements other than:
 
 1. **Reference cells must exist in the notebook.** They must be code
-   cells (or raw cells — but only after encryption on lock).
+   cells (or raw cells, but only after encryption on lock).
 2. **A cell is either graded or a reference, not both.**
 3. **Answerable cells need a payload.** If you create one, you must
    provide the expected output.
@@ -179,17 +179,17 @@ But there are conventions that produce better results:
 - **Place reference cells near their graded cell.** During single-cell
   correction, the notebook is executed from the top down to whichever
   comes later: the graded cell or its furthest reference. If a reference
-  is far below, every code cell in between executes too — including
+  is far below, every code cell in between executes too, including
   other students' answer cells, which may error or produce side effects
   that pollute kernel state.
 
   Do not drag all reference cells to the bottom of the notebook. A
   reference at row 20 for a graded cell at row 3 means rows 4–19 all
   execute during single-cell correction of row 3. Keep each reference
-  close to — ideally directly after — its graded cell.
+  close to (ideally directly after) its graded cell.
 
 - **Use setup cells at the top for shared state.** Database connections,
-  imports, data loading — cells that every student needs but should not
+  imports, data loading. These are cells that every student needs but should not
   edit. These automatically become read-only for students.
 
 ## Testing
@@ -227,7 +227,7 @@ one copy per roster entry:
 
 1. Secret references are encrypted.
 2. Non-graded cells are marked read-only.
-3. The rubric is locked — the passphrase is stripped.
+3. The rubric is locked and the passphrase is stripped.
 4. Each copy is signed with the student's identity.
 5. The roster is encrypted so students cannot see classmates.
 
@@ -245,7 +245,7 @@ This means:
 - If a graded cell still has your test output, the student sees it
   before writing a single line of code.
 - If a secret reference cell has output (e.g., the correct query result),
-  that output is **not** encrypted — only the source is. The student can
+  that output is **not** encrypted; only the source is. The student can
   read the output even though the code is hidden.
 
 Treat outputs as intentional content. If an output is in the distributed
@@ -260,7 +260,7 @@ cells manually.
 A locked notebook where:
 
 - Markdown and setup cells are **visible but not editable**.
-- Graded cells are **editable** — these are the blanks to fill in.
+- Graded cells are **editable**: these are the blanks to fill in.
 - Secret references appear as **encrypted raw cells** (PGP blocks, hidden source).
 - Shared references are **visible but not editable**.
 - The passphrase is absent. Students cannot unlock the workbook.
@@ -325,7 +325,7 @@ A workbook moves through these stages:
 - **Test early, test often.** Run Correct after every change. A small
   drift in expected output can silently break answerable cell scoring.
 - **Answerable cells are fragile.** A trailing newline, a different
-  locale, a library update that changes formatting — any of these will
+  locale, a library update that changes formatting. Any of these will
   invalidate the digest. Prefer comparable or correctable cells when
   output is not perfectly deterministic.
 - **Correctable cells are the most robust.** Tests that assert properties
@@ -344,4 +344,4 @@ A workbook moves through these stages:
   working directory. There is no server-side setup step.
 - **Clear outputs before propagating.** Unless you intentionally want
   students to see a cell's output, clear all outputs before distributing.
-  Outputs are not encrypted — even on secret reference cells.
+  Outputs are not encrypted, even on secret reference cells.

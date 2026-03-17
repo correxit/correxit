@@ -544,7 +544,7 @@ test('intervention on last reviewable cell auto-certifies workbook', async ({
   );
   await cd(page, '.');
 
-  // Batch grade — workbook will be locked but not certified.
+  // Batch grade: workbook will be locked but not certified.
   // Then unlock, intervene on the reviewable cell, and certify.
   const result = await page.evaluate(async (directory: string) => {
     const { Rubric, Workbook } = (window as any).__correxit__;
@@ -569,7 +569,7 @@ test('intervention on last reviewable cell auto-certifies workbook', async ({
     });
     await Workbook.intervene(workbook, 'manual', intervention);
 
-    // Certify using bypass (no kernel needed — all cells already scored).
+    // Certify using bypass (no kernel needed, all cells already scored).
     const { grade } = await Workbook.certify(workbook, true);
     await workbook.context.save();
 
@@ -724,7 +724,7 @@ test('collect gathers certified workbooks and records receipts', async ({
     }
   }, propagated.directory);
 
-  // Now collect — the default collector returns a UUID receipt.
+  // Now collect: the default collector returns a UUID receipt.
   const result = await page.evaluate(async (directory: string) => {
     const { Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;

@@ -132,10 +132,10 @@ re-running `build:lite`.
 **2. Start two terminals:**
 
 ```bash
-# Terminal 1 — rebuild on every save
+# Terminal 1: rebuild on every save
 jlpm watch
 
-# Terminal 2 — serve the static site at http://localhost:8888
+# Terminal 2: serve the static site at http://localhost:8888
 jlpm serve
 ```
 

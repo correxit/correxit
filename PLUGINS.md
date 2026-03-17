@@ -177,7 +177,7 @@ type Unlocker = {
 ```
 
 Manages the rubric key lifecycle. `store` persists a key for a rubric id
-(in memory only — keys must never reach disk). `unlock` attempts to unlock
+(in memory only; keys must never reach disk). `unlock` attempts to unlock
 a workbook, optionally prompting the user for credentials.
 
 The default implementation uses the JupyterLab `SecretsManager`. An
@@ -227,7 +227,7 @@ The integration uses two moving parts:
 The teacher enters their Moodle server URL and token in the Correxit
 registrar settings (Settings → Correxit Registrar → Moodle). Correxit then
 fetches the teacher's courses, assignments, and enrolled students directly
-from the browser — no backend required.
+from the browser. No backend required.
 
 ### Administrator setup
 
@@ -235,8 +235,8 @@ These steps are performed once by whoever administers the Moodle instance.
 
 #### 1. Enable web services
 
-- **Site administration → Advanced features** — check _Enable web services_.
-- **Site administration → Server → Web services → Manage protocols** —
+- **Site administration → Advanced features**: check _Enable web services_.
+- **Site administration → Server → Web services → Manage protocols**:
   enable _REST protocol_.
 
 #### 2. Create the external service
@@ -251,14 +251,14 @@ These steps are performed once by whoever administers the Moodle instance.
 #### 3. Add functions to the service
 
 Open the Correxit service and add the functions listed below. This list
-tracks exactly what the current Correxit code calls — nothing more.
+tracks exactly what the current Correxit code calls, nothing more.
 
 | Function                        | Used by                                                  |
 | ------------------------------- | -------------------------------------------------------- |
-| `mod_assign_get_assignments`    | Registrar — lists assignments the teacher can see        |
-| `core_enrol_get_enrolled_users` | Registrar & Consumer — fetches the roster / user IDs     |
-| `core_grades_update_grades`     | Consumer — sets the assignment's maximum grade           |
-| `mod_assign_save_grade`         | Consumer — attaches the notebook as feedback per student |
+| `mod_assign_get_assignments`    | Registrar: lists assignments the teacher can see         |
+| `core_enrol_get_enrolled_users` | Registrar & Consumer: fetches the roster / user IDs      |
+| `core_grades_update_grades`     | Consumer: sets the assignment's maximum grade            |
+| `mod_assign_save_grade`         | Consumer: attaches the notebook as feedback per student  |
 
 The external service must also have **Can upload files** and
 **Can download files** enabled (checkboxes on the service edit page).
@@ -287,11 +287,11 @@ CORS headers that allow requests from the origin where JupyterLab is served
 
 How you achieve this depends on your deployment:
 
-- **Apache** — add an `Access-Control-Allow-Origin` header to the
+- **Apache**: add an `Access-Control-Allow-Origin` header to the
   webservice endpoint via a `.conf` snippet or `.htaccess`.
-- **Nginx reverse proxy** — add the header in the `location` block that
+- **Nginx reverse proxy**: add the header in the `location` block that
   proxies to Moodle.
-- **Docker (moodle-docker)** — mount a CORS config file into the Apache
+- **Docker (moodle-docker)**: mount a CORS config file into the Apache
   container. The `local.yml` override in the moodle-docker repo is one way.
 
 A wildcard (`*`) is acceptable for development. In production, restrict the
@@ -323,14 +323,14 @@ The Moodle registrar encodes the assignment `id` as `courseId:assignmentId`
 (e.g. `2:5`). The Moodle consumer parses this compound ID to directly look
 up the course's enrolled users without re-fetching all assignments. Other
 LMS integrations may adopt a similar colon-delimited convention. Registrars
-that do not use an LMS (e.g. manual mode) store a plain opaque string —
+that do not use an LMS (e.g. manual mode) store a plain opaque string;
 the core treats `id` as `string | null` and never interprets it.
 
 ### Minimum permissions
 
 The teacher account needs the standard **editingteacher** role in each
 course they teach. No additional capabilities beyond the role defaults are
-required — the web service functions above operate within the teacher's
+required. The web service functions above operate within the teacher's
 normal course-level permissions.
 
 The token and external service are administrative objects; the teacher does
