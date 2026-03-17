@@ -85,7 +85,6 @@ export namespace Moodle {
   > = new Map();
 
   const scales: Map<string, { expiry: number; max: number }> = new Map();
-
   const scale = async (
     request: ReturnType<typeof api>,
     course: string,
@@ -94,7 +93,8 @@ export namespace Moodle {
     const key = `${course}:${assignment}`;
     const cached = scales.get(key);
     if (cached && cached.expiry > Date.now()) return cached.max;
-    const records: { courses: Course[] } = await request(
+
+    const records = await request<{ courses: Course[] }>(
       'mod_assign_get_assignments',
       `courseids[0]=${course}`
     );
@@ -105,13 +105,13 @@ export namespace Moodle {
     scales.set(key, { expiry: Date.now() + TTL, max });
     return max;
   };
-
   const enroll = async (
     request: ReturnType<typeof api>,
     course: string
   ): Promise<Map<string, number>> => {
     const cached = participants.get(course);
     if (cached && cached.expiry > Date.now()) return cached.users;
+
     const users: User[] = await request(
       'core_enrol_get_enrolled_users',
       `&courseid=${course}`
@@ -168,7 +168,6 @@ export namespace Moodle {
         `plugindata[files_filemanager]=${item}`
       ].join('&')
     );
-
     return `moodle:${assignment}:${uid}:${item}`;
   }
 
@@ -227,18 +226,13 @@ export namespace Moodle {
       let item: number | null = null;
       try {
         item = await upload(url, token, content, file);
+        if (!item) throw new TypeError('upload resolved to null');
       } catch (error) {
-        const message = String(error instanceof Error ? error.message : error);
+        const reason = error instanceof Error ? error.message : String(error);
+        const message = `Upload failed for (${assignee}): ${reason}`;
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`Upload failed: ${message}`] };
-        yield { type: 'progress', slots: [++progress, total] };
-        continue;
-      }
-      if (!item) {
-        yield { type: 'separator', slots: [] };
-        yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`Upload failed for ${assignee}`] };
+        yield { type: 'error', slots: [message] };
         yield { type: 'progress', slots: [++progress, total] };
         continue;
       }
@@ -282,7 +276,7 @@ export namespace Moodle {
     if (!token || !url) return null;
 
     const request = api(url, token);
-    const records: { courses: Course[] } = await request(
+    const records = await request<{ courses: Course[] }>(
       'mod_assign_get_assignments'
     );
     const populated = ({ assignments }: Course) => assignments.length > 0;
