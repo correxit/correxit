@@ -1,10 +1,9 @@
-import { Signal } from '@lumino/signaling';
+import { ISignal, Signal } from '@lumino/signaling';
 import { Rubric, Workbook } from '.';
 
 /** Upper bound for in-memory cache of cell scores. */
 export const LIMIT = 500;
 
-const refreshed = new Signal<object, void>({});
 const state: {
   cursor: string | null;
   report: Map<string, Rubric.Score>;
@@ -35,6 +34,23 @@ export function cell(args: Partial<Rubric.Cell & Rubric.Cell.Toolbar>): string {
   const toolbar = args[Rubric.Cell.TOOLBAR];
   return args.id || (toolbar && notebook?.activeCell?.model.id) || '';
 }
+
+/** @returns the active reviewer cursor cell ID; caches the update if given. */
+export function cursor(update?: string | null): string | null {
+  if (update !== undefined && update !== state.cursor) {
+    state.cursor = update;
+    refresh();
+  }
+  return state.cursor;
+}
+
+/** Notify the sidebar to re-render. */
+export function refresh() {
+  (refreshed as Signal<object, unknown>).emit(undefined);
+}
+
+/** Notifies that the UI needs to be refreshed. */
+export const refreshed: ISignal<object, void> = new Signal({});
 
 /** @returns the cached or persisted score for a cell. */
 export function report(
@@ -67,19 +83,3 @@ export function workbook(update?: Workbook | null): Workbook | null {
   }
   return state.workbook;
 }
-
-/** Notify the sidebar to re-render. */
-export function refresh() {
-  refreshed.emit(void 0);
-}
-
-/** @returns the active reviewer cursor cell ID; caches the update if given. */
-export function cursor(update?: string | null): string | null {
-  if (update !== undefined && update !== state.cursor) {
-    state.cursor = update;
-    refreshed.emit(void 0);
-  }
-  return state.cursor;
-}
-
-export { refreshed };
