@@ -257,7 +257,8 @@ export namespace Rubric {
           };
         }
 
-        const points = ({ status }: Score) => status === 'correct' ? possible : 0;
+        const points = ({ status }: Score) =>
+          status === 'correct' ? possible : 0;
         const score = await compare(expected, given);
         return { ...score, id, points: points(score), possible };
       }

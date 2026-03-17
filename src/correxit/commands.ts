@@ -487,7 +487,8 @@ export function commands(
         commands.notifyCommandChanged(CommandIDs.track);
       };
       const refocus = () => shell.activateById('correxit-sidebar');
-      const widget = new Propagator.Widget({ commands, refocus, release, trans });
+      const options = { commands, refocus, release, trans };
+      const widget = new Propagator.Widget(options);
       widget.id = `correxit-propagator-${++serial}`;
       widget.title.caption = title;
       widget.title.icon = Icons.assignment;

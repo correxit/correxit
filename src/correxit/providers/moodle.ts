@@ -138,7 +138,7 @@ export namespace Moodle {
     if (!rubric) throw new Error('collector error: no rubric');
 
     const compound = rubric.assignment.id;
-    if (!compound) throw new Error('collector error: no external assignment ID');
+    if (!compound) throw new Error('collector error: no assignment ID');
 
     const [course, assignment] = compound.split(':');
     if (!course || !assignment)

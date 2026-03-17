@@ -25,12 +25,12 @@ export class SidebarWidget extends ReactWidget {
   protected commands: CommandRegistry;
 
   protected get workbook(): Workbook | null {
-    return this._workbook;
+    return this.active;
   }
   protected set workbook(workbook: Workbook | null) {
     const previous = this.workbook;
     if (workbook === previous) return;
-    this._workbook = workbook;
+    this.active = workbook;
     if (workbook) {
       const notebook = workbook.context.model.sharedModel;
       notebook.metadataChanged.connect(this.update, this);
@@ -69,7 +69,7 @@ export class SidebarWidget extends ReactWidget {
     }
   }
 
-  private _workbook: Workbook | null = null;
+  protected active: Workbook | null = null;
 }
 
 export namespace SidebarWidget {
