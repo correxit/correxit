@@ -10,9 +10,16 @@ The Python package delivers the extension to JupyterLab and bundles the
 schemas that register settings and toolbar contributions. All grading logic
 runs in the browser; there is no server component.
 
-## Design principles
+## Documentation
 
-See [DESIGN](DESIGN.md)
+| Document                       | Audience          | Content                                          |
+| ------------------------------ | ----------------- | ------------------------------------------------ |
+| [AUTHORING](AUTHORING.md)      | Assignment author  | How to create, configure, test, and distribute a workbook |
+| [DESIGN](DESIGN.md)            | Developer          | Architecture, data model, async patterns          |
+| [SECURITY](SECURITY.md)        | Developer, auditor | Threat model, encryption, key management          |
+| [PLUGINS](PLUGINS.md)          | Integrator         | Plugin token interfaces for LMS and transport     |
+| [RELEASE](RELEASE.md)          | Maintainer         | Release process and versioning                    |
+| [CHANGELOG](CHANGELOG.md)      | Everyone           | Version history                                   |
 
 ## What does it do? How does it work?
 
