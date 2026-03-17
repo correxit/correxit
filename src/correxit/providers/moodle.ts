@@ -86,10 +86,10 @@ export namespace Moodle {
   const TTL = 5 * 60_000;
   const participants: Map<
     string,
-    { expiry: number; users: Map<string, number> }
+    { expires: number; users: Map<string, number> }
   > = new Map();
 
-  const scales: Map<string, { expiry: number; max: number }> = new Map();
+  const scales: Map<string, { expires: number; max: number }> = new Map();
   const scale = async (
     request: ReturnType<typeof api>,
     course: string,
@@ -97,7 +97,7 @@ export namespace Moodle {
   ): Promise<number> => {
     const key = `${course}:${assignment}`;
     const cached = scales.get(key);
-    if (cached && cached.expiry > Date.now()) return cached.max;
+    if (cached && cached.expires > Date.now()) return cached.max;
 
     const records = await request<{ courses: Course[] }>(
       'mod_assign_get_assignments',
@@ -107,7 +107,7 @@ export namespace Moodle {
       .flatMap(({ assignments }) => assignments)
       .find(({ id }) => String(id) === assignment);
     const max = found && found.grade > 0 ? found.grade : 100;
-    scales.set(key, { expiry: Date.now() + TTL, max });
+    scales.set(key, { expires: Date.now() + TTL, max });
     return max;
   };
   const enroll = async (
@@ -115,14 +115,14 @@ export namespace Moodle {
     course: string
   ): Promise<Map<string, number>> => {
     const cached = participants.get(course);
-    if (cached && cached.expiry > Date.now()) return cached.users;
+    if (cached && cached.expires > Date.now()) return cached.users;
 
     const users: User[] = await request(
       'core_enrol_get_enrolled_users',
       `courseid=${course}`
     );
     const enrolled = new Map(users.map(user => [identify(user), user.id]));
-    participants.set(course, { expiry: Date.now() + TTL, users: enrolled });
+    participants.set(course, { expires: Date.now() + TTL, users: enrolled });
     return enrolled;
   };
 
