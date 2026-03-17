@@ -141,6 +141,19 @@ export function Reviewer(props: Reviewer.Props) {
   }, [workbook, cursor?.cell]);
   const type = model?.cell_type ?? 'code';
   const source = model?.getSource() ?? '';
+
+  // Preceding markdown cell as question context (if not graded or a reference).
+  const question = useMemo(() => {
+    if (!workbook || !cursor || !rubric) return null;
+    const cells = workbook.context.model.sharedModel.cells;
+    const index = cells.findIndex(cell => cell.id === cursor.cell);
+    if (index <= 0) return null;
+    const preceding = cells[index - 1];
+    if (preceding.cell_type !== 'markdown') return null;
+    if (preceding.id in rubric.cells) return null;
+    if (preceding.id in rubric.references) return null;
+    return preceding.getSource() || null;
+  }, [workbook, cursor?.cell, rubric]);
   const saved: any[] = type === 'code' ? ((model as any)?.outputs ?? []) : [];
   const [corrected, setCorrected] = useState<Rubric.Cell.Output[]>([]);
   useEffect(() => void setCorrected([]), [cursor?.path, cursor?.cell]);
@@ -269,6 +282,16 @@ export function Reviewer(props: Reviewer.Props) {
           workbooks={workbooks}
         />
         <div className="correxit-reviewer-content">
+          {question && (
+            <CellSource
+              factory={null}
+              placeholder=""
+              rendermime={rendermime}
+              source={question}
+              type="markdown"
+              muted
+            />
+          )}
           <CellSource
             factory={factory}
             placeholder={trans.__('(blank)')}
@@ -285,7 +308,7 @@ export function Reviewer(props: Reviewer.Props) {
           )}
           {certified ? (
             <div className="correxit-reviewer-certified">
-              <p>{trans.__('Certified')}</p>
+              <p>{trans.__('Certified (read-only)')}</p>
             </div>
           ) : (
             <div className="correxit-reviewer-scoring">
@@ -404,14 +427,21 @@ export namespace Reviewer {
 
 const CellSource: React.FC<{
   factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
+  muted?: boolean;
   placeholder: string;
   rendermime: IRenderMimeRegistry | null;
   source: string;
   type: string;
-}> = ({ factory, placeholder, rendermime, source, type }) => {
+}> = ({ factory, muted, placeholder, rendermime, source, type }) => {
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<CodeEditor.IEditor | null>(null);
-  const className = `correxit-reviewer-source cxt-cell-${type}`;
+  const className = [
+    'correxit-reviewer-source',
+    `cxt-cell-${type}`,
+    muted && 'cxt-mod-question'
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   // Code cells: use a read-only CodeMirror editor for syntax highlighting.
   useEffect(() => {

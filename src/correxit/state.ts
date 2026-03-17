@@ -1,14 +1,26 @@
-import { Signal } from '@lumino/signaling';
+import { ISignal, Signal } from '@lumino/signaling';
 import { Rubric, Workbook } from '.';
 
-/** Upper bound for in-memory cache of cell scores. */
-export const LIMIT = 500;
-
+const signal = new Signal<object, void>({});
+const guard = ({ content: notebook }: Workbook.Headed) => {
+  if (notebook.notebookConfig.showEditorForReadOnlyMarkdown !== false) {
+    notebook.notebookConfig = {
+      ...notebook.notebookConfig,
+      showEditorForReadOnlyMarkdown: false
+    };
+  }
+};
 const state: {
   cursor: string | null;
   report: Map<string, Rubric.Score>;
   workbook: Workbook | null;
 } = { cursor: null, report: new Map(), workbook: null };
+
+/** Upper bound for in-memory cache of cell scores. */
+export const LIMIT = 500;
+
+/** Notifies that the UI needs to be refreshed. */
+export const refreshed: ISignal<object, void> = signal;
 
 /**
  * Caches a cell score in memory.
@@ -35,6 +47,20 @@ export function cell(args: Partial<Rubric.Cell & Rubric.Cell.Toolbar>): string {
   return args.id || (toolbar && notebook?.activeCell?.model.id) || '';
 }
 
+/** @returns the active reviewer cursor cell ID; caches the update if given. */
+export function cursor(update?: string | null): string | null {
+  if (update !== undefined && update !== state.cursor) {
+    state.cursor = update;
+    refresh();
+  }
+  return state.cursor;
+}
+
+/** Notify the sidebar to re-render. */
+export function refresh() {
+  signal.emit(undefined);
+}
+
 /** @returns the cached or persisted score for a cell. */
 export function report(
   workbook: Workbook | null,
@@ -55,23 +81,6 @@ export function report(
 /** @returns the active workbook; caches the update if given. */
 export function workbook(update?: Workbook | null): Workbook | null {
   state.workbook = update === undefined ? state.workbook : update;
+  if (state.workbook?.content) guard(state.workbook);
   return state.workbook;
 }
-
-const refreshed = new Signal<object, void>({});
-
-/** Notify the sidebar to re-render. */
-export function refresh() {
-  refreshed.emit(void 0);
-}
-
-/** @returns the active reviewer cursor cell ID; caches the update if given. */
-export function cursor(update?: string | null): string | null {
-  if (update !== undefined && update !== state.cursor) {
-    state.cursor = update;
-    refreshed.emit(void 0);
-  }
-  return state.cursor;
-}
-
-export { refreshed };

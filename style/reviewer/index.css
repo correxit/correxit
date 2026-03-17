@@ -140,6 +140,13 @@
     background-color: var(--jp-layout-color2);
     border-left-color: var(--jp-warn-color1, var(--jp-border-color2));
   }
+
+  &.cxt-mod-question {
+    border-left-color: var(--jp-border-color2);
+    font-size: var(--jp-ui-font-size0);
+    margin-bottom: 0;
+    opacity: 0.7;
+  }
 }
 
 .correxit-reviewer-source-blank {

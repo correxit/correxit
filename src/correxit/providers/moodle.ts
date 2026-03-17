@@ -3,7 +3,12 @@ import { Correxit, Workbook } from '..';
 import * as io from '../io';
 
 export namespace Moodle {
-  type Assignment = { duedate: number; grade: number; id: number; name: string };
+  type Assignment = {
+    duedate: number;
+    grade: number;
+    id: number;
+    name: string;
+  };
 
   type Course = {
     assignments: Assignment[];
@@ -53,7 +58,7 @@ export namespace Moodle {
     token: string,
     content: string,
     filename: string
-  ): Promise<number | null> => {
+  ): Promise<number> => {
     const form = new FormData();
     const blob = new Blob([content], { type: 'application/json' });
     form.append('token', token);
@@ -81,11 +86,10 @@ export namespace Moodle {
   const TTL = 5 * 60_000;
   const participants: Map<
     string,
-    { expiry: number; users: Map<string, number> }
+    { expires: number; users: Map<string, number> }
   > = new Map();
 
-  const scales: Map<string, { expiry: number; max: number }> = new Map();
-
+  const scales: Map<string, { expires: number; max: number }> = new Map();
   const scale = async (
     request: ReturnType<typeof api>,
     course: string,
@@ -93,31 +97,32 @@ export namespace Moodle {
   ): Promise<number> => {
     const key = `${course}:${assignment}`;
     const cached = scales.get(key);
-    if (cached && cached.expiry > Date.now()) return cached.max;
-    const records: { courses: Course[] } = await request(
+    if (cached && cached.expires > Date.now()) return cached.max;
+
+    const records = await request<{ courses: Course[] }>(
       'mod_assign_get_assignments',
       `courseids[0]=${course}`
     );
     const found = records.courses
-      .flatMap(course => course.assignments)
+      .flatMap(({ assignments }) => assignments)
       .find(({ id }) => String(id) === assignment);
     const max = found && found.grade > 0 ? found.grade : 100;
-    scales.set(key, { expiry: Date.now() + TTL, max });
+    scales.set(key, { expires: Date.now() + TTL, max });
     return max;
   };
-
   const enroll = async (
     request: ReturnType<typeof api>,
     course: string
   ): Promise<Map<string, number>> => {
     const cached = participants.get(course);
-    if (cached && cached.expiry > Date.now()) return cached.users;
+    if (cached && cached.expires > Date.now()) return cached.users;
+
     const users: User[] = await request(
       'core_enrol_get_enrolled_users',
-      `&courseid=${course}`
+      `courseid=${course}`
     );
     const enrolled = new Map(users.map(user => [identify(user), user.id]));
-    participants.set(course, { expiry: Date.now() + TTL, users: enrolled });
+    participants.set(course, { expires: Date.now() + TTL, users: enrolled });
     return enrolled;
   };
 
@@ -133,7 +138,7 @@ export namespace Moodle {
     if (!rubric) throw new Error('collector error: no rubric');
 
     const compound = rubric.assignment.id;
-    if (!compound) throw new Error('collector error: no external assignment ID');
+    if (!compound) throw new Error('collector error: no assignment ID');
 
     const [course, assignment] = compound.split(':');
     if (!course || !assignment)
@@ -168,7 +173,6 @@ export namespace Moodle {
         `plugindata[files_filemanager]=${item}`
       ].join('&')
     );
-
     return `moodle:${assignment}:${uid}:${item}`;
   }
 
@@ -176,8 +180,8 @@ export namespace Moodle {
     { rubric, stream }: Parameters<Correxit.Consumer>[0],
     settings: Settings
   ): ReturnType<Correxit.Consumer> {
-    const token = settings.token;
-    const url = URLExt.normalize(settings.url);
+    const { token, url: raw } = settings;
+    const url = URLExt.normalize(raw);
     if (!token || !url) {
       yield { type: 'error', slots: ['Moodle URL or token not configured'] };
       return;
@@ -200,20 +204,20 @@ export namespace Moodle {
     try {
       users = await request(
         'core_enrol_get_enrolled_users',
-        `&courseid=${course}`
+        `courseid=${course}`
       );
     } catch (error) {
-      const message = String(error instanceof Error ? error.message : error);
-      yield { type: 'error', slots: [message] };
+      const reason = error instanceof Error ? error.message : String(error);
+      yield { type: 'error', slots: [reason] };
       return;
     }
 
-    const participants = new Map(users.map(user => [identify(user), user.id]));
+    const enrolled = new Map(users.map(user => [identify(user), user.id]));
     const total = rubric.assignment.roster.length;
     let progress = 0;
     for await (const { identifier, notebook } of await stream(null)) {
       const { assignee } = identifier;
-      const uid = participants.get(assignee);
+      const uid = enrolled.get(assignee);
       if (uid === undefined) {
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
@@ -224,21 +228,15 @@ export namespace Moodle {
 
       const content = JSON.stringify(notebook);
       const file = await io.assigned(rubric.assignment.name, assignee);
-      let item: number | null = null;
+      let item: number;
       try {
         item = await upload(url, token, content, file);
       } catch (error) {
-        const message = String(error instanceof Error ? error.message : error);
+        const reason = error instanceof Error ? error.message : String(error);
+        const message = `Upload failed (${assignee}): ${reason}`;
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`Upload failed: ${message}`] };
-        yield { type: 'progress', slots: [++progress, total] };
-        continue;
-      }
-      if (!item) {
-        yield { type: 'separator', slots: [] };
-        yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`Upload failed for ${assignee}`] };
+        yield { type: 'error', slots: [message] };
         yield { type: 'progress', slots: [++progress, total] };
         continue;
       }
@@ -257,10 +255,10 @@ export namespace Moodle {
           ].join('&')
         );
       } catch (error) {
-        const message = String(error instanceof Error ? error.message : error);
+        const reason = error instanceof Error ? error.message : String(error);
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`Grade save failed: ${message}`] };
+        yield { type: 'error', slots: [`Grade save failed: ${reason}`] };
         yield { type: 'progress', slots: [++progress, total] };
         continue;
       }
@@ -277,12 +275,12 @@ export namespace Moodle {
     identifier: Workbook.Identifier,
     settings: Settings
   ): ReturnType<Correxit.Registrar> {
-    const token = settings.token;
-    const url = URLExt.normalize(settings.url);
+    const { token, url: raw } = settings;
+    const url = URLExt.normalize(raw);
     if (!token || !url) return null;
 
     const request = api(url, token);
-    const records: { courses: Course[] } = await request(
+    const records = await request<{ courses: Course[] }>(
       'mod_assign_get_assignments'
     );
     const populated = ({ assignments }: Course) => assignments.length > 0;
@@ -298,7 +296,7 @@ export namespace Moodle {
       courses.map(async ({ id }) => {
         const users: User[] = await request(
           'core_enrol_get_enrolled_users',
-          `&courseid=${id}`
+          `courseid=${id}`
         );
         return [id, normalize(users)] as const;
       })

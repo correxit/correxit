@@ -523,6 +523,7 @@ export namespace Workbook {
       secrets.map(({ referent }) => Cell.decrypt(workbook, referent, key))
     );
     transact(workbook, prepared);
+    defrost(workbook);
     // Keep the original (un-pruned) rubric for downstream audits.
     return update(
       workbook, rubric, { ok: true, pruned: [], rubric }

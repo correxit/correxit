@@ -113,5 +113,10 @@ async function template(
     await encrypt(notebook, reference.referent, rubric.key);
     encrypted.push(reference.referent);
   }
+  for (const cell of notebook.cells) {
+    const id = cell.id as string | undefined || '';
+    if (Rubric.has(rubric, id)) continue;
+    cell.metadata.editable = false;
+  }
   return { encrypted, notebook };
 }

@@ -129,6 +129,18 @@ describe('state', () => {
       state.workbook(null);
       expect(state.workbook()).toBeNull();
     });
+
+    it('forces showEditorForReadOnlyMarkdown to false', () => {
+      const config = {
+        editorStatuses: {},
+        showEditorForReadOnlyMarkdown: true
+      };
+      const wb = { ...dummy, content: { notebookConfig: config } } as any;
+      state.workbook(wb);
+      expect(wb.content.notebookConfig.showEditorForReadOnlyMarkdown).toBe(
+        false
+      );
+    });
   });
 
   describe('cell', () => {
@@ -138,7 +150,7 @@ describe('state', () => {
 
     it('returns active cell id if toolbar flag is set', () => {
       const activeCell = { model: { id: 'active-id' } };
-      const content = { activeCell };
+      const content = { activeCell, notebookConfig: {} };
       const wb = { ...dummy, content };
       state.workbook(wb);
       expect(state.cell({ [Rubric.Cell.TOOLBAR]: true })).toBe('active-id');
