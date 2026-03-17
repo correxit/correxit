@@ -129,6 +129,18 @@ describe('state', () => {
       state.workbook(null);
       expect(state.workbook()).toBeNull();
     });
+
+    it('forces showEditorForReadOnlyMarkdown to false', () => {
+      const config = {
+        editorStatuses: {},
+        showEditorForReadOnlyMarkdown: true
+      };
+      const wb = { ...dummy, content: { notebookConfig: config } } as any;
+      state.workbook(wb);
+      expect(wb.content.notebookConfig.showEditorForReadOnlyMarkdown).toBe(
+        false
+      );
+    });
   });
 
   describe('cell', () => {
