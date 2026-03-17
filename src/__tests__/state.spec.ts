@@ -138,7 +138,7 @@ describe('state', () => {
 
     it('returns active cell id if toolbar flag is set', () => {
       const activeCell = { model: { id: 'active-id' } };
-      const content = { activeCell };
+      const content = { activeCell, notebookConfig: {} };
       const wb = { ...dummy, content };
       state.workbook(wb);
       expect(state.cell({ [Rubric.Cell.TOOLBAR]: true })).toBe('active-id');
