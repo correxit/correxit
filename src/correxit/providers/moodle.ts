@@ -53,7 +53,7 @@ export namespace Moodle {
     token: string,
     content: string,
     filename: string
-  ): Promise<number | null> => {
+  ): Promise<number> => {
     const form = new FormData();
     const blob = new Blob([content], { type: 'application/json' });
     form.append('token', token);
@@ -223,10 +223,9 @@ export namespace Moodle {
 
       const content = JSON.stringify(notebook);
       const file = await io.assigned(rubric.assignment.name, assignee);
-      let item: number | null = null;
+      let item: number;
       try {
         item = await upload(url, token, content, file);
-        if (!item) throw new TypeError('upload resolved to null');
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         const message = `Upload failed (${assignee}): ${reason}`;

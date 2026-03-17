@@ -724,7 +724,7 @@ test('collect gathers certified workbooks and records receipts', async ({
     }
   }, propagated.directory);
 
-  // Now collect: the default collector returns a UUID receipt.
+  // Now collect: the collector returns a manual:<sha256> digest receipt.
   const result = await page.evaluate(async (directory: string) => {
     const { Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
