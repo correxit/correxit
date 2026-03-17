@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/QuantStack/correxit/compare/v1.12.0...v1.13.0) (2026-03-17)
+
+
+### Features
+
+* Updated manual submitter, reviewer question cell, docs ([#57](https://github.com/QuantStack/correxit/issues/57)) ([2cd3a43](https://github.com/QuantStack/correxit/commit/2cd3a4337018649e08af309ecdcefbf0d0618890))
+
 # [1.12.0](https://github.com/QuantStack/correxit/compare/v1.11.1...v1.12.0) (2026-03-16)
 
 
