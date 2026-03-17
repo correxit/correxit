@@ -99,7 +99,7 @@ export namespace Moodle {
       `courseids[0]=${course}`
     );
     const found = records.courses
-      .flatMap(course => course.assignments)
+      .flatMap(({ assignments }) => assignments)
       .find(({ id }) => String(id) === assignment);
     const max = found && found.grade > 0 ? found.grade : 100;
     scales.set(key, { expiry: Date.now() + TTL, max });
@@ -114,7 +114,7 @@ export namespace Moodle {
 
     const users: User[] = await request(
       'core_enrol_get_enrolled_users',
-      `&courseid=${course}`
+      `courseid=${course}`
     );
     const enrolled = new Map(users.map(user => [identify(user), user.id]));
     participants.set(course, { expiry: Date.now() + TTL, users: enrolled });
@@ -175,8 +175,8 @@ export namespace Moodle {
     { rubric, stream }: Parameters<Correxit.Consumer>[0],
     settings: Settings
   ): ReturnType<Correxit.Consumer> {
-    const token = settings.token;
-    const url = URLExt.normalize(settings.url);
+    const { token, url: raw } = settings;
+    const url = URLExt.normalize(raw);
     if (!token || !url) {
       yield { type: 'error', slots: ['Moodle URL or token not configured'] };
       return;
@@ -199,20 +199,20 @@ export namespace Moodle {
     try {
       users = await request(
         'core_enrol_get_enrolled_users',
-        `&courseid=${course}`
+        `courseid=${course}`
       );
     } catch (error) {
-      const message = String(error instanceof Error ? error.message : error);
-      yield { type: 'error', slots: [message] };
+      const reason = error instanceof Error ? error.message : String(error);
+      yield { type: 'error', slots: [reason] };
       return;
     }
 
-    const participants = new Map(users.map(user => [identify(user), user.id]));
+    const enrolled = new Map(users.map(user => [identify(user), user.id]));
     const total = rubric.assignment.roster.length;
     let progress = 0;
     for await (const { identifier, notebook } of await stream(null)) {
       const { assignee } = identifier;
-      const uid = participants.get(assignee);
+      const uid = enrolled.get(assignee);
       if (uid === undefined) {
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
@@ -229,7 +229,7 @@ export namespace Moodle {
         if (!item) throw new TypeError('upload resolved to null');
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        const message = `Upload failed for (${assignee}): ${reason}`;
+        const message = `Upload failed (${assignee}): ${reason}`;
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
         yield { type: 'error', slots: [message] };
@@ -251,10 +251,10 @@ export namespace Moodle {
           ].join('&')
         );
       } catch (error) {
-        const message = String(error instanceof Error ? error.message : error);
+        const reason = error instanceof Error ? error.message : String(error);
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`Grade save failed: ${message}`] };
+        yield { type: 'error', slots: [`Grade save failed: ${reason}`] };
         yield { type: 'progress', slots: [++progress, total] };
         continue;
       }
@@ -271,8 +271,8 @@ export namespace Moodle {
     identifier: Workbook.Identifier,
     settings: Settings
   ): ReturnType<Correxit.Registrar> {
-    const token = settings.token;
-    const url = URLExt.normalize(settings.url);
+    const { token, url: raw } = settings;
+    const url = URLExt.normalize(raw);
     if (!token || !url) return null;
 
     const request = api(url, token);
@@ -292,7 +292,7 @@ export namespace Moodle {
       courses.map(async ({ id }) => {
         const users: User[] = await request(
           'core_enrol_get_enrolled_users',
-          `&courseid=${id}`
+          `courseid=${id}`
         );
         return [id, normalize(users)] as const;
       })

@@ -17,7 +17,6 @@ import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStatusBar } from '@jupyterlab/statusbar';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
-import { UUID } from '@lumino/coreutils';
 import { DisposableDelegate } from '@lumino/disposable';
 import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
@@ -29,6 +28,7 @@ import * as dispatcher from './correxit/dispatcher';
 import * as kernels from './correxit/kernels';
 import { Moodle } from './correxit/providers/moodle';
 import * as registrars from './correxit/registrars';
+import * as submitters from './correxit/submitters';
 import * as state from './correxit/state';
 import { Sidebar } from './ui';
 
@@ -307,14 +307,14 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> =
     }
   );
 
-/** The default Correxit assignment submitter, returns a UUID. */
+/** The default Correxit assignment submitter, content-addressed digest. */
 const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   id: Correxit.SUBMITTER,
   description: Correxit.DESCRIPTION.SUBMITTER,
   autoStart: true,
   ...((deactivator?: () => void) => ({
     provides: Correxit.Submitter,
-    activate: (): Correxit.Submitter => async _ => UUID.uuid4(),
+    activate: (): Correxit.Submitter => submitters.manual,
     deactivate: () => deactivator?.()
   }))()
 };
