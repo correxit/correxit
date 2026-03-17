@@ -3,7 +3,12 @@ import { Correxit, Workbook } from '..';
 import * as io from '../io';
 
 export namespace Moodle {
-  type Assignment = { duedate: number; grade: number; id: number; name: string };
+  type Assignment = {
+    duedate: number;
+    grade: number;
+    id: number;
+    name: string;
+  };
 
   type Course = {
     assignments: Assignment[];
