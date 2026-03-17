@@ -1,9 +1,7 @@
 import { ISignal, Signal } from '@lumino/signaling';
 import { Rubric, Workbook } from '.';
 
-/** Upper bound for in-memory cache of cell scores. */
-export const LIMIT = 500;
-
+const signal = new Signal<object, void>({});
 const guard = ({ content: notebook }: Workbook.Headed) => {
   if (notebook.notebookConfig.showEditorForReadOnlyMarkdown !== false) {
     notebook.notebookConfig = {
@@ -17,6 +15,12 @@ const state: {
   report: Map<string, Rubric.Score>;
   workbook: Workbook | null;
 } = { cursor: null, report: new Map(), workbook: null };
+
+/** Upper bound for in-memory cache of cell scores. */
+export const LIMIT = 500;
+
+/** Notifies that the UI needs to be refreshed. */
+export const refreshed: ISignal<object, void> = signal;
 
 /**
  * Caches a cell score in memory.
@@ -54,11 +58,8 @@ export function cursor(update?: string | null): string | null {
 
 /** Notify the sidebar to re-render. */
 export function refresh() {
-  (refreshed as Signal<object, unknown>).emit(undefined);
+  signal.emit(undefined);
 }
-
-/** Notifies that the UI needs to be refreshed. */
-export const refreshed: ISignal<object, void> = new Signal({});
 
 /** @returns the cached or persisted score for a cell. */
 export function report(
