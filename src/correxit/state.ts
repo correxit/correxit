@@ -4,6 +4,7 @@ import { Rubric, Workbook } from '.';
 /** Upper bound for in-memory cache of cell scores. */
 export const LIMIT = 500;
 
+const refreshed = new Signal<object, void>({});
 const state: {
   cursor: string | null;
   report: Map<string, Rubric.Score>;
@@ -55,10 +56,17 @@ export function report(
 /** @returns the active workbook; caches the update if given. */
 export function workbook(update?: Workbook | null): Workbook | null {
   state.workbook = update === undefined ? state.workbook : update;
+  if (update?.content) {
+    const config = update.content.notebookConfig;
+    if (config.showEditorForReadOnlyMarkdown !== false) {
+      update.content.notebookConfig = {
+        ...config,
+        showEditorForReadOnlyMarkdown: false
+      };
+    }
+  }
   return state.workbook;
 }
-
-const refreshed = new Signal<object, void>({});
 
 /** Notify the sidebar to re-render. */
 export function refresh() {
