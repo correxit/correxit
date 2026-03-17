@@ -28,8 +28,8 @@ import * as dispatcher from './correxit/dispatcher';
 import * as kernels from './correxit/kernels';
 import { Moodle } from './correxit/providers/moodle';
 import * as registrars from './correxit/registrars';
-import * as submitters from './correxit/submitters';
 import * as state from './correxit/state';
+import * as submitters from './correxit/submitters';
 import { Sidebar } from './ui';
 
 /** The Correxit grade collector dispatches to the configured provider. */
