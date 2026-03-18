@@ -887,6 +887,7 @@ export namespace Workbook {
     if (!rubric) throw new Error('unlock error');
     if (!rubric.locked) return rubric;
 
+    const unlocked = await Rubric.unlock(rubric, key);
     const { assignment } = rubric;
     if (assignment.seal) {
       const armored = await security.decrypt(
@@ -914,7 +915,6 @@ export namespace Workbook {
       transact(workbook, prepared);
     }
 
-    const unlocked = await Rubric.unlock(rubric, key);
     return decrypt(workbook, unlocked);
   }
 

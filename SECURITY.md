@@ -157,11 +157,13 @@ evidence with zero security value.
    unseals all cells. Clears `seal`, `submission`, `submitted`, and
    student key fields. Defrosts the notebook.
 
-6. **Grading** (`Workbook.unlock`): Checks `assignment.seal`. If
-   non-null: decrypts author PGP private key (local scope only),
-   verifies seal hash, unseals each cell (checking `assignee` and
-   `id` in each payload), then proceeds with normal unlock (roster
-   decryption, reference cell decryption).
+6. **Grading** (`Workbook.unlock`): Validates metadata first
+   (roster decryption, assignment signature) so that a tampered
+   workbook never gets plaintext written. Then, if `assignment.seal`
+   is non-null: decrypts the author PGP private key (local scope
+   only), verifies the seal hash, and unseals each cell (checking
+   `assignee` and `id` in each payload). Finally, decrypts
+   reference cells.
 
 ### Payload Binding
 
