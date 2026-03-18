@@ -687,8 +687,8 @@ export function commands(
       let recipients: string[];
 
       const body = trans.__(
-        `Would you like to set a passphrase to revise your submission later?
-         Or do you just want to seal and submit? This document will be locked.`
+`Would you like to set a passphrase to revise your submission later?
+Or do you just want to seal and submit? This document will be locked.`
       );
       const { button } = await showDialog({
         title,
