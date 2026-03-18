@@ -7,7 +7,7 @@ codebase.
 ## Security
 
 Correxit workbooks are Jupyter notebooks (`.ipynb` files) with rubric data in
-their metadata. Because these files are shared between instructors and students,
+their metadata. Because these files are shared between authors and students,
 integrity is paramount. Correxit only writes locked rubric contents to the
 notebook metadata.
 
@@ -19,10 +19,13 @@ Cryptographic keys exist only in memory. They enter via user input (passphrase
 prompt or secrets manager) and are never serialized to disk or notebook metadata.
 They die with the browser tab.
 
-Correxit uses `openpgp.js` for encryption/decryption and native `window.crypto`
-for signing. All fields use explicit nulls (`field: Type | null`) rather than
-optional markers (`field?: Type`) to ensure stable JSON serialization, which is
-required for deterministic cryptographic signatures.
+Correxit uses `openpgp.js` for symmetric encryption/decryption and PGP
+Curve25519 asymmetric encryption (sealed submissions), and native
+`window.crypto` for HMAC-SHA-256 signing and PBKDF2 key derivation. All fields
+use explicit nulls (`field: Type | null`) rather than optional markers
+(`field?: Type`) to ensure stable JSON serialization, which is required for
+deterministic cryptographic signatures. The plaintext PGP private key exists
+only in local scope during `unlock` and is discarded when the function returns.
 
 ## Architecture
 

@@ -50,9 +50,11 @@ const workbook = (
     collected: null,
     expiration: null,
     id: '',
+    keys: Rubric.Assignment.Keys.empty(),
     name: '',
     report: Rubric.Assignment.Report.empty(),
     roster: [],
+    seal: null,
     signature: '',
     submission,
     submitted: null

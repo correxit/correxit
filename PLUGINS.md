@@ -51,7 +51,7 @@ type Registrar = (
 ) => Promise<Rubric.Assignment.Registration[] | null>;
 ```
 
-Called when an instructor opens a workbook that has not yet been assigned.
+Called when an author opens a workbook that has not yet been assigned.
 Returns assignment registrations for the workbook.
 
 ```typescript
@@ -64,7 +64,7 @@ type Registration = Pick<
 
 | Return value     | Effect                                                                                                         |
 | ---------------- | -------------------------------------------------------------------------------------------------------------- |
-| `null`           | Assignment input is unlocked; the instructor may enter details manually.                                       |
+| `null`           | Assignment input is unlocked; the author may enter details manually.                                           |
 | `[]`             | Assignment input is locked; the assignment has no eligible registrations.                                      |
 | `Registration[]` | Assignment input is locked; a single registration is auto-selected, multiple registrations present a dropdown. |
 
@@ -83,7 +83,7 @@ type Consumer = (output: {
 }) => AsyncGenerator<Emitter.Emission>;
 ```
 
-Called when an instructor triggers propagation. The consumer receives:
+Called when an author triggers propagation. The consumer receives:
 
 - `path` - the source notebook path.
 - `rubric` - the unlocked rubric, including the resolved roster.

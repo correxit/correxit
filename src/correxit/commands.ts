@@ -31,6 +31,7 @@ export namespace CommandIDs {
   export const refer = 'correxit:refer';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
+  export const revise = 'correxit:revise';
   export const reweight = 'correxit:reweight';
   export const save = 'correxit:save';
   export const share = 'correxit:share';
@@ -53,8 +54,8 @@ type Reified =
 const { get, has, size } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert, correct,
-  dereference, draft, intervene, lock, refer, remove, reset, reweight, submit,
-  toggle
+  dereference, draft, intervene, lock, refer, remove, reset, revise, reweight,
+  submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -351,7 +352,8 @@ export function commands(
       const rubric = open(state.workbook());
       const submitted = !!rubric?.assignment.submission;
       const certified = !!rubric?.assignment.certification;
-      return !!rubric?.locked && submitted && !certified;
+      const sealed = !!rubric?.assignment.seal;
+      return !!rubric?.locked && submitted && !certified && !sealed;
     },
     isVisible: () => commands.isEnabled(CommandIDs.draft),
     label: trans.__('Revert to draft...'),
@@ -520,7 +522,9 @@ export function commands(
       if (rubric.assignment.assignee) return false;
 
       const cell = get(rubric, id);
-      return !!cell && (cell.is === 'comparable' || cell.is === 'correctable');
+      if (!cell) return false;
+      if (cell.is === 'correctable') return true;
+      return cell.is === 'comparable' && !cell.references.length;
     },
     isVisible: args => commands.isEnabled(CommandIDs.refer, args),
     label: trans.__('Add a reference cell'),
@@ -678,27 +682,96 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
 
+      const author = rubric.assignment.keys.public.author;
       const title = trans.__('Submit assignment');
-      const body = trans.__('Submit assignment and set workbook to read-only?');
+      let recipients: string[];
+
+      const body = trans.__(
+`Would you like to set a passphrase to revise your submission later?
+Or do you just want to seal and submit? This document will be locked.`
+      );
       const { button } = await showDialog({
         title,
         body,
         buttons: [
           Dialog.cancelButton({ label: trans.__('Cancel') }),
-          Dialog.okButton({ label: trans.__('Submit') })
+          Dialog.okButton({
+            className: 'jp-mod-styled correxit-dialog-revert',
+            label: trans.__('Submit without passphrase')
+          }),
+          Dialog.okButton({
+            className: 'jp-mod-styled',
+            label: trans.__('Set passphrase'),
+            actions: ['passphrase']
+          })
         ]
       });
       if (!button.accept) return;
+
+      if (button.actions.includes('passphrase')) {
+        const passphrase = await input.text({
+          title: trans.__('Set a submission passphrase'),
+          label: trans.__('Enter a passphrase to seal your submission')
+        });
+        if (!passphrase) return;
+
+        const student = await security.keygen(passphrase, rubric.id);
+        const pair = await security.keypair();
+        const armored = await security.encrypt(pair.private, student);
+        const keys: Rubric.Assignment.Keys = {
+          private: { ...rubric.assignment.keys.private, assignee: armored },
+          public: { ...rubric.assignment.keys.public, assignee: pair.public }
+        };
+        await Workbook.update(workbook, {
+          ...rubric, assignment: { ...rubric.assignment, keys }
+        } as Rubric.Locked);
+        recipients = [author, pair.public];
+      } else {
+        recipients = [author];
+      }
+
       try {
         const identifier = Workbook.identifier(workbook);
         if (!Workbook.Identifier.assigned(identifier)) return;
-        await submit(workbook);
+        await submit(workbook, recipients);
 
         const receipt = await submitter(workbook, identifier);
         await acknowledge(workbook, receipt);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.revise, {
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      if (!rubric?.locked) return false;
+      const { certification, keys, seal, submission } = rubric.assignment;
+      return !!seal && !!submission
+        && !certification && !!keys.private.assignee;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.revise),
+    label: trans.__('Revise submission...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric?.locked) return;
+
+      const passphrase = await input.text({
+        title: trans.__('Enter your submission passphrase'),
+        label: trans.__('Enter the passphrase you used when submitting')
+      });
+      if (!passphrase) return;
+
+      try {
+        const secret = await security.keygen(passphrase, rubric.id);
+        const armored = await security.decrypt(
+          rubric.assignment.keys.private.assignee!, secret
+        );
+        await revise(workbook, await security.parse(armored));
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        void showErrorMessage(trans.__('Could not revise'), error as Error);
       }
     }
   }));

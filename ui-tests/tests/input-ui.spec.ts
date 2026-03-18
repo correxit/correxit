@@ -13,7 +13,20 @@ test('selects a reference cell for comparison', async ({ page }) => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
-    await Workbook.update(panel, { ...Rubric.create(), key: 'secret' });
+    await Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create())
+    );
     // This command invokes input.cell, so it can not be awaited.
     void app.commands.execute('correxit:configure', {
       id: 'source',

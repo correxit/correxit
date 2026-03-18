@@ -7,7 +7,8 @@ import { Assignment } from './assignment';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const { certify, convert, draft, lock, submit, unlock } = Correxit.CommandIDs;
+const { certify, convert, draft, lock, revise, submit, unlock } =
+  Correxit.CommandIDs;
 
 export const Header: React.FC<{
   commands: CommandRegistry;
@@ -38,8 +39,15 @@ export const Header: React.FC<{
     ? trans.__('%1 (%2 of %3)', heading, score.points, score.possible)
     : heading;
   const submitted = !!rubric?.assignment.submission;
+  const sealed = !!rubric?.assignment.seal;
   const unlocked = !!rubric && !rubric.locked;
-  const action = unlocked ? certify : submitted ? draft : submit;
+  const action = unlocked
+    ? certify
+    : submitted && sealed
+      ? revise
+      : submitted
+        ? draft
+        : submit;
   return (
     <section className="correxit-sidebar-header">
       <div className="correxit-sidebar-inner-header">

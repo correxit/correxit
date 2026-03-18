@@ -153,6 +153,67 @@ export namespace Workbook {
       return { index, replacement };
     }
 
+    /** Prepares a PGP-sealed cell replacement (any type -> raw). */
+    export async function seal(
+      workbook: Workbook,
+      id: string,
+      assignee: string,
+      recipients: string[]
+    ): Promise<Prepared> {
+      const notebook = workbook.context.model.sharedModel;
+      const index = findIndex(notebook.cells, cell => cell.id === id);
+      if (index === -1) throw new Error('seal error: cell not found');
+
+      const cell = notebook.cells[index];
+      const type = cell.toJSON().cell_type;
+      const source = cell.getSource();
+      const payload = JSON.stringify({ assignee, id, source, type });
+      const ciphertext = await security.seal(payload, recipients);
+      const jupyter = {
+        ...(cell.getMetadata('jupyter') as any || {}),
+        source_hidden: true
+      };
+      const snapshot = cell.toJSON();
+      const metadata = { ...snapshot.metadata, editable: false, jupyter };
+      delete metadata['trusted'];
+
+      const replacement = {
+        ...snapshot, cell_type: 'raw', metadata, source: ciphertext
+      };
+      return { index, replacement };
+    }
+
+    /** Prepares an unsealed cell replacement (raw -> original type). */
+    export async function unseal(
+      workbook: Workbook,
+      id: string,
+      assignee: string,
+      key: security.PrivateKey | string
+    ): Promise<Prepared> {
+      const notebook = workbook.context.model.sharedModel;
+      const index = findIndex(notebook.cells, cell => cell.id === id);
+      if (index === -1) throw new Error('unseal error: cell not found');
+
+      const cell = notebook.cells[index];
+      const json = await security.unseal(cell.getSource(), key);
+      const payload = JSON.parse(json);
+      if (payload.assignee !== assignee)
+        throw new Error(`assignee mismatch: ${assignee} ≠ ${payload.assignee}`);
+      if (payload.id !== id)
+        throw new Error('cell id mismatch: sealed cell was moved');
+
+      const jupyter = { ...(cell.getMetadata('jupyter') as any || {}) };
+      delete jupyter['source_hidden'];
+      const snapshot = cell.toJSON();
+      const metadata = { ...snapshot.metadata as any, jupyter };
+      delete metadata['editable'];
+
+      const replacement = {
+        ...snapshot, cell_type: payload.type, metadata, source: payload.source
+      };
+      return { index, replacement };
+    }
+
   }
 
   const quiet = true;
@@ -267,7 +328,7 @@ export namespace Workbook {
    * If the rubric is locked, it is left unmodified.
    *
    * Headed workbooks tolerate missing cells: the pruned rubric is returned
-   * with `ok: true` so the instructor can still interact with what remains.
+   * with `ok: true` so the author can still interact with what remains.
    * Headless workbooks fail immediately. Batch grading cannot recover from
    * a structurally incomplete notebook.
    */
@@ -390,8 +451,15 @@ export namespace Workbook {
       if (error === Correxit.NO_CORREXIT_METADATA) {
         const created = Rubric.create();
         const key = await security.keygen(passphrase, created.id);
+        const pair = await security.keypair();
+        const armored = await security.encrypt(pair.private, key);
+        const keys: Rubric.Assignment.Keys = {
+          private: { assignee: null, author: armored },
+          public: { assignee: null, author: pair.public }
+        };
+        const assignment = { ...created.assignment, keys };
         unlocker.store(created.id, key);
-        return update(workbook, { ...created, key });
+        return update(workbook, { ...created, assignment, key });
       }
       throw error;
     }
@@ -525,9 +593,7 @@ export namespace Workbook {
     transact(workbook, prepared);
     defrost(workbook);
     // Keep the original (un-pruned) rubric for downstream audits.
-    return update(
-      workbook, rubric, { ok: true, pruned: [], rubric }
-    );
+    return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
   /** Revert a submission to draft, restoring cell editability. */
@@ -730,12 +796,62 @@ export namespace Workbook {
     return update(workbook, updated);
   }
 
-  /** Submit an assignment, locking all cells to read-only. */
-  export async function submit(workbook: Workbook): Promise<Rubric.Locked> {
+  /** Revise a sealed submission: unseal cells and clear submission state. */
+  export async function revise(
+    workbook: Workbook,
+    key: security.PrivateKey | string
+  ): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked || !rubric.assignment.seal)
+      throw new Error('revise error');
+
+    const { assignee } = rubric.assignment;
+    const ids = Object.keys(rubric.cells).sort();
+    const prepared = await Promise.all(
+      ids.map(id => Cell.unseal(workbook, id, assignee, key))
+    );
+    transact(workbook, prepared);
+    defrost(workbook);
+    return update(workbook, Rubric.unseal(rubric));
+  }
+
+  /**
+   * Seal all rubric cells in a workbook, encrypting their sources
+   * to the given PGP public key recipients.
+   *
+   * @returns the seal hash (SHA-256 of concatenated ciphertexts).
+   */
+  export async function seal(
+    workbook: Workbook,
+    rubric: Rubric.Locked,
+    recipients: string[]
+  ): Promise<string> {
+    const { assignee } = rubric.assignment;
+    const ids = Object.keys(rubric.cells).sort();
+    const prepared = await Promise.all(
+      ids.map(id => Cell.seal(workbook, id, assignee, recipients))
+    );
+    transact(workbook, prepared);
+
+    const sources = prepared.map(({ replacement: { source } }) => source);
+    const joined = sources.join('\n');
+    return security.digest(joined);
+  }
+
+  /** Submit an assignment: seal rubric cells, then freeze. */
+  export async function submit(
+    workbook: Workbook,
+    recipients: string[]
+  ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked) throw new Error('submit error');
+    if (!recipients.length)
+      throw new Error('submit error: missing seal recipients');
+
+    const hash = await seal(workbook, rubric, recipients);
+    const sealed = Rubric.seal(rubric, hash);
     freeze(workbook);
-    return update(workbook, Rubric.submit(rubric));
+    return update(workbook, Rubric.submit(sealed));
   }
 
   /** Toggle a workbook reference's `secret` flag. */
@@ -769,7 +885,50 @@ export namespace Workbook {
     if (!rubric) throw new Error('unlock error');
     if (!rubric.locked) return rubric;
 
-    const unlocked = await Rubric.unlock(rubric, key);
+    let unlocked = await Rubric.unlock(rubric, key);
+    const { assignment } = rubric;
+    if (assignment.seal) {
+      const armored = await security.decrypt(
+        assignment.keys.private.author, key
+      );
+      const author = await security.parse(armored);
+
+      // Partition rubric cell IDs into present and missing.
+      const ids = Object.keys(rubric.cells).sort();
+      const notebook = workbook.context.model.sharedModel;
+      const index = Object.fromEntries(
+        notebook.cells.map(cell => [cell.id, cell])
+      );
+      const present = ids.filter(id => id in index);
+      const missing = ids.filter(id => !(id in index));
+
+      if (missing.length) {
+        if (!workbook.content)
+          throw new Error('unlock seal error: missing cells');
+        console.warn('unlock: skipping seal verify, missing cells', missing);
+      } else {
+        // Verify seal integrity before decrypting.
+        const ciphertexts = present.map(id => index[id].getSource());
+        const hash = await security.digest(ciphertexts.join('\n'));
+        if (hash !== assignment.seal)
+          throw new Error('seal mismatch: ciphertexts tampered');
+      }
+
+      // Unseal each rubric cell present in the notebook.
+      const { assignee } = assignment;
+      const prepared = await Promise.all(
+        present.map(id => Cell.unseal(workbook, id, assignee, author))
+      );
+      transact(workbook, prepared);
+
+      // Clear the seal: cells are now plaintext, so the hash would not
+      // match on a subsequent unlock after save-and-reopen.
+      unlocked = {
+        ...unlocked,
+        assignment: { ...unlocked.assignment, seal: null }
+      };
+    }
+
     return decrypt(workbook, unlocked);
   }
 

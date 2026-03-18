@@ -32,7 +32,7 @@ export const Body: React.FC<{
     comparable: trans.__('Cell output is compared against a reference.'),
     correctable: trans.__('Cell is corrected by reference cells.'),
     reference: trans.__('Selected cell is a reference cell.'),
-    reviewable: trans.__('Cell is manually reviewed by an instructor.')
+    reviewable: trans.__('Cell is manually reviewed.')
   };
   const hint = get(rubric, id)?.is ?? (id in rubric.references && 'reference');
   return (
