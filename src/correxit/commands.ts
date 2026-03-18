@@ -130,7 +130,6 @@ export function commands(
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
-
       try {
         const certified = await certify(workbook);
         const receipt = await collector(certified);
