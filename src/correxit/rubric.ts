@@ -409,7 +409,7 @@ export namespace Rubric {
       }
     }
 
-    /** PGP keypair for sealed submissions. */
+    /** PGP keypairs for sealed submissions. */
     export type Keys = Readonly<{
       private: Readonly<{ assignee: string | null; author: string }>;
       public: Readonly<{ assignee: string | null; author: string }>;

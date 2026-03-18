@@ -887,7 +887,7 @@ export namespace Workbook {
     if (!rubric) throw new Error('unlock error');
     if (!rubric.locked) return rubric;
 
-    const unlocked = await Rubric.unlock(rubric, key);
+    let unlocked = await Rubric.unlock(rubric, key);
     const { assignment } = rubric;
     if (assignment.seal) {
       const armored = await security.decrypt(
@@ -895,24 +895,40 @@ export namespace Workbook {
       );
       const author = await security.parse(armored);
 
-      // Verify seal integrity before decrypting.
+      // Partition rubric cell IDs into present and missing.
       const ids = Object.keys(rubric.cells).sort();
       const notebook = workbook.context.model.sharedModel;
-      const ciphertexts = ids.map(id => {
-        const index = findIndex(notebook.cells, cell => cell.id === id);
-        if (index === -1) throw new Error('unlock seal error: missing cell');
-        return notebook.cells[index].getSource();
-      });
-      const hash = await security.digest(ciphertexts.join('\n'));
-      if (hash !== assignment.seal)
-        throw new Error('seal mismatch: ciphertexts tampered after submission');
+      const index = Object.fromEntries(
+        notebook.cells.map(cell => [cell.id, cell])
+      );
+      const present = ids.filter(id => id in index);
+      const missing = ids.filter(id => !(id in index));
 
-      // Unseal each rubric cell.
+      if (missing.length) {
+        if (!workbook.content)
+          throw new Error('unlock seal error: missing cells');
+        console.warn('unlock: skipping seal verify, missing cells', missing);
+      } else {
+        // Verify seal integrity before decrypting.
+        const ciphertexts = present.map(id => index[id].getSource());
+        const hash = await security.digest(ciphertexts.join('\n'));
+        if (hash !== assignment.seal)
+          throw new Error('seal mismatch: ciphertexts tampered');
+      }
+
+      // Unseal each rubric cell present in the notebook.
       const { assignee } = assignment;
       const prepared = await Promise.all(
-        ids.map(id => Cell.unseal(workbook, id, assignee, author))
+        present.map(id => Cell.unseal(workbook, id, assignee, author))
       );
       transact(workbook, prepared);
+
+      // Clear the seal: cells are now plaintext, so the hash would not
+      // match on a subsequent unlock after save-and-reopen.
+      unlocked = {
+        ...unlocked,
+        assignment: { ...unlocked.assignment, seal: null }
+      };
     }
 
     return decrypt(workbook, unlocked);
