@@ -468,7 +468,7 @@ export namespace Rubric {
       const { interventions: manual, scores: auto } = terms.report;
       const report = { interventions: sort(manual), scores: sort(auto) };
       const unsigned = { assignee, expiration, id, name, report, roster };
-      return security.digest(JSON.stringify(unsigned).concat(key));
+      return security.hmac(JSON.stringify(unsigned), key);
     }
 
     export function summary(report: Report): Score {

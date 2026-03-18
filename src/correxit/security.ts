@@ -27,6 +27,24 @@ export async function encrypt(text: string, password: string): Promise<string> {
   return ENCRYPT({ message, passwords: [password] }) as Promise<string>;
 }
 
+export async function hmac(message: string, key: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const material = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signed = await crypto.subtle.sign(
+    'HMAC',
+    material,
+    encoder.encode(message)
+  );
+  const hexadecimal = (digit: number) => digit.toString(16).padStart(2, '0');
+  return Array.from(new Uint8Array(signed)).map(hexadecimal).join('');
+}
+
 export async function keygen(
   passphrase: string,
   salt: string
