@@ -171,9 +171,19 @@ evidence with zero security value.
    (roster decryption, assignment signature) so that a tampered
    workbook never gets plaintext written. Then, if `assignment.seal`
    is non-null: decrypts the author PGP private key (local scope
-   only), verifies the seal hash, and unseals each cell (checking
-   `assignee` and `id` in each payload). Finally, decrypts
-   reference cells.
+   only), verifies the seal hash, unseals each cell (checking
+   `assignee` and `id` in each payload), and clears `seal` to
+   null. The seal is cleared because cells are now plaintext;
+   the original hash would not match on a subsequent unlock
+   after save-and-reopen. Finally, decrypts reference cells.
+
+   If rubric cells are missing from the notebook (e.g. a student
+   deleted cells before submission), headed workbooks (interactive
+   author context) skip seal verification and unseal only the
+   cells that remain. Headless workbooks (batch grading) hard-fail.
+   This matches `audit()`, which tolerates and prunes missing
+   cells in headed mode but rejects incomplete notebooks in
+   headless mode.
 
 ### Payload Binding
 
