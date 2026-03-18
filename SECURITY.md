@@ -15,7 +15,7 @@ no trusted third party. Cryptographic primitives use `window.crypto`
 | Student forges or alters their grade | Assignment signature (keyed SHA-256 hash)              |
 | Student edits cells after submission | Workbook locking + freezing                            |
 | Peer reads answers from file         | Sealed submissions (PGP encryption to author key)      |
-| Student tampers after submit         | Seal hash recomputed at grading time                   |
+| Student tampers after submit         | Seal hash + transport integrity (see below)            |
 | Student copies peer's sealed blobs   | Assignee + cell id bound inside encrypted payload      |
 | Tampered workbook delivery           | Out-of-band (Consumer/Collector plugin hashing)        |
 
@@ -88,6 +88,17 @@ joined with newline) is stored as `assignment.seal`. At unlock
 time, `Workbook.unlock` recomputes this hash from the current
 ciphertexts and compares. A mismatch fails the workbook.
 
+The seal hash is **not signed**. It cannot be: at submit time
+the workbook is locked and the HMAC key is absent. The hash
+detects accidental corruption and casual tampering (e.g. a
+student editing one cell's ciphertext in the notebook JSON). It
+does not prevent a sophisticated student from re-encrypting
+cells with the cleartext public key, recomputing the hash, and
+updating `assignment.seal`. True post-submission integrity
+against deliberate file modification depends on the Submitter
+plugin delivering an independent copy to the LMS at submit time
+(see Transport Integrity below).
+
 ### Transport Integrity (Plugin Responsibility)
 
 Whole-file integrity of distributed workbook files is the
@@ -149,8 +160,7 @@ evidence with zero security value.
 4. **Submit, with passphrase** (`commands.ts: submit`): Student
    generates their own keypair. Their private key is encrypted
    with their PBKDF2 key. Cells are sealed to both
-   `[keys.public.author, keys.public.assignee]`. The student key
-   is stored via the unlocker's secrets manager.
+   `[keys.public.author, keys.public.assignee]`.
 
 5. **Revise** (`commands.ts: revise`, `Workbook.revise`): Student
    enters passphrase, derives key, decrypts their PGP private key,
@@ -242,6 +252,21 @@ All optional fields use `Type | null`, never `Type?`. This ensures
 `undefined` is omitted. Since signatures hash stringified JSON,
 field presence must be stable.
 
+## Assignee Key Lifecycle
+
+Assignee key fields (`keys.private.assignee`,
+`keys.public.assignee`) start as null from propagation and
+remain null unless the student chooses "Set passphrase" at
+submit time. `Rubric.unseal()` clears them back to null on
+revise. The `revise` command checks `!!keys.private.assignee`
+for enablement, so fire-and-forget submissions never offer a
+revise option.
+
+`Rubric.assign()` preserves keys when reassigning, but it only
+operates on unlocked rubrics (author side), where assignee key
+fields are always null. Stale student keys cannot leak across
+assignments.
+
 ## Known Limitations
 
 1. **Client-side only.** A technically sophisticated student could
@@ -250,3 +275,8 @@ field presence must be stable.
 
 2. **No separation of duties.** The author holds the key and
    can perform any operation. There is no independent audit role.
+
+3. **Seal is unsigned.** The seal hash is SHA-256, not HMAC. A
+   student with file access and the cleartext public key could
+   forge new ciphertexts and a matching hash. The seal detects
+   corruption, not deliberate forgery. See Seal Integrity.

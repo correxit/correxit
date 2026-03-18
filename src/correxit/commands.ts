@@ -714,6 +714,7 @@ export function commands(
           label: trans.__('Enter a passphrase to seal your submission')
         });
         if (!passphrase) return;
+
         const student = await security.keygen(passphrase, rubric.id);
         const pair = await security.keypair();
         const armored = await security.encrypt(pair.private, student);
@@ -724,7 +725,6 @@ export function commands(
         await Workbook.update(workbook, {
           ...rubric, assignment: { ...rubric.assignment, keys }
         } as Rubric.Locked);
-        unlocker.store(`student:${rubric.id}`, student);
         recipients = [author, pair.public];
       } else {
         recipients = [author];
