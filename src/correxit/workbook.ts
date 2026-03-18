@@ -593,9 +593,7 @@ export namespace Workbook {
     transact(workbook, prepared);
     defrost(workbook);
     // Keep the original (un-pruned) rubric for downstream audits.
-    return update(
-      workbook, rubric, { ok: true, pruned: [], rubric }
-    );
+    return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
   /** Revert a submission to draft, restoring cell editability. */
