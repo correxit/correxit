@@ -12,7 +12,7 @@ test('audits and prunes invalid rubric cells', async ({ page }) => {
     const workbook = { content: panel.content, context: panel.context } as any;
 
     const rubric = Rubric.add(
-      { ...Rubric.create(), key: 'secret' },
+      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
       {
         id: 'missing-ref',
         is: 'comparable',
@@ -45,7 +45,7 @@ test('locks unlocked rubric and writes notebook metadata', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const rubric = { ...Rubric.create(), key: 'secret' } as any;
+    const rubric = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()) as any;
     const written = await Workbook.update(workbook, rubric);
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
     return {
@@ -73,7 +73,7 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     const workbook = { content: panel.content, context: panel.context };
 
     const rubric = Rubric.add(
-      { ...Rubric.create(), key: 'secret' },
+      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
       {
         id: 'cell',
         is: 'comparable',
@@ -123,7 +123,7 @@ test('assigns workbook and updates metadata', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const initial = { ...Rubric.create(), key: 'secret' };
+    const initial = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create());
     await Workbook.update(workbook, initial);
 
     const changes = {
@@ -154,7 +154,7 @@ test('assign short-circuits when no fields changed', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const initial = { ...Rubric.create(), key: 'secret' };
+    const initial = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create());
     await Workbook.update(workbook, initial);
 
     const assigned = await Workbook.assign(workbook, {
@@ -184,7 +184,7 @@ test('reweights a configured cell', async ({ page }) => {
     const workbook = { content: panel.content, context: panel.context };
 
     const rubric = Rubric.add(
-      { ...Rubric.create(), key: 'secret' },
+      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
       {
         id: 'cell',
         is: 'reviewable',
@@ -218,7 +218,7 @@ test('sets and clears a cell intervention score', async ({ page }) => {
     const workbook = { content: panel.content, context: panel.context };
 
     const rubric = Rubric.add(
-      { ...Rubric.create(), key: 'secret' },
+      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
       {
         id: 'cell',
         is: 'reviewable',
@@ -267,11 +267,11 @@ test('submits a workbook and sets cells to read-only', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const rubric = { ...Rubric.create(), key: 'secret' } as any;
+    const rubric = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()) as any;
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
 
-    let submitted = await Workbook.submit(workbook);
+    let submitted = await Workbook.submit(workbook, ['pub']);
     submitted = await Workbook.acknowledge(workbook, 'receipt-123');
     const notebook = panel.context.model.sharedModel;
     const metadata = notebook.getMetadata('correxit');
@@ -292,7 +292,7 @@ test('submits a workbook and sets cells to read-only', async ({ page }) => {
   await dispose();
 });
 
-test('drafts a submitted workbook, restores editability', async ({ page }) => {
+test('revises a submitted workbook, restores editability', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'a', source: 'x = 1' },
     { id: 'b', source: 'y = 2' }
@@ -303,21 +303,21 @@ test('drafts a submitted workbook, restores editability', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const rubric = { ...Rubric.create(), key: 'secret' } as any;
+    const rubric = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()) as any;
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
-    await Workbook.submit(workbook, 'receipt');
+    await Workbook.submit(workbook, ['pub']);
 
     // Mark one cell as source_hidden to simulate an encrypted cell.
     const notebook = panel.context.model.sharedModel;
     notebook.cells[1].setMetadata('jupyter', { source_hidden: true });
 
-    const drafted = await Workbook.draft(workbook);
+    const revised = await Workbook.revise(workbook, 'unused');
     const metadata = notebook.getMetadata('correxit');
     return {
-      locked: drafted.locked,
-      submission: drafted.assignment.submission,
-      submitted: drafted.assignment.submitted,
+      locked: revised.locked,
+      submission: revised.assignment.submission,
+      submitted: revised.assignment.submitted,
       stored: metadata?.assignment?.submission ?? null,
       editable: notebook.cells.map((c: any) => c.getMetadata('editable'))
     };
