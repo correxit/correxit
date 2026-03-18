@@ -1,18 +1,13 @@
-import {
-  createMessage,
-  decrypt as DECRYPT,
-  encrypt as ENCRYPT,
-  readMessage
-} from 'openpgp';
+import * as pgp from 'openpgp';
 
 export async function decrypt(text: string, password: string): Promise<string> {
   let message;
   try {
-    message = await readMessage({ armoredMessage: text });
+    message = await pgp.readMessage({ armoredMessage: text });
   } catch (_) {
     return text;
   }
-  return (await DECRYPT({ message, passwords: [password] })).data;
+  return (await pgp.decrypt({ message, passwords: [password] })).data;
 }
 
 export async function digest(text: string): Promise<string> {
@@ -23,8 +18,8 @@ export async function digest(text: string): Promise<string> {
 }
 
 export async function encrypt(text: string, password: string): Promise<string> {
-  const message = await createMessage({ text });
-  return ENCRYPT({ message, passwords: [password] }) as Promise<string>;
+  const message = await pgp.createMessage({ text });
+  return pgp.encrypt({ message, passwords: [password] }) as Promise<string>;
 }
 
 export async function hmac(message: string, key: string): Promise<string> {

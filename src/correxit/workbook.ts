@@ -267,7 +267,7 @@ export namespace Workbook {
    * If the rubric is locked, it is left unmodified.
    *
    * Headed workbooks tolerate missing cells: the pruned rubric is returned
-   * with `ok: true` so the instructor can still interact with what remains.
+   * with `ok: true` so the author can still interact with what remains.
    * Headless workbooks fail immediately. Batch grading cannot recover from
    * a structurally incomplete notebook.
    */

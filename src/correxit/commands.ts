@@ -520,7 +520,9 @@ export function commands(
       if (rubric.assignment.assignee) return false;
 
       const cell = get(rubric, id);
-      return !!cell && (cell.is === 'comparable' || cell.is === 'correctable');
+      if (!cell) return false;
+      if (cell.is === 'correctable') return true;
+      return cell.is === 'comparable' && !cell.references.length;
     },
     isVisible: args => commands.isEnabled(CommandIDs.refer, args),
     label: trans.__('Add a reference cell'),

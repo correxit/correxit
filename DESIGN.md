@@ -7,7 +7,7 @@ codebase.
 ## Security
 
 Correxit workbooks are Jupyter notebooks (`.ipynb` files) with rubric data in
-their metadata. Because these files are shared between instructors and students,
+their metadata. Because these files are shared between authors and students,
 integrity is paramount. Correxit only writes locked rubric contents to the
 notebook metadata.
 

@@ -99,7 +99,7 @@ the sidebar.
 ### Reviewable
 
 No automated grading. The cell is flagged for manual review by an
-instructor using the Reviewer interface. The grader sees the cell source
+author using the Reviewer interface. The grader sees the cell source
 and output, assigns a score, and optionally leaves a comment.
 
 Best for open-ended responses, proofs, written analysis, or anything

@@ -16,7 +16,7 @@ no trusted third party. Cryptographic primitives use `window.crypto`
 | Student edits cells after submission | Workbook locking + freezing                            |
 | Tampered workbook delivery           | Out-of-band (Consumer/Collector plugin hashing)        |
 
-**Out of scope:** malicious instructors (they hold the key, full
+**Out of scope:** malicious authors (they hold the key, full
 authority by design), browser memory extraction, compromised
 JupyterLab servers (Correxit has no backend), and cross-student
 file access (students reading each other's workbooks is a file
@@ -133,5 +133,5 @@ field presence must be stable.
    modify extension code in-browser to bypass locking or encryption.
    The cryptographic mechanisms detect tampering after the fact.
 
-2. **No separation of duties.** The instructor holds the key and
+2. **No separation of duties.** The author holds the key and
    can perform any operation. There is no independent audit role.
