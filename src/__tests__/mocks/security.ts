@@ -12,6 +12,10 @@ export const decrypt = jest.fn(async (text: string, key: string) => {
 
 export const digest = jest.fn(async (text: string) => `DIGEST<${text}>`);
 
+export const hmac = jest.fn(
+  async (message: string, key: string) => `HMAC<${message}:${key}>`
+);
+
 export const keygen = jest.fn(
   async (passphrase: string, salt: string) =>
     `KEY<${passphrase}:${salt || 'default'}>`
