@@ -5,12 +5,6 @@ import {
   readMessage
 } from 'openpgp';
 
-// Equivalent to: await digest('correxit:salt');
-const SALT = 'af4680e881d3da6272c9026660c11e8cbf89ecf515a3c6489e9330b1bed47cf8';
-// Equivalent to: await digest('correxit:pepper');
-const PEPPER =
-  'a4964c9269aeecfbdd4143cfd087c2262351f0d6bf1961bc56cd0e247c1c71e9';
-
 export async function decrypt(text: string, password: string): Promise<string> {
   let message;
   try {
@@ -35,8 +29,26 @@ export async function encrypt(text: string, password: string): Promise<string> {
 
 export async function keygen(
   passphrase: string,
-  salt = SALT,
-  pepper = PEPPER
+  salt: string
 ): Promise<string> {
-  return digest(`${salt}:${await digest(passphrase)}:${pepper}`);
+  const encoder = new TextEncoder();
+  const material = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(passphrase),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode(salt),
+      iterations: 600_000,
+      hash: 'SHA-256'
+    },
+    material,
+    256
+  );
+  const hexadecimal = (digit: number) => digit.toString(16).padStart(2, '0');
+  return Array.from(new Uint8Array(bits)).map(hexadecimal).join('');
 }
