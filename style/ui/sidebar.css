@@ -472,6 +472,27 @@
   color: var(--jp-warn-color0);
 }
 
+button.jp-Dialog-button.correxit-dialog-revert.jp-mod-styled.jp-mod-accept {
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-warn-color2);
+  color: var(--jp-warn-color0);
+}
+
+button.jp-Dialog-button.correxit-dialog-revert.jp-mod-styled.jp-mod-accept:hover {
+  background-color: var(--jp-layout-color3);
+  border-color: var(--jp-warn-color1);
+}
+
+button.jp-Dialog-button.correxit-dialog-revert.jp-mod-styled.jp-mod-accept:active {
+  background-color: var(--jp-layout-color3);
+  border-color: var(--jp-warn-color0);
+}
+
+button.jp-Dialog-button.correxit-dialog-revert.jp-mod-styled.jp-mod-accept:focus,
+button.jp-Dialog-button.correxit-dialog-revert.jp-mod-styled.jp-mod-accept:focus-visible {
+  outline: 1px solid var(--jp-warn-color1);
+}
+
 .correxit-sidebar-inner-header .jp-ToolbarButtonComponent:hover {
   background-color: transparent;
 }

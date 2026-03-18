@@ -1,5 +1,7 @@
 import * as pgp from 'openpgp';
 
+export type PrivateKey = pgp.PrivateKey;
+
 export async function decrypt(text: string, password: string): Promise<string> {
   let message;
   try {
@@ -64,4 +66,45 @@ export async function keygen(
   );
   const hexadecimal = (digit: number) => digit.toString(16).padStart(2, '0');
   return Array.from(new Uint8Array(bits)).map(hexadecimal).join('');
+}
+
+/** Generate an ECC Curve25519 keypair. The private key is unprotected. */
+export async function keypair(): Promise<{
+  public: string;
+  private: string;
+}> {
+  const { publicKey, privateKey } = await pgp.generateKey({
+    type: 'curve25519',
+    userIDs: [{ name: 'correxit' }],
+    format: 'armored'
+  });
+  return { public: publicKey, private: privateKey };
+}
+
+/** Parse an armored PGP private key for reuse across multiple unseal calls. */
+export async function parse(armored: string): Promise<PrivateKey> {
+  return pgp.readPrivateKey({ armoredKey: armored });
+}
+
+/** Encrypt text to one or more PGP public keys. */
+export async function seal(
+  text: string,
+  recipients: string[]
+): Promise<string> {
+  const keys = await Promise.all(
+    recipients.map(k => pgp.readKey({ armoredKey: k }))
+  );
+  const message = await pgp.createMessage({ text });
+  return pgp.encrypt({ message, encryptionKeys: keys }) as Promise<string>;
+}
+
+/** Decrypt PGP ciphertext using a parsed or armored private key. */
+export async function unseal(
+  text: string,
+  key: string | PrivateKey
+): Promise<string> {
+  const private_key = typeof key === 'string' ? await parse(key) : key;
+  const message = await pgp.readMessage({ armoredMessage: text });
+  return (await pgp.decrypt({ message, decryptionKeys: private_key }))
+    .data as string;
 }

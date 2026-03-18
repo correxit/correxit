@@ -5,7 +5,17 @@ import { Rubric } from '../correxit/rubric';
 describe('Rubric', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  const create = (): Rubric.Unlocked => ({ ...Rubric.create(), key: 'secret' });
+  const create = (): Rubric.Unlocked => ({
+    ...Rubric.create(),
+    assignment: {
+      ...Rubric.create().assignment,
+      keys: {
+        private: { assignee: null, author: 'PGP_PRIVATE_KEY' },
+        public: { assignee: null, author: 'PGP_PUBLIC_KEY' }
+      }
+    },
+    key: 'secret'
+  });
   const output = (text: string): Rubric.Cell.Output =>
     ({
       content: { name: 'stdout', text },

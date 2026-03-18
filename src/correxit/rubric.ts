@@ -20,9 +20,11 @@ export namespace Rubric {
     collected: string | null;
     expiration: Timestamp;
     id: string | null;
+    keys: Assignment.Keys;
     name: string;
     report: Assignment.Report;
     roster: string[];
+    seal: string | null;
     signature: string;
     submission: Timestamp;
     submitted: string | null;
@@ -407,11 +409,34 @@ export namespace Rubric {
       }
     }
 
+    /** PGP keypair for sealed submissions. */
+    export type Keys = Readonly<{
+      private: Readonly<{ assignee: string | null; author: string }>;
+      public: Readonly<{ assignee: string | null; author: string }>;
+    }>;
+
+    export namespace Keys {
+      /** The author-only subset included in the HMAC signature. */
+      export type Author = Readonly<{ private: string; public: string }>;
+
+      export function author(keys: Keys): Author {
+        return { private: keys.private.author, public: keys.public.author };
+      }
+
+      export function empty(): Keys {
+        return Object.freeze({
+          private: Object.freeze({ assignee: null, author: '' }),
+          public: Object.freeze({ assignee: null, author: '' })
+        });
+      }
+    }
+
     /** The terms of the assignment that are verified by its signature. */
     export type Terms = Omit<
       Assignment,
       | 'certification'
       | 'collected'
+      | 'seal'
       | 'signature'
       | 'submission'
       | 'submitted'
@@ -424,9 +449,11 @@ export namespace Rubric {
         collected: null,
         expiration: null,
         id: null,
+        keys: Keys.empty(),
         name: '',
         report: Report.empty(),
         roster: [],
+        seal: null,
         signature: '',
         submission: null,
         submitted: null
@@ -464,10 +491,11 @@ export namespace Rubric {
     }
 
     export async function sign(terms: Terms, key: string): Promise<string> {
-      const { assignee, expiration, id, name, roster } = terms;
+      const { assignee, expiration, id, keys, name, roster } = terms;
       const { interventions: manual, scores: auto } = terms.report;
+      const author = Keys.author(keys);
       const report = { interventions: sort(manual), scores: sort(auto) };
-      const unsigned = { assignee, expiration, id, name, report, roster };
+      const unsigned = { assignee, author, expiration, id, name, report, roster };
       return security.hmac(JSON.stringify(unsigned), key);
     }
 
@@ -500,7 +528,11 @@ export namespace Rubric {
     export async function validate(
       { assignment, key }: Pick<Unlocked, 'assignment' | 'key'>
     ) {
-      const { assignee, roster, signature } = assignment;
+      const { assignee, keys, roster, seal, signature } = assignment;
+      if (!keys.private.author)
+        throw new Error('missing author private key');
+      if (!keys.public.author)
+        throw new Error('missing author public key');
       if (assignee && !signature)
         throw new Error('missing signature for assignee');
       if (assignee && signature !== await sign(assignment, key))
@@ -509,6 +541,10 @@ export namespace Rubric {
         throw new Error('assignee does not exist in roster');
       if (roster.length && !signature)
         throw new Error('missing signature for roster');
+      if (seal && !keys.public.author)
+        throw new Error('sealed assignment missing author public key');
+      if (keys.private.assignee && !keys.public.assignee)
+        throw new Error('assignee private key without public key');
     }
   }
 
@@ -687,8 +723,10 @@ export namespace Rubric {
     const submission = stale ? null : rubric.assignment.submission;
     const submitted = stale ? null : rubric.assignment.submitted;
     const report = stale ? Assignment.Report.empty() : rubric.assignment.report;
-    const unsigned = { assignee, expiration, id, name, report, roster };
-    const lifecycle = { certification, collected, submission, submitted };
+    const keys = rubric.assignment.keys;
+    const seal = rubric.assignment.seal;
+    const unsigned = { assignee, expiration, id, keys, name, report, roster };
+    const lifecycle = { certification, collected, seal, submission, submitted };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = { ...unsigned, ...lifecycle, signature };
     await Assignment.validate({ assignment, key });
@@ -712,6 +750,8 @@ export namespace Rubric {
 
   /** @returns a locked rubric with lifecycle timestamps nulled. */
   export function draft(rubric: Locked): Locked {
+    if (rubric.assignment.seal)
+      throw new Error('draft error: workbook is sealed');
     const assignment = {
       ...rubric.assignment,
       certification: null,
@@ -794,9 +834,18 @@ export namespace Rubric {
       throw new Error('invalid rubric, invalid kernel spec');
     const blank = Assignment.Report.empty();
     const report = { ...blank, interventions, kernel, scores };
+    const keys = {
+      private: { ...Assignment.Keys.empty().private, ...assignment.keys?.private },
+      public: { ...Assignment.Keys.empty().public, ...assignment.keys?.public }
+    };
+    if (!keys.private.author)
+      throw new Error('invalid rubric, missing author private key');
+    if (!keys.public.author)
+      throw new Error('invalid rubric, missing author public key');
+    const seal = assignment.seal ?? null;
     const references = rubric.references ?? {};
     return {
-      assignment: { ...Assignment.empty(), ...assignment, report },
+      assignment: { ...Assignment.empty(), ...assignment, keys, report, seal },
       cells, id, key, locked, references, revised
     };
   }
@@ -877,6 +926,28 @@ export namespace Rubric {
     const submission = Date.now();
     const assignment = { ...rubric.assignment, submission };
     return { ...rubric, assignment, revised: submission };
+  }
+
+  /** Record a seal hash on a locked rubric. */
+  export function seal(rubric: Locked, hash: string): Locked {
+    const assignment = { ...rubric.assignment, seal: hash };
+    return { ...rubric, assignment, revised: Date.now() };
+  }
+
+  /** Clear seal and student keys (for revise). */
+  export function unseal(rubric: Locked): Locked {
+    const keys: Assignment.Keys = {
+      private: { ...rubric.assignment.keys.private, assignee: null },
+      public: { ...rubric.assignment.keys.public, assignee: null }
+    };
+    const assignment = {
+      ...rubric.assignment,
+      keys,
+      seal: null,
+      submission: null,
+      submitted: null
+    };
+    return { ...rubric, assignment, revised: Date.now() };
   }
 
   /** @returns a formatted rendition of a rubric timestamp. */

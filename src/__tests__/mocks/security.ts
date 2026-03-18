@@ -20,3 +20,21 @@ export const keygen = jest.fn(
   async (passphrase: string, salt: string) =>
     `KEY<${passphrase}:${salt || 'default'}>`
 );
+
+export const keypair = jest.fn(async () => ({
+  public: 'PGP_PUBLIC_KEY',
+  private: 'PGP_PRIVATE_KEY'
+}));
+
+export const parse = jest.fn(async (armored: string) => armored);
+
+export const seal = jest.fn(
+  async (text: string, recipients: string[]) =>
+    `SEALED[${recipients.join(',')}]:${text}`
+);
+
+export const unseal = jest.fn(async (text: string, _key: string | unknown) => {
+  const match = text.match(/^SEALED\[.*?\]:(.*)$/);
+  if (!match) throw new Error('Mock unseal failed');
+  return match[1];
+});
