@@ -748,7 +748,8 @@ export function commands(
       const rubric = open(state.workbook());
       if (!rubric?.locked) return false;
       const { certification, keys, seal, submission } = rubric.assignment;
-      return !!seal && !!submission && !certification && !!keys.private.assignee;
+      return !!seal && !!submission
+        && !certification && !!keys.private.assignee;
     },
     isVisible: () => commands.isEnabled(CommandIDs.revise),
     label: trans.__('Revise submission...'),
@@ -763,12 +764,11 @@ export function commands(
       if (!passphrase) return;
 
       try {
-        const student_key = await security.keygen(passphrase, rubric.id);
+        const secret = await security.keygen(passphrase, rubric.id);
         const armored = await security.decrypt(
-          rubric.assignment.keys.private.assignee!, student_key
+          rubric.assignment.keys.private.assignee!, secret
         );
-        const private_key = await security.parse(armored);
-        await revise(workbook, private_key);
+        await revise(workbook, await security.parse(armored));
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not revise'), error as Error);

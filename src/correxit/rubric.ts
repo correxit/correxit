@@ -495,7 +495,10 @@ export namespace Rubric {
       const { interventions: manual, scores: auto } = terms.report;
       const author = Keys.author(keys);
       const report = { interventions: sort(manual), scores: sort(auto) };
-      const unsigned = { assignee, author, expiration, id, name, report, roster };
+      const unsigned = {
+        assignee, author, expiration, id,
+        name, report, roster
+      };
       return security.hmac(JSON.stringify(unsigned), key);
     }
 
@@ -835,8 +838,14 @@ export namespace Rubric {
     const blank = Assignment.Report.empty();
     const report = { ...blank, interventions, kernel, scores };
     const keys = {
-      private: { ...Assignment.Keys.empty().private, ...assignment.keys?.private },
-      public: { ...Assignment.Keys.empty().public, ...assignment.keys?.public }
+      private: {
+        ...Assignment.Keys.empty().private,
+        ...assignment.keys?.private
+      },
+      public: {
+        ...Assignment.Keys.empty().public,
+        ...assignment.keys?.public
+      }
     };
     if (!keys.private.author)
       throw new Error('invalid rubric, missing author private key');

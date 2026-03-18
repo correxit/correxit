@@ -28,7 +28,17 @@ async function propagate(
     });
 
     const rubric = Rubric.add(
-      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+      (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
       {
         id: 'target',
         is: 'comparable',
@@ -405,7 +415,17 @@ test('batch leaves reviewable cells pending intervention', async ({ page }) => {
       });
 
       let rubric = Rubric.add(
-        (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+        (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
         {
           id: 'target',
           is: 'comparable',
@@ -508,7 +528,17 @@ test('intervention on last reviewable cell auto-certifies workbook', async ({
       });
 
       let rubric = Rubric.add(
-        (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+        (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
         {
           id: 'target',
           is: 'comparable',
@@ -630,7 +660,17 @@ test('correctable cell with multiple references sums per-reference points', asyn
       });
 
       const rubric = Rubric.add(
-        (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+        (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
         {
           id: 'target',
           is: 'correctable',

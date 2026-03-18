@@ -159,7 +159,7 @@ export namespace Workbook {
       id: string,
       assignee: string,
       recipients: string[]
-    ): Promise<Prepared & { ciphertext: string }> {
+    ): Promise<Prepared> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, cell => cell.id === id);
       if (index === -1) throw new Error('seal error: cell not found');
@@ -180,7 +180,7 @@ export namespace Workbook {
       const replacement = {
         ...snapshot, cell_type: 'raw', metadata, source: ciphertext
       };
-      return { ciphertext, index, replacement };
+      return { index, replacement };
     }
 
     /** Prepares an unsealed cell replacement (raw -> original type). */
@@ -452,9 +452,9 @@ export namespace Workbook {
         const created = Rubric.create();
         const key = await security.keygen(passphrase, created.id);
         const pair = await security.keypair();
-        const encrypted_private = await security.encrypt(pair.private, key);
+        const armored = await security.encrypt(pair.private, key);
         const keys: Rubric.Assignment.Keys = {
-          private: { assignee: null, author: encrypted_private },
+          private: { assignee: null, author: armored },
           public: { assignee: null, author: pair.public }
         };
         const assignment = { ...created.assignment, keys };
@@ -798,45 +798,6 @@ export namespace Workbook {
     return update(workbook, updated);
   }
 
-  /** Submit an assignment: seal rubric cells, then freeze. */
-  export async function submit(
-    workbook: Workbook,
-    recipients: string[]
-  ): Promise<Rubric.Locked> {
-    const rubric = open(workbook, quiet);
-    if (!rubric?.locked) throw new Error('submit error');
-    if (!recipients.length)
-      throw new Error('submit error: missing seal recipients');
-
-    const hash = await seal(workbook, rubric, recipients);
-    const sealed = Rubric.seal(rubric, hash);
-    freeze(workbook);
-    return update(workbook, Rubric.submit(sealed));
-  }
-
-  /**
-   * Seal all rubric cells in a workbook, encrypting their sources
-   * to the given PGP public key recipients.
-   *
-   * @returns the seal hash (SHA-256 of concatenated ciphertexts).
-   */
-  export async function seal(
-    workbook: Workbook,
-    rubric: Rubric.Locked,
-    recipients: string[]
-  ): Promise<string> {
-    const { assignee } = rubric.assignment;
-    const ids = Object.keys(rubric.cells).sort();
-    const prepared: (Cell.Prepared & { ciphertext: string })[] = [];
-    for (const id of ids) {
-      const result = await Cell.seal(workbook, id, assignee, recipients);
-      prepared.push(result);
-    }
-    transact(workbook, prepared);
-    const joined = prepared.map(p => p.ciphertext).join('\n');
-    return security.digest(joined);
-  }
-
   /** Revise a sealed submission: unseal cells and clear submission state. */
   export async function revise(
     workbook: Workbook,
@@ -854,6 +815,45 @@ export namespace Workbook {
     transact(workbook, prepared);
     defrost(workbook);
     return update(workbook, Rubric.unseal(rubric));
+  }
+
+  /**
+   * Seal all rubric cells in a workbook, encrypting their sources
+   * to the given PGP public key recipients.
+   *
+   * @returns the seal hash (SHA-256 of concatenated ciphertexts).
+   */
+  export async function seal(
+    workbook: Workbook,
+    rubric: Rubric.Locked,
+    recipients: string[]
+  ): Promise<string> {
+    const { assignee } = rubric.assignment;
+    const ids = Object.keys(rubric.cells).sort();
+    const prepared = await Promise.all(
+      ids.map(id => Cell.seal(workbook, id, assignee, recipients))
+    );
+    transact(workbook, prepared);
+
+    const sources = prepared.map(({ replacement: { source } }) => source);
+    const joined = sources.join('\n');
+    return security.digest(joined);
+  }
+
+  /** Submit an assignment: seal rubric cells, then freeze. */
+  export async function submit(
+    workbook: Workbook,
+    recipients: string[]
+  ): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked) throw new Error('submit error');
+    if (!recipients.length)
+      throw new Error('submit error: missing seal recipients');
+
+    const hash = await seal(workbook, rubric, recipients);
+    const sealed = Rubric.seal(rubric, hash);
+    freeze(workbook);
+    return update(workbook, Rubric.submit(sealed));
   }
 
   /** Toggle a workbook reference's `secret` flag. */
@@ -892,7 +892,7 @@ export namespace Workbook {
       const armored = await security.decrypt(
         assignment.keys.private.author, key
       );
-      const private_key = await security.parse(armored);
+      const author = await security.parse(armored);
 
       // Verify seal integrity before decrypting.
       const ids = Object.keys(rubric.cells).sort();
@@ -909,7 +909,7 @@ export namespace Workbook {
       // Unseal each rubric cell.
       const { assignee } = assignment;
       const prepared = await Promise.all(
-        ids.map(id => Cell.unseal(workbook, id, assignee, private_key))
+        ids.map(id => Cell.unseal(workbook, id, assignee, author))
       );
       transact(workbook, prepared);
     }

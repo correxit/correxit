@@ -15,7 +15,17 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
     const panel = app.shell.currentWidget;
 
     const rubric = Rubric.add(
-      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+      (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
       {
         id: 'target',
         is: 'comparable',
@@ -134,7 +144,17 @@ test('propagate command is disabled for assigned workbooks', async ({
     const { Rubric, Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
-    await Workbook.update(panel, (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()));
+    await Workbook.update(panel, (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()));
     await app.commands.execute('correxit:assign', {
       assignee: 'alice@example.com',
       roster: ['alice@example.com']

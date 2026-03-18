@@ -12,7 +12,17 @@ test('audits and prunes invalid rubric cells', async ({ page }) => {
     const workbook = { content: panel.content, context: panel.context } as any;
 
     const rubric = Rubric.add(
-      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+      (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
       {
         id: 'missing-ref',
         is: 'comparable',
@@ -45,7 +55,17 @@ test('locks unlocked rubric and writes notebook metadata', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const rubric = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()) as any;
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()) as any;
     const written = await Workbook.update(workbook, rubric);
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
     return {
@@ -73,7 +93,17 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
     const workbook = { content: panel.content, context: panel.context };
 
     const rubric = Rubric.add(
-      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+      (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
       {
         id: 'cell',
         is: 'comparable',
@@ -123,7 +153,17 @@ test('assigns workbook and updates metadata', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const initial = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create());
+    const initial = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create());
     await Workbook.update(workbook, initial);
 
     const changes = {
@@ -154,7 +194,17 @@ test('assign short-circuits when no fields changed', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const initial = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create());
+    const initial = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create());
     await Workbook.update(workbook, initial);
 
     const assigned = await Workbook.assign(workbook, {
@@ -184,7 +234,17 @@ test('reweights a configured cell', async ({ page }) => {
     const workbook = { content: panel.content, context: panel.context };
 
     const rubric = Rubric.add(
-      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+      (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
       {
         id: 'cell',
         is: 'reviewable',
@@ -218,7 +278,17 @@ test('sets and clears a cell intervention score', async ({ page }) => {
     const workbook = { content: panel.content, context: panel.context };
 
     const rubric = Rubric.add(
-      (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()),
+      (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()),
       {
         id: 'cell',
         is: 'reviewable',
@@ -267,7 +337,17 @@ test('submits a workbook and sets cells to read-only', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const rubric = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()) as any;
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()) as any;
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
 
@@ -303,7 +383,17 @@ test('revises a submitted workbook, restores editability', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const rubric = (r => ({ ...r, key: 'secret', assignment: { ...r.assignment, keys: { private: { assignee: null, author: 'priv' }, public: { assignee: null, author: 'pub' } } } }))(Rubric.create()) as any;
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()) as any;
     await Workbook.update(workbook, rubric);
     await Workbook.lock(workbook);
     await Workbook.submit(workbook, ['pub']);

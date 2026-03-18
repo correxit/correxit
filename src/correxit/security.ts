@@ -38,7 +38,7 @@ export async function hmac(message: string, key: string): Promise<string> {
     material,
     encoder.encode(message)
   );
-  const hexadecimal = (digit: number) => digit.toString(16).padStart(2, '0');
+  const hexadecimal = (byte: number) => byte.toString(16).padStart(2, '0');
   return Array.from(new Uint8Array(signed)).map(hexadecimal).join('');
 }
 
@@ -64,7 +64,7 @@ export async function keygen(
     material,
     256
   );
-  const hexadecimal = (digit: number) => digit.toString(16).padStart(2, '0');
+  const hexadecimal = (byte: number) => byte.toString(16).padStart(2, '0');
   return Array.from(new Uint8Array(bits)).map(hexadecimal).join('');
 }
 
@@ -101,10 +101,11 @@ export async function seal(
 /** Decrypt PGP ciphertext using a parsed or armored private key. */
 export async function unseal(
   text: string,
-  key: string | PrivateKey
+  recipient: string | PrivateKey
 ): Promise<string> {
-  const private_key = typeof key === 'string' ? await parse(key) : key;
+  const key = typeof recipient === 'string'
+    ? await parse(recipient) : recipient;
   const message = await pgp.readMessage({ armoredMessage: text });
-  return (await pgp.decrypt({ message, decryptionKeys: private_key }))
+  return (await pgp.decrypt({ message, decryptionKeys: key }))
     .data as string;
 }
