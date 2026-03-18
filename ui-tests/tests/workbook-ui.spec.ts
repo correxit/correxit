@@ -13,16 +13,16 @@ test('audits and prunes invalid rubric cells', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'missing-ref',
         is: 'comparable',
@@ -94,16 +94,16 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'cell',
         is: 'comparable',
@@ -235,16 +235,16 @@ test('reweights a configured cell', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'cell',
         is: 'reviewable',
@@ -279,16 +279,16 @@ test('sets and clears a cell intervention score', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'cell',
         is: 'reviewable',

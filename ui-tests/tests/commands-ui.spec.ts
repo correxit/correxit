@@ -42,17 +42,20 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
-    await Workbook.update(panel, (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+    await Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()));
+      }))(Rubric.create())
+    );
     await app.commands.execute('correxit:configure', {
       id: 'cell',
       is: 'comparable',
@@ -91,17 +94,20 @@ test('adds a correctable cell to the rubric', async ({ page }) => {
     const { Workbook, Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
-    await Workbook.update(panel, (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+    await Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()));
+      }))(Rubric.create())
+    );
     await app.commands.execute('correxit:configure', {
       id: 'cell',
       is: 'correctable',
@@ -139,16 +145,16 @@ test('removes a cell from the rubric', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'cell',
         is: 'comparable',
@@ -185,16 +191,16 @@ test('toggles secret flag on a rubric cell', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'cell',
         is: 'comparable',
@@ -231,16 +237,16 @@ test('sets a comment on a rubric cell', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'cell',
         is: 'comparable',
@@ -274,17 +280,20 @@ test('reweights cell points via command', async ({ page }) => {
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
 
-    await Workbook.update(panel, (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+    await Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()));
+      }))(Rubric.create())
+    );
     await app.commands.execute('correxit:configure', {
       id: 'cell',
       is: 'reviewable'
@@ -312,17 +321,20 @@ test('sets and clears intervention via command', async ({ page }) => {
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
 
-    await Workbook.update(panel, (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+    await Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()));
+      }))(Rubric.create())
+    );
     await app.commands.execute('correxit:configure', {
       id: 'cell',
       is: 'reviewable'
@@ -371,16 +383,16 @@ test('locks workbook and encrypts reference cells', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'cell',
         is: 'comparable',
@@ -424,16 +436,16 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
 
     const rubric = Rubric.add(
       (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()),
+      }))(Rubric.create()),
       {
         id: 'cell',
         is: 'comparable',
@@ -490,17 +502,20 @@ test('assigns workbook and updates assignment metadata', async ({ page }) => {
     const { Rubric, Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
-    await Workbook.update(panel, (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
+    await Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
         }
-      }
-    }))(Rubric.create()));
+      }))(Rubric.create())
+    );
     await app.commands.execute('correxit:assign', {
       assignee: 'student@example.com',
       roster: ['student@example.com']
