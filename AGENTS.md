@@ -23,6 +23,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
   - _Wrong_: Encrypt -> Validate.
   - _Right_: Validate -> Encrypt.
 - **Keys Never on Disk**: Cryptographic keys only exist in memory (closure scope, `Set<string>`). They enter via user input and die with the browser tab. Never serialize keys to notebook metadata or persist them.
+- **Sealed Submissions**: At submit time, rubric cell sources are PGP-encrypted to the author's public key (and optionally the student's). Payload is `{ assignee, id, source, type }`, binding the ciphertext to a specific student and cell. The seal hash is a SHA-256 of all ciphertexts (sorted by cell id). At unlock, the author's PGP private key is decrypted into local scope, the seal hash is verified, and cells are unsealed. The private key is discarded when `unlock` returns.
 - **Immutability**: `Rubric` is an immutable data structure. Mutations return new instances (e.g., `Rubric.add()`).
 
 ### State Management
@@ -77,8 +78,8 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 ## 7. Key Module Map
 
 - `rubric.ts`: Core immutable data model & scoring logic.
-- `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing (with `bypass` mode to skip re-execution when all cells are already scored), `correct()` with verbose overloads returning `Grade.Verbose` (including cell outputs), and `collect()` for recording a collection receipt.
-- `security.ts`: `openpgp` & `window.crypto` wrappers.
+- `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing (with `bypass` mode to skip re-execution when all cells are already scored), `correct()` with verbose overloads returning `Grade.Verbose` (including cell outputs), `collect()` for recording a collection receipt, `submit()` for sealing + freezing + submission, `seal()` / `revise()` for sealed submission lifecycle, and `Cell.seal()` / `Cell.unseal()` for per-cell PGP operations.
+- `security.ts`: `openpgp` & `window.crypto` wrappers. Symmetric: `encrypt`, `decrypt`, `keygen`, `hmac`, `digest`. Asymmetric: `keypair` (Curve25519), `seal` (encrypt to public keys), `unseal` (decrypt with private key), `parse` (pre-parse a private key for reuse across multiple unseal calls).
 - `commands.ts`: The central controller registry. Defines `Reified` type for safe workbook resolution.
 - `dispatcher.ts`: Plugin factory for provider-dispatched plugins (Consumer, Registrar). The `create` callback returns a `[Plugin, () => void]` tuple. Handles Moodle settings and intercepts secrets via a settings registry transform, moving them to the secrets manager so they never reach disk.
 - `propagator.ts`: Async generator for assignment distribution to rosters.
