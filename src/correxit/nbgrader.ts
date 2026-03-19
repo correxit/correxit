@@ -265,8 +265,35 @@ export function clean(
   return rest;
 }
 
+/**
+ * Compare the sum of nbgrader metadata points to the converted rubric
+ * total. Returns the original metadata total when it differs from the
+ * rubric total (due to recalibration, rounding, or discarded cells),
+ * or null when there is no difference.
+ */
+export function slippage(
+  cells: Cellular[],
+  classification: Classification
+): number | null {
+  let total = 0;
+  let found = false;
+  for (const cell of cells) {
+    const meta = cell.metadata.nbgrader as Partial<Metadata> | undefined;
+    if (meta?.points === null || meta?.points === undefined) continue;
+    if (!meta.grade && !meta.solution && !meta.task) continue;
+    total += Math.max(0, meta.points);
+    found = true;
+  }
+  if (!found) return null;
+  const rubric = classification.cells.reduce(
+    (sum, cell) => sum + cell.points, 0
+  );
+  return total === rubric ? null : total;
+}
+
 /** Build a summary report for a completed nbgrader conversion. */
 export function report(
+  source: Cellular[],
   classification: Classification,
   trans: TranslationBundle
 ): string[] {
@@ -286,6 +313,16 @@ export function report(
     report.push(trans.__(
       '%1 hidden test regions extracted.',
       splits.length
+    ));
+  }
+  const textual = slippage(source, classification);
+  if (textual !== null) {
+    report.push(trans.__(
+      'The original nbgrader metadata totals %1 points but the converted '
+      + 'rubric totals %2. Correxit scales fractional points to integers '
+      + 'and rounds where necessary, so some drift is expected. Check that '
+      + 'the converted point values look right in the sidebar.',
+      textual, points
     ));
   }
   if (warnings.length) {
@@ -594,5 +631,5 @@ export async function convert(
     }
   }, false);
 
-  return report(classification, trans);
+  return report(cells, classification, trans);
 }

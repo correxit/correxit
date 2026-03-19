@@ -345,3 +345,85 @@ A workbook moves through these stages:
 - **Clear outputs before propagating.** Unless you intentionally want
   students to see a cell's output, clear all outputs before distributing.
   Outputs are not encrypted, even on secret reference cells.
+
+## Converting from nbgrader
+
+If your notebook was authored in nbgrader, Correxit can convert it
+automatically. Open the notebook and click **Convert to a workbook
+assignment…** in the sidebar. Correxit reads the per-cell nbgrader
+metadata (`grade`, `solution`, `task`, `points`) and maps each cell to
+the closest Correxit equivalent. The nbgrader metadata is stripped after
+conversion.
+
+### How cells are mapped
+
+| nbgrader cell type   | nbgrader metadata                | Correxit type   |
+| -------------------- | -------------------------------- | --------------- |
+| Autograded answer    | `solution=true`, `grade=false`   | correctable     |
+| Autograder tests     | `grade=true`, `solution=false`   | reference       |
+| Manual answer        | `grade=true`, `solution=true`    | reviewable      |
+| Task                 | `task=true`                      | reviewable      |
+| Read-only / locked   | `locked=true`, no grade/solution | (skipped)       |
+| Unmarked             | no nbgrader key                  | (skipped)       |
+
+An autograded answer becomes **correctable** when test cells follow it
+in notebook order. If no test cells follow, it falls back to
+**reviewable** (the conversion report notes this with a warning).
+
+Task cells are assigned to the next unmarked cell below them. If no
+unmarked cell follows, the task's points are discarded (also warned).
+
+### Solution and mark-scheme markers
+
+`### BEGIN SOLUTION` / `### END SOLUTION` marker lines are removed
+from cell sources, but the solution code between them is kept.
+
+`=== BEGIN MARK SCHEME ===` / `=== END MARK SCHEME ===` regions are
+removed entirely (markers and content).
+
+### Hidden tests
+
+If a test cell contains `### BEGIN HIDDEN TESTS` / `### END HIDDEN
+TESTS` markers, Correxit splits it into two cells: the visible portion
+stays in place; the hidden portion becomes a new secret reference cell
+inserted directly after. Both count toward the correctable cell's point
+total.
+
+### AUTOTEST directives
+
+nbgrader's `### AUTOTEST` and `### HASHED AUTOTEST` directives are
+expanded at conversion time. Correxit leases a kernel, executes the
+answer cell to define its variables, then evaluates each autotest
+expression and replaces the directive with a concrete `assert` statement.
+If no kernel is available, the directives are left in place and a
+warning is added to the report.
+
+### Points and slippage
+
+nbgrader stores point values in cell metadata as numbers. Correxit
+requires integer points. During conversion, two transformations can
+change the point totals:
+
+1. **Recalibration.** When nbgrader splits a cell's total across
+   multiple test cells as fractions (e.g., two tests at 0.5 each),
+   Correxit scales them to the smallest integers preserving their ratios
+   (0.5 + 0.5 becomes 1 + 1). The ratio of partial credit is preserved,
+   but the absolute total changes.
+
+2. **Rounding.** Fractional points on reviewable and task cells are
+   rounded to the nearest integer.
+
+If the sum of the original nbgrader metadata points differs from the
+converted rubric total, the conversion report states both numbers so
+you can verify the result. This is informational: the converted values
+are what Correxit will use for grading. If the original notebook text
+mentions point values (e.g., "Part A (2 points)"), those strings are
+not updated automatically. You may want to edit them by hand after
+conversion so students see numbers that match the rubric.
+
+### After conversion
+
+The conversion report appears in a dialog. Review it for warnings.
+Then use the sidebar to inspect each cell's configuration and run
+**Correct workbook…** to verify that every cell scores correctly before
+distributing.

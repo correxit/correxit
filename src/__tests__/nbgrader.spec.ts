@@ -15,6 +15,7 @@ const {
   clean,
   detect,
   hidden,
+  slippage,
   spread: expand,
   strip
 } = nbgrader;
@@ -838,6 +839,94 @@ describe('nbgrader', () => {
       const result = await expand(cells, classification, executor);
       expect(result.sources.find(({ id }) => id === 'a1')).toBeDefined();
       expect(result.sources.find(({ id }) => id === 't1')).toBeDefined();
+    });
+  });
+
+  describe('slippage', () => {
+    it('returns null when no cells carry metadata points', () => {
+      const cells = [
+        Cell.answer('a1'),
+        Cell.test('t1', 2)
+      ];
+      const classification = classify(cells);
+      // answer has no points in metadata (solution-only), test has 2;
+      // rubric total is 2, metadata total is 2 → null
+      expect(slippage(cells, classification)).toBeNull();
+    });
+
+    it('returns null when metadata points match rubric points', () => {
+      const cells = [
+        Cell.answer('a1'),
+        Cell.test('t1', 3),
+        Cell.test('t2', 2)
+      ];
+      const classification = classify(cells);
+      // metadata: 3 + 2 = 5, rubric: 3 + 2 = 5
+      expect(slippage(cells, classification)).toBeNull();
+    });
+
+    it('detects slippage from fractional recalibration', () => {
+      const cells = [
+        Cell.answer('a1'),
+        Cell.test('t1', 0.5),
+        Cell.test('t2', 0.5)
+      ];
+      const classification = classify(cells);
+      // metadata: 0.5 + 0.5 = 1, rubric after recalibrate: 1 + 1 = 2
+      expect(slippage(cells, classification)).toBe(1);
+    });
+
+    it('detects slippage from discarded task points', () => {
+      // Trailing task with no following unmarked cell: points discarded.
+      const cells = [Cell.task('t1', 5)];
+      const classification = classify(cells);
+      // metadata: 5, rubric: 0 (task discarded)
+      expect(slippage(cells, classification)).toBe(5);
+    });
+
+    it('detects slippage from orphan answer losing its points', () => {
+      // Autograded answer with no test cells → forced to 1-point reviewable.
+      const cells = [Cell.answer('a1')];
+      const classification = classify(cells);
+      // answer metadata has no points field → not counted in metadata total.
+      // rubric: 1 (default reviewable). No metadata points → null.
+      expect(slippage(cells, classification)).toBeNull();
+    });
+
+    it('ignores cells without grade, solution, or task flags', () => {
+      const cells = [
+        Cell.readonly('r1'),
+        Cell.answer('a1'),
+        Cell.test('t1', 2)
+      ];
+      const classification = classify(cells);
+      // readonly has locked=true but no grade/solution/task → ignored
+      expect(slippage(cells, classification)).toBeNull();
+    });
+
+    it('clamps negative metadata points to zero', () => {
+      const cells = [
+        Cell.answer('a1'),
+        cell('t1', 'code', '', {
+          grade: true, grade_id: 't1', locked: false,
+          points: -3, schema_version: 3, solution: false
+        })
+      ];
+      const classification = classify(cells);
+      // metadata: max(0, -3) = 0, rubric: 0 (test with 0 points)
+      expect(slippage(cells, classification)).toBeNull();
+    });
+
+    it('detects slippage from rounding on manual cells', () => {
+      const cells = [
+        cell('m1', 'code', '', {
+          grade: true, grade_id: 'm1', locked: false,
+          points: 1.7, schema_version: 3, solution: true
+        })
+      ];
+      const classification = classify(cells);
+      // metadata: 1.7, rubric: Math.round(1.7) = 2
+      expect(slippage(cells, classification)).toBe(1.7);
     });
   });
 });
