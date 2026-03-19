@@ -976,3 +976,94 @@ test.describe('nbgrader scoring (synthetic)', () => {
     expect(result.possible).toBe(5);
   });
 });
+
+// ── Tests: scoring real fixture notebooks ──
+
+test.describe('nbgrader scoring (fixtures)', () => {
+  test.afterEach(async ({ page }) => {
+    try {
+      await page.notebook.close(true);
+    } catch {
+      /* ok */
+    }
+  });
+
+  /**
+   * Source notebooks with correct solutions baked into answer cells
+   * (inside ### BEGIN SOLUTION markers). After conversion the markers
+   * are stripped but the code survives, so every auto-graded reference
+   * should pass.
+   *
+   * All four encode the same logical assignment:
+   *   squares (2 pts, 2 test refs) + sum_of_squares (2 pts, 2 test refs)
+   *   + 2 reviewable cells (3 pts, unscored by correct())
+   */
+  for (const name of [
+    'test.ipynb',
+    'test-v1.ipynb',
+    'test-v2.ipynb',
+    'test-with-output.ipynb'
+  ]) {
+    test(`${name}: correct solutions score full auto marks`, async ({
+      page
+    }) => {
+      await page.goto();
+      await page.notebook.createNew();
+      await load(page, name);
+      await convert(page);
+
+      const result = await score(page);
+      expect(result.possible).toBe(7);
+      expect(result.points).toBe(4);
+    });
+  }
+
+  test('submitted-changed.ipynb: correct student answer passes all tests', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'submitted-changed.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    // Correctable: set_a with a=1. Tests: print("Success!") + assert a==1.
+    // Both pass -> 2/2 auto pts. Reviewables (5 pts) are unscored.
+    expect(result.possible).toBe(7);
+    expect(result.points).toBe(2);
+  });
+
+  test('submitted-unchanged.ipynb: placeholder answer earns partial credit', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'submitted-unchanged.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    // Answer cell raises NotImplementedError, so `a` is never defined.
+    // Test "foo" (print) passes (no dependency on a). Test "bar"
+    // (assert a == 1) fails with NameError. -> 1/2 auto pts.
+    expect(result.possible).toBe(7);
+    expect(result.points).toBe(1);
+  });
+
+  test('test-hidden-tests.ipynb: incomplete solutions fail hidden references', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'test-hidden-tests.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    // Solutions hardcode squares(1), squares(2), squares(10) but not
+    // squares(11). The hidden references check squares(11) and
+    // sum_of_squares(11), which both return None -> fail.
+    // Non-hidden refs (invalid_input, uses_squares) pass.
+    // -> 2/4 pts.
+    expect(result.possible).toBe(4);
+    expect(result.points).toBe(2);
+  });
+});
