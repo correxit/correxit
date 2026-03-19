@@ -6,8 +6,7 @@ import * as nbgrader from '../correxit/nbgrader';
 type Cellular = nbgrader.Cellular;
 type Executor = nbgrader.Executor;
 
-const { autotests, classify, clean, detect, strip } = nbgrader;
-const { pure: expand } = nbgrader.expand;
+const { autotests, classify, clean, detect, spread: expand, strip } = nbgrader;
 
 const cell = (
   id: string,

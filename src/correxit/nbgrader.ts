@@ -349,93 +349,86 @@ export async function expand(
   }
   const [kernel, release] = leased;
   try {
-    return await expand.pure(cells, classification, executor(kernel));
+    return await spread(cells, classification, executor(kernel));
   } finally {
     await release();
   }
 }
 
-export namespace expand {
-  /** Pure expansion logic, separated for unit testing without a kernel. */
-  export async function pure(
-    cells: Cellular[],
-    classification: Classification,
-    execute: Executor
-  ): Promise<Classification> {
-    const answers = new Set(
-      classification.cells
-        .filter(cell => cell.is === 'correctable')
-        .map(cell => cell.id)
-    );
-    const referents = new Set(
-      classification.references.flat().map(ref => ref.referent)
-    );
-    const stripped = new Map(
-      classification.sources.map(({ id, source }) => [id, source])
-    );
+/** AUTOTEST expand() logic (separated for unit testing without a kernel). */
+export async function spread(
+  cells: Cellular[],
+  classification: Classification,
+  execute: Executor
+): Promise<Classification> {
+  const answers = new Set(
+    classification.cells
+      .filter(cell => cell.is === 'correctable')
+      .map(({ id }) => id)
+  );
+  const referents = new Set(
+    classification.references.flat().map(ref => ref.referent)
+  );
+  const stripped = new Map(
+    classification.sources.map(({ id, source }) => [id, source])
+  );
+  const expanded: { id: string; source: string }[] = [];
+  const warnings: string[] = [];
+  for (const cell of cells) {
+    if (answers.has(cell.id)) {
+      await execute(stripped.get(cell.id) ?? cell.source);
+      continue;
+    }
+    if (!referents.has(cell.id)) continue;
 
-    const expanded: { id: string; source: string }[] = [];
-    const warnings: string[] = [];
-
-    for (const cell of cells) {
-      if (answers.has(cell.id)) {
-        await execute(stripped.get(cell.id) ?? cell.source);
-        continue;
-      }
-      if (!referents.has(cell.id)) continue;
-
-      const found = directives(cell.source);
-      if (!found.length) {
-        await execute(cell.source);
-        continue;
-      }
-
-      const lines = cell.source.split('\n');
-      const on = new Set(
-        found.map(directive => directive.line)
-      );
-      const output: string[] = [];
-      let pending: string[] = [];
-
-      const flush = async () => {
-        if (!pending.length) return;
-        const block = pending.join('\n');
-        output.push(...pending);
-        pending = [];
-        if (block.trim()) await execute(block);
-      };
-
-      let ok = true;
-      for (let i = 0; i < lines.length; i++) {
-        if (!on.has(i)) { pending.push(lines[i]); continue; }
-        await flush();
-        const directive = found.find(
-          directive => directive.line === i
-        )!;
-        for (const expr of directive.expressions) {
-          const value = await execute(expr);
-          if (value !== null) {
-            output.push(`assert ${expr} == ${value}`);
-          } else {
-            ok = false;
-            warnings.push(
-              `Expansion failed for "${expr}" in cell "${cell.id}"`
-            );
-            output.push(`### AUTOTEST ${expr}`);
-          }
-        }
-      }
-      await flush();
-      if (ok)
-        expanded.push({ id: cell.id, source: output.join('\n') });
+    const found = directives(cell.source);
+    if (!found.length) {
+      await execute(cell.source);
+      continue;
     }
 
-    return {
-      ...classification,
-      sources: [...classification.sources, ...expanded],
-      warnings: [...classification.warnings, ...warnings]
+    let pending: string[] = [];
+    const lines = cell.source.split('\n');
+    const on = new Set(found.map(directive => directive.line));
+    const output: string[] = [];
+    const flush = async () => {
+      if (!pending.length) return;
+      const block = pending.join('\n');
+      output.push(...pending);
+      pending = [];
+      if (block.trim()) await execute(block);
     };
+
+    let ok = true;
+    for (let i = 0; i < lines.length; i++) {
+      if (!on.has(i)) { pending.push(lines[i]); continue; }
+      await flush();
+      const directive = found.find(
+        directive => directive.line === i
+      )!;
+      for (const expr of directive.expressions) {
+        const value = await execute(expr);
+        if (value !== null) {
+          output.push(`assert ${expr} == ${value}`);
+        } else {
+          ok = false;
+          warnings.push(
+            `Expansion failed for "${expr}" in cell "${cell.id}"`
+          );
+          output.push(`### AUTOTEST ${expr}`);
+        }
+      }
+    }
+    await flush();
+    if (ok)
+      expanded.push({ id: cell.id, source: output.join('\n') });
   }
+
+  return {
+    ...classification,
+    sources: [...classification.sources, ...expanded],
+    warnings: [...classification.warnings, ...warnings]
+  };
 }
 
 /**
@@ -461,4 +454,63 @@ export function strip(source: string): string {
     out.push(line);
   }
   return out.join('\n');
+}
+
+/**
+ * Detect, classify, and apply nbgrader cell metadata to a freshly
+ * converted workbook. Returns a summary widget on success, or null
+ * when the notebook contains no nbgrader metadata.
+ */
+export async function convert(
+  workbook: Workbook,
+  trans: TranslationBundle
+): Promise<Widget | null> {
+  const notebook = workbook.context.model.sharedModel;
+  const cells: Cellular[] = notebook.cells.map(cell => ({
+    id: cell.id,
+    cell_type: cell.cell_type,
+    source: cell.getSource(),
+    metadata: cell.toJSON().metadata as Record<string, any>
+  }));
+  if (!detect(cells)) return null;
+
+  let classification = classify(cells);
+
+  const referents = new Set(
+    classification.references.flat().map(ref => ref.referent)
+  );
+  const pending = cells.some(cell =>
+    referents.has(cell.id) && autotests(cell.source)
+  );
+  if (pending)
+    classification = await expand(workbook, cells, classification);
+
+  for (const warning of classification.warnings)
+    console.warn('nbgrader convert:', warning);
+  for (let i = 0; i < classification.cells.length; i++) {
+    await Workbook.add(
+      workbook, classification.cells[i], classification.references[i]
+    );
+  }
+
+  const cached = new Map(
+    classification.sources.map(({ id, source }) => [id, source])
+  );
+  notebook.transact(() => {
+    for (const cell of notebook.cells) {
+      const json = cell.toJSON();
+      const cleaned = clean(json.metadata);
+      const source = cached.get(cell.id);
+      if (source !== undefined) {
+        const replacement = { ...json, metadata: cleaned, source };
+        const index = notebook.cells.indexOf(cell);
+        notebook.deleteCell(index);
+        notebook.insertCell(index, replacement);
+      } else if ('nbgrader' in (json.metadata as any || {})) {
+        cell.transact(() => cell.deleteMetadata('nbgrader'));
+      }
+    }
+  }, false);
+
+  return report(classification, trans);
 }

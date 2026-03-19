@@ -280,55 +280,13 @@ export function commands(
       });
       if (!passphrase) return;
 
-      const notebook = workbook.context.model.sharedModel;
-      const snapshot = () => notebook.cells.map(cell => ({
-        id: cell.id,
-        cell_type: cell.cell_type,
-        source: cell.getSource(),
-        metadata: cell.toJSON().metadata as Record<string, any>
-      }));
-      const detected = nbgrader.detect(snapshot());
       await convert(workbook, passphrase, unlocker);
-      if (!detected) return;
-
-      const snap = snapshot();
-      let classification = nbgrader.classify(snap);
-
-      const referents = new Set(
-        classification.references.flat().map(ref => ref.referent)
-      );
-      const pending = snap.some(cell =>
-        referents.has(cell.id) && nbgrader.autotests(cell.source)
-      );
-      if (pending)
-        classification = await nbgrader.expand(workbook, snap, classification);
-
-      const { cells, references, sources } = classification;
-      for (const warning of classification.warnings)
-        console.warn('nbgrader convert:', warning);
-      for (let i = 0; i < cells.length; i++)
-        await add(workbook, cells[i], references[i]);
-
-      const cached = new Map(sources.map(({ id, source }) => [id, source]));
-      notebook.transact(() => {
-        for (const cell of notebook.cells) {
-          const json = cell.toJSON();
-          const cleaned = nbgrader.clean(json.metadata);
-          const source = cached.get(cell.id);
-          if (source !== undefined) {
-            const replacement = { ...json, metadata: cleaned, source };
-            const index = notebook.cells.indexOf(cell);
-            notebook.deleteCell(index);
-            notebook.insertCell(index, replacement);
-          } else if ('nbgrader' in (json.metadata as any || {})) {
-            cell.transact(() => cell.deleteMetadata('nbgrader'));
-          }
-        }
-      }, false);
+      const body = await nbgrader.convert(workbook, trans);
+      if (!body) return;
 
       void showDialog({
-        title: trans.__('Workbook created'),
-        body: nbgrader.report(classification, trans),
+        title: trans.__('Converted from nbgrader'),
+        body,
         buttons: [Dialog.okButton()]
       });
     }
