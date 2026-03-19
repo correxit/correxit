@@ -560,7 +560,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
       return notebook.cells.map((cell: any) => cell.getSource());
     });
     // Autotest directives replaced with concrete assertions.
-    expect(sources[1]).toBe('assert f(1) == 2\nassert f(2) == 4');
+    expect(sources[1]).toBe('assert (f(1)) == 2\nassert (f(2)) == 4');
 
     const s = await shape(page);
     expect(s.cells).toEqual([['correctable', 1, 1]]);
@@ -606,7 +606,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
       const notebook = panel.context.model.sharedModel;
       return notebook.cells.map((cell: any) => cell.getSource());
     });
-    expect(sources[1]).toBe('assert x == 42\nassert x + 1 == 43');
+    expect(sources[1]).toBe('assert (x) == 42\nassert (x + 1) == 43');
   });
 
   test('non-autotest code in test cell is preserved around expansions', async ({
@@ -625,7 +625,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
       const notebook = panel.context.model.sharedModel;
       return notebook.cells.map((cell: any) => cell.getSource());
     });
-    expect(sources[1]).toBe('"""verify x"""\nassert x == 10\nassert x > 0');
+    expect(sources[1]).toBe('"""verify x"""\nassert (x) == 10\nassert x > 0');
   });
 
   test('HASHED AUTOTEST directives are expanded', async ({ page }) => {
@@ -642,7 +642,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
       const notebook = panel.context.model.sharedModel;
       return notebook.cells.map((cell: any) => cell.getSource());
     });
-    expect(sources[1]).toBe('assert f(5) == 25');
+    expect(sources[1]).toBe('assert (f(5)) == 25');
   });
 });
 
