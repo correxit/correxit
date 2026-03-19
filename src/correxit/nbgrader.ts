@@ -169,6 +169,75 @@ export function detect(cells: Cellular[]): boolean {
 }
 
 /**
+ * Pre-split cells containing hidden test regions.
+ *
+ * Test cells with BEGIN HIDDEN / END HIDDEN markers become two cells:
+ * the visible portion (same ID, zero points) and the hidden portion
+ * (synthetic ID, full points). This runs before classify() so that
+ * classification never reasons about mid-stride splits.
+ */
+export function presplit(cells: Cellular[]): {
+  cells: Cellular[];
+  sources: { id: string; source: string }[];
+  splits: { cell: string; referent: string; source: string }[];
+} {
+  const expanded: Cellular[] = [];
+  const sources: { id: string; source: string }[] = [];
+  const splits: { cell: string; referent: string; source: string }[] = [];
+
+  for (const cell of cells) {
+    const meta = cell.metadata.nbgrader as
+      Partial<Metadata> | undefined;
+    const test =
+      meta?.grade === true && meta?.solution !== true
+      && cell.cell_type === 'code';
+
+    if (!test) { expanded.push(cell); continue; }
+
+    const split = hidden(cell.source);
+    if (!split || !split.visible.trim()) {
+      expanded.push(cell);
+      continue;
+    }
+
+    const referent = `${cell.id}-hidden`;
+    const points = Math.max(0, meta!.points ?? 1);
+
+    // Visible portion: same ID, zero points.
+    expanded.push({
+      ...cell,
+      source: split.visible,
+      metadata: {
+        ...cell.metadata,
+        nbgrader: { ...(meta as Metadata), points: 0 }
+      }
+    });
+
+    // Hidden portion: synthetic cell with full points.
+    expanded.push({
+      id: referent,
+      cell_type: 'code',
+      source: split.hidden,
+      metadata: {
+        nbgrader: {
+          grade: true,
+          grade_id: referent,
+          locked: true,
+          points,
+          schema_version: meta!.schema_version ?? 3,
+          solution: false
+        }
+      }
+    });
+
+    sources.push({ id: cell.id, source: split.visible });
+    splits.push({ cell: cell.id, referent, source: split.hidden });
+  }
+
+  return { cells: expanded, sources, splits };
+}
+
+/**
  * Walk cells top-to-bottom and classify into rubric entries.
  *
  * Linkage: nbgrader has no explicit answer-to-test link. Tests
@@ -289,25 +358,9 @@ export function classify(cells: Cellular[]): Classification {
     }
     if (is.test) {
       if (answer) {
-        const split = hidden(cell.source);
-        if (split && split.visible.trim()) {
-          const referent = `${cell.id}-hidden`;
-          answer.tests.push({ id: referent, points });
-          result.sources.push({
-            id: cell.id, source: split.visible
-          });
-          result.splits.push({
-            cell: cell.id,
-            referent,
-            source: split.hidden
-          });
-        } else {
-          answer.tests.push({ id: cell.id, points });
-        }
+        answer.tests.push({ id: cell.id, points });
       } else {
-        const warn =
-          `Test cell "${cell.id}" has no preceding answer`
-          + '; skipped';
+        const warn = `Test cell "${cell.id}" has no preceding answer; skipped`;
         result.warnings.push(warn);
       }
       continue;
@@ -464,23 +517,23 @@ export async function spread(
   const stripped = new Map(
     classification.sources.map(({ id, source }) => [id, source])
   );
+
   const expanded: { id: string; source: string }[] = [];
   const warnings: string[] = [];
-  for (const cell of cells) {
-    if (answers.has(cell.id)) {
-      await execute(stripped.get(cell.id) ?? cell.source);
-      continue;
-    }
-    if (!referents.has(cell.id)) continue;
 
-    const found = directives(cell.source);
+  /** Expand directives in `source`, returning the rewritten text. */
+  const rewrite = async (
+    id: string,
+    source: string
+  ): Promise<string | null> => {
+    const found = directives(source);
     if (!found.length) {
-      await execute(cell.source);
-      continue;
+      await execute(source);
+      return null;
     }
 
     let pending: string[] = [];
-    const lines = cell.source.split('\n');
+    const lines = source.split('\n');
     const on = new Set(found.map(directive => directive.line));
     const output: string[] = [];
     const flush = async () => {
@@ -495,30 +548,44 @@ export async function spread(
     for (let i = 0; i < lines.length; i++) {
       if (!on.has(i)) { pending.push(lines[i]); continue; }
       await flush();
-      const directive = found.find(
-        directive => directive.line === i
-      )!;
+      const directive = found.find(({ line }) => line === i)!;
       for (const expr of directive.expressions) {
         const value = await execute(expr);
         if (value !== null) {
-          output.push(`assert ${expr} == ${value}`);
+          output.push(`assert (${expr}) == ${value}`);
         } else {
           ok = false;
           warnings.push(
-            `Expansion failed for "${expr}" in cell "${cell.id}"`
+            `Expansion failed for "${expr}" in cell "${id}"`
           );
           output.push(`### AUTOTEST ${expr}`);
         }
       }
     }
     await flush();
-    if (ok)
-      expanded.push({ id: cell.id, source: output.join('\n') });
+    return ok ? output.join('\n') : null;
+  };
+
+  for (const cell of cells) {
+    if (answers.has(cell.id)) {
+      await execute(stripped.get(cell.id) ?? cell.source);
+      continue;
+    }
+    if (!referents.has(cell.id)) continue;
+
+    const source = stripped.get(cell.id) ?? cell.source;
+    const result = await rewrite(cell.id, source);
+    if (result !== null)
+      expanded.push({ id: cell.id, source: result });
   }
 
+  const overwritten = new Set(expanded.map(({ id }) => id));
   return {
     ...classification,
-    sources: [...classification.sources, ...expanded],
+    sources: [
+      ...classification.sources.filter(s => !overwritten.has(s.id)),
+      ...expanded
+    ],
     warnings: [...classification.warnings, ...warnings]
   };
 }
@@ -569,15 +636,24 @@ export async function convert(
   trans: TranslationBundle
 ): Promise<string[] | null> {
   const notebook = workbook.context.model.sharedModel;
-  const cells: Cellular[] = notebook.cells.map(cell => ({
+  const raw: Cellular[] = notebook.cells.map(cell => ({
     id: cell.id,
     cell_type: cell.cell_type,
     source: cell.getSource(),
     metadata: cell.toJSON().metadata as Record<string, any>
   }));
-  if (!detect(cells)) return null;
+  if (!detect(raw)) return null;
 
+  // Pass 1: split hidden test regions into separate cells.
+  const { cells, sources: presources, splits } = presplit(raw);
+
+  // Pass 2: classify the (already-split) cells.
   let classification = classify(cells);
+  classification = {
+    ...classification,
+    sources: [...presources, ...classification.sources],
+    splits
+  };
 
   const referents = new Set(
     classification.references.flat().map(ref => ref.referent)
@@ -591,7 +667,12 @@ export async function convert(
   for (const warning of classification.warnings)
     console.warn('nbgrader convert:', warning);
 
-  // Insert hidden test cells extracted from split test cells.
+  // Build source cache once for both split insertion and final cleanup.
+  const cached = new Map(
+    classification.sources.map(({ id, source }) => [id, source])
+  );
+
+  // Insert hidden test cells extracted by presplit.
   for (const split of classification.splits) {
     const index = notebook.cells.findIndex(
       cell => cell.id === split.cell
@@ -599,7 +680,7 @@ export async function convert(
     if (index < 0) continue;
     notebook.insertCell(index + 1, {
       cell_type: 'code',
-      source: split.source,
+      source: cached.get(split.referent) ?? split.source,
       metadata: {}
     });
     const actual = notebook.cells[index + 1].id;
@@ -625,9 +706,6 @@ export async function convert(
     );
   }
 
-  const cached = new Map(
-    classification.sources.map(({ id, source }) => [id, source])
-  );
   notebook.transact(() => {
     for (const cell of notebook.cells) {
       const json = cell.toJSON();
@@ -644,5 +722,5 @@ export async function convert(
     }
   }, false);
 
-  return report(cells, classification, trans);
+  return report(raw, classification, trans);
 }

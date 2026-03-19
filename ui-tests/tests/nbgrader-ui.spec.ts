@@ -708,8 +708,8 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
     const s = await shape(page);
     expect(s.cells).toEqual([
-      ['correctable', 2, 2],
-      ['correctable', 2, 2]
+      ['correctable', 2, 3],
+      ['correctable', 2, 3]
     ]);
     expect(s.points).toBe(4);
     expect(await captured()).toHaveLength(0);
@@ -821,6 +821,112 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
     const c = await clean(page);
     expect(c.metadata).toBe(true);
+  });
+
+  // ── Autotest source notebooks ──
+
+  test('autotest-simple.ipynb: single autotest expansion', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-simple.ipynb');
+    await convert(page);
+
+    const s = await shape(page);
+    expect(s.cells).toEqual([['correctable', 1, 1]]);
+    expect(s.points).toBe(1);
+
+    // Directives replaced with concrete assertions.
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    for (const source of sources) {
+      expect(source).not.toContain('### AUTOTEST');
+    }
+
+    const c = await clean(page);
+    expect(c.metadata).toBe(true);
+    expect(c.sources).toBe(true);
+  });
+
+  test('autotest-hidden.ipynb: hidden split + expansion', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hidden.ipynb');
+    await convert(page);
+
+    const s = await shape(page);
+    // 1 correctable, 2 refs (visible 0pt + hidden 1pt), 1pt total.
+    expect(s.cells).toEqual([['correctable', 1, 2]]);
+    expect(s.points).toBe(1);
+
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    for (const source of sources) {
+      expect(source).not.toContain('### AUTOTEST');
+      expect(source).not.toContain('BEGIN HIDDEN');
+      expect(source).not.toContain('END HIDDEN');
+    }
+
+    const c = await clean(page);
+    expect(c.metadata).toBe(true);
+    expect(c.sources).toBe(true);
+  });
+
+  test('autotest-hashed.ipynb: hashed autotest expansion', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hashed.ipynb');
+    await convert(page);
+
+    const s = await shape(page);
+    expect(s.cells).toEqual([['correctable', 1, 1]]);
+    expect(s.points).toBe(1);
+
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    for (const source of sources) {
+      expect(source).not.toContain('### AUTOTEST');
+      expect(source).not.toContain('### HASHED AUTOTEST');
+    }
+
+    const c = await clean(page);
+    expect(c.metadata).toBe(true);
+    expect(c.sources).toBe(true);
+  });
+
+  test('autotest-multi.ipynb: multiple test cells + expansion', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-multi.ipynb');
+    await convert(page);
+
+    const s = await shape(page);
+    expect(s.cells).toEqual([['correctable', 4, 4]]);
+    expect(s.points).toBe(4);
+
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    for (const source of sources) {
+      expect(source).not.toContain('### AUTOTEST');
+      expect(source).not.toContain('### HASHED AUTOTEST');
+    }
+
+    const c = await clean(page);
+    expect(c.metadata).toBe(true);
+    expect(c.sources).toBe(true);
   });
 });
 
@@ -1065,5 +1171,187 @@ test.describe('nbgrader scoring (fixtures)', () => {
     // -> 2/4 pts.
     expect(result.possible).toBe(4);
     expect(result.points).toBe(2);
+  });
+
+  // ── Autotest source notebooks (baked-in solutions) ──
+
+  test('autotest-simple.ipynb: correct solution scores full marks', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-simple.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(1);
+    expect(result.status).toBe('correct');
+  });
+
+  test('autotest-hidden.ipynb: correct solution passes visible and hidden', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hidden.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(1);
+    expect(result.status).toBe('correct');
+  });
+
+  test('autotest-hashed.ipynb: correct solution scores full marks', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hashed.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(1);
+    expect(result.status).toBe('correct');
+  });
+
+  test('autotest-multi.ipynb: correct solution scores full marks', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-multi.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(4);
+    expect(result.points).toBe(4);
+    expect(result.status).toBe('correct');
+  });
+
+  // ── Autotest submission notebooks ──
+
+  test('autotest-simple-changed.ipynb: correct answer scores full marks', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-simple-changed.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(1);
+  });
+
+  test('autotest-simple-unchanged.ipynb: placeholder scores zero', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-simple-unchanged.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(0);
+  });
+
+  test('autotest-hidden-changed-right.ipynb: correct types score full visible marks', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hidden-changed-right.ipynb');
+    await convert(page);
+
+    // Submission has only visible type-check assertions (no hidden).
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(1);
+  });
+
+  test('autotest-hidden-changed-wrong.ipynb: correct types but wrong values still scores', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hidden-changed-wrong.ipynb');
+    await convert(page);
+
+    // Wrong values but correct types. Submission only has visible
+    // type-check assertions, so all pass.
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(1);
+  });
+
+  test('autotest-hidden-unchanged.ipynb: placeholder scores zero', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hidden-unchanged.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(0);
+  });
+
+  test('autotest-hashed-changed.ipynb: correct answer scores full marks', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hashed-changed.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(1);
+  });
+
+  test('autotest-hashed-unchanged.ipynb: placeholder scores zero', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-hashed-unchanged.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(1);
+    expect(result.points).toBe(0);
+  });
+
+  test('autotest-multi-changed.ipynb: partial answer earns 3 of 4', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-multi-changed.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    // a, b, c correct (cells 1, 2 pass); d, e, f wrong (cell 3 fails).
+    // fun() correct (cell 4 passes).
+    expect(result.possible).toBe(4);
+    expect(result.points).toBe(3);
+  });
+
+  test('autotest-multi-unchanged.ipynb: placeholder scores zero', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await load(page, 'autotest-multi-unchanged.ipynb');
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.possible).toBe(4);
+    expect(result.points).toBe(0);
   });
 });

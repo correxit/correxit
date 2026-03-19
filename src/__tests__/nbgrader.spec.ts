@@ -15,6 +15,7 @@ const {
   clean,
   detect,
   hidden,
+  presplit,
   slippage,
   spread: expand,
   strip
@@ -94,6 +95,17 @@ namespace Cell {
       schema_version: 3,
       solution: false
     });
+}
+
+/** Run the full presplit + classify pipeline (mirrors convert). */
+function pipeline(raw: Cellular[]) {
+  const pre = presplit(raw);
+  const result = classify(pre.cells);
+  return {
+    ...result,
+    sources: [...pre.sources, ...result.sources],
+    splits: pre.splits
+  };
 }
 
 describe('nbgrader', () => {
@@ -435,19 +447,29 @@ describe('nbgrader', () => {
         solution: false
       });
       const cells = [Cell.answer('q1'), test];
-      const result = classify(cells);
+      const result = pipeline(cells);
 
       expect(result.cells[0]).toMatchObject({
         id: 'q1',
         is: 'correctable',
-        references: ['t1-hidden']
+        references: ['t1', 't1-hidden']
       });
-      expect(result.references[0][0]).toMatchObject({
-        cell: 'q1',
-        referent: 't1-hidden',
-        points: 2,
-        secret: true
-      });
+      expect(result.references[0]).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            cell: 'q1',
+            referent: 't1',
+            points: 0,
+            secret: true
+          }),
+          expect.objectContaining({
+            cell: 'q1',
+            referent: 't1-hidden',
+            points: 2,
+            secret: true
+          })
+        ])
+      );
       expect(result.splits).toHaveLength(1);
       expect(result.splits[0]).toEqual({
         cell: 't1',
@@ -474,7 +496,7 @@ describe('nbgrader', () => {
         solution: false
       });
       const cells = [Cell.answer('q1'), test];
-      const result = classify(cells);
+      const result = pipeline(cells);
       expect(result.cells[0].references).toEqual(['t1']);
       expect(result.splits).toHaveLength(0);
     });
@@ -498,10 +520,10 @@ describe('nbgrader', () => {
         }),
         Cell.test('t2', 1)
       ];
-      const result = classify(cells);
+      const result = pipeline(cells);
       expect(result.cells[0]).toMatchObject({
         is: 'correctable',
-        references: ['t1-hidden', 't2']
+        references: ['t1', 't1-hidden', 't2']
       });
       expect(result.splits).toHaveLength(1);
     });
@@ -678,11 +700,7 @@ describe('nbgrader', () => {
       }
     });
 
-    const test_cell = (
-      id: string,
-      points: number,
-      source: string
-    ): Cellular => ({
+    const check = (id: string, points: number, source: string): Cellular => ({
       id,
       cell_type: 'code',
       source,
@@ -701,7 +719,7 @@ describe('nbgrader', () => {
     it('expands autotest directives using executor results', async () => {
       const cells: Cellular[] = [
         answer('a1', 'def f(x): return x * 2'),
-        test_cell('t1', 1, '### AUTOTEST f(1)')
+        check('t1', 1, '### AUTOTEST f(1)')
       ];
       const classification = classify(cells);
       const executor: Executor = async code => {
@@ -711,20 +729,20 @@ describe('nbgrader', () => {
       const result = await expand(cells, classification, executor);
       const source = result.sources.find(s => s.id === 't1');
       expect(source).toBeDefined();
-      expect(source!.source).toBe('assert f(1) == 2');
+      expect(source!.source).toBe('assert (f(1)) == 2');
     });
 
     it('expands semicolon-separated expressions', async () => {
       const cells: Cellular[] = [
         answer('a1', 'def f(x): return x'),
-        test_cell('t1', 1, '### AUTOTEST f(1); f(2)')
+        check('t1', 1, '### AUTOTEST f(1); f(2)')
       ];
       const classification = classify(cells);
       const values: Record<string, string> = { 'f(1)': '1', 'f(2)': '2' };
       const executor: Executor = async code => values[code] ?? null;
       const result = await expand(cells, classification, executor);
       const source = result.sources.find(s => s.id === 't1');
-      expect(source!.source).toBe('assert f(1) == 1\nassert f(2) == 2');
+      expect(source!.source).toBe('assert (f(1)) == 1\nassert (f(2)) == 2');
     });
 
     it('preserves non-autotest code around directives', async () => {
@@ -736,7 +754,7 @@ describe('nbgrader', () => {
       ].join('\n');
       const cells: Cellular[] = [
         answer('a1', 'def f(x): return x'),
-        test_cell('t1', 1, source)
+        check('t1', 1, source)
       ];
       const classification = classify(cells);
       const executor: Executor = async code => {
@@ -746,14 +764,14 @@ describe('nbgrader', () => {
       const result = await expand(cells, classification, executor);
       const expanded = result.sources.find(s => s.id === 't1');
       expect(expanded!.source).toBe(
-        '"""docstring"""\nx = 1\nassert f(x) == 1\nx = 2'
+        '"""docstring"""\nx = 1\nassert (f(x)) == 1\nx = 2'
       );
     });
 
     it('adds warning when expression evaluation fails', async () => {
       const cells: Cellular[] = [
         answer('a1', 'def f(x): return x'),
-        test_cell('t1', 1, '### AUTOTEST f(bad)')
+        check('t1', 1, '### AUTOTEST f(bad)')
       ];
       const classification = classify(cells);
       const executor: Executor = async () => null;
@@ -766,7 +784,7 @@ describe('nbgrader', () => {
     it('does not add source entry when all expressions fail', async () => {
       const cells: Cellular[] = [
         answer('a1', 'def f(x): return x'),
-        test_cell('t1', 1, '### AUTOTEST bad()')
+        check('t1', 1, '### AUTOTEST bad()')
       ];
       const classification = classify(cells);
       const executor: Executor = async () => null;
@@ -778,7 +796,7 @@ describe('nbgrader', () => {
       const executed: string[] = [];
       const cells: Cellular[] = [
         answer('a1', 'def f(): return 42'),
-        test_cell('t1', 1, '### AUTOTEST f()')
+        check('t1', 1, '### AUTOTEST f()')
       ];
       const classification = classify(cells);
       const executor: Executor = async code => {
@@ -794,7 +812,7 @@ describe('nbgrader', () => {
     it('handles HASHED AUTOTEST the same as AUTOTEST', async () => {
       const cells: Cellular[] = [
         answer('a1', 'def f(x): return x ** 2'),
-        test_cell('t1', 1, '### HASHED AUTOTEST f(3)')
+        check('t1', 1, '### HASHED AUTOTEST f(3)')
       ];
       const classification = classify(cells);
       const executor: Executor = async code => {
@@ -803,15 +821,15 @@ describe('nbgrader', () => {
       };
       const result = await expand(cells, classification, executor);
       const source = result.sources.find(s => s.id === 't1');
-      expect(source!.source).toBe('assert f(3) == 9');
+      expect(source!.source).toBe('assert (f(3)) == 9');
     });
 
     it('executes non-autotest test cells for side effects', async () => {
       const executed: string[] = [];
       const cells: Cellular[] = [
         answer('a1', 'def f(): return 1'),
-        test_cell('t1', 1, 'helper = lambda: True'),
-        test_cell('t2', 1, '### AUTOTEST f()')
+        check('t1', 1, 'helper = lambda: True'),
+        check('t2', 1, '### AUTOTEST f()')
       ];
       const classification = classify(cells);
       const executor: Executor = async code => {
@@ -826,7 +844,7 @@ describe('nbgrader', () => {
     it('preserves existing sources from classification', async () => {
       const cells: Cellular[] = [
         answer('a1', '### BEGIN SOLUTION\ndef f(): return 1\n### END SOLUTION'),
-        test_cell('t1', 1, '### AUTOTEST f()')
+        check('t1', 1, '### AUTOTEST f()')
       ];
       const classification = classify(cells);
       expect(classification.sources).toHaveLength(1);
@@ -839,6 +857,48 @@ describe('nbgrader', () => {
       const result = await expand(cells, classification, executor);
       expect(result.sources.find(({ id }) => id === 'a1')).toBeDefined();
       expect(result.sources.find(({ id }) => id === 't1')).toBeDefined();
+    });
+
+    it('expands directives in hidden and visible portions of split cells', async () => {
+      const raw: Cellular[] = [
+        answer('a1', 'a = 5'),
+        check(
+          't1',
+          1,
+          [
+            '### BEGIN HIDDEN TESTS',
+            '### AUTOTEST a',
+            '### END HIDDEN TESTS',
+            '',
+            '### AUTOTEST type(a)'
+          ].join('\n')
+        )
+      ];
+      const pre = presplit(raw);
+      const base = classify(pre.cells);
+      const classification = {
+        ...base,
+        sources: [...pre.sources, ...base.sources],
+        splits: pre.splits
+      };
+      expect(classification.splits).toHaveLength(1);
+
+      const values: Record<string, string> = {
+        a: '5',
+        'type(a)': "<class 'int'>"
+      };
+      const executor: Executor = async code => values[code] ?? null;
+      const result = await expand(pre.cells, classification, executor);
+
+      // Visible portion expanded (leading blank line from hidden split).
+      const visible = result.sources.find(s => s.id === 't1');
+      expect(visible).toBeDefined();
+      expect(visible!.source).toBe("\nassert (type(a)) == <class 'int'>");
+
+      // Hidden portion expanded (now in sources under the referent ID).
+      const secret = result.sources.find(s => s.id === 't1-hidden');
+      expect(secret).toBeDefined();
+      expect(secret!.source).toBe('assert (a) == 5');
     });
   });
 
@@ -1049,7 +1109,7 @@ describe('nbgrader fixtures', () => {
   });
 
   describe('test-hidden-tests.ipynb', () => {
-    const result = classify(load('test-hidden-tests.ipynb'));
+    const result = pipeline(load('test-hidden-tests.ipynb'));
 
     it('classifies both answers as correctable', () => {
       expect(result.cells).toHaveLength(2);
@@ -1057,9 +1117,27 @@ describe('nbgrader fixtures', () => {
       expect(result.cells[1].is).toBe('correctable');
     });
 
-    it('captures hidden test references', () => {
-      const references = result.references.flat();
-      expect(references.length).toBeGreaterThanOrEqual(4);
+    it('each correctable has 3 references: visible (0pt) + hidden + regular', () => {
+      for (const cell of result.cells) {
+        expect(cell.references).toHaveLength(3);
+        expect(
+          cell.references!.filter(id => id.endsWith('-hidden'))
+        ).toHaveLength(1);
+      }
+      const flat = result.references.flat();
+      expect(flat).toHaveLength(6);
+      const hidden = flat.filter(r => r.referent.endsWith('-hidden'));
+      expect(hidden).toHaveLength(2);
+      for (const r of hidden) expect(r.points).toBe(1);
+      const visible = flat.filter(r =>
+        result.splits.some(s => s.cell === r.referent)
+      );
+      for (const r of visible) expect(r.points).toBe(0);
+    });
+
+    it('totals 4 points (2 per correctable)', () => {
+      expect(result.cells[0].points).toBe(2);
+      expect(result.cells[1].points).toBe(2);
     });
 
     it('extracts 2 hidden test regions', () => {
@@ -1071,14 +1149,6 @@ describe('nbgrader fixtures', () => {
     it('records visible sources for split test cells', () => {
       const ids = result.sources.map(s => s.id);
       for (const split of result.splits) expect(ids).toContain(split.cell);
-    });
-
-    it('uses hidden referent IDs in correctable references', () => {
-      for (const cell of result.cells) {
-        const refs = cell.references!;
-        const split = refs.some(id => id.endsWith('-hidden'));
-        expect(split).toBe(true);
-      }
     });
 
     it('visible sources have no hidden markers', () => {
@@ -1530,20 +1600,27 @@ describe('upstream nbgrader fixtures', () => {
     });
 
     describe('autotest-hidden.ipynb', () => {
-      const result = classify(load('autotest-hidden.ipynb'));
+      const raw = load('autotest-hidden.ipynb');
+      const result = pipeline(raw);
 
-      it('produces 1 correctable', () => {
+      it('produces 1 correctable with visible and hidden references', () => {
         expect(result.cells).toHaveLength(1);
         expect(result.cells[0].is).toBe('correctable');
+        const refs = result.cells[0].references!;
+        expect(refs).toHaveLength(2);
+        expect(refs[1]).toMatch(/-hidden$/);
+      });
+
+      it('assigns 0 points to visible, full points to hidden', () => {
+        const flat = result.references.flat();
+        const visible = flat.find(r => !r.referent.endsWith('-hidden'));
+        const hidden = flat.find(r => r.referent.endsWith('-hidden'));
+        expect(visible!.points).toBe(0);
+        expect(hidden!.points).toBe(1);
       });
 
       it('splits hidden test region from test cell', () => {
         expect(result.splits).toHaveLength(1);
-      });
-
-      it('uses hidden referent ID in correctable references', () => {
-        const refs = result.cells[0].references!;
-        expect(refs.some(id => id.endsWith('-hidden'))).toBe(true);
       });
 
       it('visible source has no hidden markers', () => {
@@ -1551,6 +1628,49 @@ describe('upstream nbgrader fixtures', () => {
           expect(source).not.toContain('BEGIN HIDDEN');
           expect(source).not.toContain('END HIDDEN');
         }
+      });
+
+      it('expands autotest directives in both portions', async () => {
+        const values: Record<string, string> = {
+          a: '5',
+          b: "'hello'",
+          c: "[1, 2, 'test']",
+          'type(a)': "<class 'int'>",
+          'type(b)': "<class 'str'>",
+          'type(c)': "<class 'list'>"
+        };
+        const executed: string[] = [];
+        const executor: Executor = async code => {
+          executed.push(code);
+          return values[code] ?? null;
+        };
+        const { cells } = presplit(raw);
+        const expanded = await expand(cells, result, executor);
+
+        // Answer cell was executed first.
+        expect(executed[0]).toContain('a = 5');
+
+        // Visible portion: type() assertions.
+        const visible = expanded.sources.find(
+          s => s.id === result.splits[0].cell
+        );
+        expect(visible).toBeDefined();
+        expect(visible!.source).toContain("assert (type(a)) == <class 'int'>");
+        expect(visible!.source).toContain("assert (type(b)) == <class 'str'>");
+        expect(visible!.source).toContain("assert (type(c)) == <class 'list'>");
+        expect(visible!.source).not.toContain('### AUTOTEST');
+
+        // Hidden portion: value assertions (in sources under referent ID).
+        const secret = expanded.sources.find(
+          s => s.id === result.splits[0].referent
+        );
+        expect(secret).toBeDefined();
+        expect(secret!.source).toContain('assert (a) == 5');
+        expect(secret!.source).toContain("assert (b) == 'hello'");
+        expect(secret!.source).toContain("assert (c) == [1, 2, 'test']");
+        expect(secret!.source).not.toContain('### AUTOTEST');
+
+        expect(expanded.warnings).toHaveLength(0);
       });
     });
 
@@ -1583,8 +1703,8 @@ describe('upstream nbgrader fixtures', () => {
       ['autotest-multi-changed.ipynb', 'autotest-multi.ipynb'],
       ['autotest-multi-unchanged.ipynb', 'autotest-multi.ipynb']
     ])('%s matches cell types and points of %s', (submission, source) => {
-      const s = classify(load(submission));
-      const r = classify(load(source));
+      const s = pipeline(load(submission));
+      const r = pipeline(load(source));
       expect(s.cells.map(c => c.is)).toEqual(r.cells.map(c => c.is));
       expect(s.cells.map(c => c.points)).toEqual(r.cells.map(c => c.points));
     });
