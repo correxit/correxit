@@ -9,7 +9,15 @@ import * as nbgrader from '../correxit/nbgrader';
 type Cellular = nbgrader.Cellular;
 type Executor = nbgrader.Executor;
 
-const { autotests, classify, clean, detect, spread: expand, strip } = nbgrader;
+const {
+  autotests,
+  classify,
+  clean,
+  detect,
+  hidden,
+  spread: expand,
+  strip
+} = nbgrader;
 
 const cell = (
   id: string,
@@ -408,6 +416,95 @@ describe('nbgrader', () => {
       expect(result.sources).toHaveLength(1);
       expect(result.sources[0]).toEqual({ id: 'm1', source: 'my answer' });
     });
+
+    it('splits test cell with hidden markers into reference', () => {
+      const source = [
+        'assert f(1) == 1',
+        '### BEGIN HIDDEN TESTS',
+        'assert f(10) == 100',
+        '### END HIDDEN TESTS'
+      ].join('\n');
+      const test = cell('t1', 'code', source, {
+        grade: true,
+        grade_id: 't1',
+        locked: false,
+        points: 2,
+        schema_version: 3,
+        solution: false
+      });
+      const cells = [Cell.answer('q1'), test];
+      const result = classify(cells);
+
+      expect(result.cells[0]).toMatchObject({
+        id: 'q1',
+        is: 'correctable',
+        references: ['t1-hidden']
+      });
+      expect(result.references[0][0]).toMatchObject({
+        cell: 'q1',
+        referent: 't1-hidden',
+        points: 2,
+        secret: true
+      });
+      expect(result.splits).toHaveLength(1);
+      expect(result.splits[0]).toEqual({
+        cell: 't1',
+        referent: 't1-hidden',
+        source: 'assert f(10) == 100'
+      });
+      const visible = result.sources.find(s => s.id === 't1');
+      expect(visible).toBeDefined();
+      expect(visible!.source).toBe('assert f(1) == 1');
+    });
+
+    it('does not split when visible portion is empty', () => {
+      const source = [
+        '### BEGIN HIDDEN TESTS',
+        'assert f(10) == 100',
+        '### END HIDDEN TESTS'
+      ].join('\n');
+      const test = cell('t1', 'code', source, {
+        grade: true,
+        grade_id: 't1',
+        locked: false,
+        points: 2,
+        schema_version: 3,
+        solution: false
+      });
+      const cells = [Cell.answer('q1'), test];
+      const result = classify(cells);
+
+      expect(result.cells[0].references).toEqual(['t1']);
+      expect(result.splits).toHaveLength(0);
+    });
+
+    it('splits hidden tests alongside regular tests', () => {
+      const source = [
+        'assert f(1) == 1',
+        '### BEGIN HIDDEN TESTS',
+        'assert f(10) == 100',
+        '### END HIDDEN TESTS'
+      ].join('\n');
+      const cells = [
+        Cell.answer('q1'),
+        cell('t1', 'code', source, {
+          grade: true,
+          grade_id: 't1',
+          locked: false,
+          points: 1,
+          schema_version: 3,
+          solution: false
+        }),
+        Cell.test('t2', 1)
+      ];
+      const result = classify(cells);
+
+      expect(result.cells[0]).toMatchObject({
+        is: 'correctable',
+        references: ['t1-hidden', 't2']
+      });
+      expect(result.splits).toHaveLength(1);
+    });
   });
 
   describe('strip', () => {
@@ -463,6 +560,64 @@ describe('nbgrader', () => {
         '=== END MARK SCHEME ==='
       ].join('\n');
       expect(strip(source)).toBe('def f():\n    return 1\n');
+    });
+  });
+
+  describe('hidden', () => {
+    it('extracts hidden region and returns visible remainder', () => {
+      const source = [
+        'assert f(1) == 1',
+        '### BEGIN HIDDEN TESTS',
+        'assert f(10) == 100',
+        '### END HIDDEN TESTS'
+      ].join('\n');
+      const result = hidden(source)!;
+      expect(result.visible).toBe('assert f(1) == 1');
+      expect(result.hidden).toBe('assert f(10) == 100');
+    });
+
+    it('handles multiple hidden regions', () => {
+      const source = [
+        'assert f(1) == 1',
+        '### BEGIN HIDDEN TESTS',
+        'assert f(2) == 4',
+        '### END HIDDEN TESTS',
+        'assert f(3) == 9',
+        '### BEGIN HIDDEN TESTS',
+        'assert f(4) == 16',
+        '### END HIDDEN TESTS'
+      ].join('\n');
+      const result = hidden(source)!;
+      expect(result.visible).toBe('assert f(1) == 1\nassert f(3) == 9');
+      expect(result.hidden).toBe('assert f(2) == 4\nassert f(4) == 16');
+    });
+
+    it('returns null when no markers present', () => {
+      expect(hidden('assert f(1) == 1')).toBeNull();
+    });
+
+    it('trims trailing whitespace from visible portion', () => {
+      const source = [
+        'assert f(1) == 1',
+        '',
+        '### BEGIN HIDDEN TESTS',
+        'assert f(10) == 100',
+        '### END HIDDEN TESTS'
+      ].join('\n');
+      const result = hidden(source)!;
+      expect(result.visible).toBe('assert f(1) == 1');
+    });
+
+    it('supports singular HIDDEN TEST marker', () => {
+      const source = [
+        'visible',
+        '### BEGIN HIDDEN TEST',
+        'secret',
+        '### END HIDDEN TEST'
+      ].join('\n');
+      const result = hidden(source)!;
+      expect(result.visible).toBe('visible');
+      expect(result.hidden).toBe('secret');
     });
   });
 
@@ -835,6 +990,32 @@ describe('nbgrader fixtures', () => {
     it('captures hidden test references', () => {
       const references = result.references.flat();
       expect(references.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('extracts 2 hidden test regions', () => {
+      expect(result.splits).toHaveLength(2);
+      for (const split of result.splits)
+        expect(split.source).toContain('assert');
+    });
+
+    it('records visible sources for split test cells', () => {
+      const ids = result.sources.map(s => s.id);
+      for (const split of result.splits) expect(ids).toContain(split.cell);
+    });
+
+    it('uses hidden referent IDs in correctable references', () => {
+      for (const cell of result.cells) {
+        const refs = cell.references!;
+        const split = refs.some(id => id.endsWith('-hidden'));
+        expect(split).toBe(true);
+      }
+    });
+
+    it('visible sources have no hidden markers', () => {
+      for (const { source } of result.sources) {
+        expect(source).not.toContain('BEGIN HIDDEN');
+        expect(source).not.toContain('END HIDDEN');
+      }
     });
   });
 

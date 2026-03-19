@@ -40,6 +40,7 @@ type Classification = {
   cells: Cell[];
   references: Reference[][];
   sources: { id: string; source: string }[];
+  splits: { cell: string; referent: string; source: string }[];
   warnings: string[];
 };
 
@@ -82,6 +83,7 @@ export function classify(cells: Cellular[]): Classification {
     cells: [],
     references: [],
     sources: [],
+    splits: [],
     warnings: []
   };
   const flush = () => {
@@ -177,9 +179,25 @@ export function classify(cells: Cellular[]): Classification {
     }
     if (is.test) {
       if (answer) {
-        answer.tests.push({ id: cell.id, points });
+        const split = hidden(cell.source);
+        if (split && split.visible.trim()) {
+          const referent = `${cell.id}-hidden`;
+          answer.tests.push({ id: referent, points });
+          result.sources.push({
+            id: cell.id, source: split.visible
+          });
+          result.splits.push({
+            cell: cell.id,
+            referent,
+            source: split.hidden
+          });
+        } else {
+          answer.tests.push({ id: cell.id, points });
+        }
       } else {
-        const warn = `Test cell "${cell.id}" has no preceding answer; skipped`;
+        const warn =
+          `Test cell "${cell.id}" has no preceding answer`
+          + '; skipped';
         result.warnings.push(warn);
       }
       continue;
@@ -228,6 +246,8 @@ function recalibrate(values: number[]): number[] {
 const AUTOTEST = /^###\s+(?:HASHED\s+)?AUTOTEST\s+(.+)$/;
 const BEGIN_SOLUTION = /^#{3,}\s*BEGIN\s+SOLUTION\s*$/;
 const END_SOLUTION = /^#{3,}\s*END\s+SOLUTION\s*$/;
+const BEGIN_HIDDEN = /^#{3,}\s*BEGIN\s+HIDDEN\s+TESTS?\s*$/;
+const END_HIDDEN = /^#{3,}\s*END\s+HIDDEN\s+TESTS?\s*$/;
 const BEGIN_MARK = /^={3,}\s*BEGIN\s+MARK\s+SCHEME\s*={3,}$/;
 const END_MARK = /^={3,}\s*END\s+MARK\s+SCHEME\s*={3,}$/;
 
@@ -245,12 +265,12 @@ export function clean(
   return rest;
 }
 
-/** Build a summary widget for a completed nbgrader conversion. */
+/** Build a summary report for a completed nbgrader conversion. */
 export function report(
   classification: Classification,
   trans: TranslationBundle
 ): string[] {
-  const { cells, warnings } = classification;
+  const { cells, splits, warnings } = classification;
   const correctable = cells.filter(cell => cell.is === 'correctable');
   const reviewable = cells.filter(cell => cell.is === 'reviewable');
   const points = cells.reduce((sum, cell) => sum + cell.points, 0);
@@ -262,6 +282,12 @@ export function report(
       correctable.length, reviewable.length, points
     )
   ];
+  if (splits.length) {
+    report.push(trans.__(
+      '%1 hidden test regions extracted.',
+      splits.length
+    ));
+  }
   if (warnings.length) {
     report.push('');
     for (const warning of warnings) report.push(`\u26a0 ${warning}`);
@@ -451,6 +477,41 @@ export function strip(source: string): string {
 }
 
 /**
+ * Extract hidden test regions from a test cell source.
+ *
+ * Returns the visible and hidden portions, or null when no
+ * hidden test markers are present.
+ */
+export function hidden(
+  source: string
+): { visible: string; hidden: string } | null {
+  const lines = source.split('\n');
+  const visible: string[] = [];
+  const extracted: string[] = [];
+  let inside = false;
+  let found = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (BEGIN_HIDDEN.test(trimmed)) {
+      inside = true;
+      found = true;
+      continue;
+    }
+    if (END_HIDDEN.test(trimmed)) {
+      inside = false;
+      continue;
+    }
+    if (inside) extracted.push(line);
+    else visible.push(line);
+  }
+  if (!found) return null;
+  return {
+    visible: visible.join('\n').trimEnd(),
+    hidden: extracted.join('\n')
+  };
+}
+
+/**
  * Detect, classify, and apply nbgrader cell metadata to a converted workbook.
  *
  * @returns a serialized multi-line report on success, or null when the notebook
@@ -482,6 +543,32 @@ export async function convert(
 
   for (const warning of classification.warnings)
     console.warn('nbgrader convert:', warning);
+
+  // Insert hidden test cells extracted from split test cells.
+  for (const split of classification.splits) {
+    const index = notebook.cells.findIndex(
+      cell => cell.id === split.cell
+    );
+    if (index < 0) continue;
+    notebook.insertCell(index + 1, {
+      cell_type: 'code',
+      source: split.source,
+      metadata: {}
+    });
+    const actual = notebook.cells[index + 1].id;
+    if (actual === split.referent) continue;
+    for (const refs of classification.references)
+      {for (const ref of refs)
+        {if (ref.referent === split.referent)
+          (ref as { referent: string }).referent = actual;}}
+    for (const cell of classification.cells)
+      {if (cell.references)
+        {(cell as { references: string[] }).references =
+          cell.references.map(
+            id => id === split.referent ? actual : id
+          );}}
+  }
+
   for (let i = 0; i < classification.cells.length; i++) {
     await Workbook.add(
       workbook, classification.cells[i], classification.references[i]
