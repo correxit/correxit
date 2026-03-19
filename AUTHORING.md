@@ -357,14 +357,14 @@ conversion.
 
 ### How cells are mapped
 
-| nbgrader cell type   | nbgrader metadata                | Correxit type   |
-| -------------------- | -------------------------------- | --------------- |
-| Autograded answer    | `solution=true`, `grade=false`   | correctable     |
-| Autograder tests     | `grade=true`, `solution=false`   | reference       |
-| Manual answer        | `grade=true`, `solution=true`    | reviewable      |
-| Task                 | `task=true`                      | reviewable      |
-| Read-only / locked   | `locked=true`, no grade/solution | (skipped)       |
-| Unmarked             | no nbgrader key                  | (skipped)       |
+| nbgrader cell type | nbgrader metadata                | Correxit type |
+| ------------------ | -------------------------------- | ------------- |
+| Autograded answer  | `solution=true`, `grade=false`   | correctable   |
+| Autograder tests   | `grade=true`, `solution=false`   | reference     |
+| Manual answer      | `grade=true`, `solution=true`    | reviewable    |
+| Task               | `task=true`                      | reviewable    |
+| Read-only / locked | `locked=true`, no grade/solution | (skipped)     |
+| Unmarked           | no nbgrader key                  | (skipped)     |
 
 An autograded answer becomes **correctable** when test cells follow it
 in notebook order. If no test cells follow, it falls back to

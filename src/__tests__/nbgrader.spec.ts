@@ -844,10 +844,7 @@ describe('nbgrader', () => {
 
   describe('slippage', () => {
     it('returns null when no cells carry metadata points', () => {
-      const cells = [
-        Cell.answer('a1'),
-        Cell.test('t1', 2)
-      ];
+      const cells = [Cell.answer('a1'), Cell.test('t1', 2)];
       const classification = classify(cells);
       // answer has no points in metadata (solution-only), test has 2;
       // rubric total is 2, metadata total is 2 → null
@@ -855,11 +852,7 @@ describe('nbgrader', () => {
     });
 
     it('returns null when metadata points match rubric points', () => {
-      const cells = [
-        Cell.answer('a1'),
-        Cell.test('t1', 3),
-        Cell.test('t2', 2)
-      ];
+      const cells = [Cell.answer('a1'), Cell.test('t1', 3), Cell.test('t2', 2)];
       const classification = classify(cells);
       // metadata: 3 + 2 = 5, rubric: 3 + 2 = 5
       expect(slippage(cells, classification)).toBeNull();
@@ -908,8 +901,12 @@ describe('nbgrader', () => {
       const cells = [
         Cell.answer('a1'),
         cell('t1', 'code', '', {
-          grade: true, grade_id: 't1', locked: false,
-          points: -3, schema_version: 3, solution: false
+          grade: true,
+          grade_id: 't1',
+          locked: false,
+          points: -3,
+          schema_version: 3,
+          solution: false
         })
       ];
       const classification = classify(cells);
@@ -920,8 +917,12 @@ describe('nbgrader', () => {
     it('detects slippage from rounding on manual cells', () => {
       const cells = [
         cell('m1', 'code', '', {
-          grade: true, grade_id: 'm1', locked: false,
-          points: 1.7, schema_version: 3, solution: true
+          grade: true,
+          grade_id: 'm1',
+          locked: false,
+          points: 1.7,
+          schema_version: 3,
+          solution: true
         })
       ];
       const classification = classify(cells);
