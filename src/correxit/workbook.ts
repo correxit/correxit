@@ -1,6 +1,7 @@
 import { SharedCell } from '@jupyter/ydoc';
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
+import { INotebookContent } from '@jupyterlab/nbformat';
 import {
   INotebookModel,
   Notebook,
@@ -449,6 +450,14 @@ export namespace Workbook {
       return update(workbook, rubric);
     } catch (error) {
       if (error === Correxit.NO_CORREXIT_METADATA) {
+        const model = workbook.context.model;
+        if (model.nbformatMinor < 5) {
+          // Ensure nbformat 4.5 so cell IDs persist on save.
+          const notebook = model.toJSON() as INotebookContent;
+          notebook.nbformat_minor = 5;
+          model.fromJSON(notebook);
+        }
+
         const created = Rubric.create();
         const key = await security.keygen(passphrase, created.id);
         const pair = await security.keypair();

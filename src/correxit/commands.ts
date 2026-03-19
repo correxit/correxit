@@ -9,6 +9,7 @@ import { Correxit, Rubric, Workbook } from '..';
 import { Propagator } from '../ui/propagator';
 import * as input from './input';
 import * as io from './io';
+import * as nbgrader from './nbgrader';
 import * as propagator from './propagator';
 import * as security from './security';
 import * as state from './state';
@@ -277,7 +278,45 @@ export function commands(
         title: trans.__('Enter a passphrase'),
         label: trans.__('Enter a passphrase for this workbook')
       });
-      if (passphrase) await convert(workbook, passphrase, unlocker);
+      if (!passphrase) return;
+
+      const notebook = workbook.context.model.sharedModel;
+      const snapshot = () => notebook.cells.map(cell => ({
+        id: cell.id,
+        cell_type: cell.cell_type,
+        source: cell.getSource(),
+        metadata: cell.toJSON().metadata as Record<string, any>
+      }));
+      const detected = nbgrader.detect(snapshot());
+      await convert(workbook, passphrase, unlocker);
+      if (detected) {
+        // Capture cells after convert: fromJSON may
+        // have regenerated cell IDs (nbformat upgrade).
+        const classification = nbgrader.classify(snapshot());
+        for (const warning of classification.warnings)
+          console.warn('nbgrader convert:', warning);
+        for (let i = 0; i < classification.cells.length; i++)
+          await add(workbook, classification.cells[i], classification.references[i]);
+
+        const sources = new Map(
+          classification.sources.map(({ id, source }) => [id, source])
+        );
+        notebook.transact(() => {
+          for (const cell of notebook.cells) {
+            const json = cell.toJSON();
+            const cleaned = nbgrader.clean(json.metadata);
+            const source = sources.get(cell.id);
+            if (source !== undefined) {
+              const replacement = { ...json, metadata: cleaned, source };
+              const index = notebook.cells.indexOf(cell);
+              notebook.deleteCell(index);
+              notebook.insertCell(index, replacement);
+            } else if ('nbgrader' in (json.metadata as any || {})) {
+              cell.transact(() => cell.deleteMetadata('nbgrader'));
+            }
+          }
+        }, false);
+      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.correct, {
