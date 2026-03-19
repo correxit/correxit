@@ -1,7 +1,10 @@
 import { ICell } from '@jupyterlab/nbformat';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { Kernel } from '@jupyterlab/services';
 import { Widget } from '@lumino/widgets';
+import * as kernels from './kernels';
 import { Rubric } from './rubric';
+import { Workbook } from './workbook';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
@@ -34,7 +37,7 @@ export type Cellular =
  * Classification output: Correxit cells and their references, plus any
  * diagnostic warnings the instructor should see.
  */
-export type Classification = {
+type Classification = {
   cells: Cell[];
   references: Reference[][];
   sources: { id: string; source: string }[];
@@ -223,34 +226,15 @@ function recalibrate(values: number[]): number[] {
   return values.map(value => Math.round(value * 100));
 }
 
+const AUTOTEST = /^###\s+(?:HASHED\s+)?AUTOTEST\s+(.+)$/;
 const BEGIN_SOLUTION = /^#{3,}\s*BEGIN\s+SOLUTION\s*$/;
 const END_SOLUTION = /^#{3,}\s*END\s+SOLUTION\s*$/;
 const BEGIN_MARK = /^={3,}\s*BEGIN\s+MARK\s+SCHEME\s*={3,}$/;
 const END_MARK = /^={3,}\s*END\s+MARK\s+SCHEME\s*={3,}$/;
 
-/**
- * Strip solution and mark-scheme markers from cell source.
- *
- * Solution markers (`### BEGIN/END SOLUTION`): the marker lines are
- * removed but solution code between them is kept.
- *
- * Mark-scheme regions (`=== BEGIN/END MARK SCHEME ===`): everything
- * between the markers (inclusive) is dropped.
- */
-export function strip(source: string): string {
-  const lines = source.split('\n');
-  const out: string[] = [];
-  let marking = false;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (BEGIN_MARK.test(trimmed)) { marking = true; continue; }
-    if (END_MARK.test(trimmed)) { marking = false; continue; }
-    if (marking) continue;
-    if (BEGIN_SOLUTION.test(trimmed)) continue;
-    if (END_SOLUTION.test(trimmed)) continue;
-    out.push(line);
-  }
-  return out.join('\n');
+/** Returns true if the source contains autotest directives. */
+export function autotests(source: string): boolean {
+  return source.split('\n').some(line => AUTOTEST.test(line.trim()));
 }
 
 /** Remove the `nbgrader` key from a metadata object. */
@@ -294,4 +278,187 @@ export function report(
     node.appendChild(document.createTextNode(line));
   });
   return new Widget({ node });
+}
+
+type Directive = { line: number; expressions: string[] };
+
+/** Parse autotest directives from a cell source. */
+function directives(source: string): Directive[] {
+  return source.split('\n')
+    .map((raw, line) => ({ raw, line }))
+    .filter(({ raw }) => AUTOTEST.test(raw.trim()))
+    .map(({ raw, line }) => {
+      const match = raw.trim().match(AUTOTEST)!;
+      const expressions = match[1]
+        .split(';')
+        .map(expr => expr.trim())
+        .filter(Boolean);
+      return { line, expressions };
+    });
+}
+
+/**
+ * Execute code and return the `text/plain` execute_result, or null on
+ * failure or when the code produces no result.
+ */
+export type Executor = (code: string) => Promise<string | null>;
+
+/** Build an executor backed by a live kernel connection. */
+function executor(kernel: Kernel.IKernelConnection): Executor {
+  return code =>
+    new Promise(resolve => {
+      const future = kernel.requestExecute({ code }, true);
+      let result: string | null = null;
+      future.onIOPub = msg => {
+        if (msg.header.msg_type === 'execute_result') {
+          const data = (msg.content as any).data;
+          result = data?.['text/plain'] ?? null;
+        }
+      };
+      future.done
+        .then(reply =>
+          resolve(reply.content.status === 'ok' ? result : null)
+        )
+        .catch(() => resolve(null));
+    });
+}
+
+/**
+ * Expand autotest directives in test cells by leasing a kernel, executing
+ * answer cells for their definitions, then evaluating each autotest
+ * expression and replacing directives with concrete assertions.
+ *
+ * If no kernel is available, returns the classification unchanged with a
+ * warning appended.
+ */
+export async function expand(
+  workbook: Workbook,
+  cells: Cellular[],
+  classification: Classification
+): Promise<Classification> {
+  const leased = await kernels.lease(workbook, { async: true });
+  if (!leased) {
+    const name = workbook.context.model.defaultKernelName;
+    return {
+      ...classification,
+      warnings: [
+        ...classification.warnings,
+        `Autotest cells could not be expanded (no ${name} kernel available)`
+      ]
+    };
+  }
+  const [kernel, release] = leased;
+  try {
+    return await expand.pure(cells, classification, executor(kernel));
+  } finally {
+    await release();
+  }
+}
+
+export namespace expand {
+  /** Pure expansion logic, separated for unit testing without a kernel. */
+  export async function pure(
+    cells: Cellular[],
+    classification: Classification,
+    execute: Executor
+  ): Promise<Classification> {
+    const answers = new Set(
+      classification.cells
+        .filter(cell => cell.is === 'correctable')
+        .map(cell => cell.id)
+    );
+    const referents = new Set(
+      classification.references.flat().map(ref => ref.referent)
+    );
+    const stripped = new Map(
+      classification.sources.map(({ id, source }) => [id, source])
+    );
+
+    const expanded: { id: string; source: string }[] = [];
+    const warnings: string[] = [];
+
+    for (const cell of cells) {
+      if (answers.has(cell.id)) {
+        await execute(stripped.get(cell.id) ?? cell.source);
+        continue;
+      }
+      if (!referents.has(cell.id)) continue;
+
+      const found = directives(cell.source);
+      if (!found.length) {
+        await execute(cell.source);
+        continue;
+      }
+
+      const lines = cell.source.split('\n');
+      const on = new Set(
+        found.map(directive => directive.line)
+      );
+      const output: string[] = [];
+      let pending: string[] = [];
+
+      const flush = async () => {
+        if (!pending.length) return;
+        const block = pending.join('\n');
+        output.push(...pending);
+        pending = [];
+        if (block.trim()) await execute(block);
+      };
+
+      let ok = true;
+      for (let i = 0; i < lines.length; i++) {
+        if (!on.has(i)) { pending.push(lines[i]); continue; }
+        await flush();
+        const directive = found.find(
+          directive => directive.line === i
+        )!;
+        for (const expr of directive.expressions) {
+          const value = await execute(expr);
+          if (value !== null) {
+            output.push(`assert ${expr} == ${value}`);
+          } else {
+            ok = false;
+            warnings.push(
+              `Expansion failed for "${expr}" in cell "${cell.id}"`
+            );
+            output.push(`### AUTOTEST ${expr}`);
+          }
+        }
+      }
+      await flush();
+      if (ok)
+        expanded.push({ id: cell.id, source: output.join('\n') });
+    }
+
+    return {
+      ...classification,
+      sources: [...classification.sources, ...expanded],
+      warnings: [...classification.warnings, ...warnings]
+    };
+  }
+}
+
+/**
+ * Strip solution and mark-scheme markers from cell source.
+ *
+ * Solution markers (`### BEGIN/END SOLUTION`): the marker lines are
+ * removed but solution code between them is kept.
+ *
+ * Mark-scheme regions (`=== BEGIN/END MARK SCHEME ===`): everything
+ * between the markers (inclusive) is dropped.
+ */
+export function strip(source: string): string {
+  const lines = source.split('\n');
+  const out: string[] = [];
+  let marking = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (BEGIN_MARK.test(trimmed)) { marking = true; continue; }
+    if (END_MARK.test(trimmed)) { marking = false; continue; }
+    if (marking) continue;
+    if (BEGIN_SOLUTION.test(trimmed)) continue;
+    if (END_SOLUTION.test(trimmed)) continue;
+    out.push(line);
+  }
+  return out.join('\n');
 }

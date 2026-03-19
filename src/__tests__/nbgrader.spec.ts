@@ -1,7 +1,13 @@
 /// <reference types="node" />
 import * as fs from 'fs';
 import * as path from 'path';
-import { classify, clean, Cellular, detect, strip } from '../correxit/nbgrader';
+import * as nbgrader from '../correxit/nbgrader';
+
+type Cellular = nbgrader.Cellular;
+type Executor = nbgrader.Executor;
+
+const { autotests, classify, clean, detect, strip } = nbgrader;
+const { pure: expand } = nbgrader.expand;
 
 const cell = (
   id: string,
@@ -473,6 +479,218 @@ describe('nbgrader', () => {
     it('returns unchanged metadata when no nbgrader key', () => {
       const metadata = { editable: true };
       expect(clean(metadata)).toEqual({ editable: true });
+    });
+  });
+
+  describe('autotests', () => {
+    it('detects ### AUTOTEST directives', () => {
+      expect(autotests('### AUTOTEST squares(1)')).toBe(true);
+    });
+
+    it('detects ### HASHED AUTOTEST directives', () => {
+      expect(autotests('### HASHED AUTOTEST squares(3)')).toBe(true);
+    });
+
+    it('returns false for plain code', () => {
+      expect(autotests('assert squares(1) == [1]')).toBe(false);
+    });
+
+    it('returns false for solution markers', () => {
+      expect(autotests('### BEGIN SOLUTION\n### END SOLUTION')).toBe(false);
+    });
+
+    it('detects autotests among other lines', () => {
+      const source = '"""docstring"""\n### AUTOTEST f(1); f(2)\nassert True';
+      expect(autotests(source)).toBe(true);
+    });
+  });
+
+  describe('expand', () => {
+    const answer = (id: string, source: string): Cellular => ({
+      id,
+      cell_type: 'code',
+      source,
+      metadata: {
+        nbgrader: {
+          grade: false,
+          grade_id: id,
+          locked: false,
+          schema_version: 3,
+          solution: true
+        }
+      }
+    });
+
+    const test_cell = (
+      id: string,
+      points: number,
+      source: string
+    ): Cellular => ({
+      id,
+      cell_type: 'code',
+      source,
+      metadata: {
+        nbgrader: {
+          grade: true,
+          grade_id: id,
+          locked: false,
+          points,
+          schema_version: 3,
+          solution: false
+        }
+      }
+    });
+
+    it('expands autotest directives using executor results', async () => {
+      const cells: Cellular[] = [
+        answer('a1', 'def f(x): return x * 2'),
+        test_cell('t1', 1, '### AUTOTEST f(1)')
+      ];
+      const classification = classify(cells);
+      const executor: Executor = async code => {
+        if (code === 'f(1)') return '2';
+        return null;
+      };
+      const result = await expand(cells, classification, executor);
+
+      const source = result.sources.find(s => s.id === 't1');
+      expect(source).toBeDefined();
+      expect(source!.source).toBe('assert f(1) == 2');
+    });
+
+    it('expands semicolon-separated expressions', async () => {
+      const cells: Cellular[] = [
+        answer('a1', 'def f(x): return x'),
+        test_cell('t1', 1, '### AUTOTEST f(1); f(2)')
+      ];
+      const classification = classify(cells);
+      const values: Record<string, string> = { 'f(1)': '1', 'f(2)': '2' };
+      const executor: Executor = async code => values[code] ?? null;
+      const result = await expand(cells, classification, executor);
+
+      const source = result.sources.find(s => s.id === 't1');
+      expect(source!.source).toBe('assert f(1) == 1\nassert f(2) == 2');
+    });
+
+    it('preserves non-autotest code around directives', async () => {
+      const source = [
+        '"""docstring"""',
+        'x = 1',
+        '### AUTOTEST f(x)',
+        'x = 2'
+      ].join('\n');
+      const cells: Cellular[] = [
+        answer('a1', 'def f(x): return x'),
+        test_cell('t1', 1, source)
+      ];
+      const classification = classify(cells);
+      const executor: Executor = async code => {
+        if (code === 'f(x)') return '1';
+        return null;
+      };
+      const result = await expand(cells, classification, executor);
+
+      const expanded = result.sources.find(s => s.id === 't1');
+      expect(expanded!.source).toBe(
+        '"""docstring"""\nx = 1\nassert f(x) == 1\nx = 2'
+      );
+    });
+
+    it('adds warning when expression evaluation fails', async () => {
+      const cells: Cellular[] = [
+        answer('a1', 'def f(x): return x'),
+        test_cell('t1', 1, '### AUTOTEST f(bad)')
+      ];
+      const classification = classify(cells);
+      const executor: Executor = async () => null;
+      const result = await expand(cells, classification, executor);
+
+      expect(result.warnings).toContain(
+        'Expansion failed for "f(bad)" in cell "t1"'
+      );
+    });
+
+    it('does not add source entry when all expressions fail', async () => {
+      const cells: Cellular[] = [
+        answer('a1', 'def f(x): return x'),
+        test_cell('t1', 1, '### AUTOTEST bad()')
+      ];
+      const classification = classify(cells);
+      const executor: Executor = async () => null;
+      const result = await expand(cells, classification, executor);
+
+      expect(result.sources.find(s => s.id === 't1')).toBeUndefined();
+    });
+
+    it('executes answer cells before test cells', async () => {
+      const executed: string[] = [];
+      const cells: Cellular[] = [
+        answer('a1', 'def f(): return 42'),
+        test_cell('t1', 1, '### AUTOTEST f()')
+      ];
+      const classification = classify(cells);
+      const executor: Executor = async code => {
+        executed.push(code);
+        if (code === 'f()') return '42';
+        return null;
+      };
+      await expand(cells, classification, executor);
+
+      expect(executed[0]).toBe('def f(): return 42');
+      expect(executed[1]).toBe('f()');
+    });
+
+    it('handles HASHED AUTOTEST the same as AUTOTEST', async () => {
+      const cells: Cellular[] = [
+        answer('a1', 'def f(x): return x ** 2'),
+        test_cell('t1', 1, '### HASHED AUTOTEST f(3)')
+      ];
+      const classification = classify(cells);
+      const executor: Executor = async code => {
+        if (code === 'f(3)') return '9';
+        return null;
+      };
+      const result = await expand(cells, classification, executor);
+
+      const source = result.sources.find(s => s.id === 't1');
+      expect(source!.source).toBe('assert f(3) == 9');
+    });
+
+    it('executes non-autotest test cells for side effects', async () => {
+      const executed: string[] = [];
+      const cells: Cellular[] = [
+        answer('a1', 'def f(): return 1'),
+        test_cell('t1', 1, 'helper = lambda: True'),
+        test_cell('t2', 1, '### AUTOTEST f()')
+      ];
+      const classification = classify(cells);
+      const executor: Executor = async code => {
+        executed.push(code);
+        if (code === 'f()') return '1';
+        return null;
+      };
+      await expand(cells, classification, executor);
+
+      expect(executed).toContain('helper = lambda: True');
+    });
+
+    it('preserves existing sources from classification', async () => {
+      const cells: Cellular[] = [
+        answer('a1', '### BEGIN SOLUTION\ndef f(): return 1\n### END SOLUTION'),
+        test_cell('t1', 1, '### AUTOTEST f()')
+      ];
+      const classification = classify(cells);
+      expect(classification.sources).toHaveLength(1);
+      expect(classification.sources[0].id).toBe('a1');
+
+      const executor: Executor = async code => {
+        if (code === 'f()') return '1';
+        return null;
+      };
+      const result = await expand(cells, classification, executor);
+
+      expect(result.sources.find(s => s.id === 'a1')).toBeDefined();
+      expect(result.sources.find(s => s.id === 't1')).toBeDefined();
     });
   });
 });

@@ -291,7 +291,18 @@ export function commands(
       await convert(workbook, passphrase, unlocker);
       if (!detected) return;
 
-      const classification = nbgrader.classify(snapshot());
+      const snap = snapshot();
+      let classification = nbgrader.classify(snap);
+
+      const referents = new Set(
+        classification.references.flat().map(ref => ref.referent)
+      );
+      const pending = snap.some(cell =>
+        referents.has(cell.id) && nbgrader.autotests(cell.source)
+      );
+      if (pending)
+        classification = await nbgrader.expand(workbook, snap, classification);
+
       const { cells, references, sources } = classification;
       for (const warning of classification.warnings)
         console.warn('nbgrader convert:', warning);

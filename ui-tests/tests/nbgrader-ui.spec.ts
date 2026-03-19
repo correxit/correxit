@@ -544,6 +544,106 @@ test.describe('nbgrader conversion (synthetic)', () => {
     const c = await clean(page);
     expect(c.sources).toBe(true);
   });
+
+  test('autotest directives are expanded into assertions', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'def f(x): return x * 2'),
+      autotest('t1', 1, '### AUTOTEST f(1)\n### AUTOTEST f(2)')
+    ]);
+    await convert(page);
+
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    // Autotest directives replaced with concrete assertions.
+    expect(sources[1]).toBe('assert f(1) == 2\nassert f(2) == 4');
+
+    const s = await shape(page);
+    expect(s.cells).toEqual([['correctable', 1, 1]]);
+  });
+
+  test('expanded autotests score correctly', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer(
+        'q1',
+        [
+          'def squares(n):',
+          '    ### BEGIN SOLUTION',
+          '    return [i**2 for i in range(1, n+1)]',
+          '    ### END SOLUTION'
+        ].join('\n')
+      ),
+      autotest('t1', 1, '### AUTOTEST squares(2)'),
+      autotest('t2', 1, '### AUTOTEST squares(3)')
+    ]);
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.status).toBe('correct');
+    expect(result.points).toBe(2);
+    expect(result.possible).toBe(2);
+  });
+
+  test('semicolon-separated autotests expand to multiple assertions', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'x = 42'),
+      autotest('t1', 1, '### AUTOTEST x; x + 1')
+    ]);
+    await convert(page);
+
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    expect(sources[1]).toBe('assert x == 42\nassert x + 1 == 43');
+  });
+
+  test('non-autotest code in test cell is preserved around expansions', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'x = 10'),
+      autotest('t1', 1, '"""verify x"""\n### AUTOTEST x\nassert x > 0')
+    ]);
+    await convert(page);
+
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    expect(sources[1]).toBe('"""verify x"""\nassert x == 10\nassert x > 0');
+  });
+
+  test('HASHED AUTOTEST directives are expanded', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'def f(n): return n ** 2'),
+      autotest('t1', 1, '### HASHED AUTOTEST f(5)')
+    ]);
+    await convert(page);
+
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    expect(sources[1]).toBe('assert f(5) == 25');
+  });
 });
 
 // ── Tests: real fixture notebooks ──
@@ -666,6 +766,21 @@ test.describe('nbgrader conversion (fixtures)', () => {
     ]);
     expect(s.points).toBe(11);
     expect(await captured()).toHaveLength(0);
+
+    // Autotest directives should be expanded into concrete assertions.
+    const sources = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      return notebook.cells.map((cell: any) => cell.getSource());
+    });
+    const autotest_cells = sources.filter(
+      (s: string) => s.includes('assert') && s.includes('==')
+    );
+    expect(autotest_cells.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      expect(source).not.toContain('### AUTOTEST');
+      expect(source).not.toContain('### HASHED AUTOTEST');
+    }
 
     const c = await clean(page);
     expect(c.metadata).toBe(true);
