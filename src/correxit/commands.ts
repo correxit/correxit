@@ -5,6 +5,7 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
+import { Widget } from '@lumino/widgets';
 import { Correxit, Rubric, Workbook } from '..';
 import { Propagator } from '../ui/propagator';
 import * as input from './input';
@@ -281,12 +282,17 @@ export function commands(
       if (!passphrase) return;
 
       await convert(workbook, passphrase, unlocker);
-      const body = await nbgrader.convert(workbook, trans);
-      if (!body) return;
+      const report = await nbgrader.convert(workbook, trans);
+      if (!report) return;
 
+      const node = document.createElement('span');
+      report.forEach((line, i) => {
+        if (i > 0) node.appendChild(document.createElement('br'));
+        node.appendChild(document.createTextNode(line));
+      });
       void showDialog({
         title: trans.__('Converted from nbgrader'),
-        body,
+        body: new Widget({ node }),
         buttons: [Dialog.okButton()]
       });
     }

@@ -1,6 +1,9 @@
 /// <reference types="node" />
 import * as fs from 'fs';
 import * as path from 'path';
+
+jest.mock('../correxit/workbook', () => ({ Workbook: {} }));
+
 import * as nbgrader from '../correxit/nbgrader';
 
 type Cellular = nbgrader.Cellular;

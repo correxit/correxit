@@ -1,7 +1,6 @@
 import { ICell } from '@jupyterlab/nbformat';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { Kernel } from '@jupyterlab/services';
-import { Widget } from '@lumino/widgets';
 import * as kernels from './kernels';
 import { Rubric } from './rubric';
 import { Workbook } from './workbook';
@@ -250,12 +249,12 @@ export function clean(
 export function report(
   classification: Classification,
   trans: TranslationBundle
-): Widget {
+): string[] {
   const { cells, warnings } = classification;
   const correctable = cells.filter(cell => cell.is === 'correctable');
   const reviewable = cells.filter(cell => cell.is === 'reviewable');
   const points = cells.reduce((sum, cell) => sum + cell.points, 0);
-  const lines = [
+  const report = [
     trans.__('Converted from nbgrader format.'),
     '',
     trans.__(
@@ -264,20 +263,15 @@ export function report(
     )
   ];
   if (warnings.length) {
-    lines.push('');
-    for (const warning of warnings) lines.push(`\u26a0 ${warning}`);
+    report.push('');
+    for (const warning of warnings) report.push(`\u26a0 ${warning}`);
   }
-  lines.push('');
-  lines.push(
+  report.push('');
+  report.push(
     trans.__('Select a cell to review its configuration in the sidebar.')
   );
 
-  const node = document.createElement('span');
-  lines.forEach((line, i) => {
-    if (i > 0) node.appendChild(document.createElement('br'));
-    node.appendChild(document.createTextNode(line));
-  });
-  return new Widget({ node });
+  return report;
 }
 
 type Directive = { line: number; expressions: string[] };
@@ -457,14 +451,15 @@ export function strip(source: string): string {
 }
 
 /**
- * Detect, classify, and apply nbgrader cell metadata to a freshly
- * converted workbook. Returns a summary widget on success, or null
- * when the notebook contains no nbgrader metadata.
+ * Detect, classify, and apply nbgrader cell metadata to a converted workbook.
+ *
+ * @returns a serialized multi-line report on success, or null when the notebook
+ * contains no nbgrader metadata.
  */
 export async function convert(
   workbook: Workbook,
   trans: TranslationBundle
-): Promise<Widget | null> {
+): Promise<string[] | null> {
   const notebook = workbook.context.model.sharedModel;
   const cells: Cellular[] = notebook.cells.map(cell => ({
     id: cell.id,
