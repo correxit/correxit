@@ -303,6 +303,7 @@ describe('nbgrader', () => {
       const cells = [Cell.task('task1', 2)];
       const result = classify(cells);
       expect(result.cells).toHaveLength(0);
+
       const trailing = result.warnings.some(warning =>
         warning.includes('Trailing task')
       );
@@ -334,9 +335,8 @@ describe('nbgrader', () => {
         is: 'reviewable',
         points: 5
       });
-      const discarded = result.warnings.some(warning =>
-        warning.includes('points discarded')
-      );
+      const discarded =
+        result.warnings.some(warning => warning.includes('points discarded'));
       expect(discarded).toBe(true);
     });
 
@@ -473,7 +473,6 @@ describe('nbgrader', () => {
       });
       const cells = [Cell.answer('q1'), test];
       const result = classify(cells);
-
       expect(result.cells[0].references).toEqual(['t1']);
       expect(result.splits).toHaveLength(0);
     });
@@ -498,7 +497,6 @@ describe('nbgrader', () => {
         Cell.test('t2', 1)
       ];
       const result = classify(cells);
-
       expect(result.cells[0]).toMatchObject({
         is: 'correctable',
         references: ['t1-hidden', 't2']
@@ -709,7 +707,6 @@ describe('nbgrader', () => {
         return null;
       };
       const result = await expand(cells, classification, executor);
-
       const source = result.sources.find(s => s.id === 't1');
       expect(source).toBeDefined();
       expect(source!.source).toBe('assert f(1) == 2');
@@ -724,7 +721,6 @@ describe('nbgrader', () => {
       const values: Record<string, string> = { 'f(1)': '1', 'f(2)': '2' };
       const executor: Executor = async code => values[code] ?? null;
       const result = await expand(cells, classification, executor);
-
       const source = result.sources.find(s => s.id === 't1');
       expect(source!.source).toBe('assert f(1) == 1\nassert f(2) == 2');
     });
@@ -746,7 +742,6 @@ describe('nbgrader', () => {
         return null;
       };
       const result = await expand(cells, classification, executor);
-
       const expanded = result.sources.find(s => s.id === 't1');
       expect(expanded!.source).toBe(
         '"""docstring"""\nx = 1\nassert f(x) == 1\nx = 2'
@@ -761,7 +756,6 @@ describe('nbgrader', () => {
       const classification = classify(cells);
       const executor: Executor = async () => null;
       const result = await expand(cells, classification, executor);
-
       expect(result.warnings).toContain(
         'Expansion failed for "f(bad)" in cell "t1"'
       );
@@ -775,7 +769,6 @@ describe('nbgrader', () => {
       const classification = classify(cells);
       const executor: Executor = async () => null;
       const result = await expand(cells, classification, executor);
-
       expect(result.sources.find(s => s.id === 't1')).toBeUndefined();
     });
 
@@ -792,7 +785,6 @@ describe('nbgrader', () => {
         return null;
       };
       await expand(cells, classification, executor);
-
       expect(executed[0]).toBe('def f(): return 42');
       expect(executed[1]).toBe('f()');
     });
@@ -808,7 +800,6 @@ describe('nbgrader', () => {
         return null;
       };
       const result = await expand(cells, classification, executor);
-
       const source = result.sources.find(s => s.id === 't1');
       expect(source!.source).toBe('assert f(3) == 9');
     });
@@ -827,7 +818,6 @@ describe('nbgrader', () => {
         return null;
       };
       await expand(cells, classification, executor);
-
       expect(executed).toContain('helper = lambda: True');
     });
 
@@ -845,9 +835,8 @@ describe('nbgrader', () => {
         return null;
       };
       const result = await expand(cells, classification, executor);
-
-      expect(result.sources.find(s => s.id === 'a1')).toBeDefined();
-      expect(result.sources.find(s => s.id === 't1')).toBeDefined();
+      expect(result.sources.find(({ id }) => id === 'a1')).toBeDefined();
+      expect(result.sources.find(({ id }) => id === 't1')).toBeDefined();
     });
   });
 });
@@ -905,32 +894,22 @@ describe('nbgrader fixtures', () => {
     });
 
     it('maps sum_of_squares to correctable (recalibrated from 0.5+0.5)', () => {
-      expect(result.cells[1]).toMatchObject({
-        is: 'correctable',
-        points: 2
-      });
+      expect(result.cells[1]).toMatchObject({ is: 'correctable', points: 2 });
+
       const references = result.references[1];
       expect(references[0].points).toBe(1);
       expect(references[1].points).toBe(1);
     });
 
     it('maps manual markdown to reviewable', () => {
-      expect(result.cells[2]).toMatchObject({
-        is: 'reviewable',
-        points: 1
-      });
+      expect(result.cells[2]).toMatchObject({ is: 'reviewable', points: 1 });
     });
 
     it('maps manual code to reviewable', () => {
-      expect(result.cells[3]).toMatchObject({
-        is: 'reviewable',
-        points: 2
-      });
+      expect(result.cells[3]).toMatchObject({ is: 'reviewable', points: 2 });
     });
 
-    it('has no warnings', () => {
-      expect(result.warnings).toHaveLength(0);
-    });
+    it('has no warnings', () => { expect(result.warnings).toHaveLength(0); });
 
     it('strips solution markers from answer cells', () => {
       expect(result.sources.length).toBeGreaterThan(0);
@@ -942,9 +921,7 @@ describe('nbgrader fixtures', () => {
 
     it('creates secret references for all test cells', () => {
       const references = result.references.flat();
-      for (const reference of references) {
-        expect(reference.secret).toBe(true);
-      }
+      for (const reference of references) expect(reference.secret).toBe(true);
     });
   });
 
@@ -959,9 +936,7 @@ describe('nbgrader fixtures', () => {
       expect(result.cells[3].is).toBe('reviewable');
     });
 
-    it('has no warnings', () => {
-      expect(result.warnings).toHaveLength(0);
-    });
+    it('has no warnings', () => { expect(result.warnings).toHaveLength(0); });
   });
 
   describe('test-v2.ipynb (schema v2)', () => {

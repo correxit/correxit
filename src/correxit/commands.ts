@@ -281,8 +281,18 @@ export function commands(
       });
       if (!passphrase) return;
 
-      await convert(workbook, passphrase, unlocker);
-      const report = await nbgrader.convert(workbook, trans);
+      const overlay = document.createElement('div');
+      overlay.classList.add('correxit-overlay', 'cxt-mod-loading');
+      overlay.dataset.label = trans.__('Converting...');
+      workbook.content?.node.parentElement?.appendChild(overlay);
+
+      let report: string[] | null;
+      try {
+        await convert(workbook, passphrase, unlocker);
+        report = await nbgrader.convert(workbook, trans);
+      } finally {
+        overlay.remove();
+      }
       if (!report) return;
 
       const node = document.createElement('span');
