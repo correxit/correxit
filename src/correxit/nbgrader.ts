@@ -45,7 +45,9 @@ export function detect(cells: Cellular[]): boolean {
   return cells.some(cell => {
     const meta = cell.metadata.nbgrader as
       Partial<Metadata> | undefined;
-    return meta?.grade === true || meta?.solution === true;
+    return meta?.grade === true
+      || meta?.solution === true
+      || meta?.task === true;
   });
 }
 

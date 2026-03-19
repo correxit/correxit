@@ -69,6 +69,10 @@ describe('nbgrader', () => {
     it('returns false for read-only-only notebooks', () => {
       expect(detect([Cell.readonly('a')])).toBe(false);
     });
+
+    it('returns true for task-only notebooks', () => {
+      expect(detect([Cell.task('a'), Cell.plain('b')])).toBe(true);
+    });
   });
 
   describe('classify', () => {
