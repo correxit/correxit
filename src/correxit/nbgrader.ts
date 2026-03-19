@@ -44,6 +44,116 @@ type Classification = {
   warnings: string[];
 };
 
+// ── Constants ──────────────────────────────────────────────────────
+
+const AUTOTEST = /^###\s+(?:HASHED\s+)?AUTOTEST\s+(.+)$/;
+const BEGIN_SOLUTION = /^#{3,}\s*BEGIN\s+SOLUTION\s*$/;
+const END_SOLUTION = /^#{3,}\s*END\s+SOLUTION\s*$/;
+const BEGIN_HIDDEN = /^#{3,}\s*BEGIN\s+HIDDEN\s+TESTS?\s*$/;
+const END_HIDDEN = /^#{3,}\s*END\s+HIDDEN\s+TESTS?\s*$/;
+const BEGIN_MARK = /^={3,}\s*BEGIN\s+MARK\s+SCHEME\s*={3,}$/;
+const END_MARK = /^={3,}\s*END\s+MARK\s+SCHEME\s*={3,}$/;
+
+// ── Private helpers ───────────────────────────────────────────────
+
+/**
+ * Scale point values to the smallest integers preserving their ratios.
+ *
+ * #### Notes
+ * nbgrader commonly splits a cell's total across tests as fractions
+ * (e.g. 0.5 + 0.5). Correxit requires integer points. This finds the
+ * smallest multiplier k such that every value * k is integral.
+ */
+function recalibrate(values: number[]): number[] {
+  for (let scale = 1; scale <= 1000; scale++) {
+    const integral = values.every(
+      value => Math.abs(value * scale - Math.round(value * scale)) < 1e-9
+    );
+    if (integral)
+      return values.map(value => Math.round(value * scale));
+  }
+  return values.map(value => Math.round(value * 100));
+}
+
+/**
+ * Strip solution and mark-scheme markers from cell source.
+ *
+ * Solution markers (`### BEGIN/END SOLUTION`): the marker lines are
+ * removed but solution code between them is kept.
+ *
+ * Mark-scheme regions (`=== BEGIN/END MARK SCHEME ===`): everything
+ * between the markers (inclusive) is dropped.
+ */
+export function strip(source: string): string {
+  const lines = source.split('\n');
+  const out: string[] = [];
+  let marking = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (BEGIN_MARK.test(trimmed)) { marking = true; continue; }
+    if (END_MARK.test(trimmed)) { marking = false; continue; }
+    if (marking) continue;
+    if (BEGIN_SOLUTION.test(trimmed)) continue;
+    if (END_SOLUTION.test(trimmed)) continue;
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+/**
+ * Extract hidden test regions from a test cell source.
+ *
+ * Returns the visible and hidden portions, or null when no
+ * hidden test markers are present.
+ */
+export function hidden(
+  source: string
+): { visible: string; hidden: string } | null {
+  const lines = source.split('\n');
+  const visible: string[] = [];
+  const extracted: string[] = [];
+  let inside = false;
+  let found = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (BEGIN_HIDDEN.test(trimmed)) {
+      inside = true;
+      found = true;
+      continue;
+    }
+    if (END_HIDDEN.test(trimmed)) {
+      inside = false;
+      continue;
+    }
+    if (inside) extracted.push(line);
+    else visible.push(line);
+  }
+  if (!found) return null;
+  return {
+    visible: visible.join('\n').trimEnd(),
+    hidden: extracted.join('\n')
+  };
+}
+
+/** Parse autotest directives from a cell source. */
+function directives(
+  source: string
+): { line: number; expressions: string[] }[] {
+  return source.split('\n')
+    .map((raw, line) => ({ raw, line }))
+    .filter(({ raw }) => AUTOTEST.test(raw.trim()))
+    .map(({ raw, line }) => {
+      const match = raw.trim().match(AUTOTEST)!;
+      const expressions = match[1]
+        .split(';')
+        .map(expr => expr.trim())
+        .filter(Boolean);
+      return { line, expressions };
+    });
+}
+
+// ── Detection & classification ────────────────────────────────────
+
 /**
  * Returns true if at least one cell carries nbgrader metadata with
  * `grade === true` or `solution === true`.
@@ -224,32 +334,7 @@ export function classify(cells: Cellular[]): Classification {
   return result;
 }
 
-/**
- * Scale point values to the smallest integers preserving their ratios.
- *
- * #### Notes
- * nbgrader commonly splits a cell's total across tests as fractions
- * (e.g. 0.5 + 0.5). Correxit requires integer points. This finds the
- * smallest multiplier k such that every value * k is integral.
- */
-function recalibrate(values: number[]): number[] {
-  for (let scale = 1; scale <= 1000; scale++) {
-    const integral = values.every(
-      value => Math.abs(value * scale - Math.round(value * scale)) < 1e-9
-    );
-    if (integral)
-      return values.map(value => Math.round(value * scale));
-  }
-  return values.map(value => Math.round(value * 100));
-}
-
-const AUTOTEST = /^###\s+(?:HASHED\s+)?AUTOTEST\s+(.+)$/;
-const BEGIN_SOLUTION = /^#{3,}\s*BEGIN\s+SOLUTION\s*$/;
-const END_SOLUTION = /^#{3,}\s*END\s+SOLUTION\s*$/;
-const BEGIN_HIDDEN = /^#{3,}\s*BEGIN\s+HIDDEN\s+TESTS?\s*$/;
-const END_HIDDEN = /^#{3,}\s*END\s+HIDDEN\s+TESTS?\s*$/;
-const BEGIN_MARK = /^={3,}\s*BEGIN\s+MARK\s+SCHEME\s*={3,}$/;
-const END_MARK = /^={3,}\s*END\s+MARK\s+SCHEME\s*={3,}$/;
+// ── Metadata utilities ────────────────────────────────────────────
 
 /** Returns true if the source contains autotest directives. */
 export function autotests(source: string): boolean {
@@ -267,9 +352,9 @@ export function clean(
 
 /**
  * Compare the sum of nbgrader metadata points to the converted rubric
- * total. Returns the original metadata total when it differs from the
- * rubric total (due to recalibration, rounding, or discarded cells),
- * or null when there is no difference.
+ * total. Returns the original metadata total when it differs (due to
+ * recalibration, rounding, or discarded cells), or null when the
+ * totals agree.
  */
 export function slippage(
   cells: Cellular[],
@@ -278,7 +363,8 @@ export function slippage(
   let total = 0;
   let found = false;
   for (const cell of cells) {
-    const meta = cell.metadata.nbgrader as Partial<Metadata> | undefined;
+    const meta = cell.metadata.nbgrader as
+      Partial<Metadata> | undefined;
     if (meta?.points === null || meta?.points === undefined) continue;
     if (!meta.grade && !meta.solution && !meta.task) continue;
     total += Math.max(0, meta.points);
@@ -298,10 +384,10 @@ export function report(
   trans: TranslationBundle
 ): string[] {
   const { cells, splits, warnings } = classification;
-  const correctable = cells.filter(cell => cell.is === 'correctable');
-  const reviewable = cells.filter(cell => cell.is === 'reviewable');
-  const points = cells.reduce((sum, cell) => sum + cell.points, 0);
-  const report = [
+  const correctable = cells.filter(c => c.is === 'correctable');
+  const reviewable = cells.filter(c => c.is === 'reviewable');
+  const points = cells.reduce((sum, c) => sum + c.points, 0);
+  const lines = [
     trans.__('Converted from nbgrader format.'),
     '',
     trans.__(
@@ -309,49 +395,30 @@ export function report(
       correctable.length, reviewable.length, points
     )
   ];
-  if (splits.length) {
-    report.push(trans.__(
-      '%1 hidden test regions extracted.',
-      splits.length
-    ));
-  }
-  const textual = slippage(source, classification);
-  if (textual !== null) {
-    report.push(trans.__(
-      'The original nbgrader metadata totals %1 points but the converted '
-      + 'rubric totals %2. Correxit scales fractional points to integers '
-      + 'and rounds where necessary, so some drift is expected. Check that '
-      + 'the converted point values look right in the sidebar.',
-      textual, points
-    ));
+  if (splits.length)
+    lines.push(trans.__('%1 hidden test regions extracted.', splits.length));
+
+  const original = slippage(source, classification);
+  if (original !== null) {
+    lines.push(
+      trans.__(
+        'Original nbgrader total: %1 points. Converted: %2.', original, points
+      ),
+      trans.__(
+        'Correxit scales fractional points to integers and rounds if necessary'
+      ),
+      trans.__('Check that values look right in the sidebar.')
+    );
   }
   if (warnings.length) {
-    report.push('');
-    for (const warning of warnings) report.push(`\u26a0 ${warning}`);
+    lines.push('');
+    for (const warning of warnings) lines.push(`\u26a0 ${warning}`);
   }
-  report.push('');
-  report.push(
+  lines.push('');
+  lines.push(
     trans.__('Select a cell to review its configuration in the sidebar.')
   );
-
-  return report;
-}
-
-type Directive = { line: number; expressions: string[] };
-
-/** Parse autotest directives from a cell source. */
-function directives(source: string): Directive[] {
-  return source.split('\n')
-    .map((raw, line) => ({ raw, line }))
-    .filter(({ raw }) => AUTOTEST.test(raw.trim()))
-    .map(({ raw, line }) => {
-      const match = raw.trim().match(AUTOTEST)!;
-      const expressions = match[1]
-        .split(';')
-        .map(expr => expr.trim())
-        .filter(Boolean);
-      return { line, expressions };
-    });
+  return lines;
 }
 
 /**
@@ -378,38 +445,6 @@ function executor(kernel: Kernel.IKernelConnection): Executor {
         )
         .catch(() => resolve(null));
     });
-}
-
-/**
- * Expand autotest directives in test cells by leasing a kernel, executing
- * answer cells for their definitions, then evaluating each autotest
- * expression and replacing directives with concrete assertions.
- *
- * If no kernel is available, returns the classification unchanged with a
- * warning appended.
- */
-export async function expand(
-  workbook: Workbook,
-  cells: Cellular[],
-  classification: Classification
-): Promise<Classification> {
-  const leased = await kernels.lease(workbook, { async: true });
-  if (!leased) {
-    const name = workbook.context.model.defaultKernelName;
-    return {
-      ...classification,
-      warnings: [
-        ...classification.warnings,
-        `Autotest cells could not be expanded (no ${name} kernel available)`
-      ]
-    };
-  }
-  const [kernel, release] = leased;
-  try {
-    return await spread(cells, classification, executor(kernel));
-  } finally {
-    await release();
-  }
 }
 
 /** AUTOTEST expand() logic (separated for unit testing without a kernel). */
@@ -489,69 +524,44 @@ export async function spread(
 }
 
 /**
- * Strip solution and mark-scheme markers from cell source.
+ * Expand autotest directives in test cells by leasing a kernel,
+ * executing answer cells for their definitions, then evaluating each
+ * expression and replacing directives with concrete assertions.
  *
- * Solution markers (`### BEGIN/END SOLUTION`): the marker lines are
- * removed but solution code between them is kept.
- *
- * Mark-scheme regions (`=== BEGIN/END MARK SCHEME ===`): everything
- * between the markers (inclusive) is dropped.
+ * Returns the classification unchanged (with a warning) when no
+ * kernel is available.
  */
-export function strip(source: string): string {
-  const lines = source.split('\n');
-  const out: string[] = [];
-  let marking = false;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (BEGIN_MARK.test(trimmed)) { marking = true; continue; }
-    if (END_MARK.test(trimmed)) { marking = false; continue; }
-    if (marking) continue;
-    if (BEGIN_SOLUTION.test(trimmed)) continue;
-    if (END_SOLUTION.test(trimmed)) continue;
-    out.push(line);
+export async function expand(
+  workbook: Workbook,
+  cells: Cellular[],
+  classification: Classification
+): Promise<Classification> {
+  const leased = await kernels.lease(workbook, { async: true });
+  if (!leased) {
+    const name = workbook.context.model.defaultKernelName;
+    return {
+      ...classification,
+      warnings: [
+        ...classification.warnings,
+        'Autotest cells could not be expanded'
+        + ` (no ${name} kernel available)`
+      ]
+    };
   }
-  return out.join('\n');
+  const [kernel, release] = leased;
+  try {
+    return await spread(cells, classification, executor(kernel));
+  } finally {
+    await release();
+  }
 }
 
-/**
- * Extract hidden test regions from a test cell source.
- *
- * Returns the visible and hidden portions, or null when no
- * hidden test markers are present.
- */
-export function hidden(
-  source: string
-): { visible: string; hidden: string } | null {
-  const lines = source.split('\n');
-  const visible: string[] = [];
-  const extracted: string[] = [];
-  let inside = false;
-  let found = false;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (BEGIN_HIDDEN.test(trimmed)) {
-      inside = true;
-      found = true;
-      continue;
-    }
-    if (END_HIDDEN.test(trimmed)) {
-      inside = false;
-      continue;
-    }
-    if (inside) extracted.push(line);
-    else visible.push(line);
-  }
-  if (!found) return null;
-  return {
-    visible: visible.join('\n').trimEnd(),
-    hidden: extracted.join('\n')
-  };
-}
+// ── Main entry point ──────────────────────────────────────────────
 
 /**
- * Detect, classify, and apply nbgrader cell metadata to a converted workbook.
+ * Detect, classify, and apply nbgrader cell metadata to a workbook.
  *
- * @returns a serialized multi-line report on success, or null when the notebook
+ * @returns a summary report on success, or null when the notebook
  * contains no nbgrader metadata.
  */
 export async function convert(
@@ -594,16 +604,19 @@ export async function convert(
     });
     const actual = notebook.cells[index + 1].id;
     if (actual === split.referent) continue;
-    for (const refs of classification.references)
-      {for (const ref of refs)
-        {if (ref.referent === split.referent)
-          (ref as { referent: string }).referent = actual;}}
-    for (const cell of classification.cells)
-      {if (cell.references)
-        {(cell as { references: string[] }).references =
-          cell.references.map(
-            id => id === split.referent ? actual : id
-          );}}
+    for (const refs of classification.references) {
+      for (const ref of refs) {
+        if (ref.referent === split.referent)
+          (ref as { referent: string }).referent = actual;
+      }
+    }
+    for (const cell of classification.cells) {
+      if (!cell.references) continue;
+      (cell as { references: string[] }).references =
+        cell.references.map(
+          id => id === split.referent ? actual : id
+        );
+    }
   }
 
   for (let i = 0; i < classification.cells.length; i++) {
