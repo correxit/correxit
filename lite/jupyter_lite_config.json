@@ -1,6 +1,6 @@
 {
   "LiteBuildConfig": {
-    "contents": ["../examples", "../src/__tests__/fixtures/nbgrader"]
+    "contents": ["../examples", "../src/__tests__/fixtures"]
   },
   "ServiceWorkerAddon": {
     "enabled": true
