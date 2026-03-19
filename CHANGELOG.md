@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/QuantStack/correxit/compare/v1.13.0...v1.14.0) (2026-03-18)
+
+
+### Features
+
+* Sealed submissions ([#58](https://github.com/QuantStack/correxit/issues/58)) ([1ed4c05](https://github.com/QuantStack/correxit/commit/1ed4c0550b0b7edf8a5119a85729b20dffb69b51))
+
 # [1.13.0](https://github.com/QuantStack/correxit/compare/v1.12.0...v1.13.0) (2026-03-17)
 
 
