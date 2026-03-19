@@ -293,10 +293,11 @@ export function commands(
         // Capture cells after convert: fromJSON may
         // have regenerated cell IDs (nbformat upgrade).
         const classification = nbgrader.classify(snapshot());
+        const { cells, references } = classification;
         for (const warning of classification.warnings)
           console.warn('nbgrader convert:', warning);
-        for (let i = 0; i < classification.cells.length; i++)
-          await add(workbook, classification.cells[i], classification.references[i]);
+        for (let i = 0; i < cells.length; i++)
+          await add(workbook, cells[i], references[i]);
 
         const sources = new Map(
           classification.sources.map(({ id, source }) => [id, source])
