@@ -291,23 +291,19 @@ export function commands(
       await convert(workbook, passphrase, unlocker);
       if (!detected) return;
 
-      // Capture cells after convert: fromJSON may
-      // have regenerated cell IDs (nbformat upgrade).
       const classification = nbgrader.classify(snapshot());
-      const { cells, references } = classification;
+      const { cells, references, sources } = classification;
       for (const warning of classification.warnings)
         console.warn('nbgrader convert:', warning);
       for (let i = 0; i < cells.length; i++)
         await add(workbook, cells[i], references[i]);
 
-      const sources = new Map(
-        classification.sources.map(({ id, source }) => [id, source])
-      );
+      const cached = new Map(sources.map(({ id, source }) => [id, source]));
       notebook.transact(() => {
         for (const cell of notebook.cells) {
           const json = cell.toJSON();
           const cleaned = nbgrader.clean(json.metadata);
-          const source = sources.get(cell.id);
+          const source = cached.get(cell.id);
           if (source !== undefined) {
             const replacement = { ...json, metadata: cleaned, source };
             const index = notebook.cells.indexOf(cell);

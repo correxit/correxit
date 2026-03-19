@@ -16,41 +16,68 @@ const cell = (
 });
 
 namespace Cell {
-  export const answer = (id: string, source = '') => cell(id, 'code', source, {
-    grade: false, grade_id: id, locked: false,
-    schema_version: 3, solution: true
-  });
+  export const answer = (id: string, source = '') =>
+    cell(id, 'code', source, {
+      grade: false,
+      grade_id: id,
+      locked: false,
+      schema_version: 3,
+      solution: true
+    });
 
   export const code = (id: string, points = 1, source = '') =>
     cell(id, 'code', source, {
-      grade: true, grade_id: id, locked: false, points,
-      schema_version: 3, solution: true
+      grade: true,
+      grade_id: id,
+      locked: false,
+      points,
+      schema_version: 3,
+      solution: true
     });
 
   export const markdown = (id: string, points = 1, source = '') =>
     cell(id, 'markdown', source, {
-      grade: true, grade_id: id, locked: false, points,
-      schema_version: 3, solution: true
+      grade: true,
+      grade_id: id,
+      locked: false,
+      points,
+      schema_version: 3,
+      solution: true
     });
 
   export const plain = (id: string, type = 'code') =>
     cell(id, type, '', undefined);
 
-  export const readonly = (id: string) => cell(id, 'markdown', '', {
-    grade: false, grade_id: id, locked: true,
-    schema_version: 3, solution: false
-  });
+  export const readonly = (id: string) =>
+    cell(id, 'markdown', '', {
+      grade: false,
+      grade_id: id,
+      locked: true,
+      schema_version: 3,
+      solution: false
+    });
 
-  export const task = (id: string, points = 1) => cell(id, 'markdown', '', {
-    grade: false, grade_id: id, locked: false, points,
-    schema_version: 3, solution: false, task: true
-  });
+  export const task = (id: string, points = 1) =>
+    cell(id, 'markdown', '', {
+      grade: false,
+      grade_id: id,
+      locked: false,
+      points,
+      schema_version: 3,
+      solution: false,
+      task: true
+    });
 
-  export const test = (id: string, points = 1) => cell(id, 'code', '', {
-    grade: true, grade_id: id, locked: false, points,
-    schema_version: 3, solution: false
-  });
-};
+  export const test = (id: string, points = 1) =>
+    cell(id, 'code', '', {
+      grade: true,
+      grade_id: id,
+      locked: false,
+      points,
+      schema_version: 3,
+      solution: false
+    });
+}
 
 describe('nbgrader', () => {
   describe('detect', () => {
@@ -77,23 +104,27 @@ describe('nbgrader', () => {
 
   describe('classify', () => {
     it('maps autograded answer + tests to correctable', () => {
-      const cells = [
-        Cell.answer('q1'),
-        Cell.test('t1', 2),
-        Cell.test('t2', 1)
-      ];
+      const cells = [Cell.answer('q1'), Cell.test('t1', 2), Cell.test('t2', 1)];
       const result = classify(cells);
       expect(result.cells).toHaveLength(1);
       expect(result.cells[0]).toMatchObject({
-        id: 'q1', is: 'correctable', points: 3,
+        id: 'q1',
+        is: 'correctable',
+        points: 3,
         references: ['t1', 't2']
       });
       expect(result.references[0]).toHaveLength(2);
       expect(result.references[0][0]).toMatchObject({
-        cell: 'q1', referent: 't1', points: 2, secret: true
+        cell: 'q1',
+        referent: 't1',
+        points: 2,
+        secret: true
       });
       expect(result.references[0][1]).toMatchObject({
-        cell: 'q1', referent: 't2', points: 1, secret: true
+        cell: 'q1',
+        referent: 't2',
+        points: 1,
+        secret: true
       });
       expect(result.warnings).toHaveLength(0);
     });
@@ -103,7 +134,9 @@ describe('nbgrader', () => {
       const result = classify(cells);
       expect(result.cells).toHaveLength(1);
       expect(result.cells[0]).toMatchObject({
-        id: 'q1', is: 'reviewable', points: 1
+        id: 'q1',
+        is: 'reviewable',
+        points: 1
       });
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain('No test cells');
@@ -114,7 +147,10 @@ describe('nbgrader', () => {
       const result = classify(cells);
       expect(result.cells).toHaveLength(1);
       expect(result.cells[0]).toMatchObject({
-        id: 'm1', is: 'reviewable', points: 5, references: null
+        id: 'm1',
+        is: 'reviewable',
+        points: 5,
+        references: null
       });
     });
 
@@ -123,33 +159,39 @@ describe('nbgrader', () => {
       const result = classify(cells);
       expect(result.cells).toHaveLength(1);
       expect(result.cells[0]).toMatchObject({
-        id: 'm1', is: 'reviewable', points: 3
+        id: 'm1',
+        is: 'reviewable',
+        points: 3
       });
     });
 
     it('maps task cell to reviewable on next unmarked cell', () => {
-      const cells = [
-        Cell.task('task1', 4),
-        Cell.plain('work1')
-      ];
+      const cells = [Cell.task('task1', 4), Cell.plain('work1')];
       const result = classify(cells);
       expect(result.cells).toHaveLength(1);
       expect(result.cells[0]).toMatchObject({
-        id: 'work1', is: 'reviewable', points: 4
+        id: 'work1',
+        is: 'reviewable',
+        points: 4
       });
     });
 
     it('infers task from grade+markdown without task field (v1/v2)', () => {
       const graded = cell('old_task', 'markdown', '', {
-        grade: true, grade_id: 'old_task',
-        locked: false, points: 2,
-        schema_version: 1, solution: false
+        grade: true,
+        grade_id: 'old_task',
+        locked: false,
+        points: 2,
+        schema_version: 1,
+        solution: false
       });
       const cells = [graded, Cell.plain('work')];
       const result = classify(cells);
       expect(result.cells).toHaveLength(1);
       expect(result.cells[0]).toMatchObject({
-        id: 'work', is: 'reviewable', points: 2
+        id: 'work',
+        is: 'reviewable',
+        points: 2
       });
     });
 
@@ -169,18 +211,17 @@ describe('nbgrader', () => {
     });
 
     it('handles consecutive answers correctly', () => {
-      const cells = [
-        Cell.answer('q1'),
-        Cell.answer('q2'),
-        Cell.test('t2', 1)
-      ];
+      const cells = [Cell.answer('q1'), Cell.answer('q2'), Cell.test('t2', 1)];
       const result = classify(cells);
       expect(result.cells).toHaveLength(2);
       expect(result.cells[0]).toMatchObject({
-        id: 'q1', is: 'reviewable'
+        id: 'q1',
+        is: 'reviewable'
       });
       expect(result.cells[1]).toMatchObject({
-        id: 'q2', is: 'correctable', references: ['t2']
+        id: 'q2',
+        is: 'correctable',
+        references: ['t2']
       });
     });
 
@@ -193,7 +234,9 @@ describe('nbgrader', () => {
       const result = classify(cells);
       expect(result.cells).toHaveLength(1);
       expect(result.cells[0]).toMatchObject({
-        id: 'q1', is: 'correctable', references: ['t1']
+        id: 'q1',
+        is: 'correctable',
+        references: ['t1']
       });
     });
 
@@ -210,13 +253,19 @@ describe('nbgrader', () => {
       const result = classify(cells);
       expect(result.cells).toHaveLength(3);
       expect(result.cells[0]).toMatchObject({
-        id: 'q1', is: 'correctable', points: 2
+        id: 'q1',
+        is: 'correctable',
+        points: 2
       });
       expect(result.cells[1]).toMatchObject({
-        id: 'q2', is: 'reviewable', points: 2
+        id: 'q2',
+        is: 'reviewable',
+        points: 2
       });
       expect(result.cells[2]).toMatchObject({
-        id: 'q3', is: 'reviewable', points: 1
+        id: 'q3',
+        is: 'reviewable',
+        points: 1
       });
     });
 
@@ -227,9 +276,7 @@ describe('nbgrader', () => {
         '    return 1',
         '    ### END SOLUTION'
       ].join('\n');
-      const cells = [
-        Cell.answer('q1', source), Cell.test('t1', 1)
-      ];
+      const cells = [Cell.answer('q1', source), Cell.test('t1', 1)];
       const result = classify(cells);
       expect(result.sources).toHaveLength(1);
       expect(result.sources[0].id).toBe('q1');
@@ -240,8 +287,8 @@ describe('nbgrader', () => {
       const cells = [Cell.task('task1', 2)];
       const result = classify(cells);
       expect(result.cells).toHaveLength(0);
-      const trailing = result.warnings.some(
-        warning => warning.includes('Trailing task')
+      const trailing = result.warnings.some(warning =>
+        warning.includes('Trailing task')
       );
       expect(trailing).toBe(true);
     });
@@ -256,22 +303,23 @@ describe('nbgrader', () => {
       expect(result.cells).toHaveLength(2);
       expect(result.cells[0]).toMatchObject({ id: 'q1', is: 'reviewable' });
       expect(result.cells[1]).toMatchObject({
-        id: 'work1', is: 'reviewable', points: 2
+        id: 'work1',
+        is: 'reviewable',
+        points: 2
       });
     });
 
     it('warns when task is followed by a graded cell', () => {
-      const cells = [
-        Cell.task('task1', 3),
-        Cell.code('m1', 5)
-      ];
+      const cells = [Cell.task('task1', 3), Cell.code('m1', 5)];
       const result = classify(cells);
       expect(result.cells).toHaveLength(1);
       expect(result.cells[0]).toMatchObject({
-        id: 'm1', is: 'reviewable', points: 5
+        id: 'm1',
+        is: 'reviewable',
+        points: 5
       });
-      const discarded = result.warnings.some(
-        warning => warning.includes('points discarded')
+      const discarded = result.warnings.some(warning =>
+        warning.includes('points discarded')
       );
       expect(discarded).toBe(true);
     });
@@ -290,7 +338,9 @@ describe('nbgrader', () => {
       ];
       const result = classify(cells);
       expect(result.cells[0]).toMatchObject({
-        id: 'q1', is: 'correctable', points: 2,
+        id: 'q1',
+        is: 'correctable',
+        points: 2,
         references: ['t1', 't2']
       });
       expect(result.references[0][0].points).toBe(1);
@@ -310,11 +360,7 @@ describe('nbgrader', () => {
     });
 
     it('leaves already-integer test points unchanged', () => {
-      const cells = [
-        Cell.answer('q1'),
-        Cell.test('t1', 2),
-        Cell.test('t2', 3)
-      ];
+      const cells = [Cell.answer('q1'), Cell.test('t1', 2), Cell.test('t2', 3)];
       const result = classify(cells);
       expect(result.cells[0].points).toBe(5);
       expect(result.references[0][0].points).toBe(2);
@@ -323,8 +369,12 @@ describe('nbgrader', () => {
 
     it('rounds fractional points on standalone reviewable cells', () => {
       const manual = cell('m1', 'code', '', {
-        grade: true, grade_id: 'm1', locked: false,
-        points: 1.5, schema_version: 3, solution: true
+        grade: true,
+        grade_id: 'm1',
+        locked: false,
+        points: 1.5,
+        schema_version: 3,
+        solution: true
       });
       const result = classify([manual]);
       expect(result.cells[0].points).toBe(2);
@@ -332,8 +382,12 @@ describe('nbgrader', () => {
 
     it('treats negative points as zero', () => {
       const negative = cell('neg', 'code', '', {
-        grade: true, grade_id: 'neg', locked: false,
-        points: -5, schema_version: 3, solution: true
+        grade: true,
+        grade_id: 'neg',
+        locked: false,
+        points: -5,
+        schema_version: 3,
+        solution: true
       });
       const result = classify([negative]);
       expect(result.cells[0].points).toBe(0);
@@ -432,9 +486,9 @@ function load(name: string): Cellular[] {
   return notebook.cells.map((cell: any, i: number): Cellular => {
     const { cell_type, metadata = {} } = cell;
     const source = Array.isArray(cell.source)
-      ? cell.source.join('') : cell.source;
-    const id = cell.id
-      ?? metadata?.nbgrader?.grade_id ?? `cell-${i}`;
+      ? cell.source.join('')
+      : cell.source;
+    const id = cell.id ?? metadata?.nbgrader?.grade_id ?? `cell-${i}`;
     return { id, cell_type, source, metadata };
   });
 }
@@ -451,8 +505,8 @@ describe('nbgrader fixtures', () => {
       'ps1-problem2.ipynb',
       'ps1-autotest-problem1.ipynb',
       'ps1-autotest-problem2.ipynb',
-      'validation-zero-points.ipynb',
-    ])('%s is detected as nbgrader', (name) => {
+      'validation-zero-points.ipynb'
+    ])('%s is detected as nbgrader', name => {
       expect(detect(load(name))).toBe(true);
     });
   });
@@ -470,7 +524,7 @@ describe('nbgrader fixtures', () => {
         points: 2,
         references: expect.arrayContaining([
           expect.stringContaining('correct_squares'),
-          expect.stringContaining('squares_invalid_input'),
+          expect.stringContaining('squares_invalid_input')
         ])
       });
     });
@@ -487,13 +541,15 @@ describe('nbgrader fixtures', () => {
 
     it('maps manual markdown to reviewable', () => {
       expect(result.cells[2]).toMatchObject({
-        is: 'reviewable', points: 1
+        is: 'reviewable',
+        points: 1
       });
     });
 
     it('maps manual code to reviewable', () => {
       expect(result.cells[3]).toMatchObject({
-        is: 'reviewable', points: 2
+        is: 'reviewable',
+        points: 2
       });
     });
 
@@ -539,7 +595,10 @@ describe('nbgrader fixtures', () => {
     it('produces same structure as v3', () => {
       expect(result.cells).toHaveLength(4);
       expect(result.cells.map(cell => cell.is)).toEqual([
-        'correctable', 'correctable', 'reviewable', 'reviewable'
+        'correctable',
+        'correctable',
+        'reviewable',
+        'reviewable'
       ]);
     });
   });
@@ -580,14 +639,10 @@ describe('nbgrader fixtures', () => {
   });
 
   describe('ps1-autotest-problem1.ipynb', () => {
-    const result = classify(
-      load('ps1-autotest-problem1.ipynb')
-    );
+    const result = classify(load('ps1-autotest-problem1.ipynb'));
 
     it('handles task cell with following unmarked cell', () => {
-      const target = result.cells.find(
-        cell => cell.points === 4
-      );
+      const target = result.cells.find(cell => cell.points === 4);
       expect(target).toBeDefined();
       expect(target!.is).toBe('reviewable');
     });
@@ -607,9 +662,7 @@ describe('nbgrader fixtures', () => {
     });
 
     it('totals 3 points', () => {
-      const total = result.cells.reduce(
-        (sum, cell) => sum + cell.points, 0
-      );
+      const total = result.cells.reduce((sum, cell) => sum + cell.points, 0);
       expect(total).toBe(3);
     });
   });
@@ -625,8 +678,8 @@ describe('nbgrader fixtures', () => {
       'ps1-problem2.ipynb',
       'ps1-autotest-problem1.ipynb',
       'ps1-autotest-problem2.ipynb',
-      'validation-zero-points.ipynb',
-    ])('%s produces only integer points', (name) => {
+      'validation-zero-points.ipynb'
+    ])('%s produces only integer points', name => {
       const result = classify(load(name));
       for (const cell of result.cells)
         expect(Number.isInteger(cell.points)).toBe(true);
@@ -637,9 +690,7 @@ describe('nbgrader fixtures', () => {
   });
 
   describe('validation-zero-points.ipynb', () => {
-    const result = classify(
-      load('validation-zero-points.ipynb')
-    );
+    const result = classify(load('validation-zero-points.ipynb'));
 
     it('maps zero-point test as correctable', () => {
       expect(result.cells).toHaveLength(1);

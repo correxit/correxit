@@ -5,7 +5,13 @@ import * as path from 'path';
 test.use({ autoGoto: false });
 
 const FIXTURES = path.resolve(
-  __dirname, '..', '..', 'src', '__tests__', 'fixtures', 'nbgrader'
+  __dirname,
+  '..',
+  '..',
+  'src',
+  '__tests__',
+  'fixtures',
+  'nbgrader'
 );
 
 // ── Helpers ──
@@ -21,22 +27,19 @@ async function populate(
     nbgrader?: Record<string, any>;
   }[]
 ): Promise<void> {
-  await page.evaluate(
-    (cells: any[]) => {
-      const panel = (window as any).jupyterapp.shell.currentWidget;
-      const notebook = panel.context.model.sharedModel;
-      while (notebook.cells.length) notebook.deleteCell(0);
-      cells.forEach((cell, index) => {
-        const metadata = cell.nbgrader
-          ? { nbgrader: cell.nbgrader }
-          : {};
-        notebook.insertCell(index, {
-          cell_type: cell.type, metadata, source: cell.source
-        });
+  await page.evaluate((cells: any[]) => {
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const notebook = panel.context.model.sharedModel;
+    while (notebook.cells.length) notebook.deleteCell(0);
+    cells.forEach((cell, index) => {
+      const metadata = cell.nbgrader ? { nbgrader: cell.nbgrader } : {};
+      notebook.insertCell(index, {
+        cell_type: cell.type,
+        metadata,
+        source: cell.source
       });
-    },
-    cells
-  );
+    });
+  }, cells);
 }
 
 /**
@@ -45,13 +48,10 @@ async function populate(
 async function load(page: any, name: string): Promise<void> {
   const raw = fs.readFileSync(path.join(FIXTURES, name), 'utf-8');
   const notebook = JSON.parse(raw);
-  await page.evaluate(
-    (notebook: any) => {
-      const panel = (window as any).jupyterapp.shell.currentWidget;
-      panel.context.model.fromJSON(notebook);
-    },
-    notebook
-  );
+  await page.evaluate((notebook: any) => {
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    panel.context.model.fromJSON(notebook);
+  }, notebook);
 }
 
 /**
@@ -78,7 +78,9 @@ async function convert(page: any): Promise<string[]> {
     const body = await summary.locator('.jp-Dialog-body').textContent();
     if (body) lines.push(...body.split('\n').filter(Boolean));
     await summary.locator('.jp-mod-accept').click();
-  } catch { /* no summary dialog for plain notebooks */ }
+  } catch {
+    /* no summary dialog for plain notebooks */
+  }
   return lines;
 }
 
@@ -103,14 +105,10 @@ async function shape(page: any): Promise<{
       .filter((id: string) => id in rubric.cells)
       .map((id: string) => {
         const cell = rubric.cells[id];
-        const count = refs.filter(
-          (ref: any) => ref.cell === id
-        ).length;
+        const count = refs.filter((ref: any) => ref.cell === id).length;
         return [cell.is, cell.points, count] as [string, number, number];
       });
-    const points = cells.reduce(
-      (sum: number, [, p]: any) => sum + p, 0
-    );
+    const points = cells.reduce((sum: number, [, p]: any) => sum + p, 0);
     return { cells, points };
   });
 }
@@ -130,8 +128,7 @@ async function clean(page: any): Promise<{
     let sources = true;
     for (const cell of notebook.cells) {
       const json = cell.toJSON();
-      if ('nbgrader' in (json.metadata as any || {}))
-        metadata = false;
+      if ('nbgrader' in ((json.metadata as any) || {})) metadata = false;
       const source = cell.getSource();
       if (/###\s*BEGIN SOLUTION/.test(source)) sources = false;
       if (/###\s*END SOLUTION/.test(source)) sources = false;
@@ -146,9 +143,7 @@ async function clean(page: any): Promise<{
  * Installs a console.warn interceptor and returns a function to
  * retrieve captured warnings matching a prefix.
  */
-async function warnings(
-  page: any
-): Promise<() => Promise<string[]>> {
+async function warnings(page: any): Promise<() => Promise<string[]>> {
   await page.evaluate(() => {
     const original = console.warn;
     (window as any).__warns__ = [];
@@ -164,83 +159,118 @@ async function warnings(
     await page.evaluate(() => {
       delete (window as any).__warns__;
     });
-    return captured.filter(
-      (w: string) => w.includes('nbgrader convert:')
-    );
+    return captured.filter((w: string) => w.includes('nbgrader convert:'));
   };
 }
 
 // ── Synthetic cells ──
 
 const answer = (id: string, source = '') => ({
-  type: 'code' as const, source,
+  type: 'code' as const,
+  source,
   nbgrader: {
-    grade: false, grade_id: id, locked: false,
-    schema_version: 3, solution: true
+    grade: false,
+    grade_id: id,
+    locked: false,
+    schema_version: 3,
+    solution: true
   }
 });
 
 const autotest = (id: string, points: number, source = '') => ({
-  type: 'code' as const, source,
+  type: 'code' as const,
+  source,
   nbgrader: {
-    grade: true, grade_id: id, locked: false, points,
-    schema_version: 3, solution: false
+    grade: true,
+    grade_id: id,
+    locked: false,
+    points,
+    schema_version: 3,
+    solution: false
   }
 });
 
 const manual = (id: string, points: number, source = '') => ({
-  type: 'code' as const, source,
+  type: 'code' as const,
+  source,
   nbgrader: {
-    grade: true, grade_id: id, locked: false, points,
-    schema_version: 3, solution: true
+    grade: true,
+    grade_id: id,
+    locked: false,
+    points,
+    schema_version: 3,
+    solution: true
   }
 });
 
 const essay = (id: string, points: number, source = '') => ({
-  type: 'markdown' as const, source,
+  type: 'markdown' as const,
+  source,
   nbgrader: {
-    grade: true, grade_id: id, locked: false, points,
-    schema_version: 3, solution: true
+    grade: true,
+    grade_id: id,
+    locked: false,
+    points,
+    schema_version: 3,
+    solution: true
   }
 });
 
 const task = (id: string, points: number) => ({
-  type: 'markdown' as const, source: `Task: ${id}`,
+  type: 'markdown' as const,
+  source: `Task: ${id}`,
   nbgrader: {
-    grade: false, grade_id: id, locked: false, points,
-    schema_version: 3, solution: false, task: true
+    grade: false,
+    grade_id: id,
+    locked: false,
+    points,
+    schema_version: 3,
+    solution: false,
+    task: true
   }
 });
 
 const readonly = (id: string, source = '') => ({
-  type: 'markdown' as const, source,
+  type: 'markdown' as const,
+  source,
   nbgrader: {
-    grade: false, grade_id: id, locked: true,
-    schema_version: 3, solution: false
+    grade: false,
+    grade_id: id,
+    locked: true,
+    schema_version: 3,
+    solution: false
   }
 });
 
 const plain = (type: 'code' | 'markdown', source = '') => ({
-  type, source
+  type,
+  source
 });
 
 // ── Tests: synthetic cells ──
 
 test.describe('nbgrader conversion (synthetic)', () => {
   test.afterEach(async ({ page }) => {
-    try { await page.notebook.close(true); } catch { /* ok */ }
+    try {
+      await page.notebook.close(true);
+    } catch {
+      /* ok */
+    }
   });
 
   test('converts answer + tests to correctable', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
-      answer('q1', [
-        'def squares(n):',
-        '    ### BEGIN SOLUTION',
-        '    return [i**2 for i in range(1, n+1)]',
-        '    ### END SOLUTION'
-      ].join('\n')),
+      answer(
+        'q1',
+        [
+          'def squares(n):',
+          '    ### BEGIN SOLUTION',
+          '    return [i**2 for i in range(1, n+1)]',
+          '    ### END SOLUTION'
+        ].join('\n')
+      ),
       autotest('t1', 1, 'assert squares(2) == [1, 4]'),
       autotest('t2', 1, 'assert squares(1) == [1]')
     ]);
@@ -251,9 +281,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(s.points).toBe(2);
   });
 
-  test('summary dialog reports cell counts and points', async ({
-    page
-  }) => {
+  test('summary dialog reports cell counts and points', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
@@ -263,15 +291,9 @@ test.describe('nbgrader conversion (synthetic)', () => {
     ]);
     const summary = await convert(page);
 
-    expect(summary.some(
-      line => /1 auto-graded/.test(line)
-    )).toBe(true);
-    expect(summary.some(
-      line => /1 manually graded/.test(line)
-    )).toBe(true);
-    expect(summary.some(
-      line => /4 total points/.test(line)
-    )).toBe(true);
+    expect(summary.some(line => /1 auto-graded/.test(line))).toBe(true);
+    expect(summary.some(line => /1 manually graded/.test(line))).toBe(true);
+    expect(summary.some(line => /4 total points/.test(line))).toBe(true);
   });
 
   test('summary dialog surfaces warnings', async ({ page }) => {
@@ -280,21 +302,22 @@ test.describe('nbgrader conversion (synthetic)', () => {
     await populate(page, [answer('lonely', 'x = 1')]);
     const summary = await convert(page);
 
-    expect(summary.some(
-      line => /No test cells/.test(line)
-    )).toBe(true);
+    expect(summary.some(line => /No test cells/.test(line))).toBe(true);
   });
 
   test('strips solution markers from cell source', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
-      answer('q1', [
-        'def f():',
-        '    ### BEGIN SOLUTION',
-        '    return 42',
-        '    ### END SOLUTION'
-      ].join('\n')),
+      answer(
+        'q1',
+        [
+          'def f():',
+          '    ### BEGIN SOLUTION',
+          '    return 42',
+          '    ### END SOLUTION'
+        ].join('\n')
+      ),
       autotest('t1', 1, 'assert f() == 42')
     ]);
     await convert(page);
@@ -314,14 +337,10 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(s.cells).toEqual([['reviewable', 5, 0]]);
   });
 
-  test('maps manually graded markdown to reviewable', async ({
-    page
-  }) => {
+  test('maps manually graded markdown to reviewable', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
-    await populate(page, [
-      essay('e1', 3, 'Explain your reasoning.')
-    ]);
+    await populate(page, [essay('e1', 3, 'Explain your reasoning.')]);
     await convert(page);
 
     const s = await shape(page);
@@ -331,19 +350,14 @@ test.describe('nbgrader conversion (synthetic)', () => {
   test('maps task + unmarked cell to reviewable', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
-    await populate(page, [
-      task('task1', 4),
-      plain('code', '# student work')
-    ]);
+    await populate(page, [task('task1', 4), plain('code', '# student work')]);
     await convert(page);
 
     const s = await shape(page);
     expect(s.cells).toEqual([['reviewable', 4, 0]]);
   });
 
-  test('recalibrates fractional test points to integers', async ({
-    page
-  }) => {
+  test('recalibrates fractional test points to integers', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
@@ -381,9 +395,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(s.points).toBe(7);
   });
 
-  test('orphan answer becomes reviewable with warning', async ({
-    page
-  }) => {
+  test('orphan answer becomes reviewable with warning', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     const captured = await warnings(page);
@@ -398,15 +410,11 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(s.cells).toEqual([['reviewable', 1, 0]]);
   });
 
-  test('orphaned test cell is skipped with warning', async ({
-    page
-  }) => {
+  test('orphaned test cell is skipped with warning', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     const captured = await warnings(page);
-    await populate(page, [
-      autotest('orphan', 3, 'assert True')
-    ]);
+    await populate(page, [autotest('orphan', 3, 'assert True')]);
     await convert(page);
 
     const w = await captured();
@@ -417,9 +425,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(s.cells).toHaveLength(0);
   });
 
-  test('consecutive answers: first flushed as reviewable', async ({
-    page
-  }) => {
+  test('consecutive answers: first flushed as reviewable', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     const captured = await warnings(page);
@@ -437,9 +443,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     ]);
 
     const w = await captured();
-    expect(w.some(
-      (w: string) => w.includes('No test cells')
-    )).toBe(true);
+    expect(w.some((w: string) => w.includes('No test cells'))).toBe(true);
   });
 
   test('task followed by graded cell discards task points', async ({
@@ -448,24 +452,20 @@ test.describe('nbgrader conversion (synthetic)', () => {
     await page.goto();
     await page.notebook.createNew();
     const captured = await warnings(page);
-    await populate(page, [
-      task('task1', 3),
-      manual('m1', 5, '# show work')
-    ]);
+    await populate(page, [task('task1', 3), manual('m1', 5, '# show work')]);
     await convert(page);
 
     const w = await captured();
-    expect(w.some(
-      (w: string) => w.includes('points discarded')
-    )).toBe(true);
+    expect(w.some((w: string) => w.includes('points discarded'))).toBe(true);
 
     const s = await shape(page);
     expect(s.cells).toEqual([['reviewable', 5, 0]]);
     expect(s.points).toBe(5);
   });
 
-  test('intervening markdown does not break answer-test linkage',
-    async ({ page }) => {
+  test('intervening markdown does not break answer-test linkage', async ({
+    page
+  }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
@@ -480,19 +480,20 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(s.cells).toEqual([['correctable', 2, 1]]);
   });
 
-  test('test cell sources are preserved after conversion', async ({
-    page
-  }) => {
+  test('test cell sources are preserved after conversion', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     const test_source = 'assert squares(2) == [1, 4]';
     await populate(page, [
-      answer('q1', [
-        'def squares(n):',
-        '    ### BEGIN SOLUTION',
-        '    return [i**2 for i in range(1, n+1)]',
-        '    ### END SOLUTION'
-      ].join('\n')),
+      answer(
+        'q1',
+        [
+          'def squares(n):',
+          '    ### BEGIN SOLUTION',
+          '    return [i**2 for i in range(1, n+1)]',
+          '    ### END SOLUTION'
+        ].join('\n')
+      ),
       autotest('t1', 1, test_source)
     ]);
     await convert(page);
@@ -500,9 +501,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     const sources = await page.evaluate(() => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
       const notebook = panel.context.model.sharedModel;
-      return notebook.cells.map(
-        (cell: any) => cell.getSource()
-      );
+      return notebook.cells.map((cell: any) => cell.getSource());
     });
     // Answer cell: solution markers stripped, code preserved
     expect(sources[0]).toBe(
@@ -512,9 +511,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(sources[1]).toBe(test_source);
   });
 
-  test('plain notebook converts with no rubric cells', async ({
-    page
-  }) => {
+  test('plain notebook converts with no rubric cells', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
@@ -531,12 +528,16 @@ test.describe('nbgrader conversion (synthetic)', () => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
-      manual('m1', 2, [
-        'Explain the concept.',
-        '=== BEGIN MARK SCHEME ===',
-        'Award 2 points for clarity',
-        '=== END MARK SCHEME ==='
-      ].join('\n'))
+      manual(
+        'm1',
+        2,
+        [
+          'Explain the concept.',
+          '=== BEGIN MARK SCHEME ===',
+          'Award 2 points for clarity',
+          '=== END MARK SCHEME ==='
+        ].join('\n')
+      )
     ]);
     await convert(page);
 
@@ -549,7 +550,11 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
 test.describe('nbgrader conversion (fixtures)', () => {
   test.afterEach(async ({ page }) => {
-    try { await page.notebook.close(true); } catch { /* ok */ }
+    try {
+      await page.notebook.close(true);
+    } catch {
+      /* ok */
+    }
   });
 
   /**
@@ -614,9 +619,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
     expect(c.sources).toBe(true);
   });
 
-  test('ps1-problem1.ipynb: trailing task discarded', async ({
-    page
-  }) => {
+  test('ps1-problem1.ipynb: trailing task discarded', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     const captured = await warnings(page);
@@ -643,9 +646,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
     expect(c.sources).toBe(true);
   });
 
-  test('ps1-autotest-problem1.ipynb: task + autotest', async ({
-    page
-  }) => {
+  test('ps1-autotest-problem1.ipynb: task + autotest', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     const captured = await warnings(page);
@@ -674,10 +675,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
   /**
    * Manual-only assignments (no auto-graded cells).
    */
-  for (const name of [
-    'ps1-problem2.ipynb',
-    'ps1-autotest-problem2.ipynb'
-  ]) {
+  for (const name of ['ps1-problem2.ipynb', 'ps1-autotest-problem2.ipynb']) {
     test(`${name}: manual only`, async ({ page }) => {
       await page.goto();
       await page.notebook.createNew();
@@ -696,9 +694,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
     });
   }
 
-  test('validation-zero-points.ipynb: zero-point test', async ({
-    page
-  }) => {
+  test('validation-zero-points.ipynb: zero-point test', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await load(page, 'validation-zero-points.ipynb');
@@ -741,7 +737,9 @@ async function score(page: any): Promise<{
  * Overwrites the source of the cell at `index` (0-based).
  */
 async function rewrite(
-  page: any, index: number, source: string
+  page: any,
+  index: number,
+  source: string
 ): Promise<void> {
   await page.evaluate(
     ({ index, source }: { index: number; source: string }) => {
@@ -758,7 +756,11 @@ async function rewrite(
 
 test.describe('nbgrader scoring (synthetic)', () => {
   test.afterEach(async ({ page }) => {
-    try { await page.notebook.close(true); } catch { /* ok */ }
+    try {
+      await page.notebook.close(true);
+    } catch {
+      /* ok */
+    }
   });
 
   test('correct answer scores full marks', async ({ page }) => {
@@ -796,9 +798,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
     expect(result.possible).toBe(2);
   });
 
-  test('partial credit: one test passes, one fails', async ({
-    page
-  }) => {
+  test('partial credit: one test passes, one fails', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
@@ -818,12 +818,15 @@ test.describe('nbgrader scoring (synthetic)', () => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
-      answer('q1', [
-        'def squares(n):',
-        '    ### BEGIN SOLUTION',
-        '    return [i**2 for i in range(1, n+1)]',
-        '    ### END SOLUTION'
-      ].join('\n')),
+      answer(
+        'q1',
+        [
+          'def squares(n):',
+          '    ### BEGIN SOLUTION',
+          '    return [i**2 for i in range(1, n+1)]',
+          '    ### END SOLUTION'
+        ].join('\n')
+      ),
       autotest('t1', 1, 'assert squares(3) == [1, 4, 9]'),
       autotest('t2', 1, 'assert squares(1) == [1]')
     ]);
@@ -831,19 +834,18 @@ test.describe('nbgrader scoring (synthetic)', () => {
 
     // After conversion, solution markers are stripped but the code
     // remains. Simulate a student writing their own implementation.
-    await rewrite(page, 0, [
-      'def squares(n):',
-      '    return [i**2 for i in range(1, n+1)]'
-    ].join('\n'));
+    await rewrite(
+      page,
+      0,
+      ['def squares(n):', '    return [i**2 for i in range(1, n+1)]'].join('\n')
+    );
 
     const result = await score(page);
     expect(result.status).toBe('correct');
     expect(result.points).toBe(2);
   });
 
-  test('mixed: auto-graded correct + reviewable unscored', async ({
-    page
-  }) => {
+  test('mixed: auto-graded correct + reviewable unscored', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
