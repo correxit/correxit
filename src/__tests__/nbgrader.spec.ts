@@ -275,6 +275,54 @@ describe('nbgrader', () => {
       expect(result.cells[0].points).toBe(0);
     });
 
+    it('recalibrates fractional test points to smallest integers', () => {
+      const cells = [
+        Cell.answer('q1'),
+        Cell.test('t1', 0.5),
+        Cell.test('t2', 0.5)
+      ];
+      const result = classify(cells);
+      expect(result.cells[0]).toMatchObject({
+        id: 'q1', is: 'correctable', points: 2,
+        references: ['t1', 't2']
+      });
+      expect(result.references[0][0].points).toBe(1);
+      expect(result.references[0][1].points).toBe(1);
+    });
+
+    it('recalibrates mixed fractional points preserving ratios', () => {
+      const cells = [
+        Cell.answer('q1'),
+        Cell.test('t1', 0.5),
+        Cell.test('t2', 1.5)
+      ];
+      const result = classify(cells);
+      expect(result.cells[0].points).toBe(4);
+      expect(result.references[0][0].points).toBe(1);
+      expect(result.references[0][1].points).toBe(3);
+    });
+
+    it('leaves already-integer test points unchanged', () => {
+      const cells = [
+        Cell.answer('q1'),
+        Cell.test('t1', 2),
+        Cell.test('t2', 3)
+      ];
+      const result = classify(cells);
+      expect(result.cells[0].points).toBe(5);
+      expect(result.references[0][0].points).toBe(2);
+      expect(result.references[0][1].points).toBe(3);
+    });
+
+    it('rounds fractional points on standalone reviewable cells', () => {
+      const c = cell('m1', 'code', '', {
+        grade: true, grade_id: 'm1', locked: false,
+        points: 1.5, schema_version: 3, solution: true
+      });
+      const result = classify([c]);
+      expect(result.cells[0].points).toBe(2);
+    });
+
     it('treats negative points as zero', () => {
       const c = cell('neg', 'code', '', {
         grade: true, grade_id: 'neg', locked: false,
@@ -418,12 +466,15 @@ describe('nbgrader fixtures', () => {
       });
     });
 
-    it('maps sum_of_squares to correctable with 1pt total', () => {
+    it('maps sum_of_squares to correctable (recalibrated from 0.5+0.5)', () => {
       const q = result.cells[1];
       expect(q).toMatchObject({
         is: 'correctable',
-        points: 1
+        points: 2
       });
+      const refs = result.references[1];
+      expect(refs[0].points).toBe(1);
+      expect(refs[1].points).toBe(1);
     });
 
     it('maps manual markdown to reviewable', () => {
@@ -552,6 +603,28 @@ describe('nbgrader fixtures', () => {
         (sum, c) => sum + c.points, 0
       );
       expect(total).toBe(3);
+    });
+  });
+
+  describe('integer points invariant', () => {
+    it.each([
+      'test.ipynb',
+      'test-v1.ipynb',
+      'test-v2.ipynb',
+      'test-hidden-tests.ipynb',
+      'test-with-output.ipynb',
+      'ps1-problem1.ipynb',
+      'ps1-problem2.ipynb',
+      'ps1-autotest-problem1.ipynb',
+      'ps1-autotest-problem2.ipynb',
+      'validation-zero-points.ipynb',
+    ])('%s produces only integer points', (name) => {
+      const result = classify(load(name));
+      for (const c of result.cells)
+        expect(Number.isInteger(c.points)).toBe(true);
+      for (const refs of result.references)
+        for (const ref of refs)
+          expect(Number.isInteger(ref.points)).toBe(true);
     });
   });
 

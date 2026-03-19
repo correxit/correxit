@@ -82,15 +82,16 @@ export function classify(cells: Cellular[]): Classification {
     const { id, refs } = answer;
     answer = null;
     if (refs.length) {
-      const points = refs.reduce((sum, ref) => sum + ref.points, 0);
+      const scaled = recalibrate(refs.map(ref => ref.points));
+      const points = scaled.reduce((sum, p) => sum + p, 0);
       const cell: Cell = {
         id, is: 'correctable', payload: null, points,
         references: refs.map(ref => ref.id)
       };
-      const references: Reference[] = refs.map(ref => ({
+      const references: Reference[] = refs.map((ref, i) => ({
         cell: id,
         referent: ref.id,
-        points: ref.points,
+        points: scaled[i],
         secret: true
       }));
       result.cells.push(cell);
@@ -121,7 +122,7 @@ export function classify(cells: Cellular[]): Classification {
       if (task) {
         flush();
 
-        const points = task.points;
+        const points = Math.round(task.points);
         task = null;
         result.cells.push({
           id: cell.id, is: 'reviewable', payload: null,
@@ -179,7 +180,7 @@ export function classify(cells: Cellular[]): Classification {
       flush();
       result.cells.push({
         id: cell.id, is: 'reviewable', payload: null,
-        points, references: null
+        points: Math.round(points), references: null
       });
       result.references.push([]);
 
@@ -195,6 +196,22 @@ export function classify(cells: Cellular[]): Classification {
     result.warnings.push(warn);
   }
   return result;
+}
+
+/**
+ * Scale point values to the smallest integers preserving their ratios.
+ *
+ * #### Notes
+ * nbgrader commonly splits a cell's total across tests as fractions
+ * (e.g. 0.5 + 0.5). Correxit requires integer points. This finds the
+ * smallest multiplier k such that every value * k is integral.
+ */
+function recalibrate(values: number[]): number[] {
+  for (let k = 1; k <= 1000; k++) {
+    if (values.every(v => Math.abs(v * k - Math.round(v * k)) < 1e-9))
+      return values.map(v => Math.round(v * k));
+  }
+  return values.map(v => Math.round(v * 100));
 }
 
 const BEGIN_SOLUTION = /^#{3,}\s*BEGIN\s+SOLUTION\s*$/;
