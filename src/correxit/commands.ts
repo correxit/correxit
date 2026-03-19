@@ -5,6 +5,7 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
+import { Widget } from '@lumino/widgets';
 import { Correxit, Rubric, Workbook } from '..';
 import { Propagator } from '../ui/propagator';
 import * as input from './input';
@@ -317,6 +318,38 @@ export function commands(
             }
           }
         }, false);
+
+        const correctable = cells.filter(c => c.is === 'correctable');
+        const reviewable = cells.filter(c => c.is === 'reviewable');
+        const points = cells.reduce((sum, c) => sum + c.points, 0);
+        const lines = [
+          trans.__('Converted from nbgrader format.'),
+          '',
+          trans.__(
+            '%1 auto-graded, %2 manually graded, %3 total points.',
+            correctable.length, reviewable.length, points
+          )
+        ];
+        if (classification.warnings.length) {
+          lines.push('');
+          for (const warning of classification.warnings)
+            lines.push(`\u26a0 ${warning}`);
+        }
+        lines.push('');
+        lines.push(
+          trans.__('Select a cell to review its configuration in the sidebar.')
+        );
+
+        const node = document.createElement('span');
+        lines.forEach((line, i) => {
+          if (i > 0) node.appendChild(document.createElement('br'));
+          node.appendChild(document.createTextNode(line));
+        });
+        void showDialog({
+          title: trans.__('Workbook created'),
+          body: new Widget({ node }),
+          buttons: [Dialog.okButton()]
+        });
       }
     }
   }));

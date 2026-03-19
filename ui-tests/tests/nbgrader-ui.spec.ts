@@ -56,8 +56,10 @@ async function load(page: any, name: string): Promise<void> {
 
 /**
  * Executes `correxit:convert` and fills the passphrase dialog.
+ * If the notebook contains nbgrader cells, a summary dialog appears
+ * after conversion; this helper dismisses it automatically.
  */
-async function convert(page: any): Promise<void> {
+async function convert(page: any): Promise<string[]> {
   const done = page.evaluate(async () => {
     const app = (window as any).jupyterapp;
     await app.commands.execute('correxit:convert');
@@ -67,6 +69,17 @@ async function convert(page: any): Promise<void> {
   await dialog.locator('input').fill('test-passphrase');
   await dialog.locator('.jp-mod-accept').click();
   await done;
+
+  // Dismiss the post-conversion summary dialog if it appears.
+  const summary = page.locator('.jp-Dialog');
+  const lines: string[] = [];
+  try {
+    await summary.waitFor({ state: 'visible', timeout: 2000 });
+    const body = await summary.locator('.jp-Dialog-body').textContent();
+    if (body) lines.push(...body.split('\n').filter(Boolean));
+    await summary.locator('.jp-mod-accept').click();
+  } catch { /* no summary dialog for plain notebooks */ }
+  return lines;
 }
 
 /**
@@ -236,6 +249,40 @@ test.describe('nbgrader conversion (synthetic)', () => {
     const s = await shape(page);
     expect(s.cells).toEqual([['correctable', 2, 2]]);
     expect(s.points).toBe(2);
+  });
+
+  test('summary dialog reports cell counts and points', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'x = 1'),
+      autotest('t1', 1, 'assert x == 1'),
+      manual('q2', 3, '# explain')
+    ]);
+    const summary = await convert(page);
+
+    expect(summary.some(
+      line => /1 auto-graded/.test(line)
+    )).toBe(true);
+    expect(summary.some(
+      line => /1 manually graded/.test(line)
+    )).toBe(true);
+    expect(summary.some(
+      line => /4 total points/.test(line)
+    )).toBe(true);
+  });
+
+  test('summary dialog surfaces warnings', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [answer('lonely', 'x = 1')]);
+    const summary = await convert(page);
+
+    expect(summary.some(
+      line => /No test cells/.test(line)
+    )).toBe(true);
   });
 
   test('strips solution markers from cell source', async ({ page }) => {
