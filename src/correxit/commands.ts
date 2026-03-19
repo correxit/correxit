@@ -5,7 +5,6 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
-import { Widget } from '@lumino/widgets';
 import { Correxit, Rubric, Workbook } from '..';
 import { Propagator } from '../ui/propagator';
 import * as input from './input';
@@ -290,67 +289,41 @@ export function commands(
       }));
       const detected = nbgrader.detect(snapshot());
       await convert(workbook, passphrase, unlocker);
-      if (detected) {
-        // Capture cells after convert: fromJSON may
-        // have regenerated cell IDs (nbformat upgrade).
-        const classification = nbgrader.classify(snapshot());
-        const { cells, references } = classification;
-        for (const warning of classification.warnings)
-          console.warn('nbgrader convert:', warning);
-        for (let i = 0; i < cells.length; i++)
-          await add(workbook, cells[i], references[i]);
+      if (!detected) return;
 
-        const sources = new Map(
-          classification.sources.map(({ id, source }) => [id, source])
-        );
-        notebook.transact(() => {
-          for (const cell of notebook.cells) {
-            const json = cell.toJSON();
-            const cleaned = nbgrader.clean(json.metadata);
-            const source = sources.get(cell.id);
-            if (source !== undefined) {
-              const replacement = { ...json, metadata: cleaned, source };
-              const index = notebook.cells.indexOf(cell);
-              notebook.deleteCell(index);
-              notebook.insertCell(index, replacement);
-            } else if ('nbgrader' in (json.metadata as any || {})) {
-              cell.transact(() => cell.deleteMetadata('nbgrader'));
-            }
+      // Capture cells after convert: fromJSON may
+      // have regenerated cell IDs (nbformat upgrade).
+      const classification = nbgrader.classify(snapshot());
+      const { cells, references } = classification;
+      for (const warning of classification.warnings)
+        console.warn('nbgrader convert:', warning);
+      for (let i = 0; i < cells.length; i++)
+        await add(workbook, cells[i], references[i]);
+
+      const sources = new Map(
+        classification.sources.map(({ id, source }) => [id, source])
+      );
+      notebook.transact(() => {
+        for (const cell of notebook.cells) {
+          const json = cell.toJSON();
+          const cleaned = nbgrader.clean(json.metadata);
+          const source = sources.get(cell.id);
+          if (source !== undefined) {
+            const replacement = { ...json, metadata: cleaned, source };
+            const index = notebook.cells.indexOf(cell);
+            notebook.deleteCell(index);
+            notebook.insertCell(index, replacement);
+          } else if ('nbgrader' in (json.metadata as any || {})) {
+            cell.transact(() => cell.deleteMetadata('nbgrader'));
           }
-        }, false);
-
-        const correctable = cells.filter(c => c.is === 'correctable');
-        const reviewable = cells.filter(c => c.is === 'reviewable');
-        const points = cells.reduce((sum, c) => sum + c.points, 0);
-        const lines = [
-          trans.__('Converted from nbgrader format.'),
-          '',
-          trans.__(
-            '%1 auto-graded, %2 manually graded, %3 total points.',
-            correctable.length, reviewable.length, points
-          )
-        ];
-        if (classification.warnings.length) {
-          lines.push('');
-          for (const warning of classification.warnings)
-            lines.push(`\u26a0 ${warning}`);
         }
-        lines.push('');
-        lines.push(
-          trans.__('Select a cell to review its configuration in the sidebar.')
-        );
+      }, false);
 
-        const node = document.createElement('span');
-        lines.forEach((line, i) => {
-          if (i > 0) node.appendChild(document.createElement('br'));
-          node.appendChild(document.createTextNode(line));
-        });
-        void showDialog({
-          title: trans.__('Workbook created'),
-          body: new Widget({ node }),
-          buttons: [Dialog.okButton()]
-        });
-      }
+      void showDialog({
+        title: trans.__('Workbook created'),
+        body: nbgrader.report(classification, trans),
+        buttons: [Dialog.okButton()]
+      });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.correct, {

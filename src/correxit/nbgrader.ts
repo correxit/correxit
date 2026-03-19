@@ -1,5 +1,9 @@
 import { ICell } from '@jupyterlab/nbformat';
+import { IRenderMime } from '@jupyterlab/rendermime';
+import { Widget } from '@lumino/widgets';
 import { Rubric } from './rubric';
+
+type TranslationBundle = IRenderMime.TranslationBundle;
 
 type Cell = Rubric.Cell;
 type Reference = Rubric.Cell.Reference;
@@ -70,7 +74,7 @@ export function detect(cells: Cellular[]): boolean {
 export function classify(cells: Cellular[]): Classification {
   let answer: {
     id: string;
-    refs: { id: string; points: number }[];
+    tests: { id: string; points: number }[];
   } | null = null;
   const result: Classification = {
     cells: [],
@@ -81,18 +85,18 @@ export function classify(cells: Cellular[]): Classification {
   const flush = () => {
     if (!answer) return;
 
-    const { id, refs } = answer;
+    const { id, tests } = answer;
     answer = null;
-    if (refs.length) {
-      const scaled = recalibrate(refs.map(ref => ref.points));
-      const points = scaled.reduce((sum, p) => sum + p, 0);
+    if (tests.length) {
+      const scaled = recalibrate(tests.map(test => test.points));
+      const points = scaled.reduce((sum, value) => sum + value, 0);
       const cell: Cell = {
         id, is: 'correctable', payload: null, points,
-        references: refs.map(ref => ref.id)
+        references: tests.map(test => test.id)
       };
-      const references: Reference[] = refs.map((ref, i) => ({
+      const references: Reference[] = tests.map((test, i) => ({
         cell: id,
-        referent: ref.id,
+        referent: test.id,
         points: scaled[i],
         secret: true
       }));
@@ -162,7 +166,7 @@ export function classify(cells: Cellular[]): Classification {
     }
     if (is.answer) {
       flush();
-      answer = { id: cell.id, refs: [] };
+      answer = { id: cell.id, tests: [] };
 
       const stripped = strip(cell.source);
       if (stripped !== cell.source)
@@ -171,7 +175,7 @@ export function classify(cells: Cellular[]): Classification {
     }
     if (is.test) {
       if (answer) {
-        answer.refs.push({ id: cell.id, points });
+        answer.tests.push({ id: cell.id, points });
       } else {
         const warn = `Test cell "${cell.id}" has no preceding answer; skipped`;
         result.warnings.push(warn);
@@ -209,11 +213,14 @@ export function classify(cells: Cellular[]): Classification {
  * smallest multiplier k such that every value * k is integral.
  */
 function recalibrate(values: number[]): number[] {
-  for (let k = 1; k <= 1000; k++) {
-    if (values.every(v => Math.abs(v * k - Math.round(v * k)) < 1e-9))
-      return values.map(v => Math.round(v * k));
+  for (let scale = 1; scale <= 1000; scale++) {
+    const integral = values.every(
+      value => Math.abs(value * scale - Math.round(value * scale)) < 1e-9
+    );
+    if (integral)
+      return values.map(value => Math.round(value * scale));
   }
-  return values.map(v => Math.round(v * 100));
+  return values.map(value => Math.round(value * 100));
 }
 
 const BEGIN_SOLUTION = /^#{3,}\s*BEGIN\s+SOLUTION\s*$/;
@@ -253,4 +260,38 @@ export function clean(
   const { nbgrader, ...rest } = metadata;
   void nbgrader;
   return rest;
+}
+
+/** Build a summary widget for a completed nbgrader conversion. */
+export function report(
+  classification: Classification,
+  trans: TranslationBundle
+): Widget {
+  const { cells, warnings } = classification;
+  const correctable = cells.filter(cell => cell.is === 'correctable');
+  const reviewable = cells.filter(cell => cell.is === 'reviewable');
+  const points = cells.reduce((sum, cell) => sum + cell.points, 0);
+  const lines = [
+    trans.__('Converted from nbgrader format.'),
+    '',
+    trans.__(
+      '%1 auto-graded, %2 manually graded, %3 total points.',
+      correctable.length, reviewable.length, points
+    )
+  ];
+  if (warnings.length) {
+    lines.push('');
+    for (const warning of warnings) lines.push(`\u26a0 ${warning}`);
+  }
+  lines.push('');
+  lines.push(
+    trans.__('Select a cell to review its configuration in the sidebar.')
+  );
+
+  const node = document.createElement('span');
+  lines.forEach((line, i) => {
+    if (i > 0) node.appendChild(document.createElement('br'));
+    node.appendChild(document.createTextNode(line));
+  });
+  return new Widget({ node });
 }

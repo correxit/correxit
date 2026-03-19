@@ -221,14 +221,14 @@ describe('nbgrader', () => {
     });
 
     it('records source transformations for cells with solution markers', () => {
-      const src = [
+      const source = [
         'def f():',
         '    ### BEGIN SOLUTION',
         '    return 1',
         '    ### END SOLUTION'
       ].join('\n');
       const cells = [
-        Cell.answer('q1', src), Cell.test('t1', 1)
+        Cell.answer('q1', source), Cell.test('t1', 1)
       ];
       const result = classify(cells);
       expect(result.sources).toHaveLength(1);
@@ -240,7 +240,10 @@ describe('nbgrader', () => {
       const cells = [Cell.task('task1', 2)];
       const result = classify(cells);
       expect(result.cells).toHaveLength(0);
-      expect(result.warnings.some(w => w.includes('Trailing task'))).toBe(true);
+      const trailing = result.warnings.some(
+        warning => warning.includes('Trailing task')
+      );
+      expect(trailing).toBe(true);
     });
 
     it('flushes pending answer when a task appears', () => {
@@ -268,7 +271,7 @@ describe('nbgrader', () => {
         id: 'm1', is: 'reviewable', points: 5
       });
       const discarded = result.warnings.some(
-        w => w.includes('points discarded')
+        warning => warning.includes('points discarded')
       );
       expect(discarded).toBe(true);
     });
@@ -319,26 +322,26 @@ describe('nbgrader', () => {
     });
 
     it('rounds fractional points on standalone reviewable cells', () => {
-      const c = cell('m1', 'code', '', {
+      const manual = cell('m1', 'code', '', {
         grade: true, grade_id: 'm1', locked: false,
         points: 1.5, schema_version: 3, solution: true
       });
-      const result = classify([c]);
+      const result = classify([manual]);
       expect(result.cells[0].points).toBe(2);
     });
 
     it('treats negative points as zero', () => {
-      const c = cell('neg', 'code', '', {
+      const negative = cell('neg', 'code', '', {
         grade: true, grade_id: 'neg', locked: false,
         points: -5, schema_version: 3, solution: true
       });
-      const result = classify([c]);
+      const result = classify([negative]);
       expect(result.cells[0].points).toBe(0);
     });
 
     it('records source transformations for manually graded cells', () => {
-      const src = '### BEGIN SOLUTION\nmy answer\n### END SOLUTION';
-      const cells = [Cell.code('m1', 2, src)];
+      const source = '### BEGIN SOLUTION\nmy answer\n### END SOLUTION';
+      const cells = [Cell.code('m1', 2, source)];
       const result = classify(cells);
       expect(result.sources).toHaveLength(1);
       expect(result.sources[0]).toEqual({ id: 'm1', source: 'my answer' });
@@ -426,10 +429,13 @@ const FIXTURES = path.resolve(__dirname, 'fixtures', 'nbgrader');
 function load(name: string): Cellular[] {
   const raw = fs.readFileSync(path.join(FIXTURES, name), 'utf-8');
   const notebook = JSON.parse(raw);
-  return notebook.cells.map((c: any, i: number): Cellular => {
-    const source = Array.isArray(c.source) ? c.source.join('') : c.source;
-    const id = c.id ?? c.metadata?.nbgrader?.grade_id ?? `cell-${i}`;
-    return { id, cell_type: c.cell_type, source, metadata: c.metadata ?? {} };
+  return notebook.cells.map((cell: any, i: number): Cellular => {
+    const { cell_type, metadata = {} } = cell;
+    const source = Array.isArray(cell.source)
+      ? cell.source.join('') : cell.source;
+    const id = cell.id
+      ?? metadata?.nbgrader?.grade_id ?? `cell-${i}`;
+    return { id, cell_type, source, metadata };
   });
 }
 
@@ -459,8 +465,7 @@ describe('nbgrader fixtures', () => {
     });
 
     it('maps squares to correctable with 2 test refs', () => {
-      const q = result.cells[0];
-      expect(q).toMatchObject({
+      expect(result.cells[0]).toMatchObject({
         is: 'correctable',
         points: 2,
         references: expect.arrayContaining([
@@ -471,14 +476,13 @@ describe('nbgrader fixtures', () => {
     });
 
     it('maps sum_of_squares to correctable (recalibrated from 0.5+0.5)', () => {
-      const q = result.cells[1];
-      expect(q).toMatchObject({
+      expect(result.cells[1]).toMatchObject({
         is: 'correctable',
         points: 2
       });
-      const refs = result.references[1];
-      expect(refs[0].points).toBe(1);
-      expect(refs[1].points).toBe(1);
+      const references = result.references[1];
+      expect(references[0].points).toBe(1);
+      expect(references[1].points).toBe(1);
     });
 
     it('maps manual markdown to reviewable', () => {
@@ -499,16 +503,16 @@ describe('nbgrader fixtures', () => {
 
     it('strips solution markers from answer cells', () => {
       expect(result.sources.length).toBeGreaterThan(0);
-      for (const s of result.sources) {
-        expect(s.source).not.toContain('BEGIN SOLUTION');
-        expect(s.source).not.toContain('END SOLUTION');
+      for (const { source } of result.sources) {
+        expect(source).not.toContain('BEGIN SOLUTION');
+        expect(source).not.toContain('END SOLUTION');
       }
     });
 
     it('creates secret references for all test cells', () => {
-      const refs = result.references.flat();
-      for (const ref of refs) {
-        expect(ref.secret).toBe(true);
+      const references = result.references.flat();
+      for (const reference of references) {
+        expect(reference.secret).toBe(true);
       }
     });
   });
@@ -534,7 +538,7 @@ describe('nbgrader fixtures', () => {
 
     it('produces same structure as v3', () => {
       expect(result.cells).toHaveLength(4);
-      expect(result.cells.map(c => c.is)).toEqual([
+      expect(result.cells.map(cell => cell.is)).toEqual([
         'correctable', 'correctable', 'reviewable', 'reviewable'
       ]);
     });
@@ -550,8 +554,8 @@ describe('nbgrader fixtures', () => {
     });
 
     it('captures hidden test references', () => {
-      const refs = result.references.flat();
-      expect(refs.length).toBeGreaterThanOrEqual(4);
+      const references = result.references.flat();
+      expect(references.length).toBeGreaterThanOrEqual(4);
     });
   });
 
@@ -559,7 +563,7 @@ describe('nbgrader fixtures', () => {
     const result = classify(load('ps1-problem1.ipynb'));
 
     it('has correctable, reviewable, and task cells', () => {
-      const types = result.cells.map(c => c.is);
+      const types = result.cells.map(cell => cell.is);
       expect(types).toContain('correctable');
       expect(types).toContain('reviewable');
     });
@@ -569,8 +573,8 @@ describe('nbgrader fixtures', () => {
     });
 
     it('strips solution markers', () => {
-      for (const s of result.sources) {
-        expect(s.source).not.toContain('BEGIN SOLUTION');
+      for (const { source } of result.sources) {
+        expect(source).not.toContain('BEGIN SOLUTION');
       }
     });
   });
@@ -582,7 +586,7 @@ describe('nbgrader fixtures', () => {
 
     it('handles task cell with following unmarked cell', () => {
       const target = result.cells.find(
-        c => c.points === 4
+        cell => cell.points === 4
       );
       expect(target).toBeDefined();
       expect(target!.is).toBe('reviewable');
@@ -604,7 +608,7 @@ describe('nbgrader fixtures', () => {
 
     it('totals 3 points', () => {
       const total = result.cells.reduce(
-        (sum, c) => sum + c.points, 0
+        (sum, cell) => sum + cell.points, 0
       );
       expect(total).toBe(3);
     });
@@ -624,11 +628,11 @@ describe('nbgrader fixtures', () => {
       'validation-zero-points.ipynb',
     ])('%s produces only integer points', (name) => {
       const result = classify(load(name));
-      for (const c of result.cells)
-        expect(Number.isInteger(c.points)).toBe(true);
-      for (const refs of result.references)
-        for (const ref of refs)
-          expect(Number.isInteger(ref.points)).toBe(true);
+      for (const cell of result.cells)
+        expect(Number.isInteger(cell.points)).toBe(true);
+      for (const references of result.references)
+        for (const reference of references)
+          expect(Number.isInteger(reference.points)).toBe(true);
     });
   });
 
