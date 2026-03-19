@@ -459,7 +459,7 @@ describe('nbgrader', () => {
           expect.objectContaining({
             cell: 'q1',
             referent: 't1',
-            points: 0,
+            points: 2,
             secret: true
           }),
           expect.objectContaining({
@@ -1117,7 +1117,7 @@ describe('nbgrader fixtures', () => {
       expect(result.cells[1].is).toBe('correctable');
     });
 
-    it('each correctable has 3 references: visible (0pt) + hidden + regular', () => {
+    it('each correctable has 3 references: visible + hidden + regular', () => {
       for (const cell of result.cells) {
         expect(cell.references).toHaveLength(3);
         expect(
@@ -1132,12 +1132,12 @@ describe('nbgrader fixtures', () => {
       const visible = flat.filter(r =>
         result.splits.some(s => s.cell === r.referent)
       );
-      for (const r of visible) expect(r.points).toBe(0);
+      for (const r of visible) expect(r.points).toBe(1);
     });
 
-    it('totals 4 points (2 per correctable)', () => {
-      expect(result.cells[0].points).toBe(2);
-      expect(result.cells[1].points).toBe(2);
+    it('totals 6 points (3 per correctable)', () => {
+      expect(result.cells[0].points).toBe(3);
+      expect(result.cells[1].points).toBe(3);
     });
 
     it('extracts 2 hidden test regions', () => {
@@ -1611,11 +1611,11 @@ describe('upstream nbgrader fixtures', () => {
         expect(refs[1]).toMatch(/-hidden$/);
       });
 
-      it('assigns 0 points to visible, full points to hidden', () => {
+      it('assigns full points to both visible and hidden', () => {
         const flat = result.references.flat();
         const visible = flat.find(r => !r.referent.endsWith('-hidden'));
         const hidden = flat.find(r => r.referent.endsWith('-hidden'));
-        expect(visible!.points).toBe(0);
+        expect(visible!.points).toBe(1);
         expect(hidden!.points).toBe(1);
       });
 
@@ -1697,9 +1697,6 @@ describe('upstream nbgrader fixtures', () => {
       ['autotest-simple-unchanged.ipynb', 'autotest-simple.ipynb'],
       ['autotest-hashed-changed.ipynb', 'autotest-hashed.ipynb'],
       ['autotest-hashed-unchanged.ipynb', 'autotest-hashed.ipynb'],
-      ['autotest-hidden-changed-right.ipynb', 'autotest-hidden.ipynb'],
-      ['autotest-hidden-changed-wrong.ipynb', 'autotest-hidden.ipynb'],
-      ['autotest-hidden-unchanged.ipynb', 'autotest-hidden.ipynb'],
       ['autotest-multi-changed.ipynb', 'autotest-multi.ipynb'],
       ['autotest-multi-unchanged.ipynb', 'autotest-multi.ipynb']
     ])('%s matches cell types and points of %s', (submission, source) => {
@@ -1707,6 +1704,18 @@ describe('upstream nbgrader fixtures', () => {
       const r = pipeline(load(source));
       expect(s.cells.map(c => c.is)).toEqual(r.cells.map(c => c.is));
       expect(s.cells.map(c => c.points)).toEqual(r.cells.map(c => c.points));
+    });
+
+    // Hidden submissions lack hidden test regions, so they have fewer
+    // references and lower point totals than the source notebook.
+    it.each([
+      ['autotest-hidden-changed-right.ipynb', 'autotest-hidden.ipynb'],
+      ['autotest-hidden-changed-wrong.ipynb', 'autotest-hidden.ipynb'],
+      ['autotest-hidden-unchanged.ipynb', 'autotest-hidden.ipynb']
+    ])('%s matches cell types of %s', (submission, source) => {
+      const s = pipeline(load(submission));
+      const r = pipeline(load(source));
+      expect(s.cells.map(c => c.is)).toEqual(r.cells.map(c => c.is));
     });
   });
 

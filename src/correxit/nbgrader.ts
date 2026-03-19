@@ -203,13 +203,13 @@ export function presplit(cells: Cellular[]): {
     const referent = `${cell.id}-hidden`;
     const points = Math.max(0, meta!.points ?? 1);
 
-    // Visible portion: same ID, zero points.
+    // Visible portion: same ID, same points as the original.
     expanded.push({
       ...cell,
       source: split.visible,
       metadata: {
         ...cell.metadata,
-        nbgrader: { ...(meta as Metadata), points: 0 }
+        nbgrader: { ...(meta as Metadata), points }
       }
     });
 

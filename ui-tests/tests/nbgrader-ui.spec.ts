@@ -708,10 +708,10 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
     const s = await shape(page);
     expect(s.cells).toEqual([
-      ['correctable', 2, 3],
-      ['correctable', 2, 3]
+      ['correctable', 3, 3],
+      ['correctable', 3, 3]
     ]);
-    expect(s.points).toBe(4);
+    expect(s.points).toBe(6);
     expect(await captured()).toHaveLength(0);
 
     const c = await clean(page);
@@ -857,9 +857,9 @@ test.describe('nbgrader conversion (fixtures)', () => {
     await convert(page);
 
     const s = await shape(page);
-    // 1 correctable, 2 refs (visible 0pt + hidden 1pt), 1pt total.
-    expect(s.cells).toEqual([['correctable', 1, 2]]);
-    expect(s.points).toBe(1);
+    // 1 correctable, 2 refs (visible 1pt + hidden 1pt), 2pt total.
+    expect(s.cells).toEqual([['correctable', 2, 2]]);
+    expect(s.points).toBe(2);
 
     const sources = await page.evaluate(() => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
@@ -1167,10 +1167,10 @@ test.describe('nbgrader scoring (fixtures)', () => {
     // Solutions hardcode squares(1), squares(2), squares(10) but not
     // squares(11). The hidden references check squares(11) and
     // sum_of_squares(11), which both return None -> fail.
-    // Non-hidden refs (invalid_input, uses_squares) pass.
-    // -> 2/4 pts.
-    expect(result.possible).toBe(4);
-    expect(result.points).toBe(2);
+    // Non-hidden refs (invalid_input, uses_squares, visible) pass.
+    // -> 4/6 pts.
+    expect(result.possible).toBe(6);
+    expect(result.points).toBe(4);
   });
 
   // ── Autotest source notebooks (baked-in solutions) ──
@@ -1198,8 +1198,8 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await convert(page);
 
     const result = await score(page);
-    expect(result.possible).toBe(1);
-    expect(result.points).toBe(1);
+    expect(result.possible).toBe(2);
+    expect(result.points).toBe(2);
     expect(result.status).toBe('correct');
   });
 
