@@ -144,15 +144,15 @@ export function classify(cells: Cellular[]): Classification {
     }
 
     const is = (() => {
-      const answer = meta.solution === true && meta.grade === false;
+      const answer = meta.solution === true && meta.grade !== true;
       const manual = meta.grade === true && meta.solution === true;
       const task = meta.task === true || (
         meta.grade === true
-        && meta.solution === false
+        && meta.solution !== true
         && cell.cell_type === 'markdown'
       );
       const test =
-        meta.grade === true && meta.solution === false
+        meta.grade === true && meta.solution !== true
         && !task && cell.cell_type === 'code';
       return { answer, manual, task, test };
     })();

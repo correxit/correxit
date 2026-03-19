@@ -335,8 +335,9 @@ describe('nbgrader', () => {
         is: 'reviewable',
         points: 5
       });
-      const discarded =
-        result.warnings.some(warning => warning.includes('points discarded'));
+      const discarded = result.warnings.some(warning =>
+        warning.includes('points discarded')
+      );
       expect(discarded).toBe(true);
     });
 
@@ -909,7 +910,9 @@ describe('nbgrader fixtures', () => {
       expect(result.cells[3]).toMatchObject({ is: 'reviewable', points: 2 });
     });
 
-    it('has no warnings', () => { expect(result.warnings).toHaveLength(0); });
+    it('has no warnings', () => {
+      expect(result.warnings).toHaveLength(0);
+    });
 
     it('strips solution markers from answer cells', () => {
       expect(result.sources.length).toBeGreaterThan(0);
@@ -936,7 +939,9 @@ describe('nbgrader fixtures', () => {
       expect(result.cells[3].is).toBe('reviewable');
     });
 
-    it('has no warnings', () => { expect(result.warnings).toHaveLength(0); });
+    it('has no warnings', () => {
+      expect(result.warnings).toHaveLength(0);
+    });
   });
 
   describe('test-v2.ipynb (schema v2)', () => {
@@ -1073,5 +1078,548 @@ describe('nbgrader fixtures', () => {
       expect(result.cells[0].is).toBe('correctable');
       expect(result.cells[0].points).toBe(0);
     });
+  });
+});
+
+/**
+ * Upstream nbgrader test fixtures.
+ *
+ * These are the same notebooks nbgrader tests itself on, copied
+ * verbatim from the installed package. If our converter handles every
+ * one of these correctly, an instructor whose entire syllabus lives in
+ * nbgrader source notebooks can migrate with confidence.
+ */
+describe('upstream nbgrader fixtures', () => {
+  /**
+   * Every upstream notebook whose metadata carries at least one cell
+   * with grade=true, solution=true, or task=true.
+   */
+  const DETECTED: string[] = [
+    // Schema versions
+    'test-v0.ipynb',
+    'test-v0-invalid.ipynb',
+    // Task cell variant
+    'test_taskcell.ipynb',
+    // Autotest sources
+    'autotest-simple.ipynb',
+    'autotest-hashed.ipynb',
+    'autotest-hidden.ipynb',
+    'autotest-multi.ipynb',
+    // Autotest submissions
+    'autotest-simple-changed.ipynb',
+    'autotest-simple-unchanged.ipynb',
+    'autotest-hashed-changed.ipynb',
+    'autotest-hashed-unchanged.ipynb',
+    'autotest-hidden-changed-right.ipynb',
+    'autotest-hidden-changed-wrong.ipynb',
+    'autotest-hidden-unchanged.ipynb',
+    'autotest-multi-changed.ipynb',
+    'autotest-multi-unchanged.ipynb',
+    // Submitted variants
+    'submitted-unchanged.ipynb',
+    'submitted-changed.ipynb',
+    'submitted-locked-cell-changed.ipynb',
+    'submitted-grade-cell-changed.ipynb',
+    'submitted-cheat-attempt.ipynb',
+    'submitted-cheat-attempt-alternative.ipynb',
+    // Preprocessor edge cases
+    'blank-points.ipynb',
+    'blank-grade-id.ipynb',
+    'duplicate-grade-ids.ipynb',
+    'manually-graded-code-cell.ipynb',
+    'bad-markdown-cell-1.ipynb',
+    'bad-markdown-cell-2.ipynb',
+    // Others
+    'timeout.ipynb',
+    'too-new.ipynb',
+    'open_relative_file.ipynb',
+    'validating-environment-variable.ipynb'
+  ];
+
+  /**
+   * Notebooks that carry no actionable nbgrader metadata. Either no
+   * nbgrader key at all, or only locked/read-only flags without
+   * grade, solution, or task.
+   */
+  const NOT_DETECTED: string[] = [
+    'test-no-metadata.ipynb',
+    'test-no-metadata-autotest.ipynb',
+    'infinite-loop.ipynb',
+    'infinite-loop-with-output.ipynb',
+    'side-effects.ipynb',
+    'cell-type-changed.ipynb',
+    'no-cell-type.ipynb'
+  ];
+
+  /** Fixtures that produce at least one rubric cell from classify(). */
+  const CLASSIFIABLE: string[] = [
+    // Full assignments (schema versions)
+    'test-v0.ipynb',
+    'test-v0-invalid.ipynb',
+    'test_taskcell.ipynb',
+    // Autotest sources
+    'autotest-simple.ipynb',
+    'autotest-hashed.ipynb',
+    'autotest-hidden.ipynb',
+    'autotest-multi.ipynb',
+    // Autotest submissions
+    'autotest-simple-changed.ipynb',
+    'autotest-simple-unchanged.ipynb',
+    'autotest-hashed-changed.ipynb',
+    'autotest-hashed-unchanged.ipynb',
+    'autotest-hidden-changed-right.ipynb',
+    'autotest-hidden-changed-wrong.ipynb',
+    'autotest-hidden-unchanged.ipynb',
+    'autotest-multi-changed.ipynb',
+    'autotest-multi-unchanged.ipynb',
+    // Submitted
+    'submitted-unchanged.ipynb',
+    'submitted-changed.ipynb',
+    'submitted-locked-cell-changed.ipynb',
+    'submitted-grade-cell-changed.ipynb',
+    'submitted-cheat-attempt.ipynb',
+    'submitted-cheat-attempt-alternative.ipynb',
+    // Minimal
+    'manually-graded-code-cell.ipynb',
+    'duplicate-grade-ids.ipynb',
+    'bad-markdown-cell-2.ipynb',
+    'timeout.ipynb'
+  ];
+
+  // -- Detection ----------------------------------------------------------
+
+  describe('detect', () => {
+    it.each(DETECTED)('%s is detected as nbgrader', name => {
+      expect(detect(load(name))).toBe(true);
+    });
+
+    it.each(NOT_DETECTED)('%s is not detected as nbgrader', name => {
+      expect(detect(load(name))).toBe(false);
+    });
+  });
+
+  // -- Safety: classify never throws -------------------------------------
+
+  describe('classify never throws', () => {
+    it.each([...DETECTED, ...NOT_DETECTED])('%s', name => {
+      expect(() => classify(load(name))).not.toThrow();
+    });
+  });
+
+  // -- Structural invariants across all classifiable fixtures -------------
+
+  describe('invariants', () => {
+    it.each(CLASSIFIABLE)(
+      '%s: all cell points are non-negative integers',
+      name => {
+        const result = classify(load(name));
+        for (const cell of result.cells) {
+          expect(cell.points).toBeGreaterThanOrEqual(0);
+          expect(Number.isInteger(cell.points)).toBe(true);
+        }
+      }
+    );
+
+    it.each(CLASSIFIABLE)(
+      '%s: all reference points are non-negative integers',
+      name => {
+        const result = classify(load(name));
+        for (const refs of result.references)
+          for (const ref of refs) {
+            expect(ref.points).toBeGreaterThanOrEqual(0);
+            expect(Number.isInteger(ref.points)).toBe(true);
+          }
+      }
+    );
+
+    it.each(CLASSIFIABLE)(
+      '%s: every correctable has at least one reference',
+      name => {
+        const result = classify(load(name));
+        for (let i = 0; i < result.cells.length; i++) {
+          if (result.cells[i].is === 'correctable') {
+            expect(result.cells[i].references!.length).toBeGreaterThanOrEqual(
+              1
+            );
+            expect(result.references[i].length).toBeGreaterThanOrEqual(1);
+          }
+        }
+      }
+    );
+
+    it.each(CLASSIFIABLE)(
+      '%s: no output source contains solution markers',
+      name => {
+        const result = classify(load(name));
+        for (const { source } of result.sources) {
+          expect(source).not.toContain('BEGIN SOLUTION');
+          expect(source).not.toContain('END SOLUTION');
+        }
+      }
+    );
+
+    it.each(CLASSIFIABLE)(
+      '%s: no output source contains mark scheme markers',
+      name => {
+        const result = classify(load(name));
+        for (const { source } of result.sources) {
+          expect(source).not.toContain('BEGIN MARK SCHEME');
+          expect(source).not.toContain('END MARK SCHEME');
+        }
+      }
+    );
+
+    it.each(CLASSIFIABLE)(
+      '%s: cells and references arrays are aligned',
+      name => {
+        const result = classify(load(name));
+        expect(result.references).toHaveLength(result.cells.length);
+      }
+    );
+
+    it.each(CLASSIFIABLE)(
+      '%s: correctable reference IDs match cell.references',
+      name => {
+        const result = classify(load(name));
+        for (let i = 0; i < result.cells.length; i++) {
+          const cell = result.cells[i];
+          if (cell.is === 'correctable') {
+            const ids = result.references[i].map(r => r.referent);
+            expect(ids).toEqual(cell.references);
+          }
+        }
+      }
+    );
+
+    it.each(CLASSIFIABLE)('%s: all references are marked secret', name => {
+      const result = classify(load(name));
+      for (const refs of result.references)
+        for (const ref of refs) expect(ref.secret).toBe(true);
+    });
+  });
+
+  // -- Schema compatibility -----------------------------------------------
+
+  describe('schema compatibility', () => {
+    const v3 = classify(load('test.ipynb'));
+    const v0 = classify(load('test-v0.ipynb'));
+    const v0i = classify(load('test-v0-invalid.ipynb'));
+    const v1 = classify(load('test-v1.ipynb'));
+    const v2 = classify(load('test-v2.ipynb'));
+    const with_output = classify(load('test-with-output.ipynb'));
+
+    it('v0 produces the same cell types as v3', () => {
+      expect(v0.cells.map(c => c.is)).toEqual(v3.cells.map(c => c.is));
+    });
+
+    it('v0 produces the same point totals as v3', () => {
+      expect(v0.cells.map(c => c.points)).toEqual(v3.cells.map(c => c.points));
+    });
+
+    it('v0-invalid produces the same cell types as v3', () => {
+      expect(v0i.cells.map(c => c.is)).toEqual(v3.cells.map(c => c.is));
+    });
+
+    it('v0-invalid produces the same point totals as v3', () => {
+      expect(v0i.cells.map(c => c.points)).toEqual(v3.cells.map(c => c.points));
+    });
+
+    it('all schema versions produce zero warnings', () => {
+      for (const r of [v0, v0i, v1, v2, v3]) expect(r.warnings).toHaveLength(0);
+    });
+
+    it('test-with-output.ipynb is structurally identical to test.ipynb', () => {
+      expect(with_output.cells.map(c => c.is)).toEqual(v3.cells.map(c => c.is));
+      expect(with_output.cells.map(c => c.points)).toEqual(
+        v3.cells.map(c => c.points)
+      );
+    });
+  });
+
+  // -- Submitted notebook equivalence -------------------------------------
+
+  describe('submitted notebooks', () => {
+    const canonical = classify(load('submitted-unchanged.ipynb'));
+
+    it.each([
+      'submitted-changed.ipynb',
+      'submitted-locked-cell-changed.ipynb',
+      'submitted-grade-cell-changed.ipynb',
+      'submitted-cheat-attempt.ipynb',
+      'submitted-cheat-attempt-alternative.ipynb'
+    ])('%s matches canonical submitted classification', name => {
+      const result = classify(load(name));
+      expect(result.cells.map(c => c.is)).toEqual(
+        canonical.cells.map(c => c.is)
+      );
+      expect(result.cells.map(c => c.points)).toEqual(
+        canonical.cells.map(c => c.points)
+      );
+    });
+
+    it('produces 3 rubric cells: 1 correctable + 2 reviewable', () => {
+      expect(canonical.cells).toHaveLength(3);
+      expect(canonical.cells[0].is).toBe('correctable');
+      expect(canonical.cells[1].is).toBe('reviewable');
+      expect(canonical.cells[2].is).toBe('reviewable');
+    });
+
+    it('totals 7 points', () => {
+      const total = canonical.cells.reduce((sum, cell) => sum + cell.points, 0);
+      expect(total).toBe(7);
+    });
+
+    it('correctable has 2 test references', () => {
+      expect(canonical.cells[0].references).toHaveLength(2);
+    });
+
+    it('skips locked read-only cells', () => {
+      // submitted notebooks have 7 tagged cells but only 5 carry
+      // grade or solution; the 2 readonly (ro1, ro2) are skipped
+      expect(canonical.cells).toHaveLength(3);
+    });
+  });
+
+  // -- Task cells ---------------------------------------------------------
+
+  describe('test_taskcell.ipynb', () => {
+    const result = classify(load('test_taskcell.ipynb'));
+    const base = classify(load('test.ipynb'));
+
+    it('produces 5 rubric entries (task + 4 from base assignment)', () => {
+      expect(result.cells).toHaveLength(5);
+    });
+
+    it('first cell is reviewable from task (2 points)', () => {
+      expect(result.cells[0]).toMatchObject({
+        is: 'reviewable',
+        points: 2
+      });
+    });
+
+    it('remaining 4 match test.ipynb structure', () => {
+      expect(result.cells.slice(1).map(c => c.is)).toEqual(
+        base.cells.map(c => c.is)
+      );
+      expect(result.cells.slice(1).map(c => c.points)).toEqual(
+        base.cells.map(c => c.points)
+      );
+    });
+
+    it('has no warnings', () => {
+      expect(result.warnings).toHaveLength(0);
+    });
+  });
+
+  // -- Autotest source notebooks ------------------------------------------
+
+  describe('autotest source notebooks', () => {
+    describe('autotest-simple.ipynb', () => {
+      const result = classify(load('autotest-simple.ipynb'));
+
+      it('produces 1 correctable with 1 test reference', () => {
+        expect(result.cells).toHaveLength(1);
+        expect(result.cells[0].is).toBe('correctable');
+        expect(result.cells[0].references).toHaveLength(1);
+      });
+
+      it('strips solution markers from answer', () => {
+        for (const { source } of result.sources)
+          expect(source).not.toContain('BEGIN SOLUTION');
+      });
+    });
+
+    describe('autotest-hashed.ipynb', () => {
+      const result = classify(load('autotest-hashed.ipynb'));
+
+      it('produces 1 correctable with 1 test reference', () => {
+        expect(result.cells).toHaveLength(1);
+        expect(result.cells[0].is).toBe('correctable');
+        expect(result.cells[0].references).toHaveLength(1);
+      });
+    });
+
+    describe('autotest-hidden.ipynb', () => {
+      const result = classify(load('autotest-hidden.ipynb'));
+
+      it('produces 1 correctable', () => {
+        expect(result.cells).toHaveLength(1);
+        expect(result.cells[0].is).toBe('correctable');
+      });
+
+      it('splits hidden test region from test cell', () => {
+        expect(result.splits).toHaveLength(1);
+      });
+
+      it('uses hidden referent ID in correctable references', () => {
+        const refs = result.cells[0].references!;
+        expect(refs.some(id => id.endsWith('-hidden'))).toBe(true);
+      });
+
+      it('visible source has no hidden markers', () => {
+        for (const { source } of result.sources) {
+          expect(source).not.toContain('BEGIN HIDDEN');
+          expect(source).not.toContain('END HIDDEN');
+        }
+      });
+    });
+
+    describe('autotest-multi.ipynb', () => {
+      const result = classify(load('autotest-multi.ipynb'));
+
+      it('produces 1 correctable with 4 test references', () => {
+        expect(result.cells).toHaveLength(1);
+        expect(result.cells[0].is).toBe('correctable');
+        expect(result.cells[0].references).toHaveLength(4);
+      });
+
+      it('totals 4 points', () => {
+        expect(result.cells[0].points).toBe(4);
+      });
+    });
+  });
+
+  // -- Autotest submissions match sources ---------------------------------
+
+  describe('autotest submissions match source structure', () => {
+    it.each([
+      ['autotest-simple-changed.ipynb', 'autotest-simple.ipynb'],
+      ['autotest-simple-unchanged.ipynb', 'autotest-simple.ipynb'],
+      ['autotest-hashed-changed.ipynb', 'autotest-hashed.ipynb'],
+      ['autotest-hashed-unchanged.ipynb', 'autotest-hashed.ipynb'],
+      ['autotest-hidden-changed-right.ipynb', 'autotest-hidden.ipynb'],
+      ['autotest-hidden-changed-wrong.ipynb', 'autotest-hidden.ipynb'],
+      ['autotest-hidden-unchanged.ipynb', 'autotest-hidden.ipynb'],
+      ['autotest-multi-changed.ipynb', 'autotest-multi.ipynb'],
+      ['autotest-multi-unchanged.ipynb', 'autotest-multi.ipynb']
+    ])('%s matches cell types and points of %s', (submission, source) => {
+      const s = classify(load(submission));
+      const r = classify(load(source));
+      expect(s.cells.map(c => c.is)).toEqual(r.cells.map(c => c.is));
+      expect(s.cells.map(c => c.points)).toEqual(r.cells.map(c => c.points));
+    });
+  });
+
+  // -- Autotest directive detection on fixture sources --------------------
+
+  describe('autotests detection', () => {
+    it.each([
+      'autotest-simple.ipynb',
+      'autotest-hashed.ipynb',
+      'autotest-hidden.ipynb',
+      'autotest-multi.ipynb'
+    ])('%s: source contains autotest directives', name => {
+      expect(load(name).some(c => autotests(c.source))).toBe(true);
+    });
+
+    it.each([
+      'autotest-simple-changed.ipynb',
+      'autotest-simple-unchanged.ipynb',
+      'autotest-hashed-changed.ipynb',
+      'autotest-hashed-unchanged.ipynb',
+      'autotest-multi-changed.ipynb',
+      'autotest-multi-unchanged.ipynb'
+    ])('%s: expanded submission has no autotest directives', name => {
+      expect(load(name).some(c => autotests(c.source))).toBe(false);
+    });
+  });
+
+  // -- Edge cases from preprocessor fixtures ------------------------------
+
+  describe('edge cases', () => {
+    it('blank-points.ipynb: orphan test with null points warns', () => {
+      const result = classify(load('blank-points.ipynb'));
+      expect(result.cells).toHaveLength(0);
+      expect(result.warnings.some(w => w.includes('no preceding answer'))).toBe(
+        true
+      );
+    });
+
+    it('blank-grade-id.ipynb: orphan test with empty grade_id warns', () => {
+      const result = classify(load('blank-grade-id.ipynb'));
+      expect(result.cells).toHaveLength(0);
+      expect(result.warnings.some(w => w.includes('no preceding answer'))).toBe(
+        true
+      );
+    });
+
+    it('duplicate-grade-ids.ipynb: classifies the manual cell', () => {
+      const result = classify(load('duplicate-grade-ids.ipynb'));
+      expect(result.cells.some(c => c.is === 'reviewable')).toBe(true);
+    });
+
+    it('manually-graded-code-cell.ipynb: produces 1 reviewable', () => {
+      const result = classify(load('manually-graded-code-cell.ipynb'));
+      expect(result.cells).toHaveLength(1);
+      expect(result.cells[0].is).toBe('reviewable');
+    });
+
+    it('too-new.ipynb (v10 schema): trailing task warning', () => {
+      const result = classify(load('too-new.ipynb'));
+      expect(result.cells).toHaveLength(0);
+      expect(result.warnings.some(w => w.includes('Trailing task'))).toBe(true);
+    });
+
+    it('bad-markdown-cell-1.ipynb: grade-only markdown is task', () => {
+      // grade=true, solution=false, markdown → task. No following
+      // cell → trailing task warning.
+      const result = classify(load('bad-markdown-cell-1.ipynb'));
+      expect(result.cells).toHaveLength(0);
+      expect(result.warnings.some(w => w.includes('Trailing task'))).toBe(true);
+    });
+
+    it('bad-markdown-cell-2.ipynb: solution-only markdown is reviewable', () => {
+      const result = classify(load('bad-markdown-cell-2.ipynb'));
+      expect(result.cells).toHaveLength(1);
+      expect(result.cells[0].is).toBe('reviewable');
+    });
+
+    it('timeout.ipynb: answer + test produce 1 correctable', () => {
+      const result = classify(load('timeout.ipynb'));
+      expect(result.cells).toHaveLength(1);
+      expect(result.cells[0].is).toBe('correctable');
+    });
+
+    it('open_relative_file.ipynb: orphan test warns', () => {
+      const result = classify(load('open_relative_file.ipynb'));
+      expect(result.cells).toHaveLength(0);
+      expect(result.warnings.some(w => w.includes('no preceding answer'))).toBe(
+        true
+      );
+    });
+
+    it('validating-environment-variable.ipynb: orphan test warns', () => {
+      const result = classify(load('validating-environment-variable.ipynb'));
+      expect(result.cells).toHaveLength(0);
+      expect(result.warnings.some(w => w.includes('no preceding answer'))).toBe(
+        true
+      );
+    });
+  });
+
+  // -- Non-nbgrader notebooks produce empty classification ----------------
+
+  describe('non-nbgrader notebooks classify cleanly', () => {
+    it.each(NOT_DETECTED)('%s: produces zero cells', name => {
+      const result = classify(load(name));
+      expect(result.cells).toHaveLength(0);
+      expect(result.references).toHaveLength(0);
+    });
+  });
+
+  // -- clean() strips nbgrader from all fixtures --------------------------
+
+  describe('clean strips nbgrader metadata', () => {
+    it.each(DETECTED)(
+      '%s: clean removes nbgrader key from every tagged cell',
+      name => {
+        for (const cell of load(name)) {
+          if ('nbgrader' in cell.metadata) {
+            const cleaned = clean(cell.metadata as Record<string, any>);
+            expect('nbgrader' in cleaned).toBe(false);
+          }
+        }
+      }
+    );
   });
 });

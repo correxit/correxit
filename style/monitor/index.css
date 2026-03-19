@@ -36,7 +36,9 @@
 }
 
 @keyframes correxit-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .correxit-target-cell {
