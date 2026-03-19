@@ -665,3 +665,150 @@ test.describe('nbgrader conversion (fixtures)', () => {
     expect(c.metadata).toBe(true);
   });
 });
+
+// ── Helpers: scoring ──
+
+/**
+ * Scores the active workbook and returns the summary.
+ * Runs `Workbook.correct()` which executes all cells in kernel
+ * order and evaluates test references.
+ */
+async function score(page: any): Promise<{
+  points: number;
+  possible: number;
+  status: string;
+}> {
+  return page.evaluate(async () => {
+    const { Workbook } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const { score } = await Workbook.correct(panel);
+    return {
+      points: score.points,
+      possible: score.possible,
+      status: score.status
+    };
+  });
+}
+
+/**
+ * Overwrites the source of the cell at `index` (0-based).
+ */
+async function rewrite(
+  page: any, index: number, source: string
+): Promise<void> {
+  await page.evaluate(
+    ({ index, source }: { index: number; source: string }) => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      const cell = notebook.cells[index];
+      cell.setSource(source);
+    },
+    { index, source }
+  );
+}
+
+// ── Tests: scoring converted notebooks ──
+
+test.describe('nbgrader scoring (synthetic)', () => {
+  test.afterEach(async ({ page }) => {
+    try { await page.notebook.close(true); } catch { /* ok */ }
+  });
+
+  test('correct answer scores full marks', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'x = 42'),
+      autotest('t1', 1, 'assert x == 42'),
+      autotest('t2', 1, 'assert isinstance(x, int)')
+    ]);
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.status).toBe('correct');
+    expect(result.points).toBe(2);
+    expect(result.possible).toBe(2);
+  });
+
+  test('wrong answer scores zero', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'x = 42'),
+      autotest('t1', 1, 'assert x == 42'),
+      autotest('t2', 1, 'assert isinstance(x, int)')
+    ]);
+    await convert(page);
+
+    // Student replaces the answer with something wrong.
+    await rewrite(page, 0, 'x = "not a number"');
+
+    const result = await score(page);
+    expect(result.status).toBe('incorrect');
+    expect(result.points).toBe(0);
+    expect(result.possible).toBe(2);
+  });
+
+  test('partial credit: one test passes, one fails', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'x = 42'),
+      autotest('t1', 1, 'assert x > 0'),
+      autotest('t2', 1, 'assert x == 99')
+    ]);
+    await convert(page);
+
+    const result = await score(page);
+    expect(result.status).toBe('partial');
+    expect(result.points).toBe(1);
+    expect(result.possible).toBe(2);
+  });
+
+  test('student modifies answer after conversion', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', [
+        'def squares(n):',
+        '    ### BEGIN SOLUTION',
+        '    return [i**2 for i in range(1, n+1)]',
+        '    ### END SOLUTION'
+      ].join('\n')),
+      autotest('t1', 1, 'assert squares(3) == [1, 4, 9]'),
+      autotest('t2', 1, 'assert squares(1) == [1]')
+    ]);
+    await convert(page);
+
+    // After conversion, solution markers are stripped but the code
+    // remains. Simulate a student writing their own implementation.
+    await rewrite(page, 0, [
+      'def squares(n):',
+      '    return [i**2 for i in range(1, n+1)]'
+    ].join('\n'));
+
+    const result = await score(page);
+    expect(result.status).toBe('correct');
+    expect(result.points).toBe(2);
+  });
+
+  test('mixed: auto-graded correct + reviewable unscored', async ({
+    page
+  }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [
+      answer('q1', 'x = 42'),
+      autotest('t1', 2, 'assert x == 42'),
+      manual('q2', 3, '# explain something')
+    ]);
+    await convert(page);
+
+    const result = await score(page);
+    // Auto-graded cell passes; manual cell is unscored.
+    // Summary reflects both.
+    expect(result.possible).toBe(5);
+  });
+});
