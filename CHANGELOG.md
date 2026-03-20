@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/QuantStack/correxit/compare/v1.14.0...v1.15.0) (2026-03-20)
+
+
+### Features
+
+* Convert nbgrader source notebooks into Correxit workbooks ([#59](https://github.com/QuantStack/correxit/issues/59)) ([a1f2991](https://github.com/QuantStack/correxit/commit/a1f299104c82c1daf5fb2eaa2c89b70c1ddd6950))
+
 # [1.14.0](https://github.com/QuantStack/correxit/compare/v1.13.0...v1.14.0) (2026-03-18)
 
 
