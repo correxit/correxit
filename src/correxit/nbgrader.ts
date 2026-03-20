@@ -583,8 +583,6 @@ export async function spread(
     const value = await execute(expr);
     return { safe: value !== null, value };
   });
-
-  /** Expand directives in `source`, returning the rewritten text. */
   const rewrite = async (
     id: string,
     source: string
@@ -613,6 +611,7 @@ export async function spread(
         continue;
       }
       await flush();
+
       const directive = autotests.find(({ line }) => line === i)!;
       for (const expr of directive.expressions) {
         const { safe, value } = await inspect(expr);
@@ -634,7 +633,6 @@ export async function spread(
     await flush();
     return output.join('\n');
   };
-
   for (const cell of cells) {
     if (answers.has(cell.id)) {
       await execute(stripped.get(cell.id) ?? cell.source);
@@ -652,7 +650,7 @@ export async function spread(
   return {
     ...classification,
     sources: [
-      ...classification.sources.filter(s => !overwritten.has(s.id)),
+      ...classification.sources.filter(({ id }) => !overwritten.has(id)),
       ...expanded
     ],
     warnings: [...classification.warnings, ...warnings]
