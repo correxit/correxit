@@ -307,6 +307,29 @@
   background-image: url('../monitor/icons/reviewable.svg');
 }
 
+.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputArea-editor {
+  position: relative;
+  color: transparent;
+}
+
+.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputArea-editor::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background:
+    url('../monitor/icons/locked.svg') center / 20px 20px no-repeat,
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      var(--jp-border-color2) 4px,
+      var(--jp-border-color2) 5px
+    );
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 .jp-Notebook .jp-Cell:not(.jp-mod-active).cxt-mod-correct .jp-InputArea-editor {
   border: 1px solid var(--correxit-correct-color);
   border-radius: 6px;

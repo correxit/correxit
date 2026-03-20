@@ -4,11 +4,12 @@ import { Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 
 const correct = 'cxt-mod-correct';
+const encrypted = 'cxt-mod-encrypted';
 const incorrect = 'cxt-mod-incorrect';
 const partial = 'cxt-mod-partial';
 const decorations = Rubric.Cell.types
   .map(type => `cxt-mod-${type}`)
-  .concat(correct, incorrect, partial);
+  .concat(correct, encrypted, incorrect, partial);
 
 function clear({ content }: Workbook) {
   if (content && !content.isDisposed) content.widgets.forEach(reset);
@@ -46,13 +47,28 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
     const notebook = workbook?.content;
     if (!notebook || !rubric || notebook.isDisposed) return;
 
-    let remaining = Rubric.size(rubric);
+    const sealed = rubric.locked && !!rubric.assignment.seal;
+    const secrets = rubric.locked
+      ? new Set(
+          Object.values(rubric.references)
+            .filter(({ secret }) => secret)
+            .map(({ referent }) => referent)
+        )
+      : null;
+    let remaining = Rubric.size(rubric) + (secrets?.size || 0);
     for (const widget of notebook.widgets) {
-      const cell = Rubric.get(rubric, widget.model.id);
+      const { id } = widget.model;
+      const cell = Rubric.get(rubric, id);
       if (cell) {
         decorate(workbook, cell, widget);
-        if (--remaining === 0) break;
+        if (sealed) widget.addClass(encrypted);
+        remaining--;
       }
+      if (secrets?.has(id)) {
+        widget.addClass(encrypted);
+        remaining--;
+      }
+      if (remaining === 0) break;
     }
     return () => clear(workbook);
   }, [rubric, workbook]);
