@@ -511,6 +511,9 @@ describe('nbgrader', () => {
       const result = pipeline(cells);
       expect(result.cells[0].references).toEqual(['t1']);
       expect(result.splits).toHaveLength(0);
+      const cleaned = result.sources.find(s => s.id === 't1');
+      expect(cleaned).toBeDefined();
+      expect(cleaned!.source).toBe('assert f(10) == 100');
     });
 
     it('splits hidden tests alongside regular tests', () => {

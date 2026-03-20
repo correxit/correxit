@@ -235,6 +235,7 @@ export function presplit(cells: Cellular[]): {
     const split = hidden(cell.source);
     if (!split || !split.visible.trim()) {
       expanded.push(cell);
+      if (split) sources.push({ id: cell.id, source: split.hidden });
       continue;
     }
 
