@@ -387,14 +387,21 @@ If a test cell contains `### BEGIN HIDDEN TESTS` / `### END HIDDEN
 TESTS` markers, Correxit splits it into two cells: the visible portion
 stays in place; the hidden portion becomes a new secret reference cell
 inserted directly after. Both count toward the correctable cell's point
-total.
+total. Correxit does not create zero-point references, so split hidden
+tests can increase the converted total.
 
 ### AUTOTEST directives
 
 nbgrader's `### AUTOTEST` and `### HASHED AUTOTEST` directives are
 expanded at conversion time. Correxit leases a kernel, executes the
 answer cell to define its variables, then evaluates each autotest
-expression and replaces the directive with a concrete `assert` statement.
+expression and replaces the directive with a concrete `assert`
+statement when the observed value can be translated safely.
+
+When Correxit cannot safely reify an autotest, it leaves a commented
+placeholder in the reference cell, inserts a failing
+`NotImplementedError`, and reports the cell in the conversion summary so
+you can rewrite that test manually.
 If no kernel is available, the directives are left in place and a
 warning is added to the report.
 
@@ -409,6 +416,10 @@ change the point totals:
    Correxit scales them to the smallest integers preserving their ratios
    (0.5 + 0.5 becomes 1 + 1). The ratio of partial credit is preserved,
    but the absolute total changes.
+
+Hidden-test splits follow the same rule. A visible half and a hidden
+half remain nonzero references, so they may increase the converted
+total relative to the original nbgrader notebook.
 
 2. **Rounding.** Fractional points on reviewable and task cells are
    rounded to the nearest integer.

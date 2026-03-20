@@ -14,6 +14,19 @@ const FIXTURES = path.resolve(
   'nbgrader'
 );
 
+async function close(page: any): Promise<void> {
+  try {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  } catch {
+    /* ok */
+  }
+  try {
+    await page.notebook.close(true);
+  } catch {
+    /* ok */
+  }
+}
+
 // ── Helpers ──
 
 /**
@@ -251,11 +264,7 @@ const plain = (type: 'code' | 'markdown', source = '') => ({
 
 test.describe('nbgrader conversion (synthetic)', () => {
   test.afterEach(async ({ page }) => {
-    try {
-      await page.notebook.close(true);
-    } catch {
-      /* ok */
-    }
+    await close(page);
   });
 
   test('converts answer + tests to correctable', async ({ page }) => {
@@ -650,11 +659,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
 test.describe('nbgrader conversion (fixtures)', () => {
   test.afterEach(async ({ page }) => {
-    try {
-      await page.notebook.close(true);
-    } catch {
-      /* ok */
-    }
+    await close(page);
   });
 
   /**
@@ -977,11 +982,7 @@ async function rewrite(
 
 test.describe('nbgrader scoring (synthetic)', () => {
   test.afterEach(async ({ page }) => {
-    try {
-      await page.notebook.close(true);
-    } catch {
-      /* ok */
-    }
+    await close(page);
   });
 
   test('correct answer scores full marks', async ({ page }) => {
@@ -1087,11 +1088,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
 
 test.describe('nbgrader scoring (fixtures)', () => {
   test.afterEach(async ({ page }) => {
-    try {
-      await page.notebook.close(true);
-    } catch {
-      /* ok */
-    }
+    await close(page);
   });
 
   /**

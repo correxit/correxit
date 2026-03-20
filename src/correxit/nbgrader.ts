@@ -44,6 +44,8 @@ type Classification = {
   warnings: string[];
 };
 
+type Resolution = { safe: boolean; value: string | null; };
+
 // ── Constants ──────────────────────────────────────────────────────
 
 const AUTOTEST = /^###\s+(?:HASHED\s+)?AUTOTEST\s+(.+)$/;
@@ -73,6 +75,24 @@ function recalibrate(values: number[]): number[] {
       return values.map(value => Math.round(value * scale));
   }
   return values.map(value => Math.round(value * 100));
+}
+
+function placeholder(expr: string, value: string | null): string {
+  const note = JSON.stringify(
+    `Correxit could not safely convert AUTOTEST: ${expr}`
+  );
+  const lines = [
+    '# Correxit could not safely convert this AUTOTEST.',
+    '# Review and rewrite this reference cell manually.',
+    '# Original directive:',
+    `# ### AUTOTEST ${expr}`
+  ];
+  if (value !== null) {
+    lines.push('# Observed kernel value:');
+    lines.push(...value.split('\n').map(line => `# ${line}`));
+  }
+  lines.push(`raise NotImplementedError(${note})`);
+  return lines.join('\n');
 }
 
 /**
@@ -172,9 +192,11 @@ export function detect(cells: Cellular[]): boolean {
  * Pre-split cells containing hidden test regions.
  *
  * Test cells with BEGIN HIDDEN / END HIDDEN markers become two cells:
- * the visible portion (same ID, zero points) and the hidden portion
- * (synthetic ID, full points). This runs before classify() so that
- * classification never reasons about mid-stride splits.
+ * the visible portion (same ID, original points) and the hidden
+ * portion (synthetic ID, original points). Correxit avoids zero-point
+ * references, so split tests can increase the converted total. This
+ * runs before classify() so that classification never reasons about
+ * mid-stride splits.
  */
 export function presplit(cells: Cellular[]): {
   cells: Cellular[];
@@ -213,7 +235,7 @@ export function presplit(cells: Cellular[]): {
       }
     });
 
-    // Hidden portion: synthetic cell with full points.
+    // Hidden portion: synthetic cell with the same points.
     expanded.push({
       id: referent,
       cell_type: 'code',
@@ -480,31 +502,60 @@ export function report(
  */
 export type Executor = (code: string) => Promise<string | null>;
 
+type Resolver = (expr: string) => Promise<Resolution>;
+
+type Outcome = { ok: boolean; value: string | null; };
+
+function request(
+  kernel: Kernel.IKernelConnection,
+  code: string
+): Promise<Outcome> {
+  return new Promise(resolve => {
+    const future = kernel.requestExecute({ code }, true);
+    let value: string | null = null;
+    future.onIOPub = msg => {
+      if (msg.header.msg_type === 'execute_result') {
+        const data = (msg.content as any).data;
+        value = data?.['text/plain'] ?? null;
+      }
+    };
+    future.done
+      .then(reply =>
+        resolve({ ok: reply.content.status === 'ok', value })
+      )
+      .catch(() => resolve({ ok: false, value: null }));
+  });
+}
+
 /** Build an executor backed by a live kernel connection. */
 function executor(kernel: Kernel.IKernelConnection): Executor {
-  return code =>
-    new Promise(resolve => {
-      const future = kernel.requestExecute({ code }, true);
-      let result: string | null = null;
-      future.onIOPub = msg => {
-        if (msg.header.msg_type === 'execute_result') {
-          const data = (msg.content as any).data;
-          result = data?.['text/plain'] ?? null;
-        }
-      };
-      future.done
-        .then(reply =>
-          resolve(reply.content.status === 'ok' ? result : null)
-        )
-        .catch(() => resolve(null));
-    });
+  return async code => {
+    const result = await request(kernel, code);
+    return result.ok ? result.value : null;
+  };
+}
+
+function resolver(kernel: Kernel.IKernelConnection): Resolver {
+  const token = '__correxit_autotest__';
+  return async expr => {
+    const observed = await request(kernel, `${token} = (${expr})\n${token}`);
+    if (!observed.ok || observed.value === null)
+      return { safe: false, value: observed.value };
+
+    const validated = await request(
+      kernel,
+      `assert ${token} == ${observed.value}`
+    );
+    return { safe: validated.ok, value: observed.value };
+  };
 }
 
 /** AUTOTEST expand() logic (separated for unit testing without a kernel). */
 export async function spread(
   cells: Cellular[],
   classification: Classification,
-  execute: Executor
+  execute: Executor,
+  resolve?: Resolver
 ): Promise<Classification> {
   const answers = new Set(
     classification.cells
@@ -520,6 +571,10 @@ export async function spread(
 
   const expanded: { id: string; source: string }[] = [];
   const warnings: string[] = [];
+  const inspect = resolve || (async (expr: string) => {
+    const value = await execute(expr);
+    return { safe: value !== null, value };
+  });
 
   /** Expand directives in `source`, returning the rewritten text. */
   const rewrite = async (
@@ -544,26 +599,25 @@ export async function spread(
       if (block.trim()) await execute(block);
     };
 
-    let ok = true;
     for (let i = 0; i < lines.length; i++) {
       if (!on.has(i)) { pending.push(lines[i]); continue; }
       await flush();
       const directive = found.find(({ line }) => line === i)!;
       for (const expr of directive.expressions) {
-        const value = await execute(expr);
-        if (value !== null) {
+        const { safe, value } = await inspect(expr);
+        if (safe && value !== null) {
           output.push(`assert (${expr}) == ${value}`);
         } else {
-          ok = false;
-          warnings.push(
-            `Expansion failed for "${expr}" in cell "${id}"`
+          warnings.push(value === null
+            ? `Expansion failed for "${expr}" in cell "${id}"`
+            : `Could not safely convert AUTOTEST "${expr}" in cell "${id}"`
           );
-          output.push(`### AUTOTEST ${expr}`);
+          output.push(placeholder(expr, value));
         }
       }
     }
     await flush();
-    return ok ? output.join('\n') : null;
+    return output.join('\n');
   };
 
   for (const cell of cells) {
@@ -617,7 +671,12 @@ export async function expand(
   }
   const [kernel, release] = leased;
   try {
-    return await spread(cells, classification, executor(kernel));
+    return await spread(
+      cells,
+      classification,
+      executor(kernel),
+      resolver(kernel)
+    );
   } finally {
     await release();
   }

@@ -779,9 +779,14 @@ describe('nbgrader', () => {
       expect(result.warnings).toContain(
         'Expansion failed for "f(bad)" in cell "t1"'
       );
+      const source = result.sources.find(s => s.id === 't1');
+      expect(source).toBeDefined();
+      expect(source!.source).toContain(
+        '# Correxit could not safely convert this AUTOTEST.'
+      );
     });
 
-    it('does not add source entry when all expressions fail', async () => {
+    it('adds a placeholder when all expressions fail', async () => {
       const cells: Cellular[] = [
         answer('a1', 'def f(x): return x'),
         check('t1', 1, '### AUTOTEST bad()')
@@ -789,7 +794,30 @@ describe('nbgrader', () => {
       const classification = classify(cells);
       const executor: Executor = async () => null;
       const result = await expand(cells, classification, executor);
-      expect(result.sources.find(s => s.id === 't1')).toBeUndefined();
+      const source = result.sources.find(s => s.id === 't1');
+      expect(source).toBeDefined();
+      expect(source!.source).toContain('raise NotImplementedError');
+    });
+
+    it('adds a placeholder when an assertion is unsafe', async () => {
+      const cells: Cellular[] = [
+        answer('a1', 'a = 5'),
+        check('t1', 1, '### AUTOTEST type(a)')
+      ];
+      const classification = classify(cells);
+      const executor: Executor = async code =>
+        code === 'type(a)' ? 'int' : null;
+      const resolver = async () => ({ safe: false, value: 'int' });
+      const result = await expand(cells, classification, executor, resolver);
+
+      expect(result.warnings).toContain(
+        'Could not safely convert AUTOTEST "type(a)" in cell "t1"'
+      );
+      const source = result.sources.find(s => s.id === 't1');
+      expect(source).toBeDefined();
+      expect(source!.source).toContain('# Observed kernel value:');
+      expect(source!.source).toContain('# int');
+      expect(source!.source).toContain('raise NotImplementedError');
     });
 
     it('executes answer cells before test cells', async () => {
@@ -885,7 +913,7 @@ describe('nbgrader', () => {
 
       const values: Record<string, string> = {
         a: '5',
-        'type(a)': "<class 'int'>"
+        'type(a)': 'int'
       };
       const executor: Executor = async code => values[code] ?? null;
       const result = await expand(pre.cells, classification, executor);
@@ -893,7 +921,7 @@ describe('nbgrader', () => {
       // Visible portion expanded (leading blank line from hidden split).
       const visible = result.sources.find(s => s.id === 't1');
       expect(visible).toBeDefined();
-      expect(visible!.source).toBe("\nassert (type(a)) == <class 'int'>");
+      expect(visible!.source).toBe('\nassert (type(a)) == int');
 
       // Hidden portion expanded (now in sources under the referent ID).
       const secret = result.sources.find(s => s.id === 't1-hidden');
@@ -1635,9 +1663,9 @@ describe('upstream nbgrader fixtures', () => {
           a: '5',
           b: "'hello'",
           c: "[1, 2, 'test']",
-          'type(a)': "<class 'int'>",
-          'type(b)': "<class 'str'>",
-          'type(c)': "<class 'list'>"
+          'type(a)': 'int',
+          'type(b)': 'str',
+          'type(c)': 'list'
         };
         const executed: string[] = [];
         const executor: Executor = async code => {
@@ -1655,9 +1683,9 @@ describe('upstream nbgrader fixtures', () => {
           s => s.id === result.splits[0].cell
         );
         expect(visible).toBeDefined();
-        expect(visible!.source).toContain("assert (type(a)) == <class 'int'>");
-        expect(visible!.source).toContain("assert (type(b)) == <class 'str'>");
-        expect(visible!.source).toContain("assert (type(c)) == <class 'list'>");
+        expect(visible!.source).toContain('assert (type(a)) == int');
+        expect(visible!.source).toContain('assert (type(b)) == str');
+        expect(visible!.source).toContain('assert (type(c)) == list');
         expect(visible!.source).not.toContain('### AUTOTEST');
 
         // Hidden portion: value assertions (in sources under referent ID).
