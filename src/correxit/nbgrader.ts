@@ -5,8 +5,6 @@ import * as kernels from './kernels';
 import { Rubric } from './rubric';
 import { Workbook } from './workbook';
 
-type TranslationBundle = IRenderMime.TranslationBundle;
-
 type Cell = Rubric.Cell;
 type Reference = Rubric.Cell.Reference;
 
@@ -62,55 +60,19 @@ const VALUE = '__correxit_autotest_value__';
 const support = `def ${VERIFY}(label, actual, expected):
     if actual != expected:
       raise AssertionError(f"{label}: expected {expected!r}, got {actual!r}")`;
+
 /**
- * Scale point values to the smallest integers preserving their ratios.
- *
- * #### Notes
- * nbgrader commonly splits a cell's total across tests as fractions
- * (e.g. 0.5 + 0.5). Correxit requires integer points. This finds the
- * smallest multiplier k such that every value * k is integral.
+ * Returns true if at least one cell carries nbgrader metadata with
+ * `grade === true` or `solution === true`.
  */
-function recalibrate(values: number[]): number[] {
-  for (let scale = 1; scale <= 1000; scale++) {
-    const integral = values.every(
-      value => Math.abs(value * scale - Math.round(value * scale)) < 1e-9
-    );
-    if (integral) return values.map(value => Math.round(value * scale));
-  }
-  return values.map(value => Math.round(value * 100));
-}
-
-function placeholder(expr: string, value: string | null): string {
-  const note = JSON.stringify(
-    `Correxit could not safely convert AUTOTEST: ${expr}`
-  );
-  const lines = [
-    '# Correxit could not safely convert this AUTOTEST.',
-    '# Review and rewrite this reference cell manually.',
-    '# Original directive:',
-    `# ### AUTOTEST ${expr}`
-  ];
-  if (value !== null) {
-    lines.push('# Observed kernel value:');
-    lines.push(...value.split('\n').map(line => `# ${line}`));
-  }
-  lines.push(`raise NotImplementedError(${note})`);
-  return lines.join('\n');
-}
-
-function python(expr: string, value: string): string {
-  return `${VERIFY}(${JSON.stringify(expr)}, (${expr}), ${value})`;
-}
-
-async function language(
-  kernel: Kernel.IKernelConnection
-): Promise<string | null> {
-  try {
-    const info = await (kernel as Informative).info;
-    return info?.language_info?.name?.toLowerCase() ?? null;
-  } catch {
-    return null;
-  }
+export function detect(cells: Cellular[]): boolean {
+  return cells.some(cell => {
+    const meta = cell.metadata.nbgrader as
+      Partial<Metadata> | undefined;
+    return meta?.grade === true
+      || meta?.solution === true
+      || meta?.task === true;
+  });
 }
 
 /**
@@ -173,37 +135,6 @@ export function hidden(
   };
 }
 
-/** Parse autotest directives from a cell source. */
-function directives(
-  source: string
-): { line: number; expressions: string[] }[] {
-  return source.split('\n')
-    .map((raw, line) => ({ raw, line }))
-    .filter(({ raw }) => AUTOTEST.test(raw.trim()))
-    .map(({ raw, line }) => {
-      const match = raw.trim().match(AUTOTEST)!;
-      const expressions = match[1]
-        .split(';')
-        .map(expr => expr.trim())
-        .filter(Boolean);
-      return { line, expressions };
-    });
-}
-
-/**
- * Returns true if at least one cell carries nbgrader metadata with
- * `grade === true` or `solution === true`.
- */
-export function detect(cells: Cellular[]): boolean {
-  return cells.some(cell => {
-    const meta = cell.metadata.nbgrader as
-      Partial<Metadata> | undefined;
-    return meta?.grade === true
-      || meta?.solution === true
-      || meta?.task === true;
-  });
-}
-
 /**
  * Pre-split cells containing hidden test regions.
  *
@@ -224,12 +155,10 @@ export function presplit(cells: Cellular[]): {
   const splits: { cell: string; referent: string; source: string }[] = [];
 
   for (const cell of cells) {
-    const meta = cell.metadata.nbgrader as
-      Partial<Metadata> | undefined;
+    const meta = cell.metadata.nbgrader as Partial<Metadata> | undefined;
     const test =
       meta?.grade === true && meta?.solution !== true
       && cell.cell_type === 'code';
-
     if (!test) { expanded.push(cell); continue; }
 
     const split = hidden(cell.source);
@@ -274,6 +203,24 @@ export function presplit(cells: Cellular[]): {
   }
 
   return { cells: expanded, sources, splits };
+}
+
+/**
+ * Scale point values to the smallest integers preserving their ratios.
+ *
+ * #### Notes
+ * nbgrader commonly splits a cell's total across tests as fractions
+ * (e.g. 0.5 + 0.5). Correxit requires integer points. This finds the
+ * smallest multiplier k such that every value * k is integral.
+ */
+function recalibrate(values: number[]): number[] {
+  for (let scale = 1; scale <= 1000; scale++) {
+    const integral = values.every(
+      value => Math.abs(value * scale - Math.round(value * scale)) < 1e-9
+    );
+    if (integral) return values.map(value => Math.round(value * scale));
+  }
+  return values.map(value => Math.round(value * 100));
 }
 
 /**
@@ -471,12 +418,12 @@ export function slippage(
 export function report(
   source: Cellular[],
   classification: Classification,
-  trans: TranslationBundle
+  trans: IRenderMime.TranslationBundle
 ): string[] {
   const { cells, splits, warnings } = classification;
-  const correctable = cells.filter(c => c.is === 'correctable');
-  const reviewable = cells.filter(c => c.is === 'reviewable');
-  const points = cells.reduce((sum, c) => sum + c.points, 0);
+  const correctable = cells.filter(({ is }) => is === 'correctable');
+  const reviewable = cells.filter(({ is }) => is === 'reviewable');
+  const points = cells.reduce((sum, { points }) => sum + points, 0);
   const lines = [
     trans.__('Converted from nbgrader format.'),
     '',
@@ -497,7 +444,7 @@ export function report(
       trans.__(
         'Correxit scales fractional points to integers and rounds if necessary'
       ),
-      trans.__('Check that values look right in the sidebar.')
+      trans.__('Check the values in the sidebar.')
     );
   }
   if (warnings.length) {
@@ -521,6 +468,45 @@ type Resolver = (expr: string) => Promise<Resolution>;
 
 type Outcome = { ok: boolean; value: string | null; };
 
+function placeholder(expr: string, value: string | null): string {
+  const note = JSON.stringify(
+    `Correxit could not safely convert AUTOTEST: ${expr}`
+  );
+  const lines = [
+    '# Correxit could not safely convert this AUTOTEST.',
+    '# Review and rewrite this reference cell manually.',
+    '# Original directive:',
+    `# ### AUTOTEST ${expr}`
+  ];
+  if (value !== null) {
+    lines.push('# Observed kernel value:');
+    lines.push(...value.split('\n').map(line => `# ${line}`));
+  }
+  lines.push(`raise NotImplementedError(${note})`);
+  return lines.join('\n');
+}
+
+function python(expr: string, value: string): string {
+  return `${VERIFY}(${JSON.stringify(expr)}, (${expr}), ${value})`;
+}
+
+/** Parse autotest directives from a cell source. */
+function directives(
+  source: string
+): { line: number; expressions: string[] }[] {
+  return source.split('\n')
+    .map((raw, line) => ({ raw, line }))
+    .filter(({ raw }) => AUTOTEST.test(raw.trim()))
+    .map(({ raw, line }) => {
+      const match = raw.trim().match(AUTOTEST)!;
+      const expressions = match[1]
+        .split(';')
+        .map(expr => expr.trim())
+        .filter(Boolean);
+      return { line, expressions };
+    });
+}
+
 function request(
   kernel: Kernel.IKernelConnection,
   code: string
@@ -535,9 +521,7 @@ function request(
       }
     };
     future.done
-      .then(reply =>
-        resolve({ ok: reply.content.status === 'ok', value })
-      )
+      .then(({ content }) => resolve({ ok: content.status === 'ok', value }))
       .catch(() => resolve({ ok: false, value: null }));
   });
 }
@@ -545,9 +529,16 @@ function request(
 /** Build an executor backed by a live kernel connection. */
 function executor(kernel: Kernel.IKernelConnection): Executor {
   return async code => {
-    const result = await request(kernel, code);
-    return result.ok ? result.value : null;
+    const { ok, value } = await request(kernel, code);
+    return ok ? value : null;
   };
+}
+
+async function language(
+  kernel: Kernel.IKernelConnection
+): Promise<string | null> {
+  const info = await (kernel as Informative).info.catch(_ => null);
+  return info?.language_info?.name?.toLowerCase() ?? null;
 }
 
 function resolver(
@@ -581,12 +572,11 @@ export async function spread(
       .map(({ id }) => id)
   );
   const referents = new Set(
-    classification.references.flat().map(ref => ref.referent)
+    classification.references.flat().map(({ referent }) => referent)
   );
   const stripped = new Map(
     classification.sources.map(({ id, source }) => [id, source])
   );
-
   const expanded: { id: string; source: string }[] = [];
   const warnings: string[] = [];
   const inspect = resolve || (async (expr: string) => {
@@ -599,15 +589,15 @@ export async function spread(
     id: string,
     source: string
   ): Promise<string | null> => {
-    const found = directives(source);
-    if (!found.length) {
+    const autotests = directives(source);
+    if (!autotests.length) {
       await execute(source);
       return null;
     }
 
     let pending: string[] = [];
     const lines = source.split('\n');
-    const on = new Set(found.map(directive => directive.line));
+    const on = new Set(autotests.map(({ line }) => line));
     const output: string[] = [];
     const flush = async () => {
       if (!pending.length) return;
@@ -617,11 +607,13 @@ export async function spread(
       if (block.trim()) await execute(block);
     };
     let prepared = false;
-
     for (let i = 0; i < lines.length; i++) {
-      if (!on.has(i)) { pending.push(lines[i]); continue; }
+      if (!on.has(i)) {
+        pending.push(lines[i]);
+        continue;
+      }
       await flush();
-      const directive = found.find(({ line }) => line === i)!;
+      const directive = autotests.find(({ line }) => line === i)!;
       for (const expr of directive.expressions) {
         const { safe, value } = await inspect(expr);
         if (safe && value !== null) {
@@ -682,34 +674,29 @@ export async function expand(
 ): Promise<Classification> {
   const leased = await kernels.lease(workbook, { async: true });
   if (!leased) {
-    const name = workbook.context.model.defaultKernelName;
-    return {
-      ...classification,
-      warnings: [
-        ...classification.warnings,
-        'Autotest cells could not be expanded'
-        + ` (no ${name} kernel available)`
-      ]
-    };
+    const { defaultKernelName: name } = workbook.context.model;
+    const warnings = [
+      ...classification.warnings,
+      `Autotest cells could not be expanded, (no ${name} kernel available)`
+    ];
+    return { ...classification, warnings };
   }
+
   const [kernel, release] = leased;
   try {
     const name = await language(kernel);
     const execute = executor(kernel);
     if (name !== 'python') {
+      const resolve: Resolver =
+        async expr => ({ safe: false, value: await execute(expr) });
+      const warnings = [
+        ...classification.warnings,
+        `Autotest conversion requires a Python kernel; found "${
+          name ?? (workbook.context.model.defaultKernelName || 'unknown')
+        }"`
+      ];
       return await spread(
-        cells,
-        {
-          ...classification,
-          warnings: [
-            ...classification.warnings,
-            `Autotest conversion requires a Python kernel; found "${
-              name ?? (workbook.context.model.defaultKernelName || 'unknown')
-            }"`
-          ]
-        },
-        execute,
-        async expr => ({ safe: false, value: await execute(expr) })
+        cells, { ...classification, warnings }, execute, resolve
       );
     }
 
@@ -732,7 +719,7 @@ export async function expand(
  */
 export async function convert(
   workbook: Workbook,
-  trans: TranslationBundle
+  trans: IRenderMime.TranslationBundle
 ): Promise<string[] | null> {
   const notebook = workbook.context.model.sharedModel;
   const raw: Cellular[] = notebook.cells.map(cell => ({
