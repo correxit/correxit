@@ -12,6 +12,7 @@ import { Message } from '@lumino/messaging';
 import React from 'react';
 import { Rubric, Workbook } from '../correxit';
 import * as state from '../correxit/state';
+import { Boundary } from '../ui';
 import { Corrector } from '.';
 import * as bridge from './bridge';
 import { CommandIDs, Scanned } from './commands';
@@ -118,7 +119,13 @@ class CorrectorContent extends ReactWidget {
   }
 
   render() {
-    return <Corrector {...this.props} />;
+    const { trans } = this.props;
+    const label = trans.__('Something went wrong rendering the corrector.');
+    return (
+      <Boundary label={label}>
+        <Corrector {...this.props} />
+      </Boundary>
+    );
   }
 
   protected props: Corrector.Props & { key?: string };
@@ -441,7 +448,13 @@ class ReviewerContent extends ReactWidget {
   }
 
   render() {
-    return <Reviewer {...this.props} />;
+    const { trans } = this.props;
+    const label = trans.__('Something went wrong rendering the reviewer.');
+    return (
+      <Boundary label={label}>
+        <Reviewer {...this.props} />
+      </Boundary>
+    );
   }
 
   score(action: 'pass' | 'fail') {

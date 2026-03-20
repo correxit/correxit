@@ -5,7 +5,7 @@ import { CommandRegistry } from '@lumino/commands';
 import React from 'react';
 import { Correxit, Workbook } from '..';
 import * as state from '../correxit/state';
-import { Sidebar } from '.';
+import { Boundary, Sidebar } from '.';
 
 export class SidebarWidget extends ReactWidget {
   constructor({ commands, monitor, settings, trans }: SidebarWidget.IOptions) {
@@ -58,8 +58,13 @@ export class SidebarWidget extends ReactWidget {
 
   protected render() {
     const { annotate, commands, trans, workbook } = this;
+    const label = trans.__('Something went wrong rendering the sidebar.');
     const key = Date.now();
-    return <Sidebar {...{ annotate, commands, trans, workbook }} key={key} />;
+    return (
+      <Boundary key={key} label={label}>
+        <Sidebar {...{ annotate, commands, trans, workbook }} />
+      </Boundary>
+    );
   }
 
   protected async subscribe(monitor: Correxit.Monitor) {

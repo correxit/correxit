@@ -5,10 +5,12 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
+import { Widget } from '@lumino/widgets';
 import { Correxit, Rubric, Workbook } from '..';
 import { Propagator } from '../ui/propagator';
 import * as input from './input';
 import * as io from './io';
+import * as nbgrader from './nbgrader';
 import * as propagator from './propagator';
 import * as security from './security';
 import * as state from './state';
@@ -130,7 +132,6 @@ export function commands(
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
-
       try {
         const certified = await certify(workbook);
         const receipt = await collector(certified);
@@ -278,7 +279,36 @@ export function commands(
         title: trans.__('Enter a passphrase'),
         label: trans.__('Enter a passphrase for this workbook')
       });
-      if (passphrase) await convert(workbook, passphrase, unlocker);
+      if (!passphrase) return;
+
+      const overlay = document.createElement('div');
+      overlay.classList.add('correxit-overlay', 'cxt-mod-loading');
+      const converting = trans.__('Converting...');
+      overlay.dataset.label = converting;
+      overlay.setAttribute('role', 'status');
+      overlay.setAttribute('aria-live', 'polite');
+      overlay.setAttribute('aria-label', converting);
+      workbook.content?.node.parentElement?.appendChild(overlay);
+
+      let report: string[] | null;
+      try {
+        await convert(workbook, passphrase, unlocker);
+        report = await nbgrader.convert(workbook, trans);
+      } finally {
+        overlay.remove();
+      }
+      if (!report) return;
+
+      const node = document.createElement('span');
+      report.forEach((line, i) => {
+        if (i > 0) node.appendChild(document.createElement('br'));
+        node.appendChild(document.createTextNode(line));
+      });
+      void showDialog({
+        title: trans.__('Converted from nbgrader'),
+        body: new Widget({ node }),
+        buttons: [Dialog.okButton()]
+      });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.correct, {

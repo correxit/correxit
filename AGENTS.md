@@ -71,7 +71,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 ## 6. Testing Strategy
 
 - **Unit Tests (`src/__tests__/`)**: For pure logic and isolated modules. The following have Jest unit tests:
-  - `rubric.ts`, `state.ts`, `kernels.ts`, `unlocker.ts`, `grader.ts`, `csv.ts`
+  - `rubric.ts`, `state.ts`, `kernels.ts`, `unlocker.ts`, `grader.ts`, `csv.ts`, `nbgrader.ts`
 - **Playwright Tests (`ui-tests/`)**: For modules that require a live JupyterLab environment. These serve as the effective unit tests for the following. Do not attempt to Jest-mock them:
   - `workbook.ts`, `commands.ts` (both `correxit/` and `corrector/`), `corrector.tsx`, `reviewer.tsx`, `widget.tsx`
 
@@ -93,3 +93,5 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `corrector/reviewer.tsx`: Per-cell manual review UI. Renders cell source, outputs, a scoring grid (pass/fail/partial with directional advance), a comment field, and a score minimap. Navigation is keyboard-driven (arrow keys / HJKL). Auto-certifies when all reviewable cells are scored.
 - `corrector/csv.ts`: CSV export generator for scanned workbooks and grades. Uses `Rubric.Score.status` to detect unscored workbooks.
 - `corrector/commands.ts`: Registers Corrector commands (`batch`, `scan`, `collect`, `csv`, `launch`, `cd`) and Reviewer commands (`review`, `intervene`, `up`/`down`/`left`/`right`, `pass`, `fail`). The `intervene` command saves scores, writes comments, and auto-certifies when the last pending reviewable cell is scored.
+- `nbgrader.ts`: Converts nbgrader-format notebooks to Correxit workbooks. Detects nbgrader cell metadata, classifies cells (answerable/correctable/reviewable), splits fenced `### BEGIN/END` hidden test regions, and builds an equivalent rubric. Falls back to static output analysis when no kernel is available.
+- `ui/boundary.tsx`: React class error boundary wrapping the sidebar, corrector, and reviewer mount points. Catches synchronous render throws and shows a fallback with error message and collapsible stack trace.
