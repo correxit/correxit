@@ -59,14 +59,9 @@ const BEGIN_MARK = /^={3,}\s*BEGIN\s+MARK\s+SCHEME\s*={3,}$/;
 const END_MARK = /^={3,}\s*END\s+MARK\s+SCHEME\s*={3,}$/;
 const VERIFY = '__correxit_autotest__';
 const VALUE = '__correxit_autotest_value__';
-const support = [
-  `def ${VERIFY}(label, actual, expected):`,
-  '    if actual != expected:',
-  '        raise AssertionError(',
-  '            f"{label}: expected {expected!r}, got {actual!r}"',
-  '        )'
-].join('\n');
-
+const support = `def ${VERIFY}(label, actual, expected):
+    if actual != expected:
+      raise AssertionError(f"{label}: expected {expected!r}, got {actual!r}")`;
 /**
  * Scale point values to the smallest integers preserving their ratios.
  *
@@ -104,13 +99,7 @@ function placeholder(expr: string, value: string | null): string {
 }
 
 function python(expr: string, value: string): string {
-  return [
-    `${VERIFY}(`,
-    `  ${JSON.stringify(expr)},`,
-    `  (${expr}),`,
-    `  ${value}`,
-    ')'
-  ].join('\n');
+  return `${VERIFY}(${JSON.stringify(expr)}, (${expr}), ${value})`;
 }
 
 async function language(

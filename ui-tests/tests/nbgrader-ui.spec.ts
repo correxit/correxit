@@ -203,22 +203,12 @@ const autotest = (id: string, points: number, source = '') => ({
   }
 });
 
-const support = [
-  'def __correxit_autotest__(label, actual, expected):',
-  '    if actual != expected:',
-  '        raise AssertionError(',
-  '            f"{label}: expected {expected!r}, got {actual!r}"',
-  '        )'
-].join('\n');
+const support = `def __correxit_autotest__(label, actual, expected):
+    if actual != expected:
+      raise AssertionError(f"{label}: expected {expected!r}, got {actual!r}")`;
 
 const invoke = (expr: string, value: string): string =>
-  [
-    '__correxit_autotest__(',
-    `  ${JSON.stringify(expr)},`,
-    `  (${expr}),`,
-    `  ${value}`,
-    ')'
-  ].join('\n');
+  `__correxit_autotest__(${JSON.stringify(expr)}, (${expr}), ${value})`;
 
 const script = (...pairs: [string, string][]): string =>
   [support, '', ...pairs.map(([expr, value]) => invoke(expr, value))].join(
