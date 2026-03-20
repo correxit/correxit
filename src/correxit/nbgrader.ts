@@ -63,7 +63,7 @@ const support = `def ${VERIFY}(label, actual, expected):
 
 /**
  * Returns true if at least one cell carries nbgrader metadata with
- * `grade === true` or `solution === true`.
+ * `grade === true`, `solution === true`, or `task === true`.
  */
 export function detect(cells: Cellular[]): boolean {
   return cells.some(cell => {
@@ -140,10 +140,10 @@ export function hidden(
  *
  * Test cells with BEGIN HIDDEN / END HIDDEN markers become two cells:
  * the visible portion (same ID, original points) and the hidden
- * portion (synthetic ID, original points). Correxit avoids zero-point
- * references, so split tests can increase the converted total. This
- * runs before classify() so that classification never reasons about
- * mid-stride splits.
+ * portion (synthetic ID, original points). Both halves receive the
+ * same point value (clamped to >= 0), so split tests can increase
+ * the converted total. This runs before classify() so that
+ * classification never reasons about mid-stride splits.
  */
 export function presplit(cells: Cellular[]): {
   cells: Cellular[];
@@ -568,7 +568,7 @@ export async function spread(
 ): Promise<Classification> {
   const answers = new Set(
     classification.cells
-      .filter(cell => cell.is === 'correctable')
+      .filter(({ is }) => is === 'correctable')
       .map(({ id }) => id)
   );
   const referents = new Set(
@@ -793,7 +793,7 @@ export async function convert(
   }
 
   notebook.transact(() => {
-    for (const cell of notebook.cells) {
+    for (const cell of [...notebook.cells]) {
       const json = cell.toJSON();
       const cleaned = clean(json.metadata);
       const source = cached.get(cell.id);

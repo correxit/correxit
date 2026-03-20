@@ -283,7 +283,11 @@ export function commands(
 
       const overlay = document.createElement('div');
       overlay.classList.add('correxit-overlay', 'cxt-mod-loading');
-      overlay.dataset.label = trans.__('Converting...');
+      const converting = trans.__('Converting...');
+      overlay.dataset.label = converting;
+      overlay.setAttribute('role', 'status');
+      overlay.setAttribute('aria-live', 'polite');
+      overlay.setAttribute('aria-label', converting);
       workbook.content?.node.parentElement?.appendChild(overlay);
 
       let report: string[] | null;
