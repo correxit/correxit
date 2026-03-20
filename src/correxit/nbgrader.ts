@@ -45,8 +45,10 @@ type Classification = {
 };
 
 type Resolution = { safe: boolean; value: string | null; };
-
-// ── Constants ──────────────────────────────────────────────────────
+type Render = (expr: string, value: string) => string;
+type Informative = Kernel.IKernelConnection & {
+  info: Promise<{ language_info?: { name?: string | null } } | null>;
+};
 
 const AUTOTEST = /^###\s+(?:HASHED\s+)?AUTOTEST\s+(.+)$/;
 const BEGIN_SOLUTION = /^#{3,}\s*BEGIN\s+SOLUTION\s*$/;
@@ -55,8 +57,15 @@ const BEGIN_HIDDEN = /^#{3,}\s*BEGIN\s+HIDDEN\s+TESTS?\s*$/;
 const END_HIDDEN = /^#{3,}\s*END\s+HIDDEN\s+TESTS?\s*$/;
 const BEGIN_MARK = /^={3,}\s*BEGIN\s+MARK\s+SCHEME\s*={3,}$/;
 const END_MARK = /^={3,}\s*END\s+MARK\s+SCHEME\s*={3,}$/;
-
-// ── Private helpers ───────────────────────────────────────────────
+const VERIFY = '__correxit_autotest__';
+const VALUE = '__correxit_autotest_value__';
+const support = [
+  `def ${VERIFY}(label, actual, expected):`,
+  '    if actual != expected:',
+  '        raise AssertionError(',
+  '            f"{label}: expected {expected!r}, got {actual!r}"',
+  '        )'
+].join('\n');
 
 /**
  * Scale point values to the smallest integers preserving their ratios.
@@ -71,8 +80,7 @@ function recalibrate(values: number[]): number[] {
     const integral = values.every(
       value => Math.abs(value * scale - Math.round(value * scale)) < 1e-9
     );
-    if (integral)
-      return values.map(value => Math.round(value * scale));
+    if (integral) return values.map(value => Math.round(value * scale));
   }
   return values.map(value => Math.round(value * 100));
 }
@@ -93,6 +101,27 @@ function placeholder(expr: string, value: string | null): string {
   }
   lines.push(`raise NotImplementedError(${note})`);
   return lines.join('\n');
+}
+
+function python(expr: string, value: string): string {
+  return [
+    `${VERIFY}(`,
+    `  ${JSON.stringify(expr)},`,
+    `  (${expr}),`,
+    `  ${value}`,
+    ')'
+  ].join('\n');
+}
+
+async function language(
+  kernel: Kernel.IKernelConnection
+): Promise<string | null> {
+  try {
+    const info = await (kernel as Informative).info;
+    return info?.language_info?.name?.toLowerCase() ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -535,16 +564,18 @@ function executor(kernel: Kernel.IKernelConnection): Executor {
   };
 }
 
-function resolver(kernel: Kernel.IKernelConnection): Resolver {
-  const token = '__correxit_autotest__';
+function resolver(
+  kernel: Kernel.IKernelConnection,
+  render: Render
+): Resolver {
   return async expr => {
-    const observed = await request(kernel, `${token} = (${expr})\n${token}`);
+    const observed = await request(kernel, `${VALUE} = (${expr})\n${VALUE}`);
     if (!observed.ok || observed.value === null)
       return { safe: false, value: observed.value };
 
     const validated = await request(
       kernel,
-      `assert ${token} == ${observed.value}`
+      [support, render(expr, observed.value)].join('\n\n')
     );
     return { safe: validated.ok, value: observed.value };
   };
@@ -555,7 +586,8 @@ export async function spread(
   cells: Cellular[],
   classification: Classification,
   execute: Executor,
-  resolve?: Resolver
+  resolve?: Resolver,
+  render: Render = python
 ): Promise<Classification> {
   const answers = new Set(
     classification.cells
@@ -598,6 +630,7 @@ export async function spread(
       pending = [];
       if (block.trim()) await execute(block);
     };
+    let prepared = false;
 
     for (let i = 0; i < lines.length; i++) {
       if (!on.has(i)) { pending.push(lines[i]); continue; }
@@ -606,7 +639,11 @@ export async function spread(
       for (const expr of directive.expressions) {
         const { safe, value } = await inspect(expr);
         if (safe && value !== null) {
-          output.push(`assert (${expr}) == ${value}`);
+          if (!prepared) {
+            output.push(support, '');
+            prepared = true;
+          }
+          output.push(render(expr, value));
         } else {
           warnings.push(value === null
             ? `Expansion failed for "${expr}" in cell "${id}"`
@@ -617,6 +654,7 @@ export async function spread(
       }
     }
     await flush();
+    if (prepared) output.push('', 'print("Success!")');
     return output.join('\n');
   };
 
@@ -647,7 +685,7 @@ export async function spread(
 /**
  * Expand autotest directives in test cells by leasing a kernel,
  * executing answer cells for their definitions, then evaluating each
- * expression and replacing directives with concrete assertions.
+ * expression and replacing directives with generated Python tests.
  *
  * Returns the classification unchanged (with a warning) when no
  * kernel is available.
@@ -671,11 +709,30 @@ export async function expand(
   }
   const [kernel, release] = leased;
   try {
+    const name = await language(kernel);
+    const execute = executor(kernel);
+    if (name !== 'python') {
+      return await spread(
+        cells,
+        {
+          ...classification,
+          warnings: [
+            ...classification.warnings,
+            `Autotest conversion requires a Python kernel; found "${
+              name ?? (workbook.context.model.defaultKernelName || 'unknown')
+            }"`
+          ]
+        },
+        execute,
+        async expr => ({ safe: false, value: await execute(expr) })
+      );
+    }
+
     return await spread(
       cells,
       classification,
-      executor(kernel),
-      resolver(kernel)
+      execute,
+      resolver(kernel, python)
     );
   } finally {
     await release();
@@ -704,13 +761,13 @@ export async function convert(
   if (!detect(raw)) return null;
 
   // Pass 1: split hidden test regions into separate cells.
-  const { cells, sources: presources, splits } = presplit(raw);
+  const { cells, sources: initial, splits } = presplit(raw);
 
   // Pass 2: classify the (already-split) cells.
   let classification = classify(cells);
   classification = {
     ...classification,
-    sources: [...presources, ...classification.sources],
+    sources: [...initial, ...classification.sources],
     splits
   };
 

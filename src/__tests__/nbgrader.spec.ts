@@ -99,14 +99,40 @@ namespace Cell {
 
 /** Run the full presplit + classify pipeline (mirrors convert). */
 function pipeline(raw: Cellular[]) {
-  const pre = presplit(raw);
-  const result = classify(pre.cells);
+  const split = presplit(raw);
+  const result = classify(split.cells);
   return {
     ...result,
-    sources: [...pre.sources, ...result.sources],
-    splits: pre.splits
+    sources: [...split.sources, ...result.sources],
+    splits: split.splits
   };
 }
+
+const support = [
+  'def __correxit_autotest__(label, actual, expected):',
+  '    if actual != expected:',
+  '        raise AssertionError(',
+  '            f"{label}: expected {expected!r}, got {actual!r}"',
+  '        )'
+].join('\n');
+
+const invoke = (expr: string, value: string): string =>
+  [
+    '__correxit_autotest__(',
+    `  ${JSON.stringify(expr)},`,
+    `  (${expr}),`,
+    `  ${value}`,
+    ')'
+  ].join('\n');
+
+const script = (...pairs: [string, string][]): string =>
+  [
+    support,
+    '',
+    ...pairs.map(([expr, value]) => invoke(expr, value)),
+    '',
+    'print("Success!")'
+  ].join('\n');
 
 describe('nbgrader', () => {
   describe('detect', () => {
@@ -729,7 +755,7 @@ describe('nbgrader', () => {
       const result = await expand(cells, classification, executor);
       const source = result.sources.find(s => s.id === 't1');
       expect(source).toBeDefined();
-      expect(source!.source).toBe('assert (f(1)) == 2');
+      expect(source!.source).toBe(script(['f(1)', '2']));
     });
 
     it('expands semicolon-separated expressions', async () => {
@@ -742,7 +768,7 @@ describe('nbgrader', () => {
       const executor: Executor = async code => values[code] ?? null;
       const result = await expand(cells, classification, executor);
       const source = result.sources.find(s => s.id === 't1');
-      expect(source!.source).toBe('assert (f(1)) == 1\nassert (f(2)) == 2');
+      expect(source!.source).toBe(script(['f(1)', '1'], ['f(2)', '2']));
     });
 
     it('preserves non-autotest code around directives', async () => {
@@ -764,7 +790,16 @@ describe('nbgrader', () => {
       const result = await expand(cells, classification, executor);
       const expanded = result.sources.find(s => s.id === 't1');
       expect(expanded!.source).toBe(
-        '"""docstring"""\nx = 1\nassert (f(x)) == 1\nx = 2'
+        [
+          '"""docstring"""',
+          'x = 1',
+          support,
+          '',
+          invoke('f(x)', '1'),
+          'x = 2',
+          '',
+          'print("Success!")'
+        ].join('\n')
       );
     });
 
@@ -849,7 +884,7 @@ describe('nbgrader', () => {
       };
       const result = await expand(cells, classification, executor);
       const source = result.sources.find(s => s.id === 't1');
-      expect(source!.source).toBe('assert (f(3)) == 9');
+      expect(source!.source).toBe(script(['f(3)', '9']));
     });
 
     it('executes non-autotest test cells for side effects', async () => {
@@ -902,12 +937,12 @@ describe('nbgrader', () => {
           ].join('\n')
         )
       ];
-      const pre = presplit(raw);
-      const base = classify(pre.cells);
+      const split = presplit(raw);
+      const draft = classify(split.cells);
       const classification = {
-        ...base,
-        sources: [...pre.sources, ...base.sources],
-        splits: pre.splits
+        ...draft,
+        sources: [...split.sources, ...draft.sources],
+        splits: split.splits
       };
       expect(classification.splits).toHaveLength(1);
 
@@ -916,17 +951,17 @@ describe('nbgrader', () => {
         'type(a)': 'int'
       };
       const executor: Executor = async code => values[code] ?? null;
-      const result = await expand(pre.cells, classification, executor);
+      const result = await expand(split.cells, classification, executor);
 
       // Visible portion expanded (leading blank line from hidden split).
       const visible = result.sources.find(s => s.id === 't1');
       expect(visible).toBeDefined();
-      expect(visible!.source).toBe('\nassert (type(a)) == int');
+      expect(visible!.source).toBe(`\n${script(['type(a)', 'int'])}`);
 
       // Hidden portion expanded (now in sources under the referent ID).
       const secret = result.sources.find(s => s.id === 't1-hidden');
       expect(secret).toBeDefined();
-      expect(secret!.source).toBe('assert (a) == 5');
+      expect(secret!.source).toBe(script(['a', '5']));
     });
   });
 
@@ -1572,9 +1607,9 @@ describe('upstream nbgrader fixtures', () => {
 
   describe('test_taskcell.ipynb', () => {
     const result = classify(load('test_taskcell.ipynb'));
-    const base = classify(load('test.ipynb'));
+    const canonical = classify(load('test.ipynb'));
 
-    it('produces 5 rubric entries (task + 4 from base assignment)', () => {
+    it('produces 5 rubric entries (task + 4 from canonical assignment)', () => {
       expect(result.cells).toHaveLength(5);
     });
 
@@ -1587,10 +1622,10 @@ describe('upstream nbgrader fixtures', () => {
 
     it('remaining 4 match test.ipynb structure', () => {
       expect(result.cells.slice(1).map(c => c.is)).toEqual(
-        base.cells.map(c => c.is)
+        canonical.cells.map(c => c.is)
       );
       expect(result.cells.slice(1).map(c => c.points)).toEqual(
-        base.cells.map(c => c.points)
+        canonical.cells.map(c => c.points)
       );
     });
 
@@ -1683,9 +1718,10 @@ describe('upstream nbgrader fixtures', () => {
           s => s.id === result.splits[0].cell
         );
         expect(visible).toBeDefined();
-        expect(visible!.source).toContain('assert (type(a)) == int');
-        expect(visible!.source).toContain('assert (type(b)) == str');
-        expect(visible!.source).toContain('assert (type(c)) == list');
+        expect(visible!.source).toContain(support);
+        expect(visible!.source).toContain(invoke('type(a)', 'int'));
+        expect(visible!.source).toContain(invoke('type(b)', 'str'));
+        expect(visible!.source).toContain(invoke('type(c)', 'list'));
         expect(visible!.source).not.toContain('### AUTOTEST');
 
         // Hidden portion: value assertions (in sources under referent ID).
@@ -1693,9 +1729,10 @@ describe('upstream nbgrader fixtures', () => {
           s => s.id === result.splits[0].referent
         );
         expect(secret).toBeDefined();
-        expect(secret!.source).toContain('assert (a) == 5');
-        expect(secret!.source).toContain("assert (b) == 'hello'");
-        expect(secret!.source).toContain("assert (c) == [1, 2, 'test']");
+        expect(secret!.source).toContain(support);
+        expect(secret!.source).toContain(invoke('a', '5'));
+        expect(secret!.source).toContain(invoke('b', "'hello'"));
+        expect(secret!.source).toContain(invoke('c', "[1, 2, 'test']"));
         expect(secret!.source).not.toContain('### AUTOTEST');
 
         expect(expanded.warnings).toHaveLength(0);

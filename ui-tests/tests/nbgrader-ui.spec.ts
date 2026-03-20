@@ -101,7 +101,7 @@ async function convert(page: any): Promise<string[]> {
  * Returns the rubric shape: cells in notebook order, total points,
  * and a count of console.warn emissions from the convert command.
  *
- * Each cell is [classification, points, number_of_references].
+ * Each cell is [classification, points, references].
  */
 async function shape(page: any): Promise<{
   cells: [string, number, number][];
@@ -202,6 +202,32 @@ const autotest = (id: string, points: number, source = '') => ({
     solution: false
   }
 });
+
+const support = [
+  'def __correxit_autotest__(label, actual, expected):',
+  '    if actual != expected:',
+  '        raise AssertionError(',
+  '            f"{label}: expected {expected!r}, got {actual!r}"',
+  '        )'
+].join('\n');
+
+const invoke = (expr: string, value: string): string =>
+  [
+    '__correxit_autotest__(',
+    `  ${JSON.stringify(expr)},`,
+    `  (${expr}),`,
+    `  ${value}`,
+    ')'
+  ].join('\n');
+
+const script = (...pairs: [string, string][]): string =>
+  [
+    support,
+    '',
+    ...pairs.map(([expr, value]) => invoke(expr, value)),
+    '',
+    'print("Success!")'
+  ].join('\n');
 
 const manual = (id: string, points: number, source = '') => ({
   type: 'code' as const,
@@ -492,7 +518,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
   test('test cell sources are preserved after conversion', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
-    const test_source = 'assert squares(2) == [1, 4]';
+    const test = 'assert squares(2) == [1, 4]';
     await populate(page, [
       answer(
         'q1',
@@ -503,7 +529,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
           '    ### END SOLUTION'
         ].join('\n')
       ),
-      autotest('t1', 1, test_source)
+      autotest('t1', 1, test)
     ]);
     await convert(page);
 
@@ -517,7 +543,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
       'def squares(n):\n    return [i**2 for i in range(1, n+1)]'
     );
     // Test cell: source unchanged
-    expect(sources[1]).toBe(test_source);
+    expect(sources[1]).toBe(test);
   });
 
   test('plain notebook converts with no rubric cells', async ({ page }) => {
@@ -554,7 +580,9 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(c.sources).toBe(true);
   });
 
-  test('autotest directives are expanded into assertions', async ({ page }) => {
+  test('autotest directives are expanded into helper calls', async ({
+    page
+  }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [
@@ -568,8 +596,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
       const notebook = panel.context.model.sharedModel;
       return notebook.cells.map((cell: any) => cell.getSource());
     });
-    // Autotest directives replaced with concrete assertions.
-    expect(sources[1]).toBe('assert (f(1)) == 2\nassert (f(2)) == 4');
+    expect(sources[1]).toBe(script(['f(1)', '2'], ['f(2)', '4']));
 
     const s = await shape(page);
     expect(s.cells).toEqual([['correctable', 1, 1]]);
@@ -615,7 +642,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
       const notebook = panel.context.model.sharedModel;
       return notebook.cells.map((cell: any) => cell.getSource());
     });
-    expect(sources[1]).toBe('assert (x) == 42\nassert (x + 1) == 43');
+    expect(sources[1]).toBe(script(['x', '42'], ['x + 1', '43']));
   });
 
   test('non-autotest code in test cell is preserved around expansions', async ({
@@ -634,7 +661,17 @@ test.describe('nbgrader conversion (synthetic)', () => {
       const notebook = panel.context.model.sharedModel;
       return notebook.cells.map((cell: any) => cell.getSource());
     });
-    expect(sources[1]).toBe('"""verify x"""\nassert (x) == 10\nassert x > 0');
+    expect(sources[1]).toBe(
+      [
+        '"""verify x"""',
+        support,
+        '',
+        invoke('x', '10'),
+        'assert x > 0',
+        '',
+        'print("Success!")'
+      ].join('\n')
+    );
   });
 
   test('HASHED AUTOTEST directives are expanded', async ({ page }) => {
@@ -651,7 +688,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
       const notebook = panel.context.model.sharedModel;
       return notebook.cells.map((cell: any) => cell.getSource());
     });
-    expect(sources[1]).toBe('assert (f(5)) == 25');
+    expect(sources[1]).toBe(script(['f(5)', '25']));
   });
 });
 
@@ -686,21 +723,21 @@ test.describe('nbgrader conversion (fixtures)', () => {
       await load(page, name);
       await convert(page);
 
-      const s = await shape(page);
-      expect(s.cells).toEqual([
+      const state = await shape(page);
+      expect(state.cells).toEqual([
         ['correctable', 2, 2],
         ['correctable', 2, 2],
         ['reviewable', 1, 0],
         ['reviewable', 2, 0]
       ]);
-      expect(s.points).toBe(7);
+      expect(state.points).toBe(7);
 
-      const w = await captured();
-      expect(w).toHaveLength(0);
+      const notes = await captured();
+      expect(notes).toHaveLength(0);
 
-      const c = await clean(page);
-      expect(c.metadata).toBe(true);
-      expect(c.sources).toBe(true);
+      const cleaned = await clean(page);
+      expect(cleaned.metadata).toBe(true);
+      expect(cleaned.sources).toBe(true);
     });
   }
 
@@ -711,17 +748,17 @@ test.describe('nbgrader conversion (fixtures)', () => {
     await load(page, 'test-hidden-tests.ipynb');
     await convert(page);
 
-    const s = await shape(page);
-    expect(s.cells).toEqual([
+    const state = await shape(page);
+    expect(state.cells).toEqual([
       ['correctable', 3, 3],
       ['correctable', 3, 3]
     ]);
-    expect(s.points).toBe(6);
+    expect(state.points).toBe(6);
     expect(await captured()).toHaveLength(0);
 
-    const c = await clean(page);
-    expect(c.metadata).toBe(true);
-    expect(c.sources).toBe(true);
+    const cleaned = await clean(page);
+    expect(cleaned.metadata).toBe(true);
+    expect(cleaned.sources).toBe(true);
   });
 
   test('ps1-problem1.ipynb: trailing task discarded', async ({ page }) => {
@@ -733,22 +770,22 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
     // Same 4 cells as canonical. The trailing task cell has no
     // following unmarked cell, so it is discarded with a warning.
-    const s = await shape(page);
-    expect(s.cells).toEqual([
+    const state = await shape(page);
+    expect(state.cells).toEqual([
       ['correctable', 2, 2],
       ['correctable', 2, 2],
       ['reviewable', 1, 0],
       ['reviewable', 2, 0]
     ]);
-    expect(s.points).toBe(7);
+    expect(state.points).toBe(7);
 
-    const w = await captured();
-    expect(w.length).toBe(1);
-    expect(w[0]).toContain('Trailing task');
+    const notes = await captured();
+    expect(notes.length).toBe(1);
+    expect(notes[0]).toContain('Trailing task');
 
-    const c = await clean(page);
-    expect(c.metadata).toBe(true);
-    expect(c.sources).toBe(true);
+    const cleaned = await clean(page);
+    expect(cleaned.metadata).toBe(true);
+    expect(cleaned.sources).toBe(true);
   });
 
   test('ps1-autotest-problem1.ipynb: task + autotest', async ({ page }) => {
@@ -760,8 +797,8 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
     // 6 cells: 2 correctable, 4 reviewable (incl. task → unmarked).
     // The last correctable has 0 pts (autotest with 0-point test).
-    const s = await shape(page);
-    expect(s.cells).toEqual([
+    const state = await shape(page);
+    expect(state.cells).toEqual([
       ['correctable', 2, 2],
       ['correctable', 2, 2],
       ['reviewable', 1, 0],
@@ -769,27 +806,27 @@ test.describe('nbgrader conversion (fixtures)', () => {
       ['reviewable', 4, 0],
       ['correctable', 0, 1]
     ]);
-    expect(s.points).toBe(11);
+    expect(state.points).toBe(11);
     expect(await captured()).toHaveLength(0);
 
-    // Autotest directives should be expanded into concrete assertions.
+    // Autotest directives should be expanded into runnable helper calls.
     const sources = await page.evaluate(() => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
       const notebook = panel.context.model.sharedModel;
       return notebook.cells.map((cell: any) => cell.getSource());
     });
-    const autotest_cells = sources.filter(
-      (s: string) => s.includes('assert') && s.includes('==')
+    const autotests = sources.filter((source: string) =>
+      source.includes('__correxit_autotest__(')
     );
-    expect(autotest_cells.length).toBeGreaterThan(0);
+    expect(autotests.length).toBeGreaterThan(0);
     for (const source of sources) {
       expect(source).not.toContain('### AUTOTEST');
       expect(source).not.toContain('### HASHED AUTOTEST');
     }
 
-    const c = await clean(page);
-    expect(c.metadata).toBe(true);
-    expect(c.sources).toBe(true);
+    const cleaned = await clean(page);
+    expect(cleaned.metadata).toBe(true);
+    expect(cleaned.sources).toBe(true);
   });
 
   /**
