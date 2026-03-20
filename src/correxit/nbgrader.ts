@@ -41,7 +41,6 @@ type Classification = {
   splits: { cell: string; referent: string; source: string }[];
   warnings: string[];
 };
-
 type Resolution = { safe: boolean; value: string | null; };
 type Render = (expr: string, value: string) => string;
 type Informative = Kernel.IKernelConnection & {
@@ -67,11 +66,10 @@ const support = `def ${VERIFY}(label, actual, expected):
  */
 export function detect(cells: Cellular[]): boolean {
   return cells.some(cell => {
-    const meta = cell.metadata.nbgrader as
-      Partial<Metadata> | undefined;
-    return meta?.grade === true
-      || meta?.solution === true
-      || meta?.task === true;
+    const nbgrader = cell.metadata.nbgrader as Partial<Metadata> | undefined;
+    return nbgrader?.grade === true
+      || nbgrader?.solution === true
+      || nbgrader?.task === true;
   });
 }
 
@@ -153,7 +151,6 @@ export function presplit(cells: Cellular[]): {
   const expanded: Cellular[] = [];
   const sources: { id: string; source: string }[] = [];
   const splits: { cell: string; referent: string; source: string }[] = [];
-
   for (const cell of cells) {
     const meta = cell.metadata.nbgrader as Partial<Metadata> | undefined;
     const test =
@@ -197,11 +194,9 @@ export function presplit(cells: Cellular[]): {
         }
       }
     });
-
     sources.push({ id: cell.id, source: split.visible });
     splits.push({ cell: cell.id, referent, source: split.hidden });
   }
-
   return { cells: expanded, sources, splits };
 }
 
@@ -400,11 +395,10 @@ export function slippage(
   let total = 0;
   let found = false;
   for (const cell of cells) {
-    const meta = cell.metadata.nbgrader as
-      Partial<Metadata> | undefined;
-    if (meta?.points === null || meta?.points === undefined) continue;
-    if (!meta.grade && !meta.solution && !meta.task) continue;
-    total += Math.max(0, meta.points);
+    const nbgrader = cell.metadata.nbgrader as Partial<Metadata> | undefined;
+    if (nbgrader?.points === null || nbgrader?.points === undefined) continue;
+    if (!nbgrader.grade && !nbgrader.solution && !nbgrader.task) continue;
+    total += Math.max(0, nbgrader.points);
     found = true;
   }
   if (!found) return null;
@@ -491,9 +485,7 @@ function python(expr: string, value: string): string {
 }
 
 /** Parse autotest directives from a cell source. */
-function directives(
-  source: string
-): { line: number; expressions: string[] }[] {
+function directives(source: string): { line: number; expressions: string[] }[] {
   return source.split('\n')
     .map((raw, line) => ({ raw, line }))
     .filter(({ raw }) => AUTOTEST.test(raw.trim()))
@@ -697,7 +689,6 @@ export async function expand(
         cells, { ...classification, warnings }, execute, resolve
       );
     }
-
     return await spread(
       cells,
       classification,
@@ -758,19 +749,18 @@ export async function convert(
 
   // Insert hidden test cells extracted by presplit.
   for (const split of classification.splits) {
-    const index = notebook.cells.findIndex(
-      cell => cell.id === split.cell
-    );
+    const index = notebook.cells.findIndex(({ id }) => id === split.cell);
     if (index < 0) continue;
     notebook.insertCell(index + 1, {
       cell_type: 'code',
       source: cached.get(split.referent) ?? split.source,
       metadata: {}
     });
+
     const actual = notebook.cells[index + 1].id;
     if (actual === split.referent) continue;
-    for (const refs of classification.references) {
-      for (const ref of refs) {
+    for (const references of classification.references) {
+      for (const ref of references) {
         if (ref.referent === split.referent)
           (ref as { referent: string }).referent = actual;
       }
@@ -778,18 +768,14 @@ export async function convert(
     for (const cell of classification.cells) {
       if (!cell.references) continue;
       (cell as { references: string[] }).references =
-        cell.references.map(
-          id => id === split.referent ? actual : id
-        );
+        cell.references.map(id => id === split.referent ? actual : id);
     }
   }
-
   for (let i = 0; i < classification.cells.length; i++) {
     await Workbook.add(
       workbook, classification.cells[i], classification.references[i]
     );
   }
-
   notebook.transact(() => {
     for (const cell of [...notebook.cells]) {
       const json = cell.toJSON();
@@ -805,6 +791,5 @@ export async function convert(
       }
     }
   }, false);
-
   return report(raw, classification, trans);
 }
