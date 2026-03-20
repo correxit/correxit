@@ -190,8 +190,6 @@ function directives(
     });
 }
 
-// ── Detection & classification ────────────────────────────────────
-
 /**
  * Returns true if at least one cell carries nbgrader metadata with
  * `grade === true` or `solution === true`.
@@ -426,8 +424,6 @@ export function classify(cells: Cellular[]): Classification {
   }
   return result;
 }
-
-// ── Metadata utilities ────────────────────────────────────────────
 
 /** Returns true if the source contains autotest directives. */
 export function autotests(source: string): boolean {
@@ -726,8 +722,6 @@ export async function expand(
     await release();
   }
 }
-
-// ── Main entry point ──────────────────────────────────────────────
 
 /**
  * Detect, classify, and apply nbgrader cell metadata to a workbook.
