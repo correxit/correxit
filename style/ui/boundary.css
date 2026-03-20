@@ -1,0 +1,34 @@
+.correxit-boundary {
+  padding: 12px;
+  overflow: auto;
+}
+
+.correxit-boundary-label {
+  color: var(--jp-ui-font-color1);
+  font-size: var(--jp-ui-font-size1);
+  margin: 0 0 8px;
+}
+
+.correxit-boundary-detail {
+  background: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 2px;
+  color: var(--jp-error-color1);
+  font-size: var(--jp-code-font-size);
+  margin: 0 0 8px;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.correxit-boundary-stack {
+  background: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 2px;
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-code-font-size);
+  margin: 4px 0 0;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+}
