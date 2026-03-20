@@ -221,13 +221,9 @@ const invoke = (expr: string, value: string): string =>
   ].join('\n');
 
 const script = (...pairs: [string, string][]): string =>
-  [
-    support,
-    '',
-    ...pairs.map(([expr, value]) => invoke(expr, value)),
-    '',
-    'print("Success!")'
-  ].join('\n');
+  [support, '', ...pairs.map(([expr, value]) => invoke(expr, value))].join(
+    '\n'
+  );
 
 const manual = (id: string, points: number, source = '') => ({
   type: 'code' as const,
@@ -662,15 +658,9 @@ test.describe('nbgrader conversion (synthetic)', () => {
       return notebook.cells.map((cell: any) => cell.getSource());
     });
     expect(sources[1]).toBe(
-      [
-        '"""verify x"""',
-        support,
-        '',
-        invoke('x', '10'),
-        'assert x > 0',
-        '',
-        'print("Success!")'
-      ].join('\n')
+      ['"""verify x"""', support, '', invoke('x', '10'), 'assert x > 0'].join(
+        '\n'
+      )
     );
   });
 
@@ -1167,8 +1157,8 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await convert(page);
 
     const result = await score(page);
-    // Correctable: set_a with a=1. Tests: print("Success!") + assert a==1.
-    // Both pass -> 2/2 auto pts. Reviewables (5 pts) are unscored.
+    // Correctable: set_a with a=1. Tests: assert a==1.
+    // Passes -> 2/2 auto pts. Reviewables (5 pts) are unscored.
     expect(result.possible).toBe(7);
     expect(result.points).toBe(2);
   });

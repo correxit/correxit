@@ -126,13 +126,9 @@ const invoke = (expr: string, value: string): string =>
   ].join('\n');
 
 const script = (...pairs: [string, string][]): string =>
-  [
-    support,
-    '',
-    ...pairs.map(([expr, value]) => invoke(expr, value)),
-    '',
-    'print("Success!")'
-  ].join('\n');
+  [support, '', ...pairs.map(([expr, value]) => invoke(expr, value))].join(
+    '\n'
+  );
 
 describe('nbgrader', () => {
   describe('detect', () => {
@@ -796,9 +792,7 @@ describe('nbgrader', () => {
           support,
           '',
           invoke('f(x)', '1'),
-          'x = 2',
-          '',
-          'print("Success!")'
+          'x = 2'
         ].join('\n')
       );
     });

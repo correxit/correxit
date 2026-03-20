@@ -654,7 +654,6 @@ export async function spread(
       }
     }
     await flush();
-    if (prepared) output.push('', 'print("Success!")');
     return output.join('\n');
   };
 
