@@ -226,10 +226,11 @@ Logic is expression-oriented: `map`, `filter`, `find`, `Object.fromEntries`
 rather than imperative loops or `reduce` with spread.
 
 Names should be single, distinct English words drawn from the domain:
-`propagate`, `certify`, `lease`, `inject`, `reify`. Pattern words like
-`producer`, `handler`, `manager` are avoided. Compound identifiers are
-acceptable when convention demands it (e.g., `useCommand`, `setState`) but the
-default is brevity.
+`propagate`, `certify`, `lease`, `inject`, `reify`. In the core codebase,
+pattern words like `producer`, `handler`, `manager` are avoided, though plugin
+authors are free to use whatever idioms match their environment. Compound
+identifiers are acceptable when convention demands it (e.g., `useCommand`,
+`setState`) but the core default is brevity.
 
 ## Plugins
 
@@ -249,3 +250,27 @@ consumer with an LMS consumer requires no changes to the propagator or commands.
 Type definitions are in `src/correxit/correxit.ts`. Default implementations are
 in `src/plugins.tsx`. See [PLUGINS.md](PLUGINS.md) for the full integration
 API.
+
+## Design philosophy
+
+Correxit is dense by design. Files are self-contained, and functions say
+exactly what they do with the fewest tokens necessary. A function carries
+significant meaning per line, but remains independently readable. The goal is
+to let you understand a module without holding the rest of the system in your
+head.
+
+Some guiding principles:
+
+- **Say the most with the fewest words.** Every name, every line, every
+  structural choice should earn its place. If something can be removed without
+  loss, remove it.
+- **Vocabulary discipline.** Each word in the codebase has exactly one meaning.
+  `workbook`, `rubric`, `grade`, `cell`, `lease`: these are domain terms with
+  stable definitions. Naming is load-bearing.
+- **Pull over push.** Async generators compose via `yield*` delegation. The
+  consumer controls the pace. This is simpler and more composable than signal
+  graphs or event emitters.
+- **Framework seams.** Correxit integrates with JupyterLab's core primitives
+  (commands, widget lifecycle, plugin tokens) while adopting functional
+  patterns (generators, pure data structs, external stores) for state and
+  data flow.

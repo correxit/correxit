@@ -585,8 +585,10 @@ const Minimap: React.FC<{
       columns.map(path => {
         const rubric = rubrics.get(path) ?? null;
         if (!rubric) return 'unscored';
+
         const cell = rubric.cells[id];
         if (!cell) return 'unscored';
+
         const score = Rubric.Score.resolve(rubric.assignment.report, id);
         const reviewable = cell.is === 'reviewable';
         if (!score || score.status === 'unscored')
