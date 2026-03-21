@@ -55,7 +55,7 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
             .map(({ referent }) => referent)
         )
       : null;
-    let remaining = Rubric.size(rubric) + (secrets?.size || 0);
+    let remaining = Object.keys(rubric.cells).length + (secrets?.size || 0);
     for (const widget of notebook.widgets) {
       const { id } = widget.model;
       const cell = Rubric.get(rubric, id);

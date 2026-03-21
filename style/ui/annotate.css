@@ -42,12 +42,12 @@
 
 /* Encrypted cell overlay (secret references and sealed submissions). */
 
-.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputPlaceholder,
+.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-Placeholder-content,
 .jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputArea-editor {
   position: relative;
 }
 
-.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputPlaceholder::before,
+.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-Placeholder-content::before,
 .jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputArea-editor::before {
   content: '';
   position: absolute;
@@ -64,18 +64,13 @@
   pointer-events: none;
 }
 
-.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputPlaceholder::after,
+.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-Placeholder-content::after,
 .jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputArea-editor::after {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 20px;
-  height: 20px;
+  inset: 0;
   z-index: 6;
   background-color: var(--correxit-insistent-color);
-  -webkit-mask: url('../monitor/icons/locked.svg') center / contain no-repeat;
   mask: url('../monitor/icons/locked.svg') center / contain no-repeat;
   pointer-events: none;
 }
