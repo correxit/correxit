@@ -3,6 +3,7 @@ import { Token } from '@lumino/coreutils';
 import { Rubric, Workbook } from '.';
 import { commands as COMMANDS, CommandIDs as COMMAND_IDS } from './commands';
 import * as description from './description';
+import * as errors from './errors';
 import { Icons as ICONS } from './icons';
 
 export namespace Correxit {
@@ -98,6 +99,24 @@ export namespace Correxit {
     UI: description.UI,
     UNLOCKER: description.UNLOCKER
   };
+
+  export namespace Error {
+    export import Decrypt   = errors.Decrypt;
+    export import Encrypt   = errors.Encrypt;
+    export import Seal      = errors.Seal;
+    export import Unseal    = errors.Unseal;
+    export import Mismatch  = errors.Mismatch;
+    export import Invalid   = errors.Invalid;
+    export import Certify   = errors.Certify;
+    export import Lock      = errors.Lock;
+    export import Submit    = errors.Submit;
+    export import Revise    = errors.Revise;
+    export import Unlock    = errors.Unlock;
+    export import Save      = errors.Save;
+    export import Fetch     = errors.Fetch;
+    export import Plugin    = errors.Plugin;
+    export import interpret = errors.interpret;
+  }
 
   export const Icons = ICONS;
 

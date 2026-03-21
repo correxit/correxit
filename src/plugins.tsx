@@ -354,7 +354,8 @@ const ui: JupyterFrontEndPlugin<void> = {
 const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
   Correxit.UNLOCKER,
   token => {
-    if (!token) throw new Error('Secrets manager token unavailable');
+    if (!token)
+      throw new Correxit.Error.Plugin('Secrets manager token unavailable');
     return {
       id: Correxit.UNLOCKER,
       description: Correxit.DESCRIPTION.UNLOCKER,

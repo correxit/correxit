@@ -1,6 +1,5 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
-import { PathExt } from '@jupyterlab/coreutils';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
@@ -56,8 +55,8 @@ type Reified =
 const { get, has } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert, correct,
-  dereference, draft, intervene, lock, recipients, refer, remove, reset,
-  revise, reweight, submit, toggle
+  dereference, draft, intervene, lock, refer, remove, reset, revise, reweight,
+  submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -74,7 +73,7 @@ export function commands(
   }
 ) {
   const { commands, serviceManager: manager, shell } = app;
-  const { Icons } = Correxit;
+  const { Error, Icons } = Correxit;
   const {
     collector, consumer, injector, registrar, submitter, unlocker
   } = utilities;
@@ -138,7 +137,7 @@ export function commands(
         await collect(workbook, receipt);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not certify'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -416,7 +415,7 @@ export function commands(
         await draft(workbook);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not revert'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -474,7 +473,7 @@ export function commands(
         await lock(workbook);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not lock'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -714,15 +713,29 @@ export function commands(
       const rubric = open(state.workbook());
       const locked = !!rubric?.locked;
       const assigned = !!rubric?.assignment.assignee;
-      const submitted = !!rubric?.assignment.submission;
+      const sealed = !!rubric?.assignment.submission;
+      const receipt = !!rubric?.assignment.submitted;
       const certified = !!rubric?.assignment.certification;
-      return locked && assigned && !submitted && !certified;
+      return locked && assigned && !certified && (!sealed || !receipt);
     },
     isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
+
+      const identifier = Workbook.identifier(workbook);
+      if (!Workbook.Identifier.assigned(identifier)) return;
+      if (rubric.assignment.submission && !rubric.assignment.submitted) {
+        try {
+          const receipt = await submitter(workbook, identifier);
+          await acknowledge(workbook, receipt);
+          await commands.execute(CommandIDs.save, { ...args, undo: false });
+        } catch (error) {
+          showErrorMessage(...Error.interpret(error, trans));
+        }
+        return;
+      }
 
       const title = trans.__('Submit assignment');
       const body = trans.__(
@@ -755,13 +768,20 @@ Or do you just want to seal and submit? This document will be locked.`
         : null;
       if (actions.includes('passphrase') && !passphrase) return;
       try {
-        const identifier = Workbook.identifier(workbook);
-        if (!Workbook.Identifier.assigned(identifier)) return;
-        await submit(workbook, await recipients(workbook, passphrase));
-        await acknowledge(workbook, await submitter(workbook, identifier));
+        const recipients = await Workbook.recipients(workbook, passphrase);
+        await submit(workbook, recipients);
+        try {
+          const receipt = await submitter(workbook, identifier);
+          await acknowledge(workbook, receipt);
+        } catch (error) {
+          const message =
+            `Submission sealed but receipt failed: ${(error as Error).message}`;
+          await commands.execute(CommandIDs.save, { ...args, undo: false });
+          throw new Error.Plugin(message);
+        }
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not submit'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -793,7 +813,7 @@ Or do you just want to seal and submit? This document will be locked.`
         await revise(workbook, await security.parse(armored));
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not revise'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -822,11 +842,7 @@ successful, an unlocked rubric.
       try {
         return unlocker.unlock(workbook, handle);
       } catch (error) {
-        const file = PathExt.basename(workbook.context.path);
-        void showErrorMessage(
-          trans.__('Could not unlock %1', file),
-          error as Error
-        );
+        showErrorMessage(...Error.interpret(error, trans));
       }
       return null;
     }
