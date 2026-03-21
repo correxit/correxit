@@ -1,9 +1,8 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage, KernelSpec } from '@jupyterlab/services';
 import { find } from '@lumino/algorithm';
-import * as errors from './errors';
+import * as Error from './error';
 import * as security from './security';
-import Error = errors;
 
 /**
  * A rubric is the specification that describes how to augment a Jupyter
