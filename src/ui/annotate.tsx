@@ -48,14 +48,12 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
     if (!notebook || !rubric || notebook.isDisposed) return;
 
     const sealed = rubric.locked && !!rubric.assignment.seal;
-    const secrets = rubric.locked
-      ? new Set(
-          Object.values(rubric.references)
-            .filter(({ secret }) => secret)
-            .map(({ referent }) => referent)
-        )
-      : null;
-    let remaining = Object.keys(rubric.cells).length + (secrets?.size || 0);
+    const secrets = new Set(
+      Object.values(rubric.locked ? rubric.references : {})
+        .filter(({ secret }) => secret)
+        .map(({ referent }) => referent)
+    );
+    let remaining = Object.keys(rubric.cells).length + secrets.size;
     for (const widget of notebook.widgets) {
       const { id } = widget.model;
       const cell = Rubric.get(rubric, id);
@@ -64,7 +62,7 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
         if (sealed) widget.addClass(encrypted);
         remaining--;
       }
-      if (secrets?.has(id)) {
+      if (secrets.has(id)) {
         widget.addClass(encrypted);
         remaining--;
       }

@@ -53,13 +53,22 @@
   position: absolute;
   inset: 0;
   z-index: 5;
-  background: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 4px,
-    rgba(128, 128, 128, 0.3) 4px,
-    rgba(128, 128, 128, 0.3) 5px
-  );
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      rgba(128, 128, 128, 0.4) 4px,
+      rgba(128, 128, 128, 0.4) 5px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 4px,
+      rgba(128, 128, 128, 0.4) 4px,
+      rgba(128, 128, 128, 0.4) 5px
+    ),
+    rgba(128, 128, 128, 0.15);
   border-radius: inherit;
   pointer-events: none;
 }
@@ -76,7 +85,7 @@
 }
 
 .jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputArea-editor {
-  color: transparent;
+  color: color-mix(in srgb, currentColor 40%, transparent);
 }
 
 /* Score borders. */
