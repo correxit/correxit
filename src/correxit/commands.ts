@@ -56,7 +56,7 @@ type Reified =
 const { get, has } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert, correct,
-  dereference, draft, intervene, lock, provision, refer, remove, reset,
+  dereference, draft, intervene, lock, recipients, refer, remove, reset,
   revise, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
@@ -724,15 +724,12 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
 
-      const author = rubric.assignment.keys.public.author;
       const title = trans.__('Submit assignment');
-      let recipients: string[];
-
       const body = trans.__(
 `Would you like to set a passphrase to revise your submission later?
 Or do you just want to seal and submit? This document will be locked.`
       );
-      const { button } = await showDialog({
+      const { button: { accept, actions } } = await showDialog({
         title,
         body,
         buttons: [
@@ -748,35 +745,20 @@ Or do you just want to seal and submit? This document will be locked.`
           })
         ]
       });
-      if (!button.accept) return;
+      if (!accept) return;
 
-      if (button.actions.includes('passphrase')) {
-        const passphrase = await input.text({
-          title: trans.__('Set a submission passphrase'),
-          label: trans.__('Enter a passphrase to seal your submission')
-        });
-        if (!passphrase) return;
-
-        const student = await security.keygen(passphrase, rubric.id);
-        const pair = await security.keypair();
-        const armored = await security.encrypt(pair.private, student);
-        const keys: Rubric.Assignment.Keys = {
-          private: { ...rubric.assignment.keys.private, assignee: armored },
-          public: { ...rubric.assignment.keys.public, assignee: pair.public }
-        };
-        await provision(workbook, keys);
-        recipients = [author, pair.public];
-      } else {
-        recipients = [author];
-      }
-
+      const passphrase = actions.includes('passphrase')
+        ? await input.text({
+            title: trans.__('Set a submission passphrase'),
+            label: trans.__('Enter a passphrase to seal your submission')
+          })
+        : null;
+      if (actions.includes('passphrase') && !passphrase) return;
       try {
         const identifier = Workbook.identifier(workbook);
         if (!Workbook.Identifier.assigned(identifier)) return;
-        await submit(workbook, recipients);
-
-        const receipt = await submitter(workbook, identifier);
-        await acknowledge(workbook, receipt);
+        await submit(workbook, await recipients(workbook, passphrase));
+        await acknowledge(workbook, await submitter(workbook, identifier));
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         void showErrorMessage(trans.__('Could not submit'), error as Error);

@@ -772,14 +772,27 @@ export namespace Workbook {
     }
   }
 
-  /** Provision a locked workbook with student keypair for sealed submission. */
-  export async function provision(
+  /** @returns provisioned recipient keys for a given workbook. */
+  export async function recipients(
     workbook: Workbook,
-    keys: Rubric.Assignment.Keys
-  ): Promise<Rubric.Locked> {
+    passphrase: string | null
+  ): Promise<string[]> {
     const rubric = open(workbook, quiet);
-    if (!rubric?.locked) throw new Error('provision error');
-    return update(workbook, Rubric.provision(rubric, keys));
+    if (!rubric?.locked || !rubric.assignment.assignee)
+      throw new Error('recipients error');
+
+    const { author } = rubric.assignment.keys.public;
+    if (!passphrase) return [author];
+
+    const secret = await security.keygen(passphrase, rubric.id);
+    const pair = await security.keypair();
+    const armored = await security.encrypt(pair.private, secret);
+    const keys: Rubric.Assignment.Keys = {
+      private: { ...rubric.assignment.keys.private, assignee: armored },
+      public: { ...rubric.assignment.keys.public, assignee: pair.public }
+    };
+    await update(workbook, Rubric.provision(rubric, keys));
+    return [author, pair.public];
   }
 
   /** Add a reference to an existing comparable or correctable cell. */

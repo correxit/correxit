@@ -859,7 +859,7 @@ export namespace Rubric {
     };
   }
 
-  /** Provision a locked rubric with student keys for sealed submission. */
+  /** Provision a locked rubric with assignee keys for sealed submission. */
   export function provision(rubric: Locked, keys: Assignment.Keys): Locked {
     const assignment = { ...rubric.assignment, keys };
     return { ...rubric, assignment, revised: Date.now() };
