@@ -86,19 +86,17 @@
 
 /* Score borders. */
 
-.jp-Notebook .jp-Cell:not(.jp-mod-active).cxt-mod-correct .jp-InputArea-editor {
+.jp-Notebook .jp-Cell.cxt-mod-correct .jp-InputArea-editor {
   border: 1px solid var(--correxit-correct-color);
   border-radius: 6px;
 }
 
-.jp-Notebook
-  .jp-Cell:not(.jp-mod-active).cxt-mod-incorrect
-  .jp-InputArea-editor {
+.jp-Notebook .jp-Cell.cxt-mod-incorrect .jp-InputArea-editor {
   border: 1px solid var(--correxit-incorrect-color);
   border-radius: 6px;
 }
 
-.jp-Notebook .jp-Cell:not(.jp-mod-active).cxt-mod-partial .jp-InputArea-editor {
+.jp-Notebook .jp-Cell.cxt-mod-partial .jp-InputArea-editor {
   border: 1px solid var(--correxit-partial-color);
   border-radius: 6px;
 }
