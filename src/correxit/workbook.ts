@@ -605,6 +605,17 @@ export namespace Workbook {
     return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
+  /** Remove a single reference from a cell. */
+  export function dereference(
+    workbook: Workbook,
+    referent: string
+  ): void {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked)
+      throw new Error('dereference error, invalid rubric');
+    update(workbook, Rubric.dereference(rubric, referent));
+  }
+
   /** Revert a submission to draft, restoring cell editability. */
   export async function draft(workbook: Workbook): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
@@ -761,6 +772,16 @@ export namespace Workbook {
     }
   }
 
+  /** Provision a locked workbook with student keypair for sealed submission. */
+  export async function provision(
+    workbook: Workbook,
+    keys: Rubric.Assignment.Keys
+  ): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked) throw new Error('provision error');
+    return update(workbook, Rubric.provision(rubric, keys));
+  }
+
   /** Add a reference to an existing comparable or correctable cell. */
   export async function refer(
     workbook: Workbook,
@@ -789,22 +810,6 @@ export namespace Workbook {
     update(workbook, null);
   }
 
-  /** Update points for a cell or reference. */
-  export async function reweight(
-    workbook: Workbook,
-    id: string,
-    points: number
-  ): Promise<Rubric.Unlocked> {
-    const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked)
-      throw new Error('reweight error, invalid rubric');
-
-    const updated = id in rubric.references
-      ? Rubric.Reference.reweight(rubric, id, points)
-      : Rubric.Cell.reweight(rubric, id, points);
-    return update(workbook, updated);
-  }
-
   /** Revise a sealed submission: unseal cells and clear submission state. */
   export async function revise(
     workbook: Workbook,
@@ -822,6 +827,22 @@ export namespace Workbook {
     transact(workbook, prepared);
     defrost(workbook);
     return update(workbook, Rubric.unseal(rubric));
+  }
+
+  /** Update points for a cell or reference. */
+  export async function reweight(
+    workbook: Workbook,
+    id: string,
+    points: number
+  ): Promise<Rubric.Unlocked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked)
+      throw new Error('reweight error, invalid rubric');
+
+    const updated = id in rubric.references
+      ? Rubric.Reference.reweight(rubric, id, points)
+      : Rubric.Cell.reweight(rubric, id, points);
+    return update(workbook, updated);
   }
 
   /**
@@ -872,17 +893,6 @@ export namespace Workbook {
     if (!rubric || rubric.locked)
       throw new Error('toggle error');
     return update(workbook, Rubric.toggle(rubric, referent));
-  }
-
-  /** Remove a single reference from a cell. */
-  export function dereference(
-    workbook: Workbook,
-    referent: string
-  ): void {
-    const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked)
-      throw new Error('dereference error, invalid rubric');
-    update(workbook, Rubric.dereference(rubric, referent));
   }
 
   /** Unlocks a workbook's rubric and decrypts its contents. */

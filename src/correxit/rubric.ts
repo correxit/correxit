@@ -859,20 +859,10 @@ export namespace Rubric {
     };
   }
 
-  /** Remove a cell from a rubric and invalidate report. */
-  export function remove(rubric: Unlocked, id: string): Unlocked {
-    if (!get(rubric, id)) return rubric;
-
-    const assignment = {
-      ...rubric.assignment,
-      report: Assignment.Report.empty()
-    };
-    const { [id]: _, ...cells } = rubric.cells;
-    const references = Object.fromEntries(
-      Object.entries(rubric.references)
-        .filter(([, reference]) => reference.cell !== id)
-    );
-    return { ...rubric, assignment, cells, references, revised: Date.now() };
+  /** Provision a locked rubric with student keys for sealed submission. */
+  export function provision(rubric: Locked, keys: Assignment.Keys): Locked {
+    const assignment = { ...rubric.assignment, keys };
+    return { ...rubric, assignment, revised: Date.now() };
   }
 
   /** Add a reference to an existing comparable or correctable cell. */
@@ -886,17 +876,12 @@ export namespace Rubric {
       throw new Error(`refer error, cell ${id} not found`);
     if (cell.is !== 'comparable' && cell.is !== 'correctable')
       throw new Error(`refer error, cell ${id} is ${cell.is}`);
+
     const { referent } = reference;
-    if (referent in rubric.references) {
-      throw new Error(
-        `refer error, reference ${referent} already exists`
-      );
-    }
-    if (referent in rubric.cells) {
-      throw new Error(
-        `refer error, reference ${referent} collides`
-      );
-    }
+    if (referent in rubric.references)
+      throw new Error(`refer error, reference ${referent} already exists`);
+    if (referent in rubric.cells)
+      throw new Error(`refer error, reference ${referent} collides`);
 
     const assignment = {
       ...rubric.assignment,
@@ -912,6 +897,22 @@ export namespace Rubric {
       ...rubric.cells,
       [id]: { ...cell, points, references: local }
     };
+    return { ...rubric, assignment, cells, references, revised: Date.now() };
+  }
+
+  /** Remove a cell from a rubric and invalidate report. */
+  export function remove(rubric: Unlocked, id: string): Unlocked {
+    if (!get(rubric, id)) return rubric;
+
+    const assignment = {
+      ...rubric.assignment,
+      report: Assignment.Report.empty()
+    };
+    const { [id]: _, ...cells } = rubric.cells;
+    const references = Object.fromEntries(
+      Object.entries(rubric.references)
+        .filter(([, reference]) => reference.cell !== id)
+    );
     return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 

@@ -56,8 +56,8 @@ type Reified =
 const { get, has } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert, correct,
-  dereference, draft, intervene, lock, refer, remove, reset, revise, reweight,
-  submit, toggle
+  dereference, draft, intervene, lock, provision, refer, remove, reset,
+  revise, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -326,14 +326,17 @@ export function commands(
         return cells.some(({ id, is }) => {
           if (is === 'reviewable') return false;
           if (!rubric.locked) return true;
+
           const refs = Object.values(references)
             .filter(({ cell }) => cell === id);
           return !refs.length || refs.some(({ secret }) => !secret);
         });
       }
+
       const cell = get(rubric, id);
       if (!cell || cell.is === 'reviewable') return false;
       if (!rubric.locked) return true;
+
       const references = Object.values(rubric.references)
         .filter(reference => reference.cell === id);
       return !references.length || references.some(
@@ -400,6 +403,7 @@ export function commands(
     execute: async (args: Partial<Credentials>) => {
       const { workbook } = await reify(args);
       if (!workbook) return;
+
       const title = trans.__('Revert to draft');
       const body = trans.__('Revert read-only submission to draft workbook?');
       const buttons = [
@@ -578,6 +582,7 @@ export function commands(
 
       const rubric = open(workbook);
       if (!rubric || rubric.locked) return;
+
       const cell = get(rubric, id);
       if (!cell) return;
       if (
@@ -601,9 +606,7 @@ export function commands(
       await refer(workbook, id, reference);
 
       const { widgets } = workbook.content;
-      const original = find(
-        widgets, ({ model }) => model.id === id
-      );
+      const original = find(widgets, ({ model }) => model.id === id);
       if (original)
         await workbook.content.scrollToCell(original);
     }
@@ -615,7 +618,6 @@ export function commands(
       const rubric = open(state.workbook());
       if (!id || !rubric || rubric.locked || rubric.assignment.assignee)
         return false;
-
       return has(rubric, id);
     },
     isVisible: args => commands.isEnabled(CommandIDs.remove, args),
@@ -762,9 +764,7 @@ Or do you just want to seal and submit? This document will be locked.`
           private: { ...rubric.assignment.keys.private, assignee: armored },
           public: { ...rubric.assignment.keys.public, assignee: pair.public }
         };
-        await Workbook.update(workbook, {
-          ...rubric, assignment: { ...rubric.assignment, keys }
-        } as Rubric.Locked);
+        await provision(workbook, keys);
         recipients = [author, pair.public];
       } else {
         recipients = [author];
