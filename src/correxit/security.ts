@@ -25,10 +25,9 @@ export async function encrypt(text: string, password: string): Promise<string> {
 }
 
 export async function hmac(message: string, key: string): Promise<string> {
-  const encoder = new TextEncoder();
   const material = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(key),
+    decode(key),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
@@ -36,7 +35,7 @@ export async function hmac(message: string, key: string): Promise<string> {
   const signed = await crypto.subtle.sign(
     'HMAC',
     material,
-    encoder.encode(message)
+    new TextEncoder().encode(message)
   );
   const hexadecimal = (byte: number) => byte.toString(16).padStart(2, '0');
   return Array.from(new Uint8Array(signed)).map(hexadecimal).join('');
@@ -96,6 +95,14 @@ export async function seal(
   );
   const message = await pgp.createMessage({ text });
   return pgp.encrypt({ message, encryptionKeys: keys }) as Promise<string>;
+}
+
+/** Decode a hex string to its raw byte representation. */
+function decode(hex: string): ArrayBuffer {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++)
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes.buffer;
 }
 
 /** Decrypt PGP ciphertext using a parsed or armored private key. */

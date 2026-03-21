@@ -262,6 +262,15 @@ All optional fields use `Type | null`, never `Type?`. This ensures
 `undefined` is omitted. Since signatures hash stringified JSON,
 field presence must be stable.
 
+## Key Representation
+
+The PBKDF2-derived key is a 256-bit value stored as a 64-character
+lowercase hex string. The `hmac` function decodes this hex string
+to 32 raw bytes before importing as HMAC key material. The hex
+string is used as-is for the openpgp symmetric password (openpgp
+performs its own key derivation from the password, so the
+representation is immaterial there).
+
 ## Assignee Key Lifecycle
 
 Assignee key fields (`keys.private.assignee`,
