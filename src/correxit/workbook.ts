@@ -10,11 +10,11 @@ import {
 import { KernelSpec } from '@jupyterlab/services';
 import { findIndex, range } from '@lumino/algorithm';
 import { Correxit, Rubric } from '.';
+import * as errors from './errors';
 import * as kernels from './kernels';
 import * as security from './security';
 import * as state from './state';
-
-const { Error } = Correxit;
+import Error = errors;
 
 /** A headed or headless Correxit workbook. */
 export type Workbook = Workbook.Headed | Workbook.Headless;

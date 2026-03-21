@@ -1,8 +1,8 @@
 import { URLExt } from '@jupyterlab/coreutils';
 import { Correxit, Workbook } from '..';
+import * as errors from '../errors';
 import * as io from '../io';
-
-const { Error } = Correxit;
+import Error = errors;
 
 export namespace Moodle {
   type Assignment = {
