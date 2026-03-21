@@ -53,7 +53,7 @@ type Reified =
   { handle: Credentials | null; rubric: null; workbook: Workbook; } |
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
-const { get, has, size } = Rubric;
+const { get, has } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert, correct,
   dereference, draft, intervene, lock, refer, remove, reset, revise, reweight,
@@ -320,7 +320,17 @@ export function commands(
       const headed = workbook && workbook.content;
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
       if (!rubric || !headed) return false;
-      if (!id) return size(rubric) > 0;
+      if (!id) {
+        const cells = Object.values(rubric.cells);
+        const references = rubric.references;
+        return cells.some(({ id, is }) => {
+          if (is === 'reviewable') return false;
+          if (!rubric.locked) return true;
+          const refs = Object.values(references)
+            .filter(({ cell }) => cell === id);
+          return !refs.length || refs.some(({ secret }) => !secret);
+        });
+      }
       const cell = get(rubric, id);
       if (!cell || cell.is === 'reviewable') return false;
       if (!rubric.locked) return true;

@@ -126,26 +126,6 @@ describe('Rubric', () => {
       expect(removed.assignment.report.scores).toEqual({});
     });
 
-    it('calculates size correctly', () => {
-      let rubric = create();
-      expect(Rubric.size(rubric)).toBe(0);
-      rubric = Rubric.add(rubric, {
-        id: 'a',
-        is: 'answerable',
-        points: 1,
-        references: null,
-        payload: []
-      });
-      rubric = Rubric.add(rubric, {
-        id: 'b',
-        is: 'answerable',
-        points: 1,
-        references: null,
-        payload: []
-      });
-      expect(Rubric.size(rubric)).toBe(2);
-    });
-
     it('reweights points for an existing cell', () => {
       const id = 'cell-1';
       const base = Rubric.add(create(), {

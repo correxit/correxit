@@ -925,11 +925,6 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: Date.now() };
   }
 
-  /** @returns the number of cells in a rubric. */
-  export function size(rubric: Rubric): number {
-    return Object.keys(rubric.cells).length;
-  }
-
   /** Record the submission timestamp for a locked workbook. */
   export function submit(rubric: Locked): Locked {
     const submission = Date.now();
