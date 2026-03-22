@@ -781,9 +781,7 @@ export namespace Rubric {
   /** @returns an unlocked rubric with a certification timestamp. */
   export function certify(rubric: Unlocked): Unlocked {
     const certification = Date.now();
-    const assignment = {
-      ...rubric.assignment, certification, collected: null
-    };
+    const assignment = { ...rubric.assignment, certification, collected: null };
     return { ...rubric, assignment, revised: certification };
   }
 

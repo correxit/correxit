@@ -84,10 +84,6 @@
   pointer-events: none;
 }
 
-.jp-Notebook .jp-Cell.cxt-mod-encrypted .jp-InputArea-editor {
-  color: transparent;
-}
-
 /* Score borders. */
 
 .jp-Notebook .jp-Cell.cxt-mod-correct .jp-InputArea-editor {
