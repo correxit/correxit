@@ -658,8 +658,11 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.reset, {
     icon: Icons.reset,
     isEnabled: () => {
-      const rubric = open(state.workbook());
-      return rubric?.locked === false && !rubric.assignment.assignee;
+      const workbook = state.workbook();
+      const rubric = open(workbook);
+      if (rubric) return !rubric.locked && !rubric.assignment.assignee;
+      const notebook = workbook?.context.model.sharedModel;
+      return !!notebook?.getMetadata('correxit');
     },
     isVisible: () => commands.isEnabled(CommandIDs.reset),
     caption: trans.__('Deletes Correxit metadata, keeps notebook content'),

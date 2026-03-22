@@ -829,8 +829,6 @@ export namespace Workbook {
 
   /** Reset a workbook back to a plain Jupyter notebook. */
   export async function reset(workbook: Workbook) {
-    const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) throw new Error.Invalid('reset error');
     update(workbook, null);
   }
 
