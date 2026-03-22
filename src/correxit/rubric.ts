@@ -782,7 +782,7 @@ export namespace Rubric {
   export function certify(rubric: Unlocked): Unlocked {
     const certification = Date.now();
     const assignment = {
-      ...rubric.assignment, certification
+      ...rubric.assignment, certification, collected: null
     };
     return { ...rubric, assignment, revised: certification };
   }

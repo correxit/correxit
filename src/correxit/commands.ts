@@ -17,6 +17,7 @@ import * as state from './state';
 export namespace CommandIDs {
   export const assign = 'correxit:assign';
   export const certify = 'correxit:certify';
+  export const collect = 'correxit:collect';
   export const comment = 'correxit:comment';
   export const configure = 'correxit:configure';
   export const convert = 'correxit:convert';
@@ -127,12 +128,38 @@ export function commands(
       const assigned = !!rubric?.assignment.assignee;
       return assigned && !rubric.locked;
     },
-    label: trans.__('Certify workbook...'),
+    label: () => {
+      const rubric = open(state.workbook());
+      return rubric?.assignment.certification
+        ? trans.__('Recertify workbook...')
+        : trans.__('Certify workbook...');
+    },
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
       try {
-        const certified = await certify(workbook, trans);
+        await certify(workbook, trans);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        showErrorMessage(...Error.interpret(error, trans));
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.collect, {
+    icon: Icons.certify,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      const assigned = !!rubric?.assignment.assignee;
+      const certified = !!rubric?.assignment.certification;
+      const collected = !!rubric?.assignment.collected;
+      return assigned && !rubric.locked && certified && !collected;
+    },
+    label: trans.__('Collect workbook...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
+      try {
+        const certified = await certify(workbook, trans, true);
         const receipt = await collector(certified);
         await collect(workbook, receipt);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
