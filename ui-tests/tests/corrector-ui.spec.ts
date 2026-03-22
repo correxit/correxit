@@ -600,7 +600,8 @@ test('intervention on last reviewable cell auto-certifies workbook', async ({
     await Workbook.intervene(workbook, 'manual', intervention);
 
     // Certify using bypass (no kernel needed, all cells already scored).
-    const { grade } = await Workbook.certify(workbook, true);
+    const trans = { __: (s: string) => s };
+    const { grade } = await Workbook.certify(workbook, trans, true);
     await workbook.context.save();
 
     const rubric = Workbook.open(workbook, true);
