@@ -740,7 +740,9 @@ export namespace Rubric {
     const keys = rubric.assignment.keys;
     const seal = rubric.assignment.seal;
     const unsigned = { assignee, expiration, id, keys, name, report, roster };
-    const lifecycle = { certification, collected, seal, submission, submitted };
+    const lifecycle = {
+      certification, collected, seal, submission, submitted
+    };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = { ...unsigned, ...lifecycle, signature };
     await Assignment.validate({ assignment, key });
@@ -779,7 +781,9 @@ export namespace Rubric {
   /** @returns an unlocked rubric with a certification timestamp. */
   export function certify(rubric: Unlocked): Unlocked {
     const certification = Date.now();
-    const assignment = { ...rubric.assignment, certification };
+    const assignment = {
+      ...rubric.assignment, certification
+    };
     return { ...rubric, assignment, revised: certification };
   }
 

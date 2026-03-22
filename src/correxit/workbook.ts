@@ -9,7 +9,9 @@ import {
 } from '@jupyterlab/notebook';
 import { KernelSpec } from '@jupyterlab/services';
 import { findIndex, range } from '@lumino/algorithm';
+import { IRenderMime } from '@jupyterlab/rendermime';
 import { Correxit, Rubric } from '.';
+import * as certificate from './certificate';
 import * as Error from './error';
 import * as kernels from './kernels';
 import * as security from './security';
@@ -399,6 +401,7 @@ export namespace Workbook {
    */
   export async function certify(
     workbook: Workbook,
+    trans: IRenderMime.TranslationBundle,
     bypass = false
   ): Promise<Certified> {
     const rubric = open(workbook, quiet);
@@ -440,6 +443,7 @@ export namespace Workbook {
     if (!scored || scored.locked) throw new Error.Certify('certify error');
     await update(workbook, Rubric.certify(scored));
     await lock(workbook);
+    certificate.render(workbook, grade, trans);
     freeze(workbook);
     return { grade, identifier, workbook };
   }

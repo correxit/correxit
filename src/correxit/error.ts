@@ -1,16 +1,5 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 
-type TranslationBundle = IRenderMime.TranslationBundle;
-
-/**
- * Typed error classes for every failure mode in Correxit.
- *
- * Throw sites in the model layer (workbook.ts, rubric.ts) throw specific
- * subclasses. Catch sites in the controller layer (commands.ts) call
- * `interpret` to get a localized [title, body] pair, then choose
- * how to present it (dialog, log, yield, etc.).
- */
-
 // Crypto layer
 export class Decrypt extends Error { name = 'Decrypt' as const; }
 export class Encrypt extends Error { name = 'Encrypt' as const; }
@@ -36,7 +25,7 @@ export class Plugin extends Error { name = 'Plugin' as const; }
 /** Translate an error into a localized [title, body] pair. */
 export function interpret(
   error: unknown,
-  trans: TranslationBundle
+  trans: IRenderMime.TranslationBundle
 ): [string, Error] {
   const body = error instanceof Error ? error : new Error(String(error));
   switch (body.name) {

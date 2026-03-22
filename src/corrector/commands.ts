@@ -88,7 +88,7 @@ export function commands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
         const actions: Actions = {
-          correct,
+          correct: workbook => correct(workbook, trans),
           exclude: workbook => exclude(workbook, overwrite),
           recover
         };
@@ -304,7 +304,7 @@ export function commands(
               .some(cell => !updated.assignment.report.interventions[cell.id]);
             if (!pending) {
               try {
-                await Workbook.certify(workbook, true);
+                await Workbook.certify(workbook, trans, true);
                 await save(workbook);
               } catch {
                 // Certification may fail if auto-graded cells are unresolved;
@@ -363,7 +363,10 @@ export function commands(
   return disposables;
 }
 
-async function correct(workbook: Headless): Promise<Certified> {
+async function correct(
+  workbook: Headless,
+  trans: IRenderMime.TranslationBundle
+): Promise<Certified> {
   const rubric = open(workbook);
   if (!rubric || rubric.locked)
     throw new Correxit.Error.Certify('correct error: invalid rubric');
@@ -373,7 +376,7 @@ async function correct(workbook: Headless): Promise<Certified> {
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
   if (!pending) {
-    const result = await Workbook.certify(workbook);
+    const result = await Workbook.certify(workbook, trans);
     await save(workbook);
     return result;
   }

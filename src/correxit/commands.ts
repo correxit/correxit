@@ -54,9 +54,9 @@ type Reified =
 
 const { get, has } = Rubric;
 const {
-  acknowledge, add, assign, certify, collect, comment, convert, correct,
-  dereference, draft, intervene, lock, refer, remove, reset, revise, reweight,
-  submit, toggle
+  acknowledge, add, assign, certify, collect, comment, convert,
+  correct, dereference, draft, intervene, lock, refer, remove, reset, revise,
+  reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -132,7 +132,7 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
       try {
-        const certified = await certify(workbook);
+        const certified = await certify(workbook, trans);
         const receipt = await collector(certified);
         await collect(workbook, receipt);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
