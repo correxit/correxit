@@ -56,8 +56,8 @@ type Reified =
 const { get, has } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert,
-  correct, dereference, draft, intervene, lock, refer, remove, reset, revise,
-  reweight, submit, toggle
+  correct, dereference, draft, intervene, lock, recover, refer, remove, reset,
+  revise, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -671,13 +671,41 @@ export function commands(
       const { workbook } = await reify(args);
       if (!workbook) return;
 
-      const title = trans.__('Revert to notebook');
-      const body = commands.caption(CommandIDs.reset);
-      const { button } = await showDialog({ body, title });
-      if (button.accept) {
-        await reset(workbook);
-        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      const notebook = workbook.context.model.sharedModel;
+      const encrypted = notebook.cells.some(
+        cell => security.encrypted(cell.getSource())
+      );
+      if (encrypted) {
+        const passphrase = args.key ?? await input.text({
+          title: trans.__('Recover encrypted cells'),
+          label: trans.__('Enter a passphrase to attempt decryption')
+        });
+        if (passphrase) {
+          const recovered = await recover(workbook, passphrase);
+          if (!recovered) {
+            const { button } = await showDialog({
+              title: trans.__('Recovery failed'),
+              body: trans.__('No cells could be decrypted. Reset anyway?')
+            });
+            if (!button.accept) return;
+          }
+        } else {
+          const { button } = await showDialog({
+            title: trans.__('Revert to notebook'),
+            body: trans.__(
+              'Encrypted cells were detected. Reset without recovering?'
+            )
+          });
+          if (!button.accept) return;
+        }
+      } else {
+        const title = trans.__('Revert to notebook');
+        const body = commands.caption(CommandIDs.reset);
+        const { button } = await showDialog({ body, title });
+        if (!button.accept) return;
       }
+      await reset(workbook);
+      await commands.execute(CommandIDs.save, { ...args, undo: false });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.reweight, {

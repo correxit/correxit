@@ -806,6 +806,78 @@ export namespace Workbook {
     return [author, pair.public];
   }
 
+  /**
+   * Attempt to decrypt all encrypted cells in a workbook.
+   *
+   * Reads the rubric ID and encrypted PGP keys directly from raw
+   * notebook metadata (no normalization required). Tries symmetric
+   * decryption and, if PGP private keys can be recovered, asymmetric
+   * unsealing on every encrypted cell.
+   *
+   * @returns the number of cells successfully recovered.
+   */
+  export async function recover(
+    workbook: Workbook,
+    passphrase: string
+  ): Promise<number> {
+    const notebook = workbook.context.model.sharedModel;
+    const metadata = notebook.getMetadata('correxit') as any;
+    const id = metadata?.id;
+    if (!id || typeof id !== 'string') return 0;
+
+    const key = await security.keygen(passphrase, id);
+    const keys: security.PrivateKey[] = [];
+    const armored = metadata?.assignment?.keys?.private;
+    const recover = async (field: unknown) => {
+      if (!field || typeof field !== 'string') return;
+      try {
+        const decrypted = await security.decrypt(field, key);
+        if (decrypted !== field) keys.push(await security.parse(decrypted));
+      } catch { /* wrong key or corrupt */ }
+    };
+    await recover(armored?.author);
+    await recover(armored?.assignee);
+
+    const prepared: Cell.Prepared[] = [];
+    for (const [index, cell] of notebook.cells.entries()) {
+      const source = cell.getSource();
+      if (!security.encrypted(source)) continue;
+
+      let recovered: string | null = null;
+      let payload: { type?: string; source?: string } | null = null;
+      try {
+        const decrypted = await security.decrypt(source, key);
+        if (decrypted !== source) recovered = decrypted;
+      } catch { /* wrong key */ }
+      if (!recovered) {
+        for (const recipient of keys) {
+          try {
+            const json = await security.unseal(source, recipient);
+            payload = JSON.parse(json);
+            break;
+          } catch { /* wrong key or not sealed to this recipient */ }
+        }
+      }
+      if (!recovered && !payload) continue;
+
+      const jupyter = { ...(cell.getMetadata('jupyter') as any || {}) };
+      delete jupyter['source_hidden'];
+
+      const snapshot = cell.toJSON();
+      const replacement = {
+        ...snapshot,
+        cell_type: payload?.type ?? 'code',
+        metadata: { ...snapshot.metadata as any, jupyter, trusted: true },
+        source: payload?.source ?? recovered!
+      };
+      delete replacement.metadata['editable'];
+      prepared.push({ index, replacement });
+    }
+    transact(workbook, prepared);
+    if (prepared.length) defrost(workbook);
+    return prepared.length;
+  }
+
   /** Add a reference to an existing comparable or correctable cell. */
   export async function refer(
     workbook: Workbook,

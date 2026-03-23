@@ -24,6 +24,10 @@ export async function encrypt(text: string, password: string): Promise<string> {
   return pgp.encrypt({ message, passwords: [password] }) as Promise<string>;
 }
 
+export function encrypted(text: string): boolean {
+  return text.trimStart().startsWith('-----BEGIN PGP MESSAGE-----');
+}
+
 export async function hmac(message: string, key: string): Promise<string> {
   const decode = (hex: string): ArrayBuffer => {
     const bytes = new Uint8Array(hex.length / 2);
