@@ -1,5 +1,6 @@
 import { URLExt } from '@jupyterlab/coreutils';
 import { Correxit, Workbook } from '..';
+import * as Error from '../error';
 import * as io from '../io';
 
 export namespace Moodle {
@@ -38,11 +39,11 @@ export namespace Moodle {
 
       const response = await fetch(endpoint, { method: 'POST', body });
       if (!response.ok)
-        throw new Error(`${action} failed (status ${response.status})`);
+        throw new Error.Plugin(`${action} failed (status ${response.status})`);
 
       const payload = await response.json();
       if (payload && typeof payload === 'object' && 'exception' in payload)
-        throw new Error((payload.message as string) || `${action} failed`);
+        throw new Error.Plugin(payload.message || `${action} failed`);
       return payload as T;
     };
   };
@@ -74,14 +75,14 @@ export namespace Moodle {
       const reason = await response.text().catch(() => '');
       const message = reason ||
         `Upload failed (${response.status} ${response.statusText})`;
-      throw new Error(message);
+      throw new Error.Plugin(message);
     }
 
     const draft = await response.json();
     if (Array.isArray(draft) && draft[0]?.itemid) return draft[0].itemid;
 
     const reason = draft?.error || draft?.message || 'Upload returned no item';
-    throw new Error(reason);
+    throw new Error.Plugin(reason);
   };
   const TTL = 5 * 60_000;
   const participants: Map<
@@ -132,30 +133,32 @@ export namespace Moodle {
   ): Promise<string | null> {
     const { token, url: raw } = settings;
     const url = URLExt.normalize(raw);
-    if (!token || !url) throw new Error('Moodle URL or token not configured');
+    if (!token || !url)
+      throw new Error.Plugin('Moodle URL or token not configured');
 
     const rubric = Workbook.open(certified.workbook, true);
-    if (!rubric) throw new Error('collector error: no rubric');
+    if (!rubric) throw new Error.Plugin('collector error: no rubric');
 
     const compound = rubric.assignment.id;
-    if (!compound) throw new Error('collector error: no assignment ID');
+    if (!compound) throw new Error.Plugin('collector error: no assignment ID');
 
     const [course, assignment] = compound.split(':');
     if (!course || !assignment)
-      throw new Error('collector error: invalid assignment ID format');
+      throw new Error.Plugin('collector error: invalid assignment ID format');
 
     const request = api(url, token);
     const { assignee } = certified.identifier;
     const enrolled = await enroll(request, course);
     const uid = enrolled.get(assignee);
     if (uid === undefined)
-      throw new Error(`collector error: no Moodle user for ${assignee}`);
+      throw new Error.Plugin(`collector error: no Moodle user for ${assignee}`);
 
     const notebook = certified.workbook.context.model.sharedModel.toJSON();
     const content = JSON.stringify(notebook);
     const file = await io.assigned(rubric.assignment.name, assignee);
     const item = await upload(url, token, content, file);
-    if (!item) throw new Error(`collector error: upload failed (${assignee})`);
+    if (!item)
+      throw new Error.Plugin(`collector error: upload failed (${assignee})`);
 
     const { points, possible } = certified.grade.score;
     const max = await scale(request, course, assignment);
@@ -207,8 +210,7 @@ export namespace Moodle {
         `courseid=${course}`
       );
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      yield { type: 'error', slots: [reason] };
+      yield { type: 'error', slots: [Error.reason(error)] };
       return;
     }
 
@@ -232,7 +234,7 @@ export namespace Moodle {
       try {
         item = await upload(url, token, content, file);
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = (error as Error).message || String(error);
         const message = `Upload failed (${assignee}): ${reason}`;
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
@@ -255,7 +257,7 @@ export namespace Moodle {
           ].join('&')
         );
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = (error as Error).message || String(error);
         yield { type: 'separator', slots: [] };
         yield { type: 'assigned', slots: [assignee] };
         yield { type: 'error', slots: [`Grade save failed: ${reason}`] };

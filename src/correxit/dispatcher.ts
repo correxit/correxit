@@ -5,6 +5,7 @@ import {
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { Token } from '@lumino/coreutils';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
+import { Correxit } from '.';
 
 type Provider = 'manual' | 'moodle';
 type Provision = {
@@ -20,7 +21,8 @@ export function dispatch<Plugin>(
   create: (app: JupyterFrontEnd, provision: Provision) => [Plugin, () => void]
 ): JupyterFrontEndPlugin<Plugin> {
   return SecretsManager.sign(id, token => {
-    if (!token) throw new Error('Secrets manager token unavailable');
+    if (!token)
+      throw new Correxit.Error.Plugin('Secrets manager token unavailable');
     let deactivator = () => {};
     const state: State = { active: 'manual', secret: '', url: '' };
     const provision: Provision = {

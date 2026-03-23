@@ -46,7 +46,7 @@ async function encrypt(
   key: string
 ): Promise<void> {
   const index = findIndex(notebook.cells, ({ id }) => id === reference);
-  if (!key || index === -1) throw new Error('encrypt error');
+  if (!key || index === -1) throw new Correxit.Error.Encrypt('encrypt error');
 
   const cell = notebook.cells[index];
   const source = Array.isArray(cell.source)

@@ -73,7 +73,7 @@ export function commands(
     tree,
     unlocker
   } = utilities;
-  const { Icons } = Correxit;
+  const { Error, Icons } = Correxit;
   const fetch = (handle: Credentials, silent = false) =>
     commands.execute(Correxit.CommandIDs.fetch, { ...handle, silent });
   const { normalize } = Workbook.Credentials;
@@ -88,14 +88,15 @@ export function commands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
         const actions: Actions = {
-          correct,
+          correct: workbook => correct(workbook, trans),
           exclude: workbook => exclude(workbook, overwrite),
           recover
         };
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
-        if (!handle) throw new Error(`batch error, ${JSON.stringify(args)}`);
+        if (!handle)
+          throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
 
         const cap = kernels.cap();
         const retries = kernels.retries();
@@ -160,7 +161,7 @@ export function commands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
         const handle = normalize(args);
-        if (!handle) throw new Error('collect error, bad handle');
+        if (!handle) throw new Error.Invalid('collect error, bad handle');
         return (async function* () {
           for await (const workbook of scanner({ commands }, handle)) {
             const certified = precertified(workbook);
@@ -303,7 +304,7 @@ export function commands(
               .some(cell => !updated.assignment.report.interventions[cell.id]);
             if (!pending) {
               try {
-                await Workbook.certify(workbook, true);
+                await Workbook.certify(workbook, trans, true);
                 await save(workbook);
               } catch {
                 // Certification may fail if auto-graded cells are unresolved;
@@ -312,10 +313,7 @@ export function commands(
             }
           }
         } catch (error) {
-          void showErrorMessage(
-            trans.__('Could not save intervention'),
-            error as Error
-          );
+          void showErrorMessage(...Error.interpret(error, trans));
         }
       }
     })
@@ -365,17 +363,20 @@ export function commands(
   return disposables;
 }
 
-async function correct(workbook: Headless): Promise<Certified> {
+async function correct(
+  workbook: Headless,
+  trans: IRenderMime.TranslationBundle
+): Promise<Certified> {
   const rubric = open(workbook);
   if (!rubric || rubric.locked)
-    throw new Error('correct error: invalid rubric');
+    throw new Correxit.Error.Certify('correct error: invalid rubric');
 
   const { interventions } = rubric.assignment.report;
   const pending = Object.values(rubric.cells)
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
   if (!pending) {
-    const result = await Workbook.certify(workbook);
+    const result = await Workbook.certify(workbook, trans);
     await save(workbook);
     return result;
   }
@@ -383,7 +384,7 @@ async function correct(workbook: Headless): Promise<Certified> {
   const grade = await Workbook.correct(workbook);
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier))
-    throw new Error('correct error: unassigned');
+    throw new Correxit.Error.Certify('correct error: unassigned');
   await Workbook.lock(workbook);
   await save(workbook);
   return { grade, identifier, workbook };

@@ -9,7 +9,10 @@ import {
 } from '@jupyterlab/notebook';
 import { KernelSpec } from '@jupyterlab/services';
 import { findIndex, range } from '@lumino/algorithm';
+import { IRenderMime } from '@jupyterlab/rendermime';
 import { Correxit, Rubric } from '.';
+import * as certificate from './certificate';
+import * as Error from './error';
 import * as kernels from './kernels';
 import * as security from './security';
 import * as state from './state';
@@ -111,7 +114,7 @@ export namespace Workbook {
     ): Promise<Prepared> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, ({ id }) => id === reference);
-      if (!key || index === -1) throw new Error('decrypt error');
+      if (!key || index === -1) throw new Error.Decrypt('decrypt error');
 
       const cell = notebook.cells[index];
       const source = await security.decrypt(cell.getSource(), key);
@@ -138,7 +141,7 @@ export namespace Workbook {
     ): Promise<Prepared> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, ({ id }) => id === reference);
-      if (!key || index === -1) throw new Error('encrypt error');
+      if (!key || index === -1) throw new Error.Encrypt('encrypt error');
 
       const cell = notebook.cells[index];
       const source = await security.encrypt(cell.getSource(), key);
@@ -163,7 +166,7 @@ export namespace Workbook {
     ): Promise<Prepared> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, cell => cell.id === id);
-      if (index === -1) throw new Error('seal error: cell not found');
+      if (index === -1) throw new Error.Seal('seal error: cell not found');
 
       const cell = notebook.cells[index];
       const type = cell.toJSON().cell_type;
@@ -193,15 +196,18 @@ export namespace Workbook {
     ): Promise<Prepared> {
       const notebook = workbook.context.model.sharedModel;
       const index = findIndex(notebook.cells, cell => cell.id === id);
-      if (index === -1) throw new Error('unseal error: cell not found');
+      if (index === -1) throw new Error.Unseal('unseal error: cell not found');
 
       const cell = notebook.cells[index];
       const json = await security.unseal(cell.getSource(), key);
       const payload = JSON.parse(json);
-      if (payload.assignee !== assignee)
-        throw new Error(`assignee mismatch: ${assignee} ≠ ${payload.assignee}`);
+      if (payload.assignee !== assignee) {
+        throw new Error.Mismatch(
+          `assignee mismatch: ${assignee} ≠ ${payload.assignee}`
+        );
+      }
       if (payload.id !== id)
-        throw new Error('cell id mismatch: sealed cell was moved');
+        throw new Error.Mismatch('cell id mismatch: sealed cell was moved');
 
       const jupyter = { ...(cell.getMetadata('jupyter') as any || {}) };
       delete jupyter['source_hidden'];
@@ -283,7 +289,7 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked)
-      throw new Error('add error, invalid rubric');
+      throw new Error.Invalid('add error, invalid rubric');
     return update(workbook, Rubric.add(rubric, cell, references));
   }
 
@@ -294,7 +300,7 @@ export namespace Workbook {
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric || !rubric.locked || !rubric.assignment.submission)
-      throw new Error('acknowledge error');
+      throw new Error.Submit('acknowledge error');
     return update(workbook, Rubric.acknowledge(rubric, receipt));
   }
 
@@ -316,7 +322,7 @@ export namespace Workbook {
     assignment: Partial<Rubric.Assignment> = {}
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) throw new Error('assign error');
+    if (!rubric || rubric.locked) throw new Error.Invalid('assign error');
     return stale(rubric.assignment, assignment)
       ? update(workbook, await Rubric.assign(rubric, assignment))
       : rubric;
@@ -382,7 +388,7 @@ export namespace Workbook {
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric || !rubric.locked || !rubric.assignment.certification)
-      throw new Error('collect error');
+      throw new Error.Certify('collect error');
     return update(workbook, Rubric.collect(rubric, receipt));
   }
 
@@ -395,20 +401,21 @@ export namespace Workbook {
    */
   export async function certify(
     workbook: Workbook,
+    trans: IRenderMime.TranslationBundle,
     bypass = false
   ): Promise<Certified> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) throw new Error('certify error');
+    if (!rubric || rubric.locked) throw new Error.Certify('certify error');
 
     const { interventions } = rubric.assignment.report;
     const pending = Object.values(rubric.cells)
       .filter(({ is }) => is === 'reviewable')
       .some(({ id }) => !interventions[id]);
-    if (pending) throw new Error('certify error: pending review');
+    if (pending) throw new Error.Certify('certify error: pending review');
 
     const identifier = Workbook.identifier(workbook);
     if (!Identifier.assigned(identifier))
-      throw new Error('certify error: unassigned');
+      throw new Error.Certify('certify error: unassigned');
 
     let grade: Grade;
     if (bypass) {
@@ -426,13 +433,17 @@ export namespace Workbook {
     } else {
       grade = await correct(workbook);
     }
-    if (!grade.resolved)
-      throw new Error(`certify error: unresolved: (${grade.score.status})`);
+    if (!grade.resolved) {
+      throw new Error.Certify(
+        `certify error: unresolved: (${grade.score.status})`
+      );
+    }
 
     const scored = open(workbook, quiet);
-    if (!scored || scored.locked) throw new Error('certify error');
+    if (!scored || scored.locked) throw new Error.Certify('certify error');
     await update(workbook, Rubric.certify(scored));
     await lock(workbook);
+    certificate.render(workbook, grade, trans);
     freeze(workbook);
     return { grade, identifier, workbook };
   }
@@ -590,7 +601,7 @@ export namespace Workbook {
   ) {
     const audited = Workbook.audit(workbook, rubric);
     if (!audited.ok)
-      throw new Error(`decrypt error: ${audited.error}`);
+      throw new Error.Decrypt(`decrypt error: ${audited.error}`);
     if (audited.pruned.length)
       console.warn('decrypt: workbook has missing cells', audited.pruned);
 
@@ -605,11 +616,22 @@ export namespace Workbook {
     return update(workbook, rubric, { ok: true, pruned: [], rubric });
   }
 
+  /** Remove a single reference from a cell. */
+  export function dereference(
+    workbook: Workbook,
+    referent: string
+  ): void {
+    const rubric = open(workbook, quiet);
+    if (!rubric || rubric.locked)
+      throw new Error.Invalid('dereference error, invalid rubric');
+    update(workbook, Rubric.dereference(rubric, referent));
+  }
+
   /** Revert a submission to draft, restoring cell editability. */
   export async function draft(workbook: Workbook): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked || !rubric.assignment.submission)
-      throw new Error('draft error');
+      throw new Error.Submit('draft error');
     defrost(workbook);
     return update(workbook, Rubric.draft(rubric));
   }
@@ -672,7 +694,7 @@ export namespace Workbook {
 
   export function identifier(workbook: Workbook): Identifier {
     const rubric = open(workbook, quiet);
-    if (!rubric) throw new Error('identifier error');
+    if (!rubric) throw new Error.Invalid('identifier error');
     const assignee = rubric.assignment.assignee || null;
     const assignment = rubric.assignment.id;
     const signature = rubric.assignment.signature || null;
@@ -742,7 +764,7 @@ export namespace Workbook {
   ): Rubric | null {
     if (!workbook) {
       if (quiet) return null;
-      throw new TypeError('open error');
+      throw new Error.Invalid('open error');
     }
     if (get(workbook)) return get(workbook);
 
@@ -752,13 +774,108 @@ export namespace Workbook {
       if (!metadata) throw Correxit.NO_CORREXIT_METADATA;
       const rubric = Rubric.normalize(metadata as Partial<Rubric.Locked>);
       const audit = Workbook.audit(workbook, rubric);
-      if (!audit.ok) throw new Error(`open error: ${audit.error}`);
+      if (!audit.ok) throw new Error.Invalid(`open error: ${audit.error}`);
       set(workbook, audit.rubric);
       return audit.rubric;
     } catch (error) {
       if (quiet) return null;
       throw error;
     }
+  }
+
+  /** @returns provisioned recipient keys for a given workbook. */
+  export async function recipients(
+    workbook: Workbook,
+    passphrase: string | null
+  ): Promise<string[]> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked || !rubric.assignment.assignee)
+      throw new Error.Submit('recipients error');
+
+    const { author } = rubric.assignment.keys.public;
+    if (!passphrase) return [author];
+
+    const secret = await security.keygen(passphrase, rubric.id);
+    const pair = await security.keypair();
+    const armored = await security.encrypt(pair.private, secret);
+    const keys: Rubric.Assignment.Keys = {
+      private: { ...rubric.assignment.keys.private, assignee: armored },
+      public: { ...rubric.assignment.keys.public, assignee: pair.public }
+    };
+    await update(workbook, Rubric.provision(rubric, keys));
+    return [author, pair.public];
+  }
+
+  /**
+   * Attempt to decrypt all encrypted cells in a workbook.
+   *
+   * Reads the rubric ID and encrypted PGP keys directly from raw
+   * notebook metadata (no normalization required). Tries symmetric
+   * decryption and, if PGP private keys can be recovered, asymmetric
+   * unsealing on every encrypted cell.
+   *
+   * @returns the number of cells successfully recovered.
+   */
+  export async function recover(
+    workbook: Workbook,
+    passphrase: string
+  ): Promise<number> {
+    const notebook = workbook.context.model.sharedModel;
+    const metadata = notebook.getMetadata('correxit') as any;
+    const id = metadata?.id;
+    if (!id || typeof id !== 'string') return 0;
+
+    const key = await security.keygen(passphrase, id);
+    const keys: security.PrivateKey[] = [];
+    const armored = metadata?.assignment?.keys?.private;
+    const recover = async (field: unknown) => {
+      if (!field || typeof field !== 'string') return;
+      try {
+        const decrypted = await security.decrypt(field, key);
+        if (decrypted !== field) keys.push(await security.parse(decrypted));
+      } catch { /* wrong key or corrupt */ }
+    };
+    await recover(armored?.author);
+    await recover(armored?.assignee);
+
+    const prepared: Cell.Prepared[] = [];
+    for (const [index, cell] of notebook.cells.entries()) {
+      const source = cell.getSource();
+      if (!security.encrypted(source)) continue;
+
+      let recovered: string | null = null;
+      let payload: { type?: string; source?: string } | null = null;
+      try {
+        const decrypted = await security.decrypt(source, key);
+        if (decrypted !== source) recovered = decrypted;
+      } catch { /* wrong key */ }
+      if (!recovered) {
+        for (const recipient of keys) {
+          try {
+            const json = await security.unseal(source, recipient);
+            payload = JSON.parse(json);
+            break;
+          } catch { /* wrong key or not sealed to this recipient */ }
+        }
+      }
+      if (!recovered && !payload) continue;
+
+      const jupyter = { ...(cell.getMetadata('jupyter') as any || {}) };
+      delete jupyter['source_hidden'];
+
+      const snapshot = cell.toJSON();
+      const replacement = {
+        ...snapshot,
+        cell_type: payload?.type ?? 'code',
+        metadata: { ...snapshot.metadata as any, jupyter, trusted: true },
+        source: payload?.source ?? recovered!
+      };
+      delete replacement.metadata['editable'];
+      prepared.push({ index, replacement });
+    }
+    transact(workbook, prepared);
+    if (prepared.length) defrost(workbook);
+    return prepared.length;
   }
 
   /** Add a reference to an existing comparable or correctable cell. */
@@ -769,7 +886,7 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked)
-      throw new Error('refer error, invalid rubric');
+      throw new Error.Invalid('refer error, invalid rubric');
     return update(workbook, Rubric.refer(rubric, id, reference));
   }
 
@@ -777,16 +894,33 @@ export namespace Workbook {
   export function remove(workbook: Workbook, id: string): void {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked)
-      throw new Error('remove error, invalid rubric');
+      throw new Error.Invalid('remove error, invalid rubric');
 
     update(workbook, Rubric.remove(rubric, id));
   }
 
   /** Reset a workbook back to a plain Jupyter notebook. */
   export async function reset(workbook: Workbook) {
-    const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) throw new Error('reset error');
     update(workbook, null);
+  }
+
+  /** Revise a sealed submission: unseal cells and clear submission state. */
+  export async function revise(
+    workbook: Workbook,
+    key: security.PrivateKey | string
+  ): Promise<Rubric.Locked> {
+    const rubric = open(workbook, quiet);
+    if (!rubric?.locked || !rubric.assignment.seal)
+      throw new Error.Revise('revise error');
+
+    const { assignee } = rubric.assignment;
+    const ids = Object.keys(rubric.cells).sort();
+    const prepared = await Promise.all(
+      ids.map(id => Cell.unseal(workbook, id, assignee, key))
+    );
+    transact(workbook, prepared);
+    defrost(workbook);
+    return update(workbook, Rubric.unseal(rubric));
   }
 
   /** Update points for a cell or reference. */
@@ -797,31 +931,12 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked)
-      throw new Error('reweight error, invalid rubric');
+      throw new Error.Invalid('reweight error, invalid rubric');
 
     const updated = id in rubric.references
       ? Rubric.Reference.reweight(rubric, id, points)
       : Rubric.Cell.reweight(rubric, id, points);
     return update(workbook, updated);
-  }
-
-  /** Revise a sealed submission: unseal cells and clear submission state. */
-  export async function revise(
-    workbook: Workbook,
-    key: security.PrivateKey | string
-  ): Promise<Rubric.Locked> {
-    const rubric = open(workbook, quiet);
-    if (!rubric?.locked || !rubric.assignment.seal)
-      throw new Error('revise error');
-
-    const { assignee } = rubric.assignment;
-    const ids = Object.keys(rubric.cells).sort();
-    const prepared = await Promise.all(
-      ids.map(id => Cell.unseal(workbook, id, assignee, key))
-    );
-    transact(workbook, prepared);
-    defrost(workbook);
-    return update(workbook, Rubric.unseal(rubric));
   }
 
   /**
@@ -853,9 +968,9 @@ export namespace Workbook {
     recipients: string[]
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
-    if (!rubric?.locked) throw new Error('submit error');
+    if (!rubric?.locked) throw new Error.Submit('submit error');
     if (!recipients.length)
-      throw new Error('submit error: missing seal recipients');
+      throw new Error.Submit('submit error: missing seal recipients');
 
     const hash = await seal(workbook, rubric, recipients);
     const sealed = Rubric.seal(rubric, hash);
@@ -870,19 +985,8 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked)
-      throw new Error('toggle error');
+      throw new Error.Invalid('toggle error');
     return update(workbook, Rubric.toggle(rubric, referent));
-  }
-
-  /** Remove a single reference from a cell. */
-  export function dereference(
-    workbook: Workbook,
-    referent: string
-  ): void {
-    const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked)
-      throw new Error('dereference error, invalid rubric');
-    update(workbook, Rubric.dereference(rubric, referent));
   }
 
   /** Unlocks a workbook's rubric and decrypts its contents. */
@@ -891,7 +995,7 @@ export namespace Workbook {
     key: string
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
-    if (!rubric) throw new Error('unlock error');
+    if (!rubric) throw new Error.Unlock('unlock error');
     if (!rubric.locked) return rubric;
 
     let unlocked = await Rubric.unlock(rubric, key);
@@ -913,14 +1017,14 @@ export namespace Workbook {
 
       if (missing.length) {
         if (!workbook.content)
-          throw new Error('unlock seal error: missing cells');
+          throw new Error.Unseal('unlock seal error: missing cells');
         console.warn('unlock: skipping seal verify, missing cells', missing);
       } else {
         // Verify seal integrity before decrypting.
         const ciphertexts = present.map(id => index[id].getSource());
         const hash = await security.digest(ciphertexts.join('\n'));
         if (hash !== assignment.seal)
-          throw new Error('seal mismatch: ciphertexts tampered');
+          throw new Error.Mismatch('seal mismatch: ciphertexts tampered');
       }
 
       // Unseal each rubric cell present in the notebook.
@@ -978,7 +1082,7 @@ export namespace Workbook {
       notebook.clearUndoHistory();
       return null;
     }
-    if (!audited.ok) throw new Error(`update error: ${audited.error}`);
+    if (!audited.ok) throw new Error.Invalid(`update error: ${audited.error}`);
     set(workbook, audited.rubric);
     notebook.setMetadata('correxit', await Rubric.lock(audited.rubric));
     return audited.rubric;

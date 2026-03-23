@@ -102,9 +102,9 @@ const parse = (output: string) => {
   });
 };
 
-const openMock = Workbook.open as jest.Mock;
-beforeEach(() => openMock.mockReturnValue(null));
-afterEach(() => openMock.mockReset());
+const mock = Workbook.open as jest.Mock;
+beforeEach(() => mock.mockReturnValue(null));
+afterEach(() => mock.mockReset());
 
 describe('csv', () => {
   it('returns header-only output for empty workbooks', () => {
@@ -119,7 +119,7 @@ describe('csv', () => {
 
   it('produces a row for a reified workbook with no rubric', () => {
     const wb = workbook('dir/student.ipynb');
-    openMock.mockReturnValue(null);
+    mock.mockReturnValue(null);
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     expect(rows).toHaveLength(2);
     const [, row] = rows;
@@ -131,7 +131,7 @@ describe('csv', () => {
 
   it('populates identity fields from rubric', () => {
     const wb = workbook('hw/alice.ipynb');
-    openMock.mockReturnValue(
+    mock.mockReturnValue(
       rubric({
         id: 'r-42',
         assignment: assignment({
@@ -153,7 +153,7 @@ describe('csv', () => {
 
   it('uses grade score when provided', () => {
     const wb = workbook('hw/bob.ipynb');
-    openMock.mockReturnValue(
+    mock.mockReturnValue(
       rubric({
         assignment: assignment({ assignee: 'Bob' })
       })
@@ -188,7 +188,7 @@ describe('csv', () => {
         status: 'correct'
       }
     };
-    openMock.mockReturnValue(
+    mock.mockReturnValue(
       rubric({
         assignment: assignment({ report: { ...report(), scores } })
       })
@@ -201,7 +201,7 @@ describe('csv', () => {
 
   it('escapes commas in fields', () => {
     const wb = workbook('hw/student.ipynb');
-    openMock.mockReturnValue(
+    mock.mockReturnValue(
       rubric({
         assignment: assignment({ name: 'Last, First' })
       })
@@ -214,7 +214,7 @@ describe('csv', () => {
 
   it('escapes double quotes in fields', () => {
     const wb = workbook('hw/student.ipynb');
-    openMock.mockReturnValue(
+    mock.mockReturnValue(
       rubric({
         assignment: assignment({ name: 'Say "hello"' })
       })
@@ -225,7 +225,7 @@ describe('csv', () => {
 
   it('sanitizes formula injection characters', () => {
     const wb = workbook('hw/evil.ipynb');
-    openMock.mockReturnValue(
+    mock.mockReturnValue(
       rubric({
         assignment: assignment({ assignee: '=CMD()' })
       })
@@ -237,7 +237,7 @@ describe('csv', () => {
   it('sanitizes plus, minus, at, and tab prefixes', () => {
     for (const prefix of ['+', '-', '@', '\t']) {
       const wb = workbook('hw/x.ipynb');
-      openMock.mockReturnValue(
+      mock.mockReturnValue(
         rubric({
           assignment: assignment({ assignee: `${prefix}payload` })
         })
@@ -254,7 +254,7 @@ describe('csv', () => {
 
   it('uses CRLF line endings', () => {
     const wb = workbook('hw/a.ipynb');
-    openMock.mockReturnValue(null);
+    mock.mockReturnValue(null);
     const output = generate([wb as unknown as Scanned], new Map());
     const raw = output.slice(1);
     expect(raw.split('\r\n')).toHaveLength(2);
@@ -262,7 +262,7 @@ describe('csv', () => {
 
   it('includes lifecycle timestamps when present', () => {
     const wb = workbook('hw/dated.ipynb');
-    openMock.mockReturnValue(
+    mock.mockReturnValue(
       rubric({
         assignment: assignment({
           certification: 1700000000000,
@@ -285,7 +285,7 @@ describe('csv', () => {
     const b = workbook('b.ipynb');
     const c = hollow('c.ipynb');
     const d = workbook('d.ipynb');
-    openMock.mockReturnValue(null);
+    mock.mockReturnValue(null);
     const rows = parse(
       generate([a, b, c, d] as unknown as Scanned[], new Map())
     );

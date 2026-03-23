@@ -1,6 +1,5 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
-import { PathExt } from '@jupyterlab/coreutils';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
@@ -18,6 +17,7 @@ import * as state from './state';
 export namespace CommandIDs {
   export const assign = 'correxit:assign';
   export const certify = 'correxit:certify';
+  export const collect = 'correxit:collect';
   export const comment = 'correxit:comment';
   export const configure = 'correxit:configure';
   export const convert = 'correxit:convert';
@@ -53,11 +53,11 @@ type Reified =
   { handle: Credentials | null; rubric: null; workbook: Workbook; } |
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 
-const { get, has, size } = Rubric;
+const { get, has } = Rubric;
 const {
-  acknowledge, add, assign, certify, collect, comment, convert, correct,
-  dereference, draft, intervene, lock, refer, remove, reset, revise, reweight,
-  submit, toggle
+  acknowledge, add, assign, certify, collect, comment, convert,
+  correct, dereference, draft, intervene, lock, recover, refer, remove, reset,
+  revise, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -74,7 +74,7 @@ export function commands(
   }
 ) {
   const { commands, serviceManager: manager, shell } = app;
-  const { Icons } = Correxit;
+  const { Error, Icons } = Correxit;
   const {
     collector, consumer, injector, registrar, submitter, unlocker
   } = utilities;
@@ -128,17 +128,43 @@ export function commands(
       const assigned = !!rubric?.assignment.assignee;
       return assigned && !rubric.locked;
     },
-    label: trans.__('Certify workbook...'),
+    label: () => {
+      const rubric = open(state.workbook());
+      return rubric?.assignment.certification
+        ? trans.__('Recertify workbook...')
+        : trans.__('Certify workbook...');
+    },
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
       try {
-        const certified = await certify(workbook);
+        await certify(workbook, trans);
+        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      } catch (error) {
+        showErrorMessage(...Error.interpret(error, trans));
+      }
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.collect, {
+    icon: Icons.certify,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      const assigned = !!rubric?.assignment.assignee;
+      const certified = !!rubric?.assignment.certification;
+      const collected = !!rubric?.assignment.collected;
+      return assigned && !rubric.locked && certified && !collected;
+    },
+    label: trans.__('Collect workbook...'),
+    execute: async (args: Partial<Credentials>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
+      try {
+        const certified = await certify(workbook, trans, true);
         const receipt = await collector(certified);
         await collect(workbook, receipt);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not certify'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -320,10 +346,23 @@ export function commands(
       const headed = workbook && workbook.content;
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
       if (!rubric || !headed) return false;
-      if (!id) return size(rubric) > 0;
+      if (!id) {
+        const cells = Object.values(rubric.cells);
+        const references = rubric.references;
+        return cells.some(({ id, is }) => {
+          if (is === 'reviewable') return false;
+          if (!rubric.locked) return true;
+
+          const refs = Object.values(references)
+            .filter(({ cell }) => cell === id);
+          return !refs.length || refs.some(({ secret }) => !secret);
+        });
+      }
+
       const cell = get(rubric, id);
       if (!cell || cell.is === 'reviewable') return false;
       if (!rubric.locked) return true;
+
       const references = Object.values(rubric.references)
         .filter(reference => reference.cell === id);
       return !references.length || references.some(
@@ -390,6 +429,7 @@ export function commands(
     execute: async (args: Partial<Credentials>) => {
       const { workbook } = await reify(args);
       if (!workbook) return;
+
       const title = trans.__('Revert to draft');
       const body = trans.__('Revert read-only submission to draft workbook?');
       const buttons = [
@@ -402,7 +442,7 @@ export function commands(
         await draft(workbook);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not revert'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -460,7 +500,7 @@ export function commands(
         await lock(workbook);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not lock'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -568,6 +608,7 @@ export function commands(
 
       const rubric = open(workbook);
       if (!rubric || rubric.locked) return;
+
       const cell = get(rubric, id);
       if (!cell) return;
       if (
@@ -591,9 +632,7 @@ export function commands(
       await refer(workbook, id, reference);
 
       const { widgets } = workbook.content;
-      const original = find(
-        widgets, ({ model }) => model.id === id
-      );
+      const original = find(widgets, ({ model }) => model.id === id);
       if (original)
         await workbook.content.scrollToCell(original);
     }
@@ -605,7 +644,6 @@ export function commands(
       const rubric = open(state.workbook());
       if (!id || !rubric || rubric.locked || rubric.assignment.assignee)
         return false;
-
       return has(rubric, id);
     },
     isVisible: args => commands.isEnabled(CommandIDs.remove, args),
@@ -620,8 +658,11 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.reset, {
     icon: Icons.reset,
     isEnabled: () => {
-      const rubric = open(state.workbook());
-      return rubric?.locked === false && !rubric.assignment.assignee;
+      const workbook = state.workbook();
+      const rubric = open(workbook);
+      if (rubric) return !rubric.locked && !rubric.assignment.assignee;
+      const notebook = workbook?.context.model.sharedModel;
+      return !!notebook?.getMetadata('correxit');
     },
     isVisible: () => commands.isEnabled(CommandIDs.reset),
     caption: trans.__('Deletes Correxit metadata, keeps notebook content'),
@@ -630,13 +671,41 @@ export function commands(
       const { workbook } = await reify(args);
       if (!workbook) return;
 
-      const title = trans.__('Revert to notebook');
-      const body = commands.caption(CommandIDs.reset);
-      const { button } = await showDialog({ body, title });
-      if (button.accept) {
-        await reset(workbook);
-        await commands.execute(CommandIDs.save, { ...args, undo: false });
+      const notebook = workbook.context.model.sharedModel;
+      const encrypted = notebook.cells.some(
+        cell => security.encrypted(cell.getSource())
+      );
+      if (encrypted) {
+        const passphrase = args.key ?? await input.text({
+          title: trans.__('Recover encrypted cells'),
+          label: trans.__('Enter a passphrase to attempt decryption')
+        });
+        if (passphrase) {
+          const recovered = await recover(workbook, passphrase);
+          if (!recovered) {
+            const { button } = await showDialog({
+              title: trans.__('Recovery failed'),
+              body: trans.__('No cells could be decrypted. Reset anyway?')
+            });
+            if (!button.accept) return;
+          }
+        } else {
+          const { button } = await showDialog({
+            title: trans.__('Revert to notebook'),
+            body: trans.__(
+              'Encrypted cells were detected. Reset without recovering?'
+            )
+          });
+          if (!button.accept) return;
+        }
+      } else {
+        const title = trans.__('Revert to notebook');
+        const body = commands.caption(CommandIDs.reset);
+        const { button } = await showDialog({ body, title });
+        if (!button.accept) return;
       }
+      await reset(workbook);
+      await commands.execute(CommandIDs.save, { ...args, undo: false });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.reweight, {
@@ -702,9 +771,10 @@ export function commands(
       const rubric = open(state.workbook());
       const locked = !!rubric?.locked;
       const assigned = !!rubric?.assignment.assignee;
-      const submitted = !!rubric?.assignment.submission;
+      const sealed = !!rubric?.assignment.submission;
+      const receipt = !!rubric?.assignment.submitted;
       const certified = !!rubric?.assignment.certification;
-      return locked && assigned && !submitted && !certified;
+      return locked && assigned && !certified && (!sealed || !receipt);
     },
     isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),
@@ -712,15 +782,25 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
 
-      const author = rubric.assignment.keys.public.author;
-      const title = trans.__('Submit assignment');
-      let recipients: string[];
+      const identifier = Workbook.identifier(workbook);
+      if (!Workbook.Identifier.assigned(identifier)) return;
+      if (rubric.assignment.submission && !rubric.assignment.submitted) {
+        try {
+          const receipt = await submitter(workbook, identifier);
+          await acknowledge(workbook, receipt);
+          await commands.execute(CommandIDs.save, { ...args, undo: false });
+        } catch (error) {
+          showErrorMessage(...Error.interpret(error, trans));
+        }
+        return;
+      }
 
+      const title = trans.__('Submit assignment');
       const body = trans.__(
 `Would you like to set a passphrase to revise your submission later?
 Or do you just want to seal and submit? This document will be locked.`
       );
-      const { button } = await showDialog({
+      const { button: { accept, actions } } = await showDialog({
         title,
         body,
         buttons: [
@@ -736,40 +816,30 @@ Or do you just want to seal and submit? This document will be locked.`
           })
         ]
       });
-      if (!button.accept) return;
+      if (!accept) return;
 
-      if (button.actions.includes('passphrase')) {
-        const passphrase = await input.text({
-          title: trans.__('Set a submission passphrase'),
-          label: trans.__('Enter a passphrase to seal your submission')
-        });
-        if (!passphrase) return;
-
-        const student = await security.keygen(passphrase, rubric.id);
-        const pair = await security.keypair();
-        const armored = await security.encrypt(pair.private, student);
-        const keys: Rubric.Assignment.Keys = {
-          private: { ...rubric.assignment.keys.private, assignee: armored },
-          public: { ...rubric.assignment.keys.public, assignee: pair.public }
-        };
-        await Workbook.update(workbook, {
-          ...rubric, assignment: { ...rubric.assignment, keys }
-        } as Rubric.Locked);
-        recipients = [author, pair.public];
-      } else {
-        recipients = [author];
-      }
-
+      const passphrase = actions.includes('passphrase')
+        ? await input.text({
+            title: trans.__('Set a submission passphrase'),
+            label: trans.__('Enter a passphrase to seal your submission')
+          })
+        : null;
+      if (actions.includes('passphrase') && !passphrase) return;
       try {
-        const identifier = Workbook.identifier(workbook);
-        if (!Workbook.Identifier.assigned(identifier)) return;
+        const recipients = await Workbook.recipients(workbook, passphrase);
         await submit(workbook, recipients);
-
-        const receipt = await submitter(workbook, identifier);
-        await acknowledge(workbook, receipt);
+        try {
+          const receipt = await submitter(workbook, identifier);
+          await acknowledge(workbook, receipt);
+        } catch (error) {
+          const reason = Error.reason(error);
+          const message = `Submission sealed but receipt failed: ${reason}`;
+          await commands.execute(CommandIDs.save, { ...args, undo: false });
+          throw new Error.Plugin(message);
+        }
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not submit'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -801,7 +871,7 @@ Or do you just want to seal and submit? This document will be locked.`
         await revise(workbook, await security.parse(armored));
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
-        void showErrorMessage(trans.__('Could not revise'), error as Error);
+        showErrorMessage(...Error.interpret(error, trans));
       }
     }
   }));
@@ -830,11 +900,7 @@ successful, an unlocked rubric.
       try {
         return unlocker.unlock(workbook, handle);
       } catch (error) {
-        const file = PathExt.basename(workbook.context.path);
-        void showErrorMessage(
-          trans.__('Could not unlock %1', file),
-          error as Error
-        );
+        showErrorMessage(...Error.interpret(error, trans));
       }
       return null;
     }

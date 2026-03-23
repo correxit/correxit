@@ -7,7 +7,7 @@ import { Assignment } from './assignment';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const { certify, convert, draft, lock, revise, submit, unlock } =
+const { certify, collect, convert, draft, lock, revise, submit, unlock } =
   Correxit.CommandIDs;
 
 export const Header: React.FC<{
@@ -41,8 +41,12 @@ export const Header: React.FC<{
   const submitted = !!rubric?.assignment.submission;
   const sealed = !!rubric?.assignment.seal;
   const unlocked = !!rubric && !rubric.locked;
+  const certified = !!rubric?.assignment.certification;
+  const collected = !!rubric?.assignment.collected;
   const action = unlocked
-    ? certify
+    ? certified && !collected
+      ? collect
+      : certify
     : submitted && sealed
       ? revise
       : submitted

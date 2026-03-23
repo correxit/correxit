@@ -421,3 +421,325 @@ test('revises a submitted workbook, restores editability', async ({ page }) => {
   expect(result.editable[1]).toBe(false);
   await dispose();
 });
+
+// ---------------------------------------------------------------------------
+// Recovery tests
+// ---------------------------------------------------------------------------
+
+test('recovers symmetrically encrypted cells after metadata corruption', async ({
+  page
+}) => {
+  // Scenario: author locks a workbook (encrypting secret reference cells),
+  // then metadata is corrupted (e.g. git merge conflict). The passphrase
+  // should recover the original cell source despite open() returning null.
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'answer = 42' },
+    { id: 'cell', source: 'compare' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const passphrase = 'secret';
+
+    // Use convert to get a properly derived key (PBKDF2).
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    const converted = await Workbook.convert(workbook, passphrase, unlocker);
+    const rubric = Rubric.add(
+      converted,
+      {
+        id: 'cell',
+        is: 'comparable',
+        points: 1,
+        references: ['ref'],
+        payload: null
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+
+    const notebook = panel.context.model.sharedModel;
+
+    // Verify the reference cell is now encrypted.
+    const encrypted = notebook.cells[0].getSource();
+    const sealed = encrypted
+      .trimStart()
+      .startsWith('-----BEGIN PGP MESSAGE-----');
+
+    // Corrupt metadata: delete `report` so normalize() throws.
+    const metadata = notebook.getMetadata('correxit');
+    delete metadata.assignment.report;
+    notebook.setMetadata('correxit', metadata);
+
+    // Fresh reference bypasses the WeakMap cache (mirrors user
+    // reopening the notebook after corruption).
+    const fresh = { content: panel.content, context: panel.context };
+
+    // open() should now fail.
+    const broken = Workbook.open(fresh, true);
+
+    // Recover with the original passphrase.
+    const count = await Workbook.recover(fresh, passphrase);
+
+    const restored = notebook.cells[0].getSource();
+    const type = notebook.cells[0].cell_type;
+    const jupyter = notebook.cells[0].getMetadata('jupyter');
+    const editable = notebook.cells[0].getMetadata('editable');
+
+    return {
+      sealed,
+      broken,
+      count,
+      source: restored,
+      type,
+      hidden: jupyter?.source_hidden,
+      editable
+    };
+  });
+
+  expect(result.sealed).toBe(true);
+  expect(result.broken).toBeNull();
+  expect(result.count).toBe(1);
+  expect(result.source).toBe('answer = 42');
+  expect(result.type).toBe('code');
+  expect(result.hidden).toBeUndefined();
+  expect(result.editable).toBeUndefined();
+  await dispose();
+});
+
+test('recovers zero cells with wrong passphrase', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'secret stuff' },
+    { id: 'cell', source: 'compare' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    const converted = await Workbook.convert(workbook, 'secret', unlocker);
+    const rubric = Rubric.add(
+      converted,
+      {
+        id: 'cell',
+        is: 'comparable',
+        points: 1,
+        references: ['ref'],
+        payload: null
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+
+    const notebook = panel.context.model.sharedModel;
+    const encrypted = notebook.cells[0].getSource();
+
+    // Corrupt metadata.
+    const metadata = notebook.getMetadata('correxit');
+    delete metadata.assignment.report;
+    notebook.setMetadata('correxit', metadata);
+
+    // Fresh reference bypasses the WeakMap cache.
+    const fresh = { content: panel.content, context: panel.context };
+
+    // Try to recover with the wrong passphrase.
+    const count = await Workbook.recover(fresh, 'wrong');
+
+    return {
+      count,
+      source: notebook.cells[0].getSource(),
+      unchanged: encrypted === notebook.cells[0].getSource()
+    };
+  });
+
+  expect(result.count).toBe(0);
+  expect(result.unchanged).toBe(true);
+  await dispose();
+});
+
+test('recovers only encrypted cells, leaves plain cells alone', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'hidden = 99' },
+    { id: 'cell', source: 'compare' },
+    { id: 'plain', source: 'x = 1' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    const converted = await Workbook.convert(workbook, 'secret', unlocker);
+    const rubric = Rubric.add(
+      converted,
+      {
+        id: 'cell',
+        is: 'comparable',
+        points: 1,
+        references: ['ref'],
+        payload: null
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+
+    const notebook = panel.context.model.sharedModel;
+
+    // Corrupt metadata.
+    const metadata = notebook.getMetadata('correxit');
+    delete metadata.assignment.report;
+    notebook.setMetadata('correxit', metadata);
+
+    // Fresh reference bypasses the WeakMap cache.
+    const fresh = { content: panel.content, context: panel.context };
+    const count = await Workbook.recover(fresh, 'secret');
+
+    return {
+      count,
+      ref: notebook.cells[0].getSource(),
+      cell: notebook.cells[1].getSource(),
+      plain: notebook.cells[2].getSource()
+    };
+  });
+
+  expect(result.count).toBe(1);
+  expect(result.ref).toBe('hidden = 99');
+  expect(result.cell).toBe('compare');
+  expect(result.plain).toBe('x = 1');
+  await dispose();
+});
+
+test('returns zero when metadata has no rubric id', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const notebook = panel.context.model.sharedModel;
+
+    // Set broken metadata with no id.
+    notebook.setMetadata('correxit', { locked: true });
+
+    const count = await Workbook.recover(workbook, 'secret');
+    return { count };
+  });
+
+  expect(result.count).toBe(0);
+  await dispose();
+});
+
+test('recovers sealed cells using author PGP key from metadata', async ({
+  page
+}) => {
+  // Scenario: student submits (cells sealed with PGP to author's public key).
+  // Author opens the workbook but metadata is corrupted. Recovery extracts
+  // the encrypted author private key from raw metadata, derives the symmetric
+  // key from the passphrase, decrypts the PGP private key, and unseals cells.
+  const { dispose } = await setup(page, [
+    { id: 'a', source: 'x = 1' },
+    { id: 'b', source: 'y = 2' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const passphrase = 'secret';
+
+    // Use convert to get real PGP keys (the only way without direct
+    // access to the security module).
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    const converted = await Workbook.convert(workbook, passphrase, unlocker);
+
+    // Add a cell to the rubric and assign.
+    const rubric = Rubric.add(
+      converted,
+      {
+        id: 'a',
+        is: 'correctable',
+        points: 1,
+        references: ['b'],
+        payload: null
+      },
+      [{ cell: 'a', referent: 'b', points: 1, secret: false }]
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.assign(workbook, {
+      assignee: 'student@example.com',
+      roster: ['student@example.com']
+    });
+
+    // Lock and submit: this seals cells with PGP.
+    await Workbook.lock(workbook);
+    const locked = Workbook.open(workbook);
+    const author = locked.assignment.keys.public.author;
+    await Workbook.submit(workbook, [author]);
+
+    const notebook = panel.context.model.sharedModel;
+
+    // Verify at least one cell is PGP-encrypted.
+    const source = notebook.cells[0].getSource();
+    const sealed = source.trimStart().startsWith('-----BEGIN PGP MESSAGE-----');
+
+    // Save the rubric id and keys before corruption.
+    const metadata = notebook.getMetadata('correxit');
+    const id = metadata.id;
+    const keys = metadata.assignment.keys;
+
+    // Corrupt metadata: delete cells dict so normalize() throws,
+    // but keep id and keys (realistic: git merge broke structure,
+    // but keys survived).
+    notebook.setMetadata('correxit', {
+      id,
+      assignment: { keys }
+    });
+
+    // Fresh reference bypasses the WeakMap cache.
+    const fresh = { content: panel.content, context: panel.context };
+
+    // Confirm open() fails.
+    const broken = Workbook.open(fresh, true);
+
+    // Recover: should unseal the PGP-encrypted cells.
+    const count = await Workbook.recover(fresh, passphrase);
+
+    return {
+      sealed,
+      broken,
+      count,
+      sources: [notebook.cells[0].getSource(), notebook.cells[1].getSource()],
+      types: [notebook.cells[0].cell_type, notebook.cells[1].cell_type]
+    };
+  });
+
+  expect(result.sealed).toBe(true);
+  expect(result.broken).toBeNull();
+  expect(result.count).toBeGreaterThanOrEqual(1);
+  expect(result.sources[0]).toBe('x = 1');
+  expect(result.sources[1]).toBe('y = 2');
+  expect(result.types[0]).toBe('code');
+  expect(result.types[1]).toBe('code');
+  await dispose();
+});

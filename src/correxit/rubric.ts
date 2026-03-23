@@ -1,6 +1,7 @@
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage, KernelSpec } from '@jupyterlab/services';
 import { find } from '@lumino/algorithm';
+import * as Error from './error';
 import * as security from './security';
 
 /**
@@ -190,7 +191,7 @@ export namespace Rubric {
     ): Unlocked {
       const cell = get(rubric, id);
       if (!cell)
-        throw new Error(`reweight error, rubric does not have cell id ${id}`);
+        throw new Error.Invalid(`reweight error, cell ${id} not in rubric`);
 
       const assignment = {
         ...rubric.assignment,
@@ -303,11 +304,11 @@ export namespace Rubric {
     ): Unlocked {
       const reference = rubric.references[referent];
       if (!reference)
-        throw new Error(`reweight: reference ${referent} not found`);
+        throw new Error.Invalid(`reweight: reference ${referent} not found`);
 
       const cell = get(rubric, reference.cell);
       if (!cell || cell.is !== 'correctable')
-        throw new Error(`reweight: cell ${reference.cell} invalid`);
+        throw new Error.Invalid(`reweight: cell ${reference.cell} invalid`);
 
       const assignment = {
         ...rubric.assignment,
@@ -533,21 +534,21 @@ export namespace Rubric {
     ) {
       const { assignee, keys, roster, seal, signature } = assignment;
       if (!keys.private.author)
-        throw new Error('missing author private key');
+        throw new Error.Mismatch('missing author private key');
       if (!keys.public.author)
-        throw new Error('missing author public key');
+        throw new Error.Mismatch('missing author public key');
       if (assignee && !signature)
-        throw new Error('missing signature for assignee');
+        throw new Error.Mismatch('missing signature for assignee');
       if (assignee && signature !== await sign(assignment, key))
-        throw new Error('assignee signature mismatch');
+        throw new Error.Mismatch('assignee signature mismatch');
       if (assignee && !find(roster, record => record === assignee))
-        throw new Error('assignee does not exist in roster');
+        throw new Error.Mismatch('assignee does not exist in roster');
       if (roster.length && !signature)
-        throw new Error('missing signature for roster');
+        throw new Error.Mismatch('missing signature for roster');
       if (seal && !keys.public.author)
-        throw new Error('sealed assignment missing author public key');
+        throw new Error.Mismatch('sealed assignment missing author public key');
       if (keys.private.assignee && !keys.public.assignee)
-        throw new Error('assignee private key without public key');
+        throw new Error.Mismatch('assignee private key without public key');
     }
   }
 
@@ -652,25 +653,35 @@ export namespace Rubric {
     references: Cell.Reference[] = []
   ): Unlocked {
     if (has(rubric, cell.id) || cell.id in rubric.references)
-      throw new Error(`add error, rubric already has cell id ${cell.id}`);
+      throw new Error.Invalid(`add error, cell id ${cell.id} already exists`);
     for (const reference of references) {
       const { cell: target, referent } = reference;
-      if (target !== cell.id)
-        throw new Error(`add error, reference ${referent} has wrong cell`);
-      if (referent in rubric.references)
-        throw new Error(`add error, reference ${referent} already exists`);
-      if (referent in rubric.cells)
-        throw new Error(`add error, reference ${referent} collides with cell`);
+      if (target !== cell.id) {
+        throw new Error.Invalid(
+          `add error, reference ${referent} has wrong cell`
+        );
+      }
+      if (referent in rubric.references) {
+        throw new Error.Invalid(
+          `add error, reference ${referent} already exists`
+        );
+      }
+      if (referent in rubric.cells) {
+        throw new Error.Invalid(
+          `add error, reference ${referent} collides with cell`
+        );
+      }
     }
 
     const referents = references.map(({ referent }) => referent);
     if (cell.references === null && references.length)
-      throw new Error('add error, cell does not accept references');
+      throw new Error.Invalid('add error, cell does not accept references');
     if (cell.references !== null) {
       const expected = new Set(cell.references);
       const mismatch = expected.size !== referents.length ||
         !referents.every(id => expected.delete(id));
-      if (mismatch) throw new Error('add error, cell.references mismatch');
+      if (mismatch)
+        throw new Error.Invalid('add error, cell.references mismatch');
     }
 
     const assignment = {
@@ -697,7 +708,7 @@ export namespace Rubric {
     receipt: string | null = null
   ): Locked {
     if (!rubric.assignment.submission)
-      throw new Error('acknowledge error: not submitted');
+      throw new Error.Submit('acknowledge error: not submitted');
 
     const assignment = { ...rubric.assignment, submitted: receipt };
     return { ...rubric, assignment, revised: Date.now() };
@@ -729,7 +740,9 @@ export namespace Rubric {
     const keys = rubric.assignment.keys;
     const seal = rubric.assignment.seal;
     const unsigned = { assignee, expiration, id, keys, name, report, roster };
-    const lifecycle = { certification, collected, seal, submission, submitted };
+    const lifecycle = {
+      certification, collected, seal, submission, submitted
+    };
     const signature = await Assignment.sign(unsigned, key);
     const assignment = { ...unsigned, ...lifecycle, signature };
     await Assignment.validate({ assignment, key });
@@ -754,7 +767,7 @@ export namespace Rubric {
   /** @returns a locked rubric with lifecycle timestamps nulled. */
   export function draft(rubric: Locked): Locked {
     if (rubric.assignment.seal)
-      throw new Error('draft error: workbook is sealed');
+      throw new Error.Submit('draft error: workbook is sealed');
     const assignment = {
       ...rubric.assignment,
       certification: null,
@@ -768,7 +781,7 @@ export namespace Rubric {
   /** @returns an unlocked rubric with a certification timestamp. */
   export function certify(rubric: Unlocked): Unlocked {
     const certification = Date.now();
-    const assignment = { ...rubric.assignment, certification };
+    const assignment = { ...rubric.assignment, certification, collected: null };
     return { ...rubric, assignment, revised: certification };
   }
 
@@ -778,7 +791,8 @@ export namespace Rubric {
     receipt: string | null = null
   ): Locked {
     if (!rubric.assignment.certification)
-      throw new Error('collect error: not certified');
+      throw new Error.Certify('collect error: not certified');
+
     const revised = Date.now();
     const assignment = { ...rubric.assignment, collected: receipt };
     return { ...rubric, assignment, revised };
@@ -815,26 +829,31 @@ export namespace Rubric {
       typeof value === 'object' && value !== null;
     const record = (value: unknown): value is { [key: string]: unknown } =>
       object(value) && !Array.isArray(value);
-    if (!revised) throw new Error('invalid rubric, missing revised');
+    if (!revised) throw new Error.Invalid('invalid rubric, missing revised');
     if (typeof id !== 'string' || !id)
-      throw new Error('invalid rubric, missing id');
-
-    if (key !== null) throw new Error('invalid rubric, missing (null) key');
-    if (locked !== true) throw new Error('invalid rubric, must be locked');
+      throw new Error.Invalid('invalid rubric, missing id');
+    if (key !== null)
+      throw new Error.Invalid('invalid rubric, missing (null) key');
+    if (locked !== true)
+      throw new Error.Invalid('invalid rubric, must be locked');
     if (!cells || typeof cells !== 'object' || Array.isArray(cells))
-      throw new Error('invalid rubric, missing cells');
-    if (!assignment) throw new Error('invalid rubric, missing assignment');
+      throw new Error.Invalid('invalid rubric, missing cells');
+    if (!assignment)
+      throw new Error.Invalid('invalid rubric, missing assignment');
     if (!record(assignment.report))
-      throw new Error('invalid rubric, missing assignment report');
+      throw new Error.Invalid('invalid rubric, missing assignment report');
 
     const { interventions, kernel: spec, scores } = assignment.report;
     const kernel = spec ?? null;
-    if (!record(interventions))
-      throw new Error('invalid rubric, missing assignment interventions');
+    if (!record(interventions)) {
+      throw new Error.Invalid(
+        'invalid rubric, missing assignment interventions'
+      );
+    }
     if (!record(scores))
-      throw new Error('invalid rubric, missing assignment scores');
+      throw new Error.Invalid('invalid rubric, missing assignment scores');
     if (kernel !== null && !object(kernel))
-      throw new Error('invalid rubric, invalid kernel spec');
+      throw new Error.Invalid('invalid rubric, invalid kernel spec');
     const blank = Assignment.Report.empty();
     const report = { ...blank, interventions, kernel, scores };
     const keys = {
@@ -848,9 +867,10 @@ export namespace Rubric {
       }
     };
     if (!keys.private.author)
-      throw new Error('invalid rubric, missing author private key');
+      throw new Error.Invalid('invalid rubric, missing author private key');
     if (!keys.public.author)
-      throw new Error('invalid rubric, missing author public key');
+      throw new Error.Invalid('invalid rubric, missing author public key');
+
     const seal = assignment.seal ?? null;
     const references = rubric.references ?? {};
     return {
@@ -859,20 +879,10 @@ export namespace Rubric {
     };
   }
 
-  /** Remove a cell from a rubric and invalidate report. */
-  export function remove(rubric: Unlocked, id: string): Unlocked {
-    if (!get(rubric, id)) return rubric;
-
-    const assignment = {
-      ...rubric.assignment,
-      report: Assignment.Report.empty()
-    };
-    const { [id]: _, ...cells } = rubric.cells;
-    const references = Object.fromEntries(
-      Object.entries(rubric.references)
-        .filter(([, reference]) => reference.cell !== id)
-    );
-    return { ...rubric, assignment, cells, references, revised: Date.now() };
+  /** Provision a locked rubric with assignee keys for sealed submission. */
+  export function provision(rubric: Locked, keys: Assignment.Keys): Locked {
+    const assignment = { ...rubric.assignment, keys };
+    return { ...rubric, assignment, revised: Date.now() };
   }
 
   /** Add a reference to an existing comparable or correctable cell. */
@@ -883,20 +893,18 @@ export namespace Rubric {
   ): Unlocked {
     const cell = get(rubric, id);
     if (!cell)
-      throw new Error(`refer error, cell ${id} not found`);
+      throw new Error.Invalid(`refer error, cell ${id} not found`);
     if (cell.is !== 'comparable' && cell.is !== 'correctable')
-      throw new Error(`refer error, cell ${id} is ${cell.is}`);
+      throw new Error.Invalid(`refer error, cell ${id} is ${cell.is}`);
+
     const { referent } = reference;
     if (referent in rubric.references) {
-      throw new Error(
+      throw new Error.Invalid(
         `refer error, reference ${referent} already exists`
       );
     }
-    if (referent in rubric.cells) {
-      throw new Error(
-        `refer error, reference ${referent} collides`
-      );
-    }
+    if (referent in rubric.cells)
+      throw new Error.Invalid(`refer error, reference ${referent} collides`);
 
     const assignment = {
       ...rubric.assignment,
@@ -915,6 +923,22 @@ export namespace Rubric {
     return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 
+  /** Remove a cell from a rubric and invalidate report. */
+  export function remove(rubric: Unlocked, id: string): Unlocked {
+    if (!get(rubric, id)) return rubric;
+
+    const assignment = {
+      ...rubric.assignment,
+      report: Assignment.Report.empty()
+    };
+    const { [id]: _, ...cells } = rubric.cells;
+    const references = Object.fromEntries(
+      Object.entries(rubric.references)
+        .filter(([, reference]) => reference.cell !== id)
+    );
+    return { ...rubric, assignment, cells, references, revised: Date.now() };
+  }
+
   export async function sign(
     rubric: Rubric.Unlocked,
     report: Assignment.Report
@@ -923,11 +947,6 @@ export namespace Rubric {
     const signature = await Assignment.sign(unsigned, rubric.key);
     const assignment = { ...unsigned, signature };
     return { ...rubric, assignment, revised: Date.now() };
-  }
-
-  /** @returns the number of cells in a rubric. */
-  export function size(rubric: Rubric): number {
-    return Object.keys(rubric.cells).length;
   }
 
   /** Record the submission timestamp for a locked workbook. */
@@ -974,7 +993,7 @@ export namespace Rubric {
   export function toggle(rubric: Unlocked, referent: string): Unlocked {
     const reference = rubric.references[referent];
     if (!reference)
-      throw new Error(`toggle: reference ${referent} not found`);
+      throw new Error.Invalid(`toggle: reference ${referent} not found`);
 
     const assignment = {
       ...rubric.assignment,
@@ -991,12 +1010,18 @@ export namespace Rubric {
     referent: string
   ): Unlocked {
     const reference = rubric.references[referent];
-    if (!reference)
-      throw new Error(`dereference error, reference ${referent} not found`);
+    if (!reference) {
+      throw new Error.Invalid(
+        `dereference error, reference ${referent} not found`
+      );
+    }
 
     const cell = get(rubric, reference.cell);
-    if (!cell || cell.is === 'answerable' || cell.is === 'reviewable')
-      throw new Error(`dereference error, cell ${reference.cell} invalid`);
+    if (!cell || cell.is === 'answerable' || cell.is === 'reviewable') {
+      throw new Error.Invalid(
+        `dereference error, cell ${reference.cell} invalid`
+      );
+    }
 
     const remaining = cell.references.filter(id => id !== referent);
     if (!remaining.length) return remove(rubric, cell.id);

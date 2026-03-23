@@ -72,7 +72,6 @@ describe('manual collector', () => {
 
   it('includes all expected fields in the digest payload', async () => {
     const receipt = await manual(certified());
-    // The mock formats as DIGEST<payload>, so we can extract and parse it.
     const payload = JSON.parse(receipt.slice('manual:DIGEST<'.length, -1));
     expect(payload).toEqual({
       assignee: 'alice@example.com',
