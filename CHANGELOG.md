@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/QuantStack/correxit/compare/v1.15.0...v1.16.0) (2026-03-23)
+
+
+### Features
+
+* Improved safety ([#61](https://github.com/QuantStack/correxit/issues/61)) ([58c6903](https://github.com/QuantStack/correxit/commit/58c6903f6b7477aa51d8474cc4e3ca29db1304ec))
+
 # [1.15.0](https://github.com/QuantStack/correxit/compare/v1.14.0...v1.15.0) (2026-03-20)
 
 
