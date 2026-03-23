@@ -1,3 +1,4 @@
+import { INotebookContent } from '@jupyterlab/nbformat';
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { Kernel, KernelMessage, KernelSpec } from '@jupyterlab/services';
 import { find } from '@lumino/algorithm';
@@ -19,14 +20,17 @@ export namespace Rubric {
     assignee: string;
     certification: Timestamp;
     collected: string | null;
+    distributed: string | null;
     expiration: Timestamp;
     id: string | null;
+    issue: string;
+    issuer: string;
     keys: Assignment.Keys;
+    mac: string;
     name: string;
     report: Assignment.Report;
     roster: string[];
     seal: string | null;
-    signature: string;
     submission: Timestamp;
     submitted: string | null;
   }>;
@@ -417,7 +421,7 @@ export namespace Rubric {
     }>;
 
     export namespace Keys {
-      /** The author-only subset included in the HMAC signature. */
+      /** The author-only subset included in the assignment MAC. */
       export type Author = Readonly<{ private: string; public: string }>;
 
       export function author(keys: Keys): Author {
@@ -432,13 +436,14 @@ export namespace Rubric {
       }
     }
 
-    /** The terms of the assignment that are verified by its signature. */
+    /** The terms of the assignment that are verified by its MAC. */
     export type Terms = Omit<
       Assignment,
       | 'certification'
       | 'collected'
+      | 'distributed'
+      | 'mac'
       | 'seal'
-      | 'signature'
       | 'submission'
       | 'submitted'
     >;
@@ -448,14 +453,17 @@ export namespace Rubric {
         assignee: '',
         certification: null,
         collected: null,
+        distributed: null,
         expiration: null,
         id: null,
+        issue: '',
+        issuer: '',
         keys: Keys.empty(),
+        mac: '',
         name: '',
         report: Report.empty(),
         roster: [],
         seal: null,
-        signature: '',
         submission: null,
         submitted: null
       });
@@ -491,16 +499,80 @@ export namespace Rubric {
       return { ...report, scores };
     }
 
-    export async function sign(terms: Terms, key: string): Promise<string> {
-      const { assignee, expiration, id, keys, name, roster } = terms;
+    export async function mac(terms: Terms, key: string): Promise<string> {
+      const { assignee, expiration, id, issue, issuer, keys, name, roster } =
+        terms;
       const { interventions: manual, scores: auto } = terms.report;
       const author = Keys.author(keys);
       const report = { interventions: sort(manual), scores: sort(auto) };
       const unsigned = {
-        assignee, author, expiration, id,
+        assignee, author, expiration, id, issue, issuer,
         name, report, roster
       };
       return security.hmac(JSON.stringify(unsigned), key);
+    }
+
+    export async function issue({
+      assignment,
+      notebook,
+      rubric
+    }: {
+      assignment: Pick<Assignment, 'assignee' | 'expiration' | 'id' | 'name'>;
+      notebook: INotebookContent;
+      rubric: Pick<Base, 'cells' | 'id' | 'references'>;
+    }): Promise<string> {
+      const sources = notebook.cells
+        .map(({ id, source, cell_type }) => [
+          String(id),
+          cell_type,
+          Array.isArray(source) ? source.join('') : source
+        ])
+        .sort(([a], [b]) => a.localeCompare(b));
+      const cells = Object.fromEntries(
+        Object.entries(rubric.cells).sort(([a], [b]) => a.localeCompare(b))
+      );
+      const references = Object.fromEntries(
+        Object.entries(rubric.references).sort(([a], [b]) => a.localeCompare(b))
+      );
+      return security.digest(JSON.stringify({
+        assignee: assignment.assignee,
+        assignment: assignment.id,
+        cells,
+        expiration: assignment.expiration,
+        name: assignment.name,
+        references,
+        rubric: rubric.id,
+        sources
+      }));
+    }
+
+    export async function issuer(
+      issue: string,
+      author: string
+    ): Promise<string> {
+      return security.sign(issue, author);
+    }
+
+    export async function unstarted({
+      assignment,
+      notebook,
+      rubric
+    }: {
+      assignment: Pick<
+        Assignment,
+        'assignee' | 'expiration' | 'id' | 'issue' | 'issuer' | 'keys' | 'name'
+      >;
+      notebook: INotebookContent;
+      rubric: Pick<Base, 'cells' | 'id' | 'references'>;
+    }): Promise<boolean> {
+      if (!assignment.issue || !assignment.issuer) return false;
+      const verified = await security.verify(
+        assignment.issuer,
+        assignment.keys.public.author
+      );
+      if (verified !== assignment.issue) return false;
+      const current = await issue({ assignment, notebook, rubric });
+      return current === assignment.issue;
     }
 
     export function summary(report: Report): Score {
@@ -532,19 +604,26 @@ export namespace Rubric {
     export async function validate(
       { assignment, key }: Pick<Unlocked, 'assignment' | 'key'>
     ) {
-      const { assignee, keys, roster, seal, signature } = assignment;
+      const { assignee, issue, issuer, keys, mac, roster, seal } = assignment;
       if (!keys.private.author)
         throw new Error.Mismatch('missing author private key');
       if (!keys.public.author)
         throw new Error.Mismatch('missing author public key');
-      if (assignee && !signature)
-        throw new Error.Mismatch('missing signature for assignee');
-      if (assignee && signature !== await sign(assignment, key))
-        throw new Error.Mismatch('assignee signature mismatch');
+      if (assignee && !mac)
+        throw new Error.Mismatch('missing mac for assignee');
+      if (assignee && mac !== await Assignment.mac(assignment, key))
+        throw new Error.Mismatch('assignee mac mismatch');
       if (assignee && !find(roster, record => record === assignee))
         throw new Error.Mismatch('assignee does not exist in roster');
-      if (roster.length && !signature)
-        throw new Error.Mismatch('missing signature for roster');
+      if (roster.length && !mac)
+        throw new Error.Mismatch('missing mac for roster');
+      if (!!issue !== !!issuer)
+        throw new Error.Mismatch('issue and issuer must appear together');
+      if (issue) {
+        const verified = await security.verify(issuer, keys.public.author);
+        if (verified !== issue)
+          throw new Error.Mismatch('issue signature mismatch');
+      }
       if (seal && !keys.public.author)
         throw new Error.Mismatch('sealed assignment missing author public key');
       if (keys.private.assignee && !keys.public.assignee)
@@ -734,17 +813,30 @@ export namespace Rubric {
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster);
     const certification = stale ? null : rubric.assignment.certification;
     const collected = stale ? null : rubric.assignment.collected;
+    const distributed = stale ? null : rubric.assignment.distributed;
+    const issue = stale ? '' : rubric.assignment.issue;
+    const issuer = stale ? '' : rubric.assignment.issuer;
     const submission = stale ? null : rubric.assignment.submission;
     const submitted = stale ? null : rubric.assignment.submitted;
     const report = stale ? Assignment.Report.empty() : rubric.assignment.report;
     const keys = rubric.assignment.keys;
     const seal = rubric.assignment.seal;
-    const unsigned = { assignee, expiration, id, keys, name, report, roster };
-    const lifecycle = {
-      certification, collected, seal, submission, submitted
+    const unsigned = {
+      assignee,
+      expiration,
+      id,
+      issue,
+      issuer,
+      keys,
+      name,
+      report,
+      roster
     };
-    const signature = await Assignment.sign(unsigned, key);
-    const assignment = { ...unsigned, ...lifecycle, signature };
+    const lifecycle = {
+      certification, collected, distributed, seal, submission, submitted
+    };
+    const mac = await Assignment.mac(unsigned, key);
+    const assignment = { ...unsigned, ...lifecycle, mac };
     await Assignment.validate({ assignment, key });
     return { ...rubric, assignment, key, revised: Date.now() };
   }
@@ -783,6 +875,19 @@ export namespace Rubric {
     const certification = Date.now();
     const assignment = { ...rubric.assignment, certification, collected: null };
     return { ...rubric, assignment, revised: certification };
+  }
+
+  export function distribute(rubric: Locked, receipt: string | null): Locked;
+  export function distribute(
+    rubric: Unlocked,
+    receipt: string | null
+  ): Unlocked;
+  export function distribute(
+    rubric: Rubric,
+    receipt: string | null = null
+  ): Rubric {
+    const assignment = { ...rubric.assignment, distributed: receipt };
+    return { ...rubric, assignment, revised: Date.now() };
   }
 
   /** @returns a locked rubric with a collected receipt. */
@@ -944,8 +1049,8 @@ export namespace Rubric {
     report: Assignment.Report
   ): Promise<Rubric.Unlocked> {
     const unsigned = { ...rubric.assignment, report };
-    const signature = await Assignment.sign(unsigned, rubric.key);
-    const assignment = { ...unsigned, signature };
+    const mac = await Assignment.mac(unsigned, rubric.key);
+    const assignment = { ...unsigned, mac };
     return { ...rubric, assignment, revised: Date.now() };
   }
 

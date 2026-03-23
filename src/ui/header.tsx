@@ -1,14 +1,23 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { Assignment } from './assignment';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const { certify, collect, convert, draft, lock, revise, submit, unlock } =
-  Correxit.CommandIDs;
+const {
+  certify,
+  collect,
+  convert,
+  distribute,
+  draft,
+  lock,
+  revise,
+  submit,
+  unlock
+} = Correxit.CommandIDs;
 
 export const Header: React.FC<{
   commands: CommandRegistry;
@@ -43,6 +52,12 @@ export const Header: React.FC<{
   const unlocked = !!rubric && !rubric.locked;
   const certified = !!rubric?.assignment.certification;
   const collected = !!rubric?.assignment.collected;
+  const unstarted = useUnstarted(workbook, rubric?.revised || 0);
+  const distributable =
+    !!rubric?.assignment.assignee &&
+    !!rubric.assignment.issue &&
+    !!rubric.assignment.issuer &&
+    rubric.assignment.distributed === null;
   const action = unlocked
     ? certified && !collected
       ? collect
@@ -64,22 +79,61 @@ export const Header: React.FC<{
       {!!rubric && <Assignment {...{ commands, trans, workbook }} />}
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <div className="correxit-sidebar-submission-actions">
-        <Lifecycle {...{ rubric, trans }} />
+        <Lifecycle {...{ rubric, trans, unstarted }} />
+        {distributable && (
+          <CommandToolbarButtonComponent commands={commands} id={distribute} />
+        )}
         <CommandToolbarButtonComponent commands={commands} id={action} />
       </div>
     </section>
   );
 };
 
+function useUnstarted(workbook: Workbook, revised: number): boolean {
+  const [unstarted, setUnstarted] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUnstarted(false);
+    void Workbook.unstarted(workbook)
+      .then(current => {
+        if (!cancelled) setUnstarted(current);
+      })
+      .catch(() => {
+        if (!cancelled) setUnstarted(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [revised, workbook]);
+
+  return unstarted;
+}
+
 const Lifecycle: React.FC<{
   rubric: Rubric | null;
   trans: TranslationBundle;
-}> = ({ rubric, trans }) => {
+  unstarted: boolean;
+}> = ({ rubric, trans, unstarted }) => {
   if (!rubric) return <></>;
 
   const {
-    assignment: { certification, collected, submission, submitted }
+    assignment: {
+      assignee,
+      certification,
+      collected,
+      distributed,
+      submission,
+      submitted
+    }
   } = rubric;
+  const blank_slate =
+    unstarted &&
+    certification === null &&
+    collected === null &&
+    distributed === null &&
+    submission === null &&
+    submitted === null;
   const lines: string[] = [];
   if (submission !== null)
     lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
@@ -87,11 +141,20 @@ const Lifecycle: React.FC<{
   if (certification !== null)
     lines.push(trans.__('Certification %1', Rubric.timestamp(certification)));
   if (collected !== null) lines.push(trans.__('Collected: %1', collected));
+  if (distributed !== null)
+    lines.push(trans.__('Distributed: %1', summarize(distributed, trans)));
+  if (blank_slate) lines.push(trans.__('Unstarted'));
 
   const label = lines.length
     ? lines[lines.length - 1]
-    : trans.__('Unsubmitted');
-  const title = lines.length ? lines.join('\n') : trans.__('Unsubmitted');
+    : assignee
+      ? trans.__('Started')
+      : trans.__('Unsubmitted');
+  const title = lines.length
+    ? lines.join('\n')
+    : assignee
+      ? trans.__('Started')
+      : trans.__('Unsubmitted');
   return (
     <div
       aria-label={title}
@@ -103,3 +166,11 @@ const Lifecycle: React.FC<{
     </div>
   );
 };
+
+function summarize(receipt: string, trans: TranslationBundle): string {
+  if (receipt.startsWith('-----BEGIN PGP SIGNED MESSAGE-----'))
+    return trans.__('Signed attestation');
+
+  const trimmed = receipt.trim();
+  return trimmed.length > 48 ? `${trimmed.slice(0, 48)}...` : trimmed;
+}

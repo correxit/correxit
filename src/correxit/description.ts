@@ -1,6 +1,6 @@
 export const COLLECTOR = 'A collector of certified workbook grades';
 
-export const CONSUMER = 'A consumer of propagated Correxit workbook assignments';
+export const DISTRIBUTOR = 'A distributor of propagated Correxit workbooks';
 
 export const CORRECTOR = 'Correxit Corrector user interface for batch grading workbooks';
 

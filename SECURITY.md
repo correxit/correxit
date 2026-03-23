@@ -12,12 +12,12 @@ no trusted third party. Cryptographic primitives use `window.crypto`
 | Student reads the reference cells    | Secret reference cell encryption (AES-256 via openpgp) |
 | Student reads answerable payload     | Answer payload is a digest (SHA-256 hash)              |
 | Student reads the roster             | Roster encryption (AES-256 via openpgp)                |
-| Student forges or alters their grade | Assignment signature (keyed SHA-256 hash)              |
+| Student forges or alters their grade | Assignment MAC (keyed SHA-256 hash)                    |
 | Student edits cells after submission | Workbook locking + freezing                            |
 | Peer reads answers from file         | Sealed submissions (PGP encryption to author key)      |
 | Student tampers after submit         | Seal hash + transport integrity (see below)            |
 | Student copies peer's sealed blobs   | Assignee + cell id bound inside encrypted payload      |
-| Tampered workbook delivery           | Out-of-band (Consumer/Collector plugin hashing)        |
+| Student starts from a forged blank slate | `issue` digest + `issuer` PGP signature           |
 
 **Out of scope:** malicious authors (they hold the key, full
 authority by design), browser memory extraction, compromised
@@ -42,7 +42,7 @@ the passphrase.
 
 ### Settings Secrets
 
-Provider-dispatched plugins (Consumer, Registrar) may receive API
+Provider-dispatched plugins (Distributor, Registrar) may receive API
 tokens via the JupyterLab settings editor. The `dispatcher.ts`
 module registers a settings registry `compose` transform that
 intercepts any token value, moves it to the `SecretsManager`
@@ -53,32 +53,45 @@ sees the token without it ever being written to a settings file.
 
 ## Integrity
 
-### Assignment Signature
+### Assignment MAC
 
-Signs the **terms** of the assignment: `assignee`, `expiration`,
-`id`, `keys` (author components only), `name`, `report`
-(interventions + scores, sorted), and `roster`.
+Authenticates the mutable author-controlled assignment state:
+`assignee`, `expiration`, `id`, `issue`, `issuer`, `keys`
+(author components only), `name`, `report` (interventions +
+scores, sorted), and `roster`.
 
-The `sign` function extracts `Keys.author(keys)` to include only
+The `mac` function extracts `Keys.author(keys)` to include only
 `{ private, public }` for the author. Student key fields
 (`keys.private.assignee`, `keys.public.assignee`) are present in
 `Terms` but absent from the unsigned object, so they do not affect
 the HMAC. A student setting their own keypair at submit time does
-not invalidate the signature.
+not invalidate the MAC.
 
 ```
-signature = HMAC-SHA-256(JSON.stringify(unsigned), key)
+mac = HMAC-SHA-256(JSON.stringify(unsigned), key)
 ```
 
 Proves the assignment contract is authentic. Any modification to
-signed fields invalidates the signature.
+authenticated fields invalidates the MAC.
 
-**Signed:** `assignee`, `expiration`, `id`, `keys` (author only),
-`name`, `report`, `roster`.
+**Authenticated:** `assignee`, `expiration`, `id`, `issue`,
+`issuer`, `keys` (author only), `name`, `report`, `roster`.
 
-**Not signed:** `certification`, `collected`, `seal`, `submission`,
-`submitted`. These change after signing or are set by the student
+**Not authenticated:** `certification`, `collected`, `distributed`,
+`seal`, `submission`, `submitted`. These change after signing or are set by the student
 (who does not have the symmetric key).
+
+### Blank-Slate Authenticity
+
+Each propagated workbook carries two additional assignment fields:
+
+- `issue`: a deterministic digest of the issued blank-slate state
+- `issuer`: a cleartext PGP signature over that digest made with the
+  author key
+
+These fields stay stable after later author-side edits. They answer a
+different question from the MAC: whether the student started from the
+authentic issued workbook.
 
 ### Seal Integrity
 
@@ -101,12 +114,10 @@ plugin delivering an independent copy to the LMS at submit time
 
 ### Transport Integrity (Plugin Responsibility)
 
-Whole-file integrity of distributed workbook files is the
-responsibility of the `Consumer` or `Collector` plugin at the
-transport boundary. This cannot be solved inside the workbook
-itself: a keyholder is always the source of authority over
-workbook contents, so any in-rubric digest is self-signed
-evidence with zero security value.
+Distributor receipts are transport artifacts only. Correxit stores
+whatever opaque string a distributor returns in `assignment.distributed`,
+and only `null` vs non-`null` is canonical. Blank-slate authenticity is
+carried by `issue` and `issuer`, not by the distributor receipt.
 
 ## Encryption
 
@@ -168,7 +179,7 @@ evidence with zero security value.
    student key fields. Defrosts the notebook.
 
 6. **Grading** (`Workbook.unlock`): Validates metadata first
-   (roster decryption, assignment signature) so that a tampered
+  (roster decryption, assignment MAC) so that a tampered
    workbook never gets plaintext written. Then, if `assignment.seal`
    is non-null: decrypts the author PGP private key (local scope
    only), verifies the seal hash, unseals each cell (checking
@@ -227,14 +238,17 @@ re-encrypting and comparing.
 | `roster`        | `string[]`       | Yes     | Encrypted on lock                    |
 | `expiration`    | `number \| null` | Yes     | Deadline                             |
 | `id`            | `string \| null` | Yes     | External assignment id               |
-| `keys`          | `Keys`           | Partial | Author keys signed, student keys not |
+| `keys`          | `Keys`           | Partial | Author keys MACed, student keys not  |
 | `name`          | `string`         | Yes     | Assignment display name              |
 | `report`        | `Report`         | Yes     | Scores + interventions               |
+| `issue`         | `string`         | Yes     | Deterministic blank-slate digest     |
+| `issuer`        | `string`         | Yes     | Author PGP signature over `issue`    |
 | `seal`          | `string \| null` | No      | SHA-256 of concatenated ciphertexts  |
-| `signature`     | `string`         | -       | The signature itself                 |
+| `mac`           | `string`         | -       | Mutable assignment authenticity MAC  |
 | `certification` | `number \| null` | No      | When the grade was finalized         |
 | `submission`    | `number \| null` | No      | When the student submitted           |
 | `submitted`     | `string \| null` | No      | External submission receipt          |
+| `distributed`   | `string \| null` | No      | External distribution receipt        |
 | `collected`     | `string \| null` | No      | External collection receipt          |
 
 ### Certification Sequence
@@ -250,8 +264,9 @@ A workbook cannot be collected without a non-null `certification`.
 ### Verification
 
 - `Assignment.validate({ assignment, key })` - structural checks:
-  assignee must appear in roster, signature must be valid if
-  assignee or roster exists, author keys must be present, sealed
+  assignee must appear in roster, MAC must be valid if assignee or
+  roster exists, issue and issuer must appear together and verify,
+  author keys must be present, sealed
   assignments must have an author public key, assignee private key
   requires a corresponding public key.
 
@@ -259,7 +274,7 @@ A workbook cannot be collected without a non-null `certification`.
 
 All optional fields use `Type | null`, never `Type?`. This ensures
 `JSON.stringify` output is deterministic. `null` is serialized,
-`undefined` is omitted. Since signatures hash stringified JSON,
+`undefined` is omitted. Since MACs hash stringified JSON,
 field presence must be stable.
 
 ## Key Representation

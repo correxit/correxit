@@ -33,8 +33,18 @@ export const seal = jest.fn(
     `SEALED[${recipients.join(',')}]:${text}`
 );
 
+export const sign = jest.fn(
+  async (text: string, key: string | unknown) => `SIGNED[${String(key)}]:${text}`
+);
+
 export const unseal = jest.fn(async (text: string, _key: string | unknown) => {
   const match = text.match(/^SEALED\[.*?\]:(.*)$/);
   if (!match) throw new Error('Mock unseal failed');
+  return match[1];
+});
+
+export const verify = jest.fn(async (text: string) => {
+  const match = text.match(/^SIGNED\[.*?\]:(.*)$/);
+  if (!match) throw new Error('Mock verify failed');
   return match[1];
 });

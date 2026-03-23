@@ -1,5 +1,5 @@
 import { URLExt } from '@jupyterlab/coreutils';
-import { Correxit, Workbook } from '..';
+import { Correxit, Rubric, Workbook } from '..';
 import * as Error from '../error';
 import * as io from '../io';
 
@@ -179,97 +179,48 @@ export namespace Moodle {
     return `moodle:${assignment}:${uid}:${item}`;
   }
 
-  export async function* consumer(
-    { rubric, stream }: Parameters<Correxit.Consumer>[0],
+  export async function distributor(
+    { identifier, notebook }: Parameters<Correxit.Distributor>[0],
     settings: Settings
-  ): ReturnType<Correxit.Consumer> {
+  ): ReturnType<Correxit.Distributor> {
     const { token, url: raw } = settings;
     const url = URLExt.normalize(raw);
-    if (!token || !url) {
-      yield { type: 'error', slots: ['Moodle URL or token not configured'] };
-      return;
-    }
+    if (!token || !url)
+      throw new Error.Plugin('Moodle URL or token not configured');
 
-    const compound = rubric.assignment.id;
-    if (!compound) {
-      yield { type: 'error', slots: ['No external assignment ID'] };
-      return;
-    }
+    const metadata = notebook.metadata['correxit'] as Partial<Rubric.Locked>;
+    const assignment = metadata.assignment as Partial<Rubric.Assignment>;
+    const compound = assignment.id;
+    if (!compound)
+      throw new Error.Plugin('No external assignment ID');
 
-    const [course, assignment] = compound.split(':');
-    if (!course || !assignment) {
-      yield { type: 'error', slots: ['Invalid assignment ID format'] };
-      return;
-    }
+    const [course, id] = compound.split(':');
+    if (!course || !id)
+      throw new Error.Plugin('Invalid assignment ID format');
 
     const request = api(url, token);
-    let users: User[];
-    try {
-      users = await request(
-        'core_enrol_get_enrolled_users',
-        `courseid=${course}`
-      );
-    } catch (error) {
-      yield { type: 'error', slots: [Error.reason(error)] };
-      return;
-    }
+    const uid = (await enroll(request, course)).get(identifier.assignee);
+    if (uid === undefined)
+      throw new Error.Plugin(`No Moodle user for ${identifier.assignee}`);
 
-    const enrolled = new Map(users.map(user => [identify(user), user.id]));
-    const total = rubric.assignment.roster.length;
-    let progress = 0;
-    for await (const { identifier, notebook } of await stream(null)) {
-      const { assignee } = identifier;
-      const uid = enrolled.get(assignee);
-      if (uid === undefined) {
-        yield { type: 'separator', slots: [] };
-        yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`No Moodle user for ${assignee}`] };
-        yield { type: 'progress', slots: [++progress, total] };
-        continue;
-      }
-
-      const content = JSON.stringify(notebook);
-      const file = await io.assigned(rubric.assignment.name, assignee);
-      let item: number;
-      try {
-        item = await upload(url, token, content, file);
-      } catch (error) {
-        const reason = (error as Error).message || String(error);
-        const message = `Upload failed (${assignee}): ${reason}`;
-        yield { type: 'separator', slots: [] };
-        yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [message] };
-        yield { type: 'progress', slots: [++progress, total] };
-        continue;
-      }
-      try {
-        await request(
-          'mod_assign_save_grade',
-          [
-            `assignmentid=${assignment}`,
-            `userid=${uid}`,
-            'grade=-1',
-            'attemptnumber=-1',
-            'addattempt=0',
-            'workflowstate=',
-            'applytoall=0',
-            `plugindata[files_filemanager]=${item}`
-          ].join('&')
-        );
-      } catch (error) {
-        const reason = (error as Error).message || String(error);
-        yield { type: 'separator', slots: [] };
-        yield { type: 'assigned', slots: [assignee] };
-        yield { type: 'error', slots: [`Grade save failed: ${reason}`] };
-        yield { type: 'progress', slots: [++progress, total] };
-        continue;
-      }
-      yield { type: 'separator', slots: [] };
-      yield { type: 'assigned', slots: [assignee] };
-      yield { type: 'saved', slots: [file] };
-      yield { type: 'progress', slots: [++progress, total] };
-    }
-    yield { type: 'success', slots: [total] };
+    const content = JSON.stringify(notebook);
+    const name = assignment.name || '';
+    const file = await io.assigned(name, identifier.assignee);
+    const item = await upload(url, token, content, file);
+    await request(
+      'mod_assign_save_grade',
+      [
+        `assignmentid=${id}`,
+        `userid=${uid}`,
+        'grade=-1',
+        'attemptnumber=-1',
+        'addattempt=0',
+        'workflowstate=',
+        'applytoall=0',
+        `plugindata[files_filemanager]=${item}`
+      ].join('&')
+    );
+    return `moodle:${id}:${uid}:${item}`;
   }
 
   export async function registrar(

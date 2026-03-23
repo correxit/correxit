@@ -10,7 +10,7 @@ export function generate(
 ): string {
   const { summary } = Rubric.Assignment;
   const identity = ['assignee', 'assignment', 'expiration', 'title', 'rubric'];
-  const resolution = ['signature', 'points', 'possible'];
+  const resolution = ['issue', 'points', 'possible'];
   const lifecycle = ['submission', 'submitted', 'certification', 'collected'];
   const diagnostic = ['resolved', 'path'];
   const header = [...identity, ...resolution, ...lifecycle, ...diagnostic];
@@ -22,7 +22,7 @@ export function generate(
     const assignee = rubric?.assignment.assignee || '';
     const assignment = rubric?.assignment.id || '';
     const title = rubric?.assignment.name || '';
-    const signature = rubric?.assignment.signature || '';
+    const issue = rubric?.assignment.issue || '';
     const { points, possible, status } =
       grade?.score ??
       (rubric ? summary(rubric.assignment.report) : null) ??
@@ -40,7 +40,7 @@ export function generate(
       Rubric.timestamp(expiration),
       title,
       rubric?.id || '',
-      signature,
+      issue,
       unscored ? '' : String(points),
       unscored ? '' : String(possible),
       Rubric.timestamp(submission),

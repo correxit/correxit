@@ -21,18 +21,18 @@ type Identifier = {
   assignee: string | null;
   // The external assignment ID used for LMS correlation.
   assignment: string | null;
+  // The issued blank-slate digest, if propagation has occurred.
+  issue: string | null;
   // The immutable rubric ID shared by all workbooks.
   rubric: string;
-  // A content hash that changes when the assignment materially changes.
-  signature: string | null;
 };
 ```
 
-Plugins that operate on _assigned_ workbooks (consumer, submitter) receive
-`Identifier.Assigned`, which narrows `assignee` and `signature` to `string`:
+Plugins that operate on _assigned_ workbooks (distributor, submitter) receive
+`Identifier.Assigned`, which narrows `assignee` to `string`:
 
 ```typescript
-type Assigned = Identifier & { assignee: string; signature: string };
+type Assigned = Identifier & { assignee: string };
 ```
 
 A type guard `Identifier.assigned(id)` bridges the two at runtime.
@@ -73,41 +73,38 @@ course roster and assignment metadata.
 
 ---
 
-## `Correxit.Consumer`
+## `Correxit.Distributor`
 
 ```typescript
-type Consumer = (output: {
-  path: string;
-  rubric: Rubric.Unlocked;
-  stream: Propagator;
-}) => AsyncGenerator<Emitter.Emission>;
+type Distributor = (
+  propagated: {
+    identifier: Workbook.Identifier.Assigned;
+    notebook: INotebookContent;
+    path: string;
+  }
+) => Promise<string | null>;
 ```
 
-Called when an author triggers propagation. The consumer receives:
+Called when an author triggers propagation, or when the author retries
+delivery for one saved workbook. The distributor receives:
 
-- `path` - the source notebook path.
-- `rubric` - the unlocked rubric, including the resolved roster.
-- `stream` - a factory that, given `{ base, pwd }`, returns an async
-  iterable of personalized notebook objects ready for delivery.
+- `propagated` - one personalized notebook ready for delivery.
 
 ```typescript
-// Propagator.Notebook
-type Notebook = {
+type Propagated = {
   identifier: Workbook.Identifier.Assigned;
   notebook: INotebookContent; // nbformat notebook, ready to save
   path: string; // intended destination path
 };
 ```
 
-The consumer is responsible for delivering each notebook to its destination
-(file system, LMS upload, object store, etc.) and `yield`-ing
-`Emitter.Emission` values - `{ type: string; slots: (string | number)[] }`
+The distributor is responsible only for delivering that notebook to its
+destination (LMS upload, object store, etc.) and returning any opaque receipt
+it wants to persist, or `null` if no receipt should be recorded. Local file
+creation is always handled by the core propagator.
 
-- to drive the progress UI.
-
-> The default consumer writes workbooks to a local subdirectory. A
-> server-backed consumer would iterate `stream` and POST each notebook to
-> an LMS endpoint.
+> The default distributor is the manual distributor, which simply records a
+> trivial local receipt.
 
 ---
 
@@ -123,7 +120,7 @@ type Submitter = (
 Called when a student submits a workbook. Returns an opaque submission receipt
 that Correxit stores in the workbook metadata, or `null` if the submission
 was not recorded. The identifier is guaranteed to have a non-null `assignee`
-and `signature`.
+and may also carry the stable blank-slate `issue` digest.
 
 The default implementation returns a random UUID. A server-backed submitter
 would POST the submission to an LMS, validate the assignee against the
@@ -159,7 +156,7 @@ type Grade = {
 ```
 
 The default implementation returns a random UUID. A server-backed collector
-would POST the grade to the gradebook, verify the signature, and return the
+would POST the grade to the gradebook, verify the issue or MAC as needed, and return the
 server-issued receipt ID.
 
 ---
@@ -215,7 +212,7 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
 ## Moodle Integration
 
 Correxit includes built-in Moodle plugins for the **registrar** (assignment
-metadata and rosters) and **consumer** (distributing workbooks to students
+metadata and rosters) and **distributor** (delivering workbooks to students
 via the Moodle file and submission APIs). Both operate via the Moodle REST
 API and require some one-time setup by a Moodle administrator.
 
@@ -256,14 +253,14 @@ tracks exactly what the current Correxit code calls, nothing more.
 | Function                        | Used by                                                 |
 | ------------------------------- | ------------------------------------------------------- |
 | `mod_assign_get_assignments`    | Registrar: lists assignments the teacher can see        |
-| `core_enrol_get_enrolled_users` | Registrar & Consumer: fetches the roster / user IDs     |
-| `core_grades_update_grades`     | Consumer: sets the assignment's maximum grade           |
-| `mod_assign_save_grade`         | Consumer: attaches the notebook as feedback per student |
+| `core_enrol_get_enrolled_users` | Registrar & Distributor: fetches the roster / user IDs  |
+| `core_grades_update_grades`     | Distributor: sets the assignment's maximum grade        |
+| `mod_assign_save_grade`         | Distributor: attaches the notebook as feedback          |
 
 The external service must also have **Can upload files** and
 **Can download files** enabled (checkboxes on the service edit page).
-The consumer uploads each workbook notebook to the Moodle draft area
-before attaching it to the student's submission.
+The distributor uploads each workbook notebook to the Moodle draft area
+before attaching it to the student's feedback.
 
 #### 4. Create a token for the teacher
 
@@ -306,11 +303,11 @@ Once the administrator has completed the steps above and provided a token:
 3. Set **Provider** to `moodle`.
 4. Enter the **Moodle URL** (e.g. `https://moodle.example.edu`).
 5. Paste the **API token**.
-6. **Settings → Settings Editor → Correxit Consumer**.
+6. **Settings → Settings Editor → Correxit Distributor**.
 7. Set **Provider** to `moodle`.
 8. Enter the same **Moodle URL** and **API token**.
 
-The registrar and consumer maintain independent settings and secrets so
+The registrar and distributor maintain independent settings and secrets so
 that each can be configured (or disabled) separately.
 
 When the teacher opens a workbook that has not yet been assigned, Correxit
@@ -320,7 +317,7 @@ dropdown.
 ### Assignment ID convention
 
 The Moodle registrar encodes the assignment `id` as `courseId:assignmentId`
-(e.g. `2:5`). The Moodle consumer parses this compound ID to directly look
+(e.g. `2:5`). The Moodle distributor parses this compound ID to directly look
 up the course's enrolled users without re-fetching all assignments. Other
 LMS integrations may adopt a similar colon-delimited convention. Registrars
 that do not use an LMS (e.g. manual mode) store a plain opaque string;
@@ -335,6 +332,9 @@ normal course-level permissions.
 
 The token and external service are administrative objects; the teacher does
 not need admin access to _use_ a token, only to _create_ one.
+
+Propagation progress messages are now a private UI concern. Integrators do not
+implement a streaming progress API.
 
 ### Troubleshooting
 

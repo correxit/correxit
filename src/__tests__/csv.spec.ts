@@ -24,7 +24,7 @@ type Headless = { content: null; context: { path: string } };
 const BOM = '\uFEFF';
 const header =
   'assignee,assignment,expiration,title,rubric,' +
-  'signature,points,possible,' +
+  'issue,points,possible,' +
   'submission,submitted,certification,collected,' +
   'resolved,path';
 
@@ -40,14 +40,17 @@ const assignment = (
   assignee: '',
   certification: null,
   collected: null,
+  distributed: null,
   expiration: null,
   id: null,
+  issue: '',
+  issuer: '',
   keys: Rubric.Assignment.Keys.empty(),
+  mac: '',
   name: '',
   report: report(),
   roster: [],
   seal: null,
-  signature: '',
   submission: null,
   submitted: null,
   ...overrides
@@ -137,8 +140,8 @@ describe('csv', () => {
         assignment: assignment({
           assignee: 'Alice',
           id: 'hw-1',
+          issue: 'issue-abc',
           name: 'Homework 1',
-          signature: 'sig-abc'
         })
       })
     );
@@ -148,7 +151,7 @@ describe('csv', () => {
     expect(row[1]).toBe('hw-1');
     expect(row[3]).toBe('Homework 1');
     expect(row[4]).toBe('r-42');
-    expect(row[5]).toBe('sig-abc');
+    expect(row[5]).toBe('issue-abc');
   });
 
   it('uses grade score when provided', () => {

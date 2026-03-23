@@ -116,16 +116,16 @@ unrepresentable.
 
 Long-running operations (propagation, grading, scanning) are implemented as
 cold `async function*` generators. They do no work until iterated. Each `yield`
-suspends execution until the consumer pulls the next value, providing automatic
+suspends execution until the caller pulls the next value, providing automatic
 backpressure.
 
 ### Generator pipelines
 
 Each pipeline is a pull-driven chain of generators. Nothing moves until asked.
 
-**Assignment propagation:** the propagator defines a roster loop (one notebook
-per assignee) and hands it to the consumer as a factory via `yield*`. The
-consumer decides _where_ to write by calling `stream(location)`, then iterates:
+**Assignment propagation:** the propagator defines the roster loop, creates the
+local notebooks unconditionally, and optionally calls a distributor leaf
+function per assignee:
 
 ```mermaid
 flowchart TB
@@ -135,14 +135,13 @@ flowchart TB
 
     UI(["useCommand"]):::ui
     P["propagator()"]:::gen
-    C["consumer()"]:::gen
+    D["distributor()"]:::gen
     R{{"roster loop"}}:::src
 
   UI -->|for await| P
-  P -->|yield*| C
-  C -->|for await| R
-  R -. notebook .-> C
-  C -. progress .-> P
+  P -->|call| D
+  R -. notebook .-> P
+  D -. receipt .-> P
   P -. progress .-> UI
 ```
 
@@ -235,12 +234,12 @@ identifiers are acceptable when convention demands it (e.g., `useCommand`,
 ## Plugins
 
 Correxit provides extension points as JupyterLab plugins, each identified by a
-single token. Core logic is decoupled from IO, e.g. replacing the file-system
-consumer with an LMS consumer requires no changes to the propagator or commands.
+single token. Core logic is decoupled from IO, e.g. replacing a distributor
+implementation requires no changes to the propagator loop or commands.
 
 | Plugin          | Purpose                                             | Default                       |
 | --------------- | --------------------------------------------------- | ----------------------------- |
-| **`Consumer`**  | Process propagated assignments                      | Writes to local filesystem    |
+| **`Distributor`** | Deliver one propagated workbook                   | Manual local receipt         |
 | **`Collector`** | Collect certified grades                            | Returns a UUID                |
 | **`Registrar`** | Provide assignment registrations                    | Returns null (manual entry)   |
 | **`Submitter`** | Handle submission receipts                          | Returns a UUID                |
@@ -268,7 +267,7 @@ Some guiding principles:
   `workbook`, `rubric`, `grade`, `cell`, `lease`: these are domain terms with
   stable definitions. Naming is load-bearing.
 - **Pull over push.** Async generators compose via `yield*` delegation. The
-  consumer controls the pace. This is simpler and more composable than signal
+  caller controls the pace. This is simpler and more composable than signal
   graphs or event emitters.
 - **Framework seams.** Correxit integrates with JupyterLab's core primitives
   (commands, widget lifecycle, plugin tokens) while adopting functional

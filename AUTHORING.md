@@ -231,8 +231,8 @@ one copy per roster entry:
 4. Each copy is signed with the student's identity.
 5. The roster is encrypted so students cannot see classmates.
 
-The Consumer plugin determines where files are written (local directory,
-Moodle, etc.).
+Correxit always writes local copies. An optional Distributor plugin may also
+deliver each notebook elsewhere (Moodle, object storage, etc.).
 
 ### Cell outputs and propagation
 

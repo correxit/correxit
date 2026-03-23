@@ -28,8 +28,8 @@ const grade = (workbook: Headless): Certified =>
     identifier: {
       assignee: 'a',
       assignment: 'x',
+      issue: 'i',
       rubric: 'r',
-      signature: 's'
     },
     workbook
   }) as unknown as Certified;

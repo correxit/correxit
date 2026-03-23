@@ -524,11 +524,11 @@ test('assigns workbook and updates assignment metadata', async ({ page }) => {
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
     return {
       assignee: metadata?.assignment?.assignee ?? null,
-      signature: !!metadata?.assignment?.signature
+      mac: !!metadata?.assignment?.mac
     };
   });
 
   expect(result.assignee).toBe('student@example.com');
-  expect(result.signature).toBe(true);
+  expect(result.mac).toBe(true);
   await dispose();
 });

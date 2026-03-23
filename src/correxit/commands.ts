@@ -23,6 +23,7 @@ export namespace CommandIDs {
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const dereference = 'correxit:dereference';
+  export const distribute = 'correxit:distribute';
   export const draft = 'correxit:draft';
   export const enroll = 'correxit:enroll';
   export const fetch = 'correxit:fetch';
@@ -56,8 +57,8 @@ type Reified =
 const { get, has } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert,
-  correct, dereference, draft, intervene, lock, recover, refer, remove, reset,
-  revise, reweight, submit, toggle
+  correct, dereference, distribute, draft, intervene, lock, recover, refer,
+  remove, reset, revise, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -65,7 +66,7 @@ export function commands(
   app: JupyterFrontEnd,
   utilities: {
     collector: Correxit.Collector;
-    consumer: Correxit.Consumer;
+    distributor: Correxit.Distributor;
     injector: Correxit.Injector;
     registrar: Correxit.Registrar;
     submitter: Correxit.Submitter;
@@ -76,7 +77,7 @@ export function commands(
   const { commands, serviceManager: manager, shell } = app;
   const { Error, Icons } = Correxit;
   const {
-    collector, consumer, injector, registrar, submitter, unlocker
+    collector, distributor, injector, registrar, submitter, unlocker
   } = utilities;
   const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
@@ -88,6 +89,46 @@ export function commands(
     const workbook = handle ? await fetch(handle) : state.workbook();
     const rubric = open(workbook);
     return { handle, rubric, workbook } as Reified;
+  };
+  const deliver = async (
+    args: Partial<Credentials & { quiet: boolean; silent: boolean }>
+  ): Promise<string | null> => {
+    const current = state.workbook();
+    const path = args.path || current?.context.path;
+    const handle = path && normalize({ path });
+    if (!path || !handle) return null;
+
+    const active = current?.context.path === path ? current : null;
+    const workbook = active || await fetch(handle, !!args.silent);
+    if (!workbook) return null;
+
+    try {
+      const rubric = open(workbook);
+      if (!rubric) return null;
+      if (!(await Workbook.unstarted(workbook)))
+        throw new Error.Invalid('distribute error: workbook not unstarted');
+      if (rubric.assignment.distributed) return rubric.assignment.distributed;
+
+      const identifier = Workbook.identifier(workbook);
+      if (!Workbook.Identifier.assigned(identifier))
+        throw new Error.Invalid('distribute error: unassigned');
+
+      const notebook = workbook.context.model.sharedModel.toJSON();
+      const found = await distributor({ identifier, notebook, path });
+      const receipt = issued(found, identifier.issue);
+      await distribute(workbook, receipt);
+      await workbook.context.save();
+      return receipt;
+    } catch (error) {
+      if (args.quiet) {
+        console.warn(CommandIDs.distribute, error);
+        return null;
+      }
+      showErrorMessage(...Error.interpret(error, trans));
+      return null;
+    } finally {
+      if (!active) workbook.context.dispose();
+    }
   };
   const disposables = [];
   disposables.push(commands.addCommand(CommandIDs.assign, {
@@ -416,6 +457,23 @@ export function commands(
       dereference(workbook, args.referent);
     }
   }));
+  disposables.push(commands.addCommand(CommandIDs.distribute, {
+    icon: Icons.assignment,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!(
+        rubric?.assignment.assignee &&
+        rubric.assignment.issue &&
+        rubric.assignment.issuer &&
+        rubric.assignment.distributed === null
+      );
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.distribute),
+    label: trans.__('Distribute assignment...'),
+    execute: async (
+      args: Partial<Credentials & { quiet: boolean; silent: boolean }>
+    ): Promise<string | null> => deliver(args)
+  }));
   disposables.push(commands.addCommand(CommandIDs.draft, {
     isEnabled: () => {
       const rubric = open(state.workbook());
@@ -522,11 +580,20 @@ export function commands(
     isVisible: () => commands.isEnabled(CommandIDs.propagate),
     execute: async (
       args: Partial<Credentials>
-    ): Promise<AsyncIterable<[string, Correxit.Emitter.Emission]>> => {
+    ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked) return (async function* empty() {})();
       try {
-        return translate(propagator.propagate({ consumer, workbook }), trans);
+        return translate(
+          propagator.propagate({
+            commands,
+            distributor,
+            factory,
+            manager,
+            workbook
+          }),
+          trans
+        );
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
@@ -910,15 +977,17 @@ successful, an unlocked rubric.
 }
 
 async function* translate(
-  emitter: Correxit.Emitter,
+  emitter: propagator.Emitter,
   trans: IRenderMime.TranslationBundle
-): AsyncGenerator<[string, Correxit.Emitter.Emission]> {
-  const translate = (emission: Correxit.Emitter.Emission) => {
+): AsyncGenerator<[string, propagator.Emission]> {
+  const translate = (emission: propagator.Emission) => {
     const { slots, type } = emission;
     return ({
       '': slots.join(' '),
       'assigned': trans.__('Assigned to %1', ...slots),
       'create-error': trans.__('Create ERROR %1', ...slots),
+      'distributed': trans.__('Distributed %1', slots[0]),
+      'distribute-error': trans.__('Distribute ERROR %1 (%3)', ...slots),
       'encrypted': trans.__('Encrypted cell %1', ...slots),
       'error': trans.__('ERROR %1', ...slots),
       'mkdir': trans.__('Created directory %1', ...slots),
@@ -932,4 +1001,10 @@ async function* translate(
     const message = emission && translate(emission);
     if (message) yield [message, emission];
   }
+}
+
+function issued(found: string | null, issue: string | null): string {
+  const normalized = found?.trim() || '';
+  if (normalized) return normalized;
+  return `correxit:${issue || Date.now()}`;
 }

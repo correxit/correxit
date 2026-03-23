@@ -86,20 +86,19 @@ export namespace Workbook {
   export type Identifier = {
     assignee: string | null;
     assignment: string | null;
+    issue: string | null;
     rubric: string;
-    signature: string | null;
   };
 
   export namespace Identifier {
-    /** An identifier with a guaranteed assignee and signature. */
+    /** An identifier with a guaranteed assignee. */
     export type Assigned = Identifier & {
       assignee: string;
-      signature: string;
     };
 
     /** Type guard for assigned identifiers. */
     export function assigned(id: Identifier): id is Assigned {
-      return id.assignee !== null && id.signature !== null;
+      return id.assignee !== null;
     }
   }
 
@@ -250,23 +249,28 @@ export namespace Workbook {
       assignee = assignment.assignee,
       expiration = assignment.expiration,
       id = assignment.id,
+      issue = assignment.issue,
+      issuer = assignment.issuer,
+      mac = assignment.mac,
       name = assignment.name,
       submission = assignment.submission,
       submitted = assignment.submitted,
       roster = assignment.roster,
-      signature = assignment.signature
     }: Partial<Rubric.Assignment>
   ): boolean => (
     assignee !== assignment.assignee ||
     expiration !== assignment.expiration ||
     id !== assignment.id ||
+    issue !== assignment.issue ||
+    issuer !== assignment.issuer ||
+    mac !== assignment.mac ||
     name !== assignment.name ||
     submission !== assignment.submission ||
     submitted !== assignment.submitted ||
     (roster !== assignment.roster &&
       (roster.length !== assignment.roster.length ||
         roster.some((record, i) => record !== assignment.roster[i]))) ||
-    signature !== assignment.signature
+    false
   );
   const transact = (workbook: Workbook, prepared: Cell.Prepared[]): void => {
     if (!prepared.length) return;
@@ -390,6 +394,18 @@ export namespace Workbook {
     if (!rubric || !rubric.locked || !rubric.assignment.certification)
       throw new Error.Certify('collect error');
     return update(workbook, Rubric.collect(rubric, receipt));
+  }
+
+  export async function distribute(
+    workbook: Workbook,
+    receipt: string | null = null
+  ): Promise<Rubric> {
+    const rubric = open(workbook, quiet);
+    if (!rubric || !rubric.assignment.assignee)
+      throw new Error.Invalid('distribute error');
+    return rubric.locked
+      ? update(workbook, Rubric.distribute(rubric, receipt))
+      : update(workbook, Rubric.distribute(rubric, receipt));
   }
 
   /**
@@ -697,8 +713,19 @@ export namespace Workbook {
     if (!rubric) throw new Error.Invalid('identifier error');
     const assignee = rubric.assignment.assignee || null;
     const assignment = rubric.assignment.id;
-    const signature = rubric.assignment.signature || null;
-    return { assignee, assignment, rubric: rubric.id, signature };
+    const issue = rubric.assignment.issue || null;
+    return { assignee, assignment, issue, rubric: rubric.id };
+  }
+
+  export async function unstarted(workbook: Workbook): Promise<boolean> {
+    const rubric = open(workbook, quiet);
+    if (!rubric) return false;
+    const notebook = workbook.context.model.sharedModel.toJSON();
+    return Rubric.Assignment.unstarted({
+      assignment: rubric.assignment,
+      notebook,
+      rubric
+    });
   }
 
   /** Lock a workbook if its rubric is unlocked. */

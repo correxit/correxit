@@ -8,11 +8,7 @@ import { ICommandPalette, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
-import {
-  INotebookTracker,
-  NotebookModelFactory,
-  NotebookPanel
-} from '@jupyterlab/notebook';
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStatusBar } from '@jupyterlab/statusbar';
@@ -23,10 +19,10 @@ import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector, Reviewer } from './corrector';
 import { Correxit, Unlocker, Workbook } from './correxit';
 import * as collectors from './correxit/collectors';
-import * as consumers from './correxit/consumers';
 import * as dispatcher from './correxit/dispatcher';
-import * as kernels from './correxit/kernels';
+import * as distributors from './correxit/distributors';
 import { Moodle } from './correxit/providers/moodle';
+import * as kernels from './correxit/kernels';
 import * as registrars from './correxit/registrars';
 import * as state from './correxit/state';
 import * as submitters from './correxit/submitters';
@@ -51,25 +47,20 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> =
     }
   );
 
-/** The Correxit assignment consumer dispatches to the configured provider. */
-const consumer: JupyterFrontEndPlugin<Correxit.Consumer> = dispatcher.dispatch(
-  Correxit.CONSUMER,
-  Correxit.DESCRIPTION.CONSUMER,
-  Correxit.Consumer,
-  (app, { moodle: settings, provider }) => {
-    const factory = new NotebookModelFactory();
-    const { commands, serviceManager: manager } = app;
-    const consumer: Correxit.Consumer = output => {
-      switch (provider()) {
-        case 'moodle':
-          return Moodle.consumer(output, settings());
-        default:
-          return consumers.manual(commands, factory, manager)(output);
-      }
-    };
-    return [consumer, () => factory.dispose()];
-  }
-);
+/** The Correxit distributor dispatches to the configured provider. */
+const distributor: JupyterFrontEndPlugin<Correxit.Distributor> =
+  dispatcher.dispatch(
+    Correxit.DISTRIBUTOR,
+    Correxit.DESCRIPTION.DISTRIBUTOR,
+    Correxit.Distributor,
+    (_, { moodle: settings, provider }) => {
+      const distributor: Correxit.Distributor =
+        provider() === 'moodle'
+          ? propagated => Moodle.distributor(propagated, settings())
+          : distributors.manual;
+      return [distributor, () => {}];
+    }
+  );
 
 /** The Correxit Corrector UI. */
 const corrector: JupyterFrontEndPlugin<void> = {
@@ -204,7 +195,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
   autoStart: true,
   requires: [
     Correxit.Collector,
-    Correxit.Consumer,
+    Correxit.Distributor,
     Correxit.Registrar,
     Correxit.Submitter,
     Correxit.Unlocker,
@@ -216,7 +207,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
     activate: (
       app,
       collector: Correxit.Collector,
-      consumer: Correxit.Consumer,
+      distributor: Correxit.Distributor,
       registrar: Correxit.Registrar,
       submitter: Correxit.Submitter,
       unlocker: Correxit.Unlocker,
@@ -232,6 +223,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
         Correxit.CommandIDs.configure,
         Correxit.CommandIDs.convert,
         Correxit.CommandIDs.correct,
+        Correxit.CommandIDs.distribute,
         Correxit.CommandIDs.draft,
         Correxit.CommandIDs.lock,
         Correxit.CommandIDs.share,
@@ -260,7 +252,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       )(null as Workbook | null);
       const added = Correxit.commands(app, {
         collector,
-        consumer,
+        distributor,
         injector,
         registrar,
         submitter,
@@ -391,7 +383,7 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
 
 export const plugins = [
   collector,
-  consumer,
+  distributor,
   corrector,
   monitor,
   registrar,

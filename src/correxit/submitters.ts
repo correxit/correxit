@@ -7,7 +7,7 @@ export async function manual(
   workbook: Workbook,
   identifier: Workbook.Identifier.Assigned
 ): Promise<string> {
-  const { assignee, rubric: id, signature } = identifier;
+  const { assignee, issue, rubric: id } = identifier;
   const rubric = Workbook.open(workbook, true);
   const submission = rubric?.assignment.submission ?? null;
   const notebook = workbook.context.model.sharedModel.toJSON();
@@ -16,7 +16,7 @@ export async function manual(
   const sources = notebook.cells
     .map(collapse).sort(([a], [b]) => String(a).localeCompare(String(b)));
   const payload = JSON.stringify({
-    assignee, rubric: id, signature, sources, submission
+    assignee, issue, rubric: id, sources, submission
   });
   return `manual:${await security.digest(payload)}`;
 }

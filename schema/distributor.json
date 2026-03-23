@@ -1,19 +1,19 @@
 {
-  "title": "Correxit Consumer",
-  "description": "Settings for the Correxit assignment propagation consumer",
+  "title": "Correxit Distributor",
+  "description": "Settings for the Correxit assignment distributor",
   "jupyter.lab.transform": true,
   "type": "object",
   "properties": {
     "provider": {
-      "title": "Consumer provider",
-      "description": "Which consumer to use for assignment distribution",
+      "title": "Distributor provider",
+      "description": "Which distributor to use for assignment delivery",
       "type": "string",
       "enum": ["manual", "moodle"],
       "default": "manual"
     },
     "moodle": {
       "title": "Moodle",
-      "description": "Moodle consumer settings",
+      "description": "Moodle distributor settings",
       "type": "object",
       "properties": {
         "url": {

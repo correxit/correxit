@@ -175,14 +175,20 @@ test('assigns workbook and updates metadata', async ({ page }) => {
     const metadata = panel.context.model.sharedModel.getMetadata('correxit');
     return {
       assignee: final.assignment.assignee,
+      issue: final.assignment.issue,
+      issuer: final.assignment.issuer,
+      mac: !!final.assignment.mac,
       stored: metadata?.assignment?.assignee ?? null,
-      signature: !!final.assignment.signature
+      distributed: final.assignment.distributed
     };
   });
 
   expect(result.assignee).toBe('assignee@example.com');
+  expect(result.distributed).toBeNull();
+  expect(result.issue).toBe('');
+  expect(result.issuer).toBe('');
+  expect(result.mac).toBe(true);
   expect(result.stored).toBe('assignee@example.com');
-  expect(result.signature).toBe(true);
   await dispose();
 });
 
@@ -212,10 +218,10 @@ test('assign short-circuits when no fields changed', async ({ page }) => {
       roster: ['test@example.com']
     });
 
-    const signature = assigned.assignment.signature;
+    const mac = assigned.assignment.mac;
     const unchanged = await Workbook.assign(workbook, {});
     return {
-      same: unchanged.assignment.signature === signature,
+      same: unchanged.assignment.mac === mac,
       assignee: unchanged.assignment.assignee
     };
   });
