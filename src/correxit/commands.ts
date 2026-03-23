@@ -832,8 +832,8 @@ Or do you just want to seal and submit? This document will be locked.`
           const receipt = await submitter(workbook, identifier);
           await acknowledge(workbook, receipt);
         } catch (error) {
-          const message =
-            `Submission sealed but receipt failed: ${(error as Error).message}`;
+          const reason = Error.reason(error);
+          const message = `Submission sealed but receipt failed: ${reason}`;
           await commands.execute(CommandIDs.save, { ...args, undo: false });
           throw new Error.Plugin(message);
         }

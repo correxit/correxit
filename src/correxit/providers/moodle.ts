@@ -210,10 +210,7 @@ export namespace Moodle {
         `courseid=${course}`
       );
     } catch (error) {
-      const reason = error instanceof globalThis.Error
-        ? error.message
-        : String(error);
-      yield { type: 'error', slots: [reason] };
+      yield { type: 'error', slots: [Error.reason(error)] };
       return;
     }
 

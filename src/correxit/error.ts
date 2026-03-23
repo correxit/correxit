@@ -29,20 +29,25 @@ export function interpret(
 ): [string, Error] {
   const body = error instanceof Error ? error : new Error(String(error));
   switch (body.name) {
-    case 'Decrypt':  return [trans.__('Decryption failed'), body];
-    case 'Encrypt':  return [trans.__('Encryption failed'), body];
-    case 'Seal':     return [trans.__('Could not seal'), body];
-    case 'Unseal':   return [trans.__('Could not unseal'), body];
+    case 'Decrypt':  return [trans.__('Decryption failed'),  body];
+    case 'Encrypt':  return [trans.__('Encryption failed'),  body];
+    case 'Seal':     return [trans.__('Could not seal'),     body];
+    case 'Unseal':   return [trans.__('Could not unseal'),   body];
     case 'Mismatch': return [trans.__('Integrity mismatch'), body];
-    case 'Invalid':  return [trans.__('Invalid workbook'), body];
-    case 'Certify':  return [trans.__('Could not certify'), body];
-    case 'Lock':     return [trans.__('Could not lock'), body];
-    case 'Submit':   return [trans.__('Could not submit'), body];
-    case 'Revise':   return [trans.__('Could not revise'), body];
-    case 'Unlock':   return [trans.__('Could not unlock'), body];
-    case 'Save':     return [trans.__('Could not save'), body];
-    case 'Fetch':    return [trans.__('Could not fetch'), body];
-    case 'Plugin':   return [trans.__('Plugin error'), body];
-    default:         return [trans.__('Unexpected error'), body];
+    case 'Invalid':  return [trans.__('Invalid workbook'),   body];
+    case 'Certify':  return [trans.__('Could not certify'),  body];
+    case 'Lock':     return [trans.__('Could not lock'),     body];
+    case 'Submit':   return [trans.__('Could not submit'),   body];
+    case 'Revise':   return [trans.__('Could not revise'),   body];
+    case 'Unlock':   return [trans.__('Could not unlock'),   body];
+    case 'Save':     return [trans.__('Could not save'),     body];
+    case 'Fetch':    return [trans.__('Could not fetch'),    body];
+    case 'Plugin':   return [trans.__('Plugin error'),       body];
+    default:         return [trans.__('Unexpected error'),   body];
   }
+}
+
+/** @returns a string representation of a given error object. */
+export function reason(error: unknown): string {
+  return error instanceof globalThis.Error ? error.message : String(error);
 }

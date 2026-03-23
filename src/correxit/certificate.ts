@@ -74,7 +74,7 @@ export function render(
     for (const id of ordered) {
       const cell = Rubric.get(rubric, id)!;
       const scored = Rubric.Score.resolve(report, id);
-      const points = scored ? `${scored.points} / ${scored.possible}` : '--';
+      const points = scored ? `${scored.points} / ${scored.possible}` : '–';
       const comment = scored?.comment || '';
       lines.push(
         `| ${position[id]}` +

@@ -116,6 +116,7 @@ export namespace Correxit {
     export import Fetch     = error.Fetch;
     export import Plugin    = error.Plugin;
     export import interpret = error.interpret;
+    export import reason    = error.reason;
   }
 
   export const Icons = ICONS;
