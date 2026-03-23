@@ -267,7 +267,8 @@ describe('grader', () => {
     } finally {
       warn.mockRestore();
     }
-    expect(correct).toHaveBeenCalledTimes(1 + 3); // a=1, b=3 (initial + 2 retries)
+    // a=1, b=3 (initial + 2 retries)
+    expect(correct).toHaveBeenCalledTimes(1 + 3);
     expect(recover).toHaveBeenCalledTimes(1);
     expect(
       report(collected.find(c => report(c).path === 'b.ipynb')!).resolved

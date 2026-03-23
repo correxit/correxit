@@ -9,8 +9,7 @@ import { Rubric } from '../correxit/rubric';
 import { Workbook } from '../correxit/workbook';
 import * as state from '../correxit/state';
 
-// We need to type-cast the mocked module to access the mock function
-const MockWorkbook = Workbook as unknown as { open: jest.Mock };
+const mock = Workbook.open as unknown as jest.Mock;
 
 describe('state', () => {
   const dummy: any = { context: { path: 'dummy.ipynb' } };
@@ -29,19 +28,19 @@ describe('state', () => {
 
   describe('cache & report', () => {
     it('does not cache if workbook cannot be opened', () => {
-      MockWorkbook.open.mockReturnValue(null);
+      mock.mockReturnValue(null);
       state.cache(dummy, 'cell-1', score);
       expect(state.report(dummy, 'cell-1')).toBeNull();
     });
 
     it('returns null if workbook is not openable', () => {
-      MockWorkbook.open.mockReturnValue(null);
+      mock.mockReturnValue(null);
       expect(state.report(dummy, 'cell-1')).toBeNull();
     });
 
     it('returns null if cell is not scored in rubric and not in cache', () => {
       const start = Rubric.create();
-      MockWorkbook.open.mockReturnValue(start);
+      mock.mockReturnValue(start);
       expect(state.report(dummy, 'cell-1')).toBeNull();
     });
 
@@ -51,7 +50,7 @@ describe('state', () => {
         report: { scores: { 'cell-1': score } } as any
       };
       const rubric = { ...Rubric.create(), assignment };
-      MockWorkbook.open.mockReturnValue(rubric);
+      mock.mockReturnValue(rubric);
 
       expect(state.report(dummy, 'cell-1')).toEqual(score);
     });
@@ -62,20 +61,20 @@ describe('state', () => {
         report: { scores: { 'cell-1': score } } as any
       };
       const rubric = { ...Rubric.create(), assignment };
-      MockWorkbook.open.mockReturnValue(rubric);
+      mock.mockReturnValue(rubric);
       state.report(dummy, 'cell-1');
 
       const altered = {
         ...rubric,
         assignment: { ...rubric.assignment, report: { scores: {} } as any }
       };
-      MockWorkbook.open.mockReturnValue(altered);
+      mock.mockReturnValue(altered);
       expect(state.report(dummy, 'cell-1')).toEqual(score);
     });
 
     it('retrieves explicitly cached scores', () => {
       const rubric = Rubric.create();
-      MockWorkbook.open.mockReturnValue(rubric);
+      mock.mockReturnValue(rubric);
 
       state.cache(dummy, 'cell-2', score);
       expect(state.report(dummy, 'cell-2')).toEqual(score);
@@ -92,16 +91,16 @@ describe('state', () => {
         assignment: { ...base.assignment, assignee: 'bob' }
       };
 
-      MockWorkbook.open.mockReturnValue(rubric1);
+      mock.mockReturnValue(rubric1);
       state.cache(dummy, 'cell-1', { ...score, points: 1 });
 
-      MockWorkbook.open.mockReturnValue(rubric2);
+      mock.mockReturnValue(rubric2);
       state.cache(dummy, 'cell-1', { ...score, points: 2 });
 
-      MockWorkbook.open.mockReturnValue(rubric1);
+      mock.mockReturnValue(rubric1);
       expect(state.report(dummy, 'cell-1')?.points).toBe(1);
 
-      MockWorkbook.open.mockReturnValue(rubric2);
+      mock.mockReturnValue(rubric2);
       expect(state.report(dummy, 'cell-1')?.points).toBe(2);
     });
   });
@@ -109,7 +108,7 @@ describe('state', () => {
   describe('eviction policy', () => {
     it('evicts oldest entries when cache exceeds footprint', () => {
       const rubric = { ...Rubric.create(), id: 'eviction-test' };
-      MockWorkbook.open.mockReturnValue(rubric);
+      mock.mockReturnValue(rubric);
 
       for (let i = 0; i < state.LIMIT; i++) {
         state.cache(dummy, `cell-${i}`, score);

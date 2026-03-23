@@ -355,41 +355,45 @@ describe('Rubric', () => {
       await expect(validate(tampered)).rejects.toThrow('match');
     });
 
-    it('resets lifecycle timestamps and report if any core assignment property changes', async () => {
-      let rubric = create();
-      const report: Rubric.Assignment.Report = {
-        interventions: {},
-        kernel: null,
-        scores: { c1: Rubric.Score.CORRECT }
-      };
+    it(
+      'resets lifecycle timestamps and report on' +
+        ' core assignment property change',
+      async () => {
+        let rubric = create();
+        const report: Rubric.Assignment.Report = {
+          interventions: {},
+          kernel: null,
+          scores: { c1: Rubric.Score.CORRECT }
+        };
 
-      rubric = await Rubric.assign(
-        {
-          ...rubric,
-          assignment: {
-            ...rubric.assignment,
-            assignee: 'A',
-            certification: 1234,
-            collected: 'receipt-1',
-            report,
-            roster: ['A', 'B'],
-            submission: 1000,
-            submitted: 'receipt-2'
-          }
-        },
-        { assignee: 'A' }
-      );
+        rubric = await Rubric.assign(
+          {
+            ...rubric,
+            assignment: {
+              ...rubric.assignment,
+              assignee: 'A',
+              certification: 1234,
+              collected: 'receipt-1',
+              report,
+              roster: ['A', 'B'],
+              submission: 1000,
+              submitted: 'receipt-2'
+            }
+          },
+          { assignee: 'A' }
+        );
 
-      expect(rubric.assignment.report.scores).toEqual(report.scores);
-      expect(rubric.assignment.certification).toBe(1234);
+        expect(rubric.assignment.report.scores).toEqual(report.scores);
+        expect(rubric.assignment.certification).toBe(1234);
 
-      rubric = await Rubric.assign(rubric, { assignee: 'B' });
-      expect(rubric.assignment.report.scores).toEqual({});
-      expect(rubric.assignment.certification).toBeNull();
-      expect(rubric.assignment.collected).toBeNull();
-      expect(rubric.assignment.submission).toBeNull();
-      expect(rubric.assignment.submitted).toBeNull();
-    });
+        rubric = await Rubric.assign(rubric, { assignee: 'B' });
+        expect(rubric.assignment.report.scores).toEqual({});
+        expect(rubric.assignment.certification).toBeNull();
+        expect(rubric.assignment.collected).toBeNull();
+        expect(rubric.assignment.submission).toBeNull();
+        expect(rubric.assignment.submitted).toBeNull();
+      }
+    );
 
     it('expiration can be set to control deadline', async () => {
       const expiration = Date.now() + 86400000; // 24 hours from now
@@ -682,16 +686,19 @@ describe('Rubric', () => {
         return Rubric.add(create(), cell);
       };
 
-      it('returns unscored with intervene code when no intervention', async () => {
-        const id = 'q1';
-        const rubric = populate(id);
-        const outputs = new Map([[id, [output('anything')]]]);
-        const score = await Rubric.Cell.score(rubric, id, outputs);
-        expect(score.status).toBe('unscored');
-        expect(score.code).toBe('intervene');
-        expect(score.id).toBe(id);
-        expect(score.possible).toBe(5);
-      });
+      it(
+        'returns unscored with intervene code' + ' when no intervention',
+        async () => {
+          const id = 'q1';
+          const rubric = populate(id);
+          const outputs = new Map([[id, [output('anything')]]]);
+          const score = await Rubric.Cell.score(rubric, id, outputs);
+          expect(score.status).toBe('unscored');
+          expect(score.code).toBe('intervene');
+          expect(score.id).toBe(id);
+          expect(score.possible).toBe(5);
+        }
+      );
 
       it('returns unscored even when outputs are empty', async () => {
         const id = 'q1';

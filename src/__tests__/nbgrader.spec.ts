@@ -909,47 +909,50 @@ describe('nbgrader', () => {
       expect(result.sources.find(({ id }) => id === 't1')).toBeDefined();
     });
 
-    it('expands directives in hidden and visible portions of split cells', async () => {
-      const raw: Cellular[] = [
-        answer('a1', 'a = 5'),
-        check(
-          't1',
-          1,
-          [
-            '### BEGIN HIDDEN TESTS',
-            '### AUTOTEST a',
-            '### END HIDDEN TESTS',
-            '',
-            '### AUTOTEST type(a)'
-          ].join('\n')
-        )
-      ];
-      const split = presplit(raw);
-      const draft = classify(split.cells);
-      const classification = {
-        ...draft,
-        sources: [...split.sources, ...draft.sources],
-        splits: split.splits
-      };
-      expect(classification.splits).toHaveLength(1);
+    it(
+      'expands directives in hidden and visible portions' + ' of split cells',
+      async () => {
+        const raw: Cellular[] = [
+          answer('a1', 'a = 5'),
+          check(
+            't1',
+            1,
+            [
+              '### BEGIN HIDDEN TESTS',
+              '### AUTOTEST a',
+              '### END HIDDEN TESTS',
+              '',
+              '### AUTOTEST type(a)'
+            ].join('\n')
+          )
+        ];
+        const split = presplit(raw);
+        const draft = classify(split.cells);
+        const classification = {
+          ...draft,
+          sources: [...split.sources, ...draft.sources],
+          splits: split.splits
+        };
+        expect(classification.splits).toHaveLength(1);
 
-      const values: Record<string, string> = {
-        a: '5',
-        'type(a)': 'int'
-      };
-      const executor: Executor = async code => values[code] ?? null;
-      const result = await expand(split.cells, classification, executor);
+        const values: Record<string, string> = {
+          a: '5',
+          'type(a)': 'int'
+        };
+        const executor: Executor = async code => values[code] ?? null;
+        const result = await expand(split.cells, classification, executor);
 
-      // Visible portion expanded (leading blank line from hidden split).
-      const visible = result.sources.find(s => s.id === 't1');
-      expect(visible).toBeDefined();
-      expect(visible!.source).toBe(`\n${script(['type(a)', 'int'])}`);
+        // Visible portion expanded (leading blank line from hidden split).
+        const visible = result.sources.find(s => s.id === 't1');
+        expect(visible).toBeDefined();
+        expect(visible!.source).toBe(`\n${script(['type(a)', 'int'])}`);
 
-      // Hidden portion expanded (now in sources under the referent ID).
-      const secret = result.sources.find(s => s.id === 't1-hidden');
-      expect(secret).toBeDefined();
-      expect(secret!.source).toBe(script(['a', '5']));
-    });
+        // Hidden portion expanded (now in sources under the referent ID).
+        const secret = result.sources.find(s => s.id === 't1-hidden');
+        expect(secret).toBeDefined();
+        expect(secret!.source).toBe(script(['a', '5']));
+      }
+    );
   });
 
   describe('slippage', () => {
@@ -1516,7 +1519,6 @@ describe('upstream nbgrader fixtures', () => {
     const v0i = classify(load('test-v0-invalid.ipynb'));
     const v1 = classify(load('test-v1.ipynb'));
     const v2 = classify(load('test-v2.ipynb'));
-    const with_output = classify(load('test-with-output.ipynb'));
 
     it('v0 produces the same cell types as v3', () => {
       expect(v0.cells.map(c => c.is)).toEqual(v3.cells.map(c => c.is));
@@ -1539,8 +1541,9 @@ describe('upstream nbgrader fixtures', () => {
     });
 
     it('test-with-output.ipynb is structurally identical to test.ipynb', () => {
-      expect(with_output.cells.map(c => c.is)).toEqual(v3.cells.map(c => c.is));
-      expect(with_output.cells.map(c => c.points)).toEqual(
+      const result = classify(load('test-with-output.ipynb'));
+      expect(result.cells.map(c => c.is)).toEqual(v3.cells.map(c => c.is));
+      expect(result.cells.map(c => c.points)).toEqual(
         v3.cells.map(c => c.points)
       );
     });
@@ -1839,11 +1842,14 @@ describe('upstream nbgrader fixtures', () => {
       expect(result.warnings.some(w => w.includes('Trailing task'))).toBe(true);
     });
 
-    it('bad-markdown-cell-2.ipynb: solution-only markdown is reviewable', () => {
-      const result = classify(load('bad-markdown-cell-2.ipynb'));
-      expect(result.cells).toHaveLength(1);
-      expect(result.cells[0].is).toBe('reviewable');
-    });
+    it(
+      'bad-markdown-cell-2.ipynb: solution-only markdown' + ' is reviewable',
+      () => {
+        const result = classify(load('bad-markdown-cell-2.ipynb'));
+        expect(result.cells).toHaveLength(1);
+        expect(result.cells[0].is).toBe('reviewable');
+      }
+    );
 
     it('timeout.ipynb: answer + test produce 1 correctable', () => {
       const result = classify(load('timeout.ipynb'));

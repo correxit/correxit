@@ -11,7 +11,7 @@ import { Rubric } from '../correxit/rubric';
 import { Workbook } from '../correxit/workbook';
 import { manual } from '../correxit/submitters';
 
-const MockWorkbook = Workbook as unknown as { open: jest.Mock };
+const mock = Workbook.open as unknown as jest.Mock;
 
 const identifier = (
   overrides: Partial<Workbook.Identifier.Assigned> = {}
@@ -59,7 +59,7 @@ const workbook = (
     submission,
     submitted: null
   };
-  MockWorkbook.open.mockReturnValue({ ...Rubric.create(), assignment });
+  mock.mockReturnValue({ ...Rubric.create(), assignment });
   return notebook(cells) as unknown as Workbook;
 };
 
@@ -128,7 +128,7 @@ describe('manual submitter', () => {
 
   it('uses null submission when workbook is not openable', async () => {
     const wb = notebook() as unknown as Workbook;
-    MockWorkbook.open.mockReturnValue(null);
+    mock.mockReturnValue(null);
     const receipt = await manual(wb, identifier());
     const payload = JSON.parse(receipt.slice('manual:DIGEST<'.length, -1));
     expect(payload.submission).toBeNull();
@@ -147,7 +147,7 @@ describe('manual submitter', () => {
         }
       }
     } as unknown as Workbook;
-    MockWorkbook.open.mockReturnValue({
+    mock.mockReturnValue({
       ...Rubric.create(),
       assignment: Rubric.create().assignment
     });
