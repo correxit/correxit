@@ -401,11 +401,9 @@ export namespace Workbook {
     receipt: string | null = null
   ): Promise<Rubric> {
     const rubric = open(workbook, quiet);
-    if (!rubric || !rubric.assignment.assignee)
+    if (!rubric || !rubric.locked || !rubric.assignment.assignee)
       throw new Error.Invalid('distribute error');
-    return rubric.locked
-      ? update(workbook, Rubric.distribute(rubric, receipt))
-      : update(workbook, Rubric.distribute(rubric, receipt));
+    return update(workbook, Rubric.distribute(rubric, receipt));
   }
 
   /**

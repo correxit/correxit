@@ -3,6 +3,47 @@ import { cd, setup } from './utils';
 
 test.use({ autoGoto: false });
 
+const keys = {
+  private: {
+    assignee: null,
+    author: `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+xUkEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6EgDjg6P4
+JzjqjCIqEGS8Fljrm2FRMpbWiOpUK0TnIETO1g+6zQ1jb3JyZXhpdC10ZXN0
+wsAPBBMbCgCFBYJpwc62AwsJBwkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBu
+b3RhdGlvbnMub3BlbnBncGpzLm9yZ7aeKcxlxXAmARYftBEDMKuRQYKOg+mi
+UNWWvS5pYKcDBRUKCA4MBBYAAgECGQECmwMCHgEWIQRwUHQWg+0lDFYSIKj/
+5WnPG54aeAAAwjLPzmdRtiPAQG4qh7YcqTxABlF/i6mcuUNsQvG79Vkcbgud
+48ZND/OAA3qRMBHeYvEI2EO0zcY4TvGjusPeGNQFx0kEacHOthmr6un0sKA9
+X4aGqEOxqYXCkcUuYSxJoSj3QI47TNOWYwAIuAZB5UGbE5vjq7JFdu682Hnl
+jhYm3Vce+dJFbxnudxBqwroEGBsKAHAFgmnBzrYJEP/lac8bnhp4RRQAAAAA
+ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmeDvNANjX21V+sInrrh
+T7QjHE6/sBEVbi2IVTWRo3ft/wKbDBYhBHBQdBaD7SUMVhIgqP/lac8bnhp4
+AADxaOwzJYh0FXQdc4Y5Vj8oSkixYJTh1YKqdnzbdcL9bjoEpwFbocEVhiil
+wuHeBt2QJmRrZohWA1uC36BzzqaMqQk=
+=3rAl
+-----END PGP PRIVATE KEY BLOCK-----`
+  },
+  public: {
+    assignee: null,
+    author: `-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+xiYEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6Es0NY29y
+cmV4aXQtdGVzdMLADwQTGwoAhQWCacHOtgMLCQcJEP/lac8bnhp4RRQAAAAA
+ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcme2ninMZcVwJgEWH7QR
+AzCrkUGCjoPpolDVlr0uaWCnAwUVCggODAQWAAIBAhkBApsDAh4BFiEEcFB0
+FoPtJQxWEiCo/+VpzxueGngAAMIyz85nUbYjwEBuKoe2HKk8QAZRf4upnLlD
+bELxu/VZHG4LnePGTQ/zgAN6kTAR3mLxCNhDtM3GOE7xo7rD3hjUBc4mBGnB
+zrYZq+rp9LCgPV+GhqhDsamFwpHFLmEsSaEo90COO0zTlmPCugQYGwoAcAWC
+acHOtgkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBn
+cGpzLm9yZ4O80A2NfbVX6wieuuFPtCMcTr+wERVuLYhVNZGjd+3/ApsMFiEE
+cFB0FoPtJQxWEiCo/+VpzxueGngAAPFo7DMliHQVdB1zhjlWPyhKSLFglOHV
+gqp2fNt1wv1uOgSnAVuhwRWGKKXC4d4G3ZAmZGtmiFYDW4LfoHPOpoypCQ==
+=3+uO
+-----END PGP PUBLIC KEY BLOCK-----`
+  }
+} as const;
+
 /**
  * Creates a propagated workbook directory and returns cleanup metadata.
  *
@@ -14,7 +55,7 @@ async function propagate(
   page: any,
   roster: string[]
 ): Promise<{ directory: string; paths: string[] }> {
-  return page.evaluate(async (roster: string[]) => {
+  return page.evaluate(async ({ keys, roster }: any) => {
     const { Rubric, Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
@@ -33,10 +74,7 @@ async function propagate(
         key: 'secret',
         assignment: {
           ...r.assignment,
-          keys: {
-            private: { assignee: null, author: 'priv' },
-            public: { assignee: null, author: 'pub' }
-          }
+          keys
         }
       }))(Rubric.create()),
       {
@@ -65,7 +103,7 @@ async function propagate(
       .map(({ slots }) => slots[0] as string);
 
     return { directory, paths };
-  }, roster);
+  }, { keys, roster });
 }
 
 /**
@@ -403,7 +441,7 @@ test('batch leaves reviewable cells pending intervention', async ({ page }) => {
 
   // Propagate with a mixed rubric: one comparable + one reviewable cell.
   const propagated = await page.evaluate(
-    async (roster: string[]) => {
+    async ({ keys, roster }: any) => {
       const { Rubric, Workbook } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
@@ -420,10 +458,7 @@ test('batch leaves reviewable cells pending intervention', async ({ page }) => {
           key: 'secret',
           assignment: {
             ...r.assignment,
-            keys: {
-              private: { assignee: null, author: 'priv' },
-              public: { assignee: null, author: 'pub' }
-            }
+            keys
           }
         }))(Rubric.create()),
         {
@@ -457,7 +492,7 @@ test('batch leaves reviewable cells pending intervention', async ({ page }) => {
           .map(({ slots }) => slots[0] as string)
       };
     },
-    ['alice@example.com']
+    { keys, roster: ['alice@example.com'] }
   );
   await cd(page, '.');
 
@@ -516,7 +551,7 @@ test('intervention on last reviewable cell auto-certifies workbook', async ({
 
   // Propagate with comparable + reviewable cells.
   const propagated = await page.evaluate(
-    async (roster: string[]) => {
+    async ({ keys, roster }: any) => {
       const { Rubric, Workbook } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
@@ -533,10 +568,7 @@ test('intervention on last reviewable cell auto-certifies workbook', async ({
           key: 'secret',
           assignment: {
             ...r.assignment,
-            keys: {
-              private: { assignee: null, author: 'priv' },
-              public: { assignee: null, author: 'pub' }
-            }
+            keys
           }
         }))(Rubric.create()),
         {
@@ -570,7 +602,7 @@ test('intervention on last reviewable cell auto-certifies workbook', async ({
           .map(({ slots }) => slots[0] as string)
       };
     },
-    ['alice@example.com']
+    { keys, roster: ['alice@example.com'] }
   );
   await cd(page, '.');
 
@@ -649,7 +681,7 @@ test('correctable cell with multiple references sums per-reference points', asyn
   // Propagate with a correctable cell that has two references: ref1 (3 pts)
   // and ref2 (2 pts). The student cell prints 42, matching ref1 but not ref2.
   const propagated = await page.evaluate(
-    async (roster: string[]) => {
+    async ({ keys, roster }: any) => {
       const { Rubric, Workbook } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
@@ -666,10 +698,7 @@ test('correctable cell with multiple references sums per-reference points', asyn
           key: 'secret',
           assignment: {
             ...r.assignment,
-            keys: {
-              private: { assignee: null, author: 'priv' },
-              public: { assignee: null, author: 'pub' }
-            }
+            keys
           }
         }))(Rubric.create()),
         {
@@ -699,7 +728,7 @@ test('correctable cell with multiple references sums per-reference points', asyn
           .map(({ slots }) => slots[0] as string)
       };
     },
-    ['alice@example.com']
+    { keys, roster: ['alice@example.com'] }
   );
   await cd(page, '.');
 

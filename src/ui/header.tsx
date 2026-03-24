@@ -52,7 +52,7 @@ export const Header: React.FC<{
   const unlocked = !!rubric && !rubric.locked;
   const certified = !!rubric?.assignment.certification;
   const collected = !!rubric?.assignment.collected;
-  const unstarted = useUnstarted(workbook, rubric?.revised || 0);
+  const unstarted = useUnstarted(workbook, rubric);
   const distributable =
     !!rubric?.assignment.assignee &&
     !!rubric.assignment.issue &&
@@ -89,12 +89,25 @@ export const Header: React.FC<{
   );
 };
 
-function useUnstarted(workbook: Workbook, revised: number): boolean {
+function useUnstarted(workbook: Workbook, rubric: Rubric | null): boolean {
   const [unstarted, setUnstarted] = useState(false);
+  const assignment = rubric?.assignment;
+  const needed = !!(
+    assignment?.issue &&
+    assignment?.issuer &&
+    assignment?.certification === null &&
+    assignment?.collected === null &&
+    assignment?.distributed === null &&
+    assignment?.submission === null &&
+    assignment?.submitted === null
+  );
 
   useEffect(() => {
+    if (!needed) {
+      setUnstarted(false);
+      return;
+    }
     let cancelled = false;
-    setUnstarted(false);
     void Workbook.unstarted(workbook)
       .then(current => {
         if (!cancelled) setUnstarted(current);
@@ -105,7 +118,7 @@ function useUnstarted(workbook: Workbook, revised: number): boolean {
     return () => {
       cancelled = true;
     };
-  }, [revised, workbook]);
+  }, [needed, workbook]);
 
   return unstarted;
 }

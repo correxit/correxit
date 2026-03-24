@@ -64,7 +64,7 @@ export async function* propagate({
       );
       const issuer = await Rubric.Assignment.issuer(issue, author);
       const issued = { issue, issuer };
-      await reissue({ notebook, ...issued, key });
+      await reissue({ notebook, roster, ...issued, key });
       const identifier = { ...assigned, issue: issued.issue };
       const propagated = { identifier, notebook, path };
       const created = await io.create({ factory, manager, notebook, path });
@@ -181,15 +181,16 @@ async function reassign({ assignee, key, notebook, roster }: {
   };
 }
 
-async function reissue({ issuer, issue, key, notebook }: {
+async function reissue({ issuer, issue, key, notebook, roster }: {
   issuer: string;
   issue: string;
   key: string;
   notebook: INotebookContent;
+  roster: string[];
 }): Promise<void> {
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
     { assignment: Rubric.Assignment, revised: number };
-  const { assignee, expiration, id, keys, name, report, roster } =
+  const { assignee, expiration, id, keys, name, report } =
     metadata.assignment;
   const unsigned = {
     assignee,

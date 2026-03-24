@@ -54,10 +54,14 @@ const distributor: JupyterFrontEndPlugin<Correxit.Distributor> =
     Correxit.DESCRIPTION.DISTRIBUTOR,
     Correxit.Distributor,
     (_, { moodle: settings, provider }) => {
-      const distributor: Correxit.Distributor =
-        provider() === 'moodle'
-          ? propagated => Moodle.distributor(propagated, settings())
-          : distributors.manual;
+      const distributor: Correxit.Distributor = propagated => {
+        switch (provider()) {
+          case 'moodle':
+            return Moodle.distributor(propagated, settings());
+          default:
+            return distributors.manual(propagated);
+        }
+      };
       return [distributor, () => {}];
     }
   );
