@@ -35,7 +35,7 @@ const certified = (
     assignee,
     certification,
     collected: null,
-    distributed: null,
+    distribution: null,
     expiration: null,
     id: '',
     issue: '',

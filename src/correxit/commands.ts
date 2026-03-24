@@ -92,40 +92,39 @@ export function commands(
   };
   const deliver = async (
     args: Partial<Credentials & { quiet: boolean; silent: boolean }>
-  ): Promise<string | null> => {
+  ): Promise<boolean> => {
     const current = state.workbook();
     const path = args.path || current?.context.path;
     const handle = path && normalize({ path });
-    if (!path || !handle) return null;
+    if (!path || !handle) return false;
 
     const active = current?.context.path === path ? current : null;
     const workbook = active || await fetch(handle, !!args.silent);
-    if (!workbook) return null;
+    if (!workbook) return false;
 
     try {
       const rubric = open(workbook);
-      if (!rubric) return null;
+      if (!rubric) return false;
       if (!(await Workbook.unstarted(workbook)))
         throw new Error.Invalid('distribute error: workbook not unstarted');
-      if (rubric.assignment.distributed) return rubric.assignment.distributed;
+      if (rubric.assignment.distribution !== null) return true;
 
       const identifier = Workbook.identifier(workbook);
       if (!Workbook.Identifier.assigned(identifier))
         throw new Error.Invalid('distribute error: unassigned');
 
       const notebook = workbook.context.model.sharedModel.toJSON();
-      const found = await distributor({ identifier, notebook, path });
-      const receipt = issued(found, identifier.issue);
-      await distribute(workbook, receipt);
+      await distributor({ identifier, notebook, path });
+      await distribute(workbook);
       await workbook.context.save();
-      return receipt;
+      return true;
     } catch (error) {
       if (args.quiet) {
         console.warn(CommandIDs.distribute, error);
-        return null;
+        return false;
       }
       showErrorMessage(...Error.interpret(error, trans));
-      return null;
+      return false;
     } finally {
       if (!active) workbook.context.dispose();
     }
@@ -465,14 +464,14 @@ export function commands(
         rubric?.assignment.assignee &&
         rubric.assignment.issue &&
         rubric.assignment.issuer &&
-        rubric.assignment.distributed === null
+        rubric.assignment.distribution === null
       );
     },
     isVisible: () => commands.isEnabled(CommandIDs.distribute),
     label: trans.__('Distribute assignment...'),
     execute: async (
       args: Partial<Credentials & { quiet: boolean; silent: boolean }>
-    ): Promise<string | null> => deliver(args)
+    ): Promise<boolean> => deliver(args)
   }));
   disposables.push(commands.addCommand(CommandIDs.draft, {
     isEnabled: () => {
@@ -1001,10 +1000,4 @@ async function* translate(
     const message = emission && translate(emission);
     if (message) yield [message, emission];
   }
-}
-
-function issued(found: string | null, issue: string | null): string {
-  const normalized = found?.trim() || '';
-  if (normalized) return normalized;
-  return `correxit:${issue || Date.now()}`;
 }

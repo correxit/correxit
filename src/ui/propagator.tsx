@@ -86,12 +86,12 @@ export function Propagator(props: Propagator.Props) {
     const recovered: string[] = [];
     const fresh: string[] = [];
     for (const path of pending) {
-      const receipt = await commands.execute(distribute, {
+      const ok = await commands.execute(distribute, {
         path,
         quiet: true,
         silent: true
       });
-      if (receipt) {
+      if (ok) {
         recovered.push(path);
         fresh.push(trans.__('Distributed %1', path));
       } else {

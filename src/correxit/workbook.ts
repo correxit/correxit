@@ -397,13 +397,12 @@ export namespace Workbook {
   }
 
   export async function distribute(
-    workbook: Workbook,
-    receipt: string | null = null
+    workbook: Workbook
   ): Promise<Rubric> {
     const rubric = open(workbook, quiet);
     if (!rubric || !rubric.locked || !rubric.assignment.assignee)
       throw new Error.Invalid('distribute error');
-    return update(workbook, Rubric.distribute(rubric, receipt));
+    return update(workbook, Rubric.distribute(rubric));
   }
 
   /**

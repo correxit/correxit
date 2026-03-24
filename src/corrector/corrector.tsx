@@ -59,8 +59,11 @@ const history = (workbook: Scanned, trans: TranslationBundle): string => {
   const rubric = open(workbook);
   if (!rubric) return '';
 
-  const { certification, collected, submission, submitted } = rubric.assignment;
+  const { certification, collected, distribution, submission, submitted } =
+    rubric.assignment;
   const lines: string[] = [];
+  if (distribution !== null)
+    lines.push(trans.__('Distribution %1', Rubric.timestamp(distribution)));
   if (submission !== null)
     lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
   if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));

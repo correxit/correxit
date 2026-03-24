@@ -571,15 +571,14 @@ describe('Rubric', () => {
       );
     });
 
-    it('records a distribution receipt', async () => {
+    it('records a distribution timestamp', async () => {
       const rubric = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
         expiration: null
       });
-      const receipt = 'lms-distribution-123';
-      const distributed = Rubric.distribute(rubric, receipt);
-      expect(distributed.assignment.distributed).toBe(receipt);
+      const distributed = Rubric.distribute(rubric);
+      expect(distributed.assignment.distribution).toEqual(expect.any(Number));
     });
 
     it('clears distribution on stale reassign', async () => {
@@ -588,11 +587,11 @@ describe('Rubric', () => {
         roster: ['student@example.com', 'other@example.com'],
         expiration: null
       });
-      const distributed = Rubric.distribute(rubric, 'receipt');
+      const distributed = Rubric.distribute(rubric);
       const reassigned = await Rubric.assign(distributed, {
         assignee: 'other@example.com'
       });
-      expect(reassigned.assignment.distributed).toBeNull();
+      expect(reassigned.assignment.distribution).toBeNull();
     });
   });
 

@@ -1,8 +1,6 @@
 import { Correxit } from '.';
 
-/** Manual distribution records a trivial local receipt. */
+/** Manual distribution is a no-op. */
 export async function manual(
   _propagated: Parameters<Correxit.Distributor>[0]
-): Promise<string> {
-  return 'manual';
-}
+): Promise<void> {}

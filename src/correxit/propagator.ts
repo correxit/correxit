@@ -62,12 +62,13 @@ export async function* propagate({
       await reissue({ notebook, roster, ...issued, key });
       const identifier = { ...assigned, issue: issued.issue };
       const propagated = { identifier, notebook, path };
-      let receipt: string | null = null;
+      stamp(notebook, Date.now());
+      let distributed = true;
       try {
-        const found = await distributor(propagated);
-        receipt = distribute(found, issued.issue);
-        redistribute({ notebook, receipt });
+        await distributor(propagated);
       } catch (error) {
+        stamp(notebook, null);
+        distributed = false;
         yield {
           type: 'distribute-error',
           slots: [assignee, path, `${error}`]
@@ -77,8 +78,8 @@ export async function* propagate({
       yield { type: 'separator', slots: [] };
       yield { type: 'assigned', slots: [assignee] };
       yield { type: created ? 'saved' : 'create-error', slots: [path] };
-      if (created && receipt)
-        yield { type: 'distributed', slots: [assignee, receipt] };
+      if (created && distributed)
+        yield { type: 'distributed', slots: [assignee] };
 
       yield { type: 'progress', slots: [++progress, total] };
     }
@@ -89,9 +90,15 @@ export async function* propagate({
   }
 }
 
-function distribute(receipt: string | null, issue: string): string {
-  const normalized = receipt?.trim() || '';
-  return normalized || `correxit:${issue}`;
+/** Stamp the distribution timestamp on a serialized notebook. */
+function stamp(
+  notebook: INotebookContent,
+  distribution: number | null
+): void {
+  const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
+    { assignment: Rubric.Assignment, revised: number };
+  metadata.assignment = { ...metadata.assignment, distribution };
+  metadata.revised = Date.now();
 }
 
 async function encrypt(
@@ -120,7 +127,7 @@ function lifecycle(expiration: Rubric.Timestamp) {
   return {
     certification: null,
     collected: null,
-    distributed: null,
+    distribution: null,
     expiration,
     issue: '',
     issuer: '',
@@ -184,17 +191,6 @@ async function reissue({ issuer, issue, key, notebook, roster }: {
   };
   const mac = await Rubric.Assignment.mac(unsigned, key);
   metadata.assignment = { ...metadata.assignment, issue, issuer, mac };
-  metadata.revised = Date.now();
-}
-
-/** Mutate a propagated notebook to add the distributed receipt. */
-function redistribute({ notebook, receipt }: {
-  notebook: INotebookContent;
-  receipt: string;
-}): void {
-  const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
-    { assignment: Rubric.Assignment, revised: number };
-  metadata.assignment = { ...metadata.assignment, distributed: receipt };
   metadata.revised = Date.now();
 }
 

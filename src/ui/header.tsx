@@ -57,7 +57,7 @@ export const Header: React.FC<{
     !!rubric?.assignment.assignee &&
     !!rubric.assignment.issue &&
     !!rubric.assignment.issuer &&
-    rubric.assignment.distributed === null;
+    rubric.assignment.distribution === null;
   const action = unlocked
     ? certified && !collected
       ? collect
@@ -97,7 +97,7 @@ function useUnstarted(workbook: Workbook, rubric: Rubric | null): boolean {
     assignment?.issuer &&
     assignment?.certification === null &&
     assignment?.collected === null &&
-    assignment?.distributed === null &&
+    assignment?.distribution === null &&
     assignment?.submission === null &&
     assignment?.submitted === null
   );
@@ -135,7 +135,7 @@ const Lifecycle: React.FC<{
       assignee,
       certification,
       collected,
-      distributed,
+      distribution,
       submission,
       submitted
     }
@@ -144,18 +144,18 @@ const Lifecycle: React.FC<{
     unstarted &&
     certification === null &&
     collected === null &&
-    distributed === null &&
+    distribution === null &&
     submission === null &&
     submitted === null;
   const lines: string[] = [];
+  if (distribution !== null)
+    lines.push(trans.__('Distribution %1', Rubric.timestamp(distribution)));
   if (submission !== null)
     lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
   if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
   if (certification !== null)
     lines.push(trans.__('Certification %1', Rubric.timestamp(certification)));
   if (collected !== null) lines.push(trans.__('Collected: %1', collected));
-  if (distributed !== null)
-    lines.push(trans.__('Distributed: %1', summarize(distributed, trans)));
   if (blank_slate) lines.push(trans.__('Unstarted'));
 
   const label = lines.length
@@ -179,11 +179,3 @@ const Lifecycle: React.FC<{
     </div>
   );
 };
-
-function summarize(receipt: string, trans: TranslationBundle): string {
-  if (receipt.startsWith('-----BEGIN PGP SIGNED MESSAGE-----'))
-    return trans.__('Signed attestation');
-
-  const trimmed = receipt.trim();
-  return trimmed.length > 48 ? `${trimmed.slice(0, 48)}...` : trimmed;
-}

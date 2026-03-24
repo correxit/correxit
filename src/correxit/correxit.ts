@@ -16,7 +16,7 @@ export namespace Correxit {
     identifier: Workbook.Identifier.Assigned;
     notebook: INotebookContent;
     path: string;
-  }) => Promise<string | null>;
+  }) => Promise<void>;
 
   export type Injector = (workbook: Workbook | null) => void;
 

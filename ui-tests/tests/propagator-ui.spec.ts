@@ -119,7 +119,7 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
 
       return {
         assignee: assignment.assignee,
-        distributed: assignment.distributed,
+        distribution: assignment.distribution,
         issue: assignment.issue,
         issuer: assignment.issuer,
         locked: metadata.locked,
@@ -148,7 +148,7 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
 
   for (const check of result.checks) {
     expect(result.assigned).toContain(check.assignee);
-    expect(check.distributed).toBe('manual');
+    expect(check.distribution).toEqual(expect.any(Number));
     expect(typeof check.issue).toBe('string');
     expect(check.issue.length).toBeGreaterThan(0);
     expect(typeof check.issuer).toBe('string');
@@ -186,7 +186,7 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
   await dispose();
 });
 
-test('distribute validates issued notebooks before recording a receipt', async ({
+test('distribute validates issued notebooks before distributing', async ({
   page
 }) => {
   const { dispose } = await setup(page, [
@@ -236,25 +236,25 @@ test('distribute validates issued notebooks before recording a receipt', async (
     const contents = app.serviceManager.contents;
     const file = await contents.get(path, { content: true, type: 'notebook' });
     const notebook = file.content;
-    notebook.metadata.correxit.assignment.distributed = null;
+    notebook.metadata.correxit.assignment.distribution = null;
     notebook.cells[1].source = 'print(answer + 1)';
     await contents.save(path, { ...file, content: notebook });
 
-    const receipt = await app.commands.execute('correxit:distribute', {
+    const ok = await app.commands.execute('correxit:distribute', {
       path,
       quiet: true,
       silent: true
     });
-    const distributed = (
+    const distribution = (
       await contents.get(path, { content: true, type: 'notebook' })
-    ).content.metadata.correxit.assignment.distributed;
+    ).content.metadata.correxit.assignment.distribution;
 
     await contents.delete(path).catch(() => {});
-    return { distributed, receipt };
+    return { distribution, ok };
   }, keys);
 
-  expect(result.receipt).toBeNull();
-  expect(result.distributed).toBeNull();
+  expect(result.ok).toBe(false);
+  expect(result.distribution).toBeNull();
   await cd(page, '.');
   await dispose();
 });

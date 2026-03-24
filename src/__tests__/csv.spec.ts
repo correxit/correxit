@@ -25,7 +25,7 @@ const BOM = '\uFEFF';
 const header =
   'assignee,assignment,expiration,title,rubric,' +
   'issue,points,possible,' +
-  'submission,submitted,certification,collected,' +
+  'distribution,submission,submitted,certification,collected,' +
   'resolved,path';
 
 const report = (): Rubric.Assignment.Report => ({
@@ -40,7 +40,7 @@ const assignment = (
   assignee: '',
   certification: null,
   collected: null,
-  distributed: null,
+  distribution: null,
   expiration: null,
   id: null,
   issue: '',
@@ -176,7 +176,7 @@ describe('csv', () => {
     const [, row] = rows;
     expect(row[6]).toBe('8');
     expect(row[7]).toBe('10');
-    expect(row[12]).toBe('true');
+    expect(row[13]).toBe('true');
   });
 
   it('falls back to rubric summary when no grade exists', () => {
@@ -277,10 +277,10 @@ describe('csv', () => {
     );
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     const [, row] = rows;
-    expect(row[8]).not.toBe('');
-    expect(row[10]).not.toBe('');
-    expect(row[9]).toBe('sub-xyz');
-    expect(row[11]).toBe('receipt-abc');
+    expect(row[9]).not.toBe('');
+    expect(row[11]).not.toBe('');
+    expect(row[10]).toBe('sub-xyz');
+    expect(row[12]).toBe('receipt-abc');
   });
 
   it('handles multiple workbooks mixing hollow and reified', () => {

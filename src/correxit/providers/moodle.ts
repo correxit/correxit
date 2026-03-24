@@ -220,7 +220,6 @@ export namespace Moodle {
         `plugindata[files_filemanager]=${item}`
       ].join('&')
     );
-    return `moodle:${id}:${uid}:${item}`;
   }
 
   export async function registrar(

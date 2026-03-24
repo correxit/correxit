@@ -48,7 +48,7 @@ const workbook = (
     assignee: 'alice@example.com',
     certification: null,
     collected: null,
-    distributed: null,
+    distribution: null,
     expiration: null,
     id: '',
     issue: '',

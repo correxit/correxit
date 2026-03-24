@@ -20,7 +20,7 @@ export namespace Rubric {
     assignee: string;
     certification: Timestamp;
     collected: string | null;
-    distributed: string | null;
+    distribution: Timestamp;
     expiration: Timestamp;
     id: string | null;
     issue: string;
@@ -441,7 +441,7 @@ export namespace Rubric {
       Assignment,
       | 'certification'
       | 'collected'
-      | 'distributed'
+      | 'distribution'
       | 'mac'
       | 'seal'
       | 'submission'
@@ -453,7 +453,7 @@ export namespace Rubric {
         assignee: '',
         certification: null,
         collected: null,
-        distributed: null,
+        distribution: null,
         expiration: null,
         id: null,
         issue: '',
@@ -807,7 +807,7 @@ export namespace Rubric {
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster);
     const certification = stale ? null : rubric.assignment.certification;
     const collected = stale ? null : rubric.assignment.collected;
-    const distributed = stale ? null : rubric.assignment.distributed;
+    const distribution = stale ? null : rubric.assignment.distribution;
     const issue = stale ? '' : rubric.assignment.issue;
     const issuer = stale ? '' : rubric.assignment.issuer;
     const submission = stale ? null : rubric.assignment.submission;
@@ -827,7 +827,7 @@ export namespace Rubric {
       roster
     };
     const lifecycle = {
-      certification, collected, distributed, seal, submission, submitted
+      certification, collected, distribution, seal, submission, submitted
     };
     const mac = await Assignment.mac(unsigned, key);
     const assignment = { ...unsigned, ...lifecycle, mac };
@@ -871,17 +871,12 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: certification };
   }
 
-  export function distribute(rubric: Locked, receipt: string | null): Locked;
-  export function distribute(
-    rubric: Unlocked,
-    receipt: string | null
-  ): Unlocked;
-  export function distribute(
-    rubric: Rubric,
-    receipt: string | null = null
-  ): Rubric {
-    const assignment = { ...rubric.assignment, distributed: receipt };
-    return { ...rubric, assignment, revised: Date.now() };
+  export function distribute(rubric: Locked): Locked;
+  export function distribute(rubric: Unlocked): Unlocked;
+  export function distribute(rubric: Rubric): Rubric {
+    const distribution = Date.now();
+    const assignment = { ...rubric.assignment, distribution };
+    return { ...rubric, assignment, revised: distribution };
   }
 
   /** @returns a locked rubric with a collected receipt. */

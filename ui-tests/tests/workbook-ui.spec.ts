@@ -179,12 +179,12 @@ test('assigns workbook and updates metadata', async ({ page }) => {
       issuer: final.assignment.issuer,
       mac: !!final.assignment.mac,
       stored: metadata?.assignment?.assignee ?? null,
-      distributed: final.assignment.distributed
+      distribution: final.assignment.distribution
     };
   });
 
   expect(result.assignee).toBe('assignee@example.com');
-  expect(result.distributed).toBeNull();
+  expect(result.distribution).toBeNull();
   expect(result.issue).toBe('');
   expect(result.issuer).toBe('');
   expect(result.mac).toBe(true);

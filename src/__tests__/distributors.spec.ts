@@ -33,21 +33,20 @@ const propagated = (
 });
 
 describe('manual distributor', () => {
-  it('returns a trivial manual receipt', async () => {
-    const receipt = await manual(propagated());
-    expect(receipt).toBe('manual');
+  it('resolves without error', async () => {
+    await expect(manual(propagated())).resolves.toBeUndefined();
   });
 
   it('does not depend on issue locally', async () => {
-    const receipt = await manual(propagated());
-    expect(receipt).toBe('manual');
+    await expect(manual(propagated())).resolves.toBeUndefined();
   });
 
   it('does not depend on notebook content locally', async () => {
-    const a = await manual(propagated([{ id: 'c1', source: 'x = 1' }]));
-    const b = await manual(
-      propagated([{ id: 'c9', source: ['line1\n', 'line2'] }])
-    );
-    expect(a).toBe(b);
+    await expect(
+      manual(propagated([{ id: 'c1', source: 'x = 1' }]))
+    ).resolves.toBeUndefined();
+    await expect(
+      manual(propagated([{ id: 'c9', source: ['line1\n', 'line2'] }]))
+    ).resolves.toBeUndefined();
   });
 });
