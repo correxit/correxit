@@ -76,13 +76,11 @@ course roster and assignment metadata.
 ## `Correxit.Distributor`
 
 ```typescript
-type Distributor = (
-  propagated: {
-    identifier: Workbook.Identifier.Assigned;
-    notebook: INotebookContent;
-    path: string;
-  }
-) => Promise<string | null>;
+type Distributor = (propagated: {
+  identifier: Workbook.Identifier.Assigned;
+  notebook: INotebookContent;
+  path: string;
+}) => Promise<string | null>;
 ```
 
 Called when an author triggers propagation, or when the author retries
@@ -250,12 +248,12 @@ These steps are performed once by whoever administers the Moodle instance.
 Open the Correxit service and add the functions listed below. This list
 tracks exactly what the current Correxit code calls, nothing more.
 
-| Function                        | Used by                                                 |
-| ------------------------------- | ------------------------------------------------------- |
-| `mod_assign_get_assignments`    | Registrar: lists assignments the teacher can see        |
-| `core_enrol_get_enrolled_users` | Registrar & Distributor: fetches the roster / user IDs  |
-| `core_grades_update_grades`     | Distributor: sets the assignment's maximum grade        |
-| `mod_assign_save_grade`         | Distributor: attaches the notebook as feedback          |
+| Function                        | Used by                                                |
+| ------------------------------- | ------------------------------------------------------ |
+| `mod_assign_get_assignments`    | Registrar: lists assignments the teacher can see       |
+| `core_enrol_get_enrolled_users` | Registrar & Distributor: fetches the roster / user IDs |
+| `core_grades_update_grades`     | Distributor: sets the assignment's maximum grade       |
+| `mod_assign_save_grade`         | Distributor: attaches the notebook as feedback         |
 
 The external service must also have **Can upload files** and
 **Can download files** enabled (checkboxes on the service edit page).

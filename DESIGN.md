@@ -237,14 +237,14 @@ Correxit provides extension points as JupyterLab plugins, each identified by a
 single token. Core logic is decoupled from IO, e.g. replacing a distributor
 implementation requires no changes to the propagator loop or commands.
 
-| Plugin          | Purpose                                             | Default                       |
-| --------------- | --------------------------------------------------- | ----------------------------- |
-| **`Distributor`** | Deliver one propagated workbook                   | Manual local receipt         |
-| **`Collector`** | Collect certified grades                            | Returns a UUID                |
-| **`Registrar`** | Provide assignment registrations                    | Returns null (manual entry)   |
-| **`Submitter`** | Handle submission receipts                          | Returns a UUID                |
-| **`Unlocker`**  | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager           |
-| **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |
+| Plugin            | Purpose                                             | Default                       |
+| ----------------- | --------------------------------------------------- | ----------------------------- |
+| **`Distributor`** | Deliver one propagated workbook                     | Manual local receipt          |
+| **`Collector`**   | Collect certified grades                            | Returns a UUID                |
+| **`Registrar`**   | Provide assignment registrations                    | Returns null (manual entry)   |
+| **`Submitter`**   | Handle submission receipts                          | Returns a UUID                |
+| **`Unlocker`**    | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager           |
+| **`Monitor`**     | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |
 
 Type definitions are in `src/correxit/correxit.ts`. Default implementations are
 in `src/plugins.tsx`. See [PLUGINS.md](PLUGINS.md) for the full integration

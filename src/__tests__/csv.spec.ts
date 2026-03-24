@@ -141,7 +141,7 @@ describe('csv', () => {
           assignee: 'Alice',
           id: 'hw-1',
           issue: 'issue-abc',
-          name: 'Homework 1',
+          name: 'Homework 1'
         })
       })
     );

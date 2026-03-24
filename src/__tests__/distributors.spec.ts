@@ -26,7 +26,7 @@ const propagated = (
 ): Parameters<typeof manual>[0] => ({
   identifier: identifier(overrides),
   notebook: {
-    cells: cells.map(cell => ({ ...cell } as any)),
+    cells: cells.map(cell => ({ ...cell }) as any),
     metadata: {}
   } as any,
   path: 'assigned.ipynb'
@@ -44,12 +44,10 @@ describe('manual distributor', () => {
   });
 
   it('does not depend on notebook content locally', async () => {
-    const a = await manual(propagated([
-      { id: 'c1', source: 'x = 1' }
-    ]));
-    const b = await manual(propagated([
-      { id: 'c9', source: ['line1\n', 'line2'] }
-    ]));
+    const a = await manual(propagated([{ id: 'c1', source: 'x = 1' }]));
+    const b = await manual(
+      propagated([{ id: 'c9', source: ['line1\n', 'line2'] }])
+    );
     expect(a).toBe(b);
   });
 });

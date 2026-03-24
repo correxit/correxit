@@ -55,55 +55,58 @@ async function propagate(
   page: any,
   roster: string[]
 ): Promise<{ directory: string; paths: string[] }> {
-  return page.evaluate(async ({ keys, roster }: any) => {
-    const { Rubric, Workbook } = (window as any).__correxit__;
-    const app = (window as any).jupyterapp;
-    const panel = app.shell.currentWidget;
+  return page.evaluate(
+    async ({ keys, roster }: any) => {
+      const { Rubric, Workbook } = (window as any).__correxit__;
+      const app = (window as any).jupyterapp;
+      const panel = app.shell.currentWidget;
 
-    // Galata creates notebooks with an empty kernelspec. Set it explicitly so
-    // propagated headless workbooks can start kernels for grading.
-    panel.context.model.sharedModel.setMetadata('kernelspec', {
-      display_name: 'Python 3 (ipykernel)',
-      language: 'python',
-      name: 'python3'
-    });
+      // Galata creates notebooks with an empty kernelspec. Set it explicitly so
+      // propagated headless workbooks can start kernels for grading.
+      panel.context.model.sharedModel.setMetadata('kernelspec', {
+        display_name: 'Python 3 (ipykernel)',
+        language: 'python',
+        name: 'python3'
+      });
 
-    const rubric = Rubric.add(
-      (r => ({
-        ...r,
-        key: 'secret',
-        assignment: {
-          ...r.assignment,
-          keys
-        }
-      }))(Rubric.create()),
-      {
-        id: 'target',
-        is: 'comparable',
-        payload: null,
-        points: 1,
-        references: ['ref']
-      },
-      [{ cell: 'target', referent: 'ref', points: 1, secret: true }]
-    );
-    await Workbook.update(panel, rubric);
-    await app.commands.execute('correxit:assign', { roster });
+      const rubric = Rubric.add(
+        (r => ({
+          ...r,
+          key: 'secret',
+          assignment: {
+            ...r.assignment,
+            keys
+          }
+        }))(Rubric.create()),
+        {
+          id: 'target',
+          is: 'comparable',
+          payload: null,
+          points: 1,
+          references: ['ref']
+        },
+        [{ cell: 'target', referent: 'ref', points: 1, secret: true }]
+      );
+      await Workbook.update(panel, rubric);
+      await app.commands.execute('correxit:assign', { roster });
 
-    type Emission = { slots: (string | number)[]; type: string };
-    const stream = await app.commands.execute('correxit:propagate');
-    const log: Emission[] = [];
-    for await (const [, emission] of stream) {
-      log.push(emission);
-    }
+      type Emission = { slots: (string | number)[]; type: string };
+      const stream = await app.commands.execute('correxit:propagate');
+      const log: Emission[] = [];
+      for await (const [, emission] of stream) {
+        log.push(emission);
+      }
 
-    const directory = log.find(({ type }) => type === 'mkdir')
-      ?.slots[0] as string;
-    const paths = log
-      .filter(({ type }) => type === 'saved')
-      .map(({ slots }) => slots[0] as string);
+      const directory = log.find(({ type }) => type === 'mkdir')
+        ?.slots[0] as string;
+      const paths = log
+        .filter(({ type }) => type === 'saved')
+        .map(({ slots }) => slots[0] as string);
 
-    return { directory, paths };
-  }, { keys, roster });
+      return { directory, paths };
+    },
+    { keys, roster }
+  );
 }
 
 /**

@@ -7,17 +7,17 @@ no trusted third party. Cryptographic primitives use `window.crypto`
 
 ## Threat Profile
 
-| Threat                               | Mitigation                                             |
-| ------------------------------------ | ------------------------------------------------------ |
-| Student reads the reference cells    | Secret reference cell encryption (AES-256 via openpgp) |
-| Student reads answerable payload     | Answer payload is a digest (SHA-256 hash)              |
-| Student reads the roster             | Roster encryption (AES-256 via openpgp)                |
-| Student forges or alters their grade | Assignment MAC (keyed SHA-256 hash)                    |
-| Student edits cells after submission | Workbook locking + freezing                            |
-| Peer reads answers from file         | Sealed submissions (PGP encryption to author key)      |
-| Student tampers after submit         | Seal hash + transport integrity (see below)            |
-| Student copies peer's sealed blobs   | Assignee + cell id bound inside encrypted payload      |
-| Student starts from a forged blank slate | `issue` digest + `issuer` PGP signature           |
+| Threat                                   | Mitigation                                             |
+| ---------------------------------------- | ------------------------------------------------------ |
+| Student reads the reference cells        | Secret reference cell encryption (AES-256 via openpgp) |
+| Student reads answerable payload         | Answer payload is a digest (SHA-256 hash)              |
+| Student reads the roster                 | Roster encryption (AES-256 via openpgp)                |
+| Student forges or alters their grade     | Assignment MAC (keyed SHA-256 hash)                    |
+| Student edits cells after submission     | Workbook locking + freezing                            |
+| Peer reads answers from file             | Sealed submissions (PGP encryption to author key)      |
+| Student tampers after submit             | Seal hash + transport integrity (see below)            |
+| Student copies peer's sealed blobs       | Assignee + cell id bound inside encrypted payload      |
+| Student starts from a forged blank slate | `issue` digest + `issuer` PGP signature                |
 
 **Out of scope:** malicious authors (they hold the key, full
 authority by design), browser memory extraction, compromised
@@ -179,7 +179,7 @@ carried by `issue` and `issuer`, not by the distributor receipt.
    student key fields. Defrosts the notebook.
 
 6. **Grading** (`Workbook.unlock`): Validates metadata first
-  (roster decryption, assignment MAC) so that a tampered
+   (roster decryption, assignment MAC) so that a tampered
    workbook never gets plaintext written. Then, if `assignment.seal`
    is non-null: decrypts the author PGP private key (local scope
    only), verifies the seal hash, unseals each cell (checking
@@ -232,24 +232,24 @@ re-encrypting and comparing.
 
 ### Assignment Fields
 
-| Field           | Type             | Signed? | Meaning                              |
-| --------------- | ---------------- | ------- | ------------------------------------ |
-| `assignee`      | `string`         | Yes     | Student identifier                   |
-| `roster`        | `string[]`       | Yes     | Encrypted on lock                    |
-| `expiration`    | `number \| null` | Yes     | Deadline                             |
-| `id`            | `string \| null` | Yes     | External assignment id               |
-| `keys`          | `Keys`           | Partial | Author keys MACed, student keys not  |
-| `name`          | `string`         | Yes     | Assignment display name              |
-| `report`        | `Report`         | Yes     | Scores + interventions               |
-| `issue`         | `string`         | Yes     | Deterministic blank-slate digest     |
-| `issuer`        | `string`         | Yes     | Author PGP signature over `issue`    |
-| `seal`          | `string \| null` | No      | SHA-256 of concatenated ciphertexts  |
-| `mac`           | `string`         | -       | Mutable assignment authenticity MAC  |
-| `certification` | `number \| null` | No      | When the grade was finalized         |
-| `submission`    | `number \| null` | No      | When the student submitted           |
-| `submitted`     | `string \| null` | No      | External submission receipt          |
-| `distributed`   | `string \| null` | No      | External distribution receipt        |
-| `collected`     | `string \| null` | No      | External collection receipt          |
+| Field           | Type             | Signed? | Meaning                             |
+| --------------- | ---------------- | ------- | ----------------------------------- |
+| `assignee`      | `string`         | Yes     | Student identifier                  |
+| `roster`        | `string[]`       | Yes     | Encrypted on lock                   |
+| `expiration`    | `number \| null` | Yes     | Deadline                            |
+| `id`            | `string \| null` | Yes     | External assignment id              |
+| `keys`          | `Keys`           | Partial | Author keys MACed, student keys not |
+| `name`          | `string`         | Yes     | Assignment display name             |
+| `report`        | `Report`         | Yes     | Scores + interventions              |
+| `issue`         | `string`         | Yes     | Deterministic blank-slate digest    |
+| `issuer`        | `string`         | Yes     | Author PGP signature over `issue`   |
+| `seal`          | `string \| null` | No      | SHA-256 of concatenated ciphertexts |
+| `mac`           | `string`         | -       | Mutable assignment authenticity MAC |
+| `certification` | `number \| null` | No      | When the grade was finalized        |
+| `submission`    | `number \| null` | No      | When the student submitted          |
+| `submitted`     | `string \| null` | No      | External submission receipt         |
+| `distributed`   | `string \| null` | No      | External distribution receipt       |
+| `collected`     | `string \| null` | No      | External collection receipt         |
 
 ### Certification Sequence
 

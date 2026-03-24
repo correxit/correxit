@@ -80,7 +80,7 @@ describe('manual submitter', () => {
     expect(payload).toMatchObject({
       assignee: 'alice@example.com',
       issue: 'issue-abc',
-      rubric: 'rubric-1',
+      rubric: 'rubric-1'
     });
     expect(payload.sources).toBeDefined();
     expect(payload.submission).toBe(1704067200000);

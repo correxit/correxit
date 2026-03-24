@@ -98,16 +98,11 @@ export function Propagator(props: Propagator.Props) {
         fresh.push(trans.__('Distribution pending %1', path));
       }
     }
-    if (fresh.length) {
-      setUpdates(current => [
-        ...current,
-        '------------',
-        ...fresh
-      ]);
-    }
-    if (recovered.length) {
-      setRetried(current => [...current, ...recovered]);
-    }
+    if (fresh.length)
+      setUpdates(current => [...current, '------------', ...fresh]);
+
+    if (recovered.length) setRetried(current => [...current, ...recovered]);
+
     setRetrying(false);
   };
   return (

@@ -34,7 +34,8 @@ export const seal = jest.fn(
 );
 
 export const sign = jest.fn(
-  async (text: string, key: string | unknown) => `SIGNED[${String(key)}]:${text}`
+  async (text: string, key: string | unknown) =>
+    `SIGNED[${String(key)}]:${text}`
 );
 
 export const unseal = jest.fn(async (text: string, _key: string | unknown) => {

@@ -374,11 +374,13 @@ describe('Rubric', () => {
       });
       const issuer = await Rubric.Assignment.issuer(issue, 'PGP_PRIVATE_KEY');
       const assignment = { ...rubric.assignment, issue, issuer };
-      await expect(Rubric.Assignment.unstarted({
-        assignment,
-        notebook,
-        rubric
-      })).resolves.toBe(true);
+      await expect(
+        Rubric.Assignment.unstarted({
+          assignment,
+          notebook,
+          rubric
+        })
+      ).resolves.toBe(true);
     });
 
     it('rejects a changed notebook as unstarted', async () => {
@@ -403,11 +405,13 @@ describe('Rubric', () => {
         cells: [{ cell_type: 'code', id: 'c1', source: 'print(2)' }],
         metadata: {}
       } as any;
-      await expect(Rubric.Assignment.unstarted({
-        assignment: { ...rubric.assignment, issue, issuer },
-        notebook: changed,
-        rubric
-      })).resolves.toBe(false);
+      await expect(
+        Rubric.Assignment.unstarted({
+          assignment: { ...rubric.assignment, issue, issuer },
+          notebook: changed,
+          rubric
+        })
+      ).resolves.toBe(false);
     });
 
     it(
