@@ -439,20 +439,40 @@ test('revise rejects tampered sealed cells', async ({ page }) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const workbook = { content: panel.content, context: panel.context };
 
-    const rubric = (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
-        }
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    const converted = await Workbook.convert(workbook, 'secret', unlocker);
+    let rubric = Rubric.add(
+      converted,
+      {
+        id: 'a',
+        is: 'reviewable',
+        points: 1,
+        references: null,
+        payload: null
       }
-    }))(Rubric.create()) as any;
+    );
+    rubric = Rubric.add(
+      rubric,
+      {
+        id: 'b',
+        is: 'reviewable',
+        points: 1,
+        references: null,
+        payload: null
+      }
+    );
     await Workbook.update(workbook, rubric);
+    await Workbook.assign(workbook, {
+      assignee: 'student@example.com',
+      roster: ['student@example.com']
+    });
     await Workbook.lock(workbook);
-    await Workbook.submit(workbook, ['pub']);
+    const locked = Workbook.open(workbook);
+    const author = locked.assignment.keys.public.author;
+    await Workbook.submit(workbook, [author]);
 
     const notebook = panel.context.model.sharedModel;
     notebook.cells[0].setSource('tampered');
@@ -788,5 +808,82 @@ test('recovers sealed cells using author PGP key from metadata', async ({
   expect(result.sources[1]).toBe('y = 2');
   expect(result.types[0]).toBe('code');
   expect(result.types[1]).toBe('code');
+  await dispose();
+});
+
+test('recovery drops sealed payloads bound to the wrong cell', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'a', source: 'x = 1' },
+    { id: 'b', source: 'y = 2' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const passphrase = 'secret';
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    const converted = await Workbook.convert(workbook, passphrase, unlocker);
+    let rubric = Rubric.add(
+      converted,
+      {
+        id: 'a',
+        is: 'reviewable',
+        points: 1,
+        references: null,
+        payload: null
+      }
+    );
+    rubric = Rubric.add(
+      rubric,
+      {
+        id: 'b',
+        is: 'reviewable',
+        points: 1,
+        references: null,
+        payload: null
+      }
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.assign(workbook, {
+      assignee: 'student@example.com',
+      roster: ['student@example.com']
+    });
+    await Workbook.lock(workbook);
+
+    const locked = Workbook.open(workbook);
+    const author = locked.assignment.keys.public.author;
+    await Workbook.submit(workbook, [author]);
+
+    const notebook = panel.context.model.sharedModel;
+    const first = notebook.cells[0].getSource();
+    const second = notebook.cells[1].getSource();
+    notebook.cells[0].setSource(second);
+    notebook.cells[1].setSource(first);
+
+    const metadata = notebook.getMetadata('correxit');
+    notebook.setMetadata('correxit', {
+      id: metadata.id,
+      assignment: { keys: metadata.assignment.keys, assignee: 'student@example.com' }
+    });
+
+    const fresh = { content: panel.content, context: panel.context };
+    const count = await Workbook.recover(fresh, passphrase);
+    return {
+      count,
+      sources: [notebook.cells[0].getSource(), notebook.cells[1].getSource()],
+      types: [notebook.cells[0].cell_type, notebook.cells[1].cell_type]
+    };
+  });
+
+  expect(result.count).toBe(0);
+  expect(result.types).toEqual(['raw', 'raw']);
+  expect(result.sources[0]).not.toBe('x = 1');
+  expect(result.sources[1]).not.toBe('y = 2');
   await dispose();
 });
