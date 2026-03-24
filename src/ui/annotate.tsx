@@ -1,6 +1,7 @@
 import { Widget } from '@lumino/widgets';
 import React, { useEffect } from 'react';
 import { Rubric, Workbook } from '..';
+import * as security from '../correxit/security';
 import * as state from '../correxit/state';
 
 const correct = 'cxt-mod-correct';
@@ -47,26 +48,21 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
     const notebook = workbook?.content;
     if (!notebook || !rubric || notebook.isDisposed) return;
 
-    const sealed = rubric.locked && !!rubric.assignment.seal;
-    const secrets = new Set(
-      Object.values(rubric.locked ? rubric.references : {})
+    const ids = new Set([
+      ...Object.keys(rubric.cells),
+      ...Object.values(rubric.locked ? rubric.references : {})
         .filter(({ secret }) => secret)
         .map(({ referent }) => referent)
-    );
-    let remaining = Object.keys(rubric.cells).length + secrets.size;
+    ]);
+    let remaining = ids.size;
     for (const widget of notebook.widgets) {
       const { id } = widget.model;
+      if (!ids.has(id)) continue;
       const cell = Rubric.get(rubric, id);
-      if (cell) {
-        decorate(workbook, cell, widget);
-        if (sealed) widget.addClass(encrypted);
-        remaining--;
-      }
-      if (secrets.has(id)) {
+      if (cell) decorate(workbook, cell, widget);
+      if (security.encrypted(widget.model.sharedModel.getSource()))
         widget.addClass(encrypted);
-        remaining--;
-      }
-      if (remaining === 0) break;
+      if (--remaining === 0) break;
     }
     return () => clear(workbook);
   }, [rubric, workbook]);
