@@ -24,7 +24,7 @@ Curve25519 asymmetric encryption (sealed submissions), and native
 `window.crypto` for HMAC-SHA-256 signing and PBKDF2 key derivation. All fields
 use explicit nulls (`field: Type | null`) rather than optional markers
 (`field?: Type`) to ensure stable JSON serialization, which is required for
-deterministic cryptographic signatures. The plaintext PGP private key exists
+deterministic cryptographic checks. The plaintext PGP private key exists
 only in local scope during `unlock` and is discarded when the function returns.
 
 ## Architecture
@@ -141,7 +141,6 @@ flowchart TB
   UI -->|for await| P
   P -->|call| D
   R -. notebook .-> P
-  D -. receipt .-> P
   P -. progress .-> UI
 ```
 
@@ -239,10 +238,10 @@ implementation requires no changes to the propagator loop or commands.
 
 | Plugin            | Purpose                                             | Default                       |
 | ----------------- | --------------------------------------------------- | ----------------------------- |
-| **`Distributor`** | Deliver one propagated workbook                     | Manual local receipt          |
-| **`Collector`**   | Collect certified grades                            | Returns a UUID                |
+| **`Distributor`** | Deliver one propagated workbook                     | Manual no-op                  |
+| **`Collector`**   | Collect certified grades                            | Digest receipt                |
 | **`Registrar`**   | Provide assignment registrations                    | Returns null (manual entry)   |
-| **`Submitter`**   | Handle submission receipts                          | Returns a UUID                |
+| **`Submitter`**   | Handle submission receipts                          | Digest receipt                |
 | **`Unlocker`**    | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager           |
 | **`Monitor`**     | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |
 

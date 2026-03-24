@@ -18,7 +18,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 ### Security Model
 
 - **Explicit Nulls**: Use `field: Type | null` instead of optional `field?: Type`.
-  - _Reason_: Stable JSON serialization is required for cryptographic signatures.
+  - _Reason_: Stable JSON serialization is required for cryptographic checks.
 - **Validate-Before-Encrypt**: Always validate rubric/assignment data _before_ encryption.
   - _Wrong_: Encrypt -> Validate.
   - _Right_: Validate -> Encrypt.
@@ -36,8 +36,8 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - **Discriminated Unions**: Use union types with a common discriminator field to encode mutually exclusive states.
   - _Example_: `Reified` type in `commands.ts` enables safe type narrowing after `if (!rubric)` guards.
   - _Pattern_: After checking `if (!rubric) return`, TypeScript knows `workbook` is non-null.
-- **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, external assignment ID, rubric ID, and signature.
-- **Timestamps**: Lifecycle timestamps (`certification`, `collected`, `submission`, `submitted`) live on `Assignment`. Read them via `Workbook.open()`.
+- **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, external assignment ID, issue digest, and rubric ID.
+- **Timestamps**: Lifecycle timestamps (`certification`, `collected`, `distribution`, `submission`, `submitted`) live on `Assignment`. Read them via `Workbook.open()`.
 
 ## 3. Asynchronous Patterns
 
