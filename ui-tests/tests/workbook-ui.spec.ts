@@ -444,26 +444,20 @@ test('revise rejects tampered sealed cells', async ({ page }) => {
       unlock: async () => null
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
-    let rubric = Rubric.add(
-      converted,
-      {
-        id: 'a',
-        is: 'reviewable',
-        points: 1,
-        references: null,
-        payload: null
-      }
-    );
-    rubric = Rubric.add(
-      rubric,
-      {
-        id: 'b',
-        is: 'reviewable',
-        points: 1,
-        references: null,
-        payload: null
-      }
-    );
+    let rubric = Rubric.add(converted, {
+      id: 'a',
+      is: 'reviewable',
+      points: 1,
+      references: null,
+      payload: null
+    });
+    rubric = Rubric.add(rubric, {
+      id: 'b',
+      is: 'reviewable',
+      points: 1,
+      references: null,
+      payload: null
+    });
     await Workbook.update(workbook, rubric);
     await Workbook.assign(workbook, {
       assignee: 'student@example.com',
@@ -829,26 +823,20 @@ test('recovery drops sealed payloads bound to the wrong cell', async ({
       unlock: async () => null
     };
     const converted = await Workbook.convert(workbook, passphrase, unlocker);
-    let rubric = Rubric.add(
-      converted,
-      {
-        id: 'a',
-        is: 'reviewable',
-        points: 1,
-        references: null,
-        payload: null
-      }
-    );
-    rubric = Rubric.add(
-      rubric,
-      {
-        id: 'b',
-        is: 'reviewable',
-        points: 1,
-        references: null,
-        payload: null
-      }
-    );
+    let rubric = Rubric.add(converted, {
+      id: 'a',
+      is: 'reviewable',
+      points: 1,
+      references: null,
+      payload: null
+    });
+    rubric = Rubric.add(rubric, {
+      id: 'b',
+      is: 'reviewable',
+      points: 1,
+      references: null,
+      payload: null
+    });
     await Workbook.update(workbook, rubric);
     await Workbook.assign(workbook, {
       assignee: 'student@example.com',
@@ -869,7 +857,10 @@ test('recovery drops sealed payloads bound to the wrong cell', async ({
     const metadata = notebook.getMetadata('correxit');
     notebook.setMetadata('correxit', {
       id: metadata.id,
-      assignment: { keys: metadata.assignment.keys, assignee: 'student@example.com' }
+      assignment: {
+        keys: metadata.assignment.keys,
+        assignee: 'student@example.com'
+      }
     });
 
     const fresh = { content: panel.content, context: panel.context };
