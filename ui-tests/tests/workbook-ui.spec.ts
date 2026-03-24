@@ -428,6 +428,47 @@ test('revises a submitted workbook, restores editability', async ({ page }) => {
   await dispose();
 });
 
+test('revise rejects tampered sealed cells', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'a', source: 'x = 1' },
+    { id: 'b', source: 'y = 2' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create()) as any;
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+    await Workbook.submit(workbook, ['pub']);
+
+    const notebook = panel.context.model.sharedModel;
+    notebook.cells[0].setSource('tampered');
+
+    try {
+      await Workbook.revise(workbook, 'unused');
+      return { message: null };
+    } catch (error) {
+      return { message: `${error}` };
+    }
+  });
+
+  expect(result.message).toContain('seal mismatch');
+  await dispose();
+});
+
 // ---------------------------------------------------------------------------
 // Recovery tests
 // ---------------------------------------------------------------------------

@@ -284,6 +284,34 @@ export namespace Workbook {
     if (workbook.content)
       NotebookActions.deselectAll(workbook.content);
   };
+  const verify = async (
+    workbook: Workbook,
+    rubric: Rubric.Locked,
+    action: 'unlock' | 'revise'
+  ): Promise<string[]> => {
+    const { seal } = rubric.assignment;
+    if (!seal) return [];
+
+    const ids = Object.keys(rubric.cells).sort();
+    const notebook = workbook.context.model.sharedModel;
+    const index = Object.fromEntries(
+      notebook.cells.map(cell => [cell.id, cell])
+    );
+    const present = ids.filter(id => id in index);
+    const missing = ids.filter(id => !(id in index));
+    if (missing.length) {
+      if (!workbook.content)
+        throw new Error.Unseal(`${action} seal error: missing cells`);
+      console.warn(`${action}: skipping seal verify, missing cells`, missing);
+      return present;
+    }
+
+    const ciphertexts = present.map(id => index[id].getSource());
+    const hash = await security.digest(ciphertexts.join('\n'));
+    if (hash !== seal)
+      throw new Error.Mismatch('seal mismatch: ciphertexts tampered');
+    return present;
+  };
 
   /** Add a cell to a workbook's rubric. */
   export async function add(
@@ -938,7 +966,7 @@ export namespace Workbook {
       throw new Error.Revise('revise error');
 
     const { assignee } = rubric.assignment;
-    const ids = Object.keys(rubric.cells).sort();
+    const ids = await verify(workbook, rubric, 'revise');
     const prepared = await Promise.all(
       ids.map(id => Cell.unseal(workbook, id, assignee, key))
     );
@@ -1029,27 +1057,7 @@ export namespace Workbook {
         assignment.keys.private.author, key
       );
       const author = await security.parse(armored);
-
-      // Partition rubric cell IDs into present and missing.
-      const ids = Object.keys(rubric.cells).sort();
-      const notebook = workbook.context.model.sharedModel;
-      const index = Object.fromEntries(
-        notebook.cells.map(cell => [cell.id, cell])
-      );
-      const present = ids.filter(id => id in index);
-      const missing = ids.filter(id => !(id in index));
-
-      if (missing.length) {
-        if (!workbook.content)
-          throw new Error.Unseal('unlock seal error: missing cells');
-        console.warn('unlock: skipping seal verify, missing cells', missing);
-      } else {
-        // Verify seal integrity before decrypting.
-        const ciphertexts = present.map(id => index[id].getSource());
-        const hash = await security.digest(ciphertexts.join('\n'));
-        if (hash !== assignment.seal)
-          throw new Error.Mismatch('seal mismatch: ciphertexts tampered');
-      }
+      const present = await verify(workbook, rubric, 'unlock');
 
       // Unseal each rubric cell present in the notebook.
       const { assignee } = assignment;
