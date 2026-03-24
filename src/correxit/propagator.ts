@@ -31,7 +31,7 @@ export async function* propagate({
     return;
   }
   try {
-    const { assignment: { roster }, key } = rubric;
+    const { assignment: { expiration, name, roster }, key } = rubric;
     const path = workbook.context.path;
     const parent = PathExt.dirname(path);
     const base = PathExt.basename(path, '.ipynb');
@@ -39,6 +39,10 @@ export async function* propagate({
     const directory = await io.mkdir(manager, parent, potential);
     const total = roster.length;
     const { encrypted, notebook: content } = await template(workbook, rubric);
+    const author = await security.decrypt(
+      rubric.assignment.keys.private.author,
+      rubric.key
+    );
     let progress = 0;
     yield { type: 'mkdir', slots: [directory.path] };
     for (const reference of encrypted)
@@ -49,49 +53,32 @@ export async function* propagate({
       const path = PathExt.join(directory.path, file);
       const assigned = await reassign({ assignee, key, notebook, roster });
       const issue = await Rubric.Assignment.issue({
-        assignment: {
-          assignee,
-          expiration: rubric.assignment.expiration,
-          id: assigned.assignment,
-          name: rubric.assignment.name
-        },
+        assignment: { assignee, expiration, id: assigned.assignment, name },
         notebook,
         rubric
       });
-      const author = await security.decrypt(
-        rubric.assignment.keys.private.author,
-        rubric.key
-      );
       const issuer = await Rubric.Assignment.issuer(issue, author);
       const issued = { issue, issuer };
       await reissue({ notebook, roster, ...issued, key });
       const identifier = { ...assigned, issue: issued.issue };
       const propagated = { identifier, notebook, path };
-      const created = await io.create({ factory, manager, notebook, path });
-      yield { type: 'separator', slots: [] };
-      yield { type: 'assigned', slots: [assignee] };
-      yield { type: created ? 'saved' : 'create-error', slots: [path] };
-      if (!created) {
-        yield { type: 'progress', slots: [++progress, total] };
-        continue;
-      }
-
+      let receipt: string | null = null;
       try {
         const found = await distributor(propagated);
-        const receipt = distribute(found, issued.issue);
+        receipt = distribute(found, issued.issue);
         redistribute({ notebook, receipt });
-        await manager.contents.save(path, {
-          content: notebook,
-          format: 'json',
-          type: 'notebook'
-        });
-        yield { type: 'distributed', slots: [assignee, receipt] };
       } catch (error) {
         yield {
           type: 'distribute-error',
           slots: [assignee, path, `${error}`]
         };
       }
+      const created = await io.create({ factory, manager, notebook, path });
+      yield { type: 'separator', slots: [] };
+      yield { type: 'assigned', slots: [assignee] };
+      yield { type: created ? 'saved' : 'create-error', slots: [path] };
+      if (created && receipt)
+        yield { type: 'distributed', slots: [assignee, receipt] };
 
       yield { type: 'progress', slots: [++progress, total] };
     }
@@ -117,7 +104,7 @@ async function encrypt(
 
   const cell = notebook.cells[index];
   const source = Array.isArray(cell.source)
-    ? cell.source.join('\n')
+    ? cell.source.join('')
     : cell.source;
   const encrypted = await security.encrypt(source, key);
   const jupyter = cell.metadata.jupyter || {};
@@ -135,6 +122,8 @@ function lifecycle(expiration: Rubric.Timestamp) {
     collected: null,
     distributed: null,
     expiration,
+    issue: '',
+    issuer: '',
     submission: null,
     submitted: null
   };
@@ -158,17 +147,7 @@ async function reassign({ assignee, key, notebook, roster }: {
   const { expiration, id, keys, name, roster: encrypted } = metadata.assignment;
   const report = Rubric.Assignment.Report.empty();
   const fresh = lifecycle(expiration);
-  const unsigned = {
-    assignee,
-    ...fresh,
-    id,
-    issue: '',
-    issuer: '',
-    keys,
-    name,
-    report,
-    roster
-  };
+  const unsigned = { assignee, ...fresh, id, keys, name, report, roster };
   const mac = await Rubric.Assignment.mac(unsigned, key);
   const seal = null;
   metadata.assignment = { ...unsigned, mac, roster: encrypted, seal };
@@ -208,7 +187,7 @@ async function reissue({ issuer, issue, key, notebook, roster }: {
   metadata.revised = Date.now();
 }
 
-/** Mutate a propagated notebook to add assignee's distributed receipt. */
+/** Mutate a propagated notebook to add the distributed receipt. */
 function redistribute({ notebook, receipt }: {
   notebook: INotebookContent;
   receipt: string;

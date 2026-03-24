@@ -512,11 +512,7 @@ export namespace Rubric {
       return security.hmac(JSON.stringify(unsigned), key);
     }
 
-    export async function issue({
-      assignment,
-      notebook,
-      rubric
-    }: {
+    export async function issue({ assignment, notebook, rubric }: {
       assignment: Pick<Assignment, 'assignee' | 'expiration' | 'id' | 'name'>;
       notebook: INotebookContent;
       rubric: Pick<Base, 'cells' | 'id' | 'references'>;
@@ -609,14 +605,12 @@ export namespace Rubric {
         throw new Error.Mismatch('missing author private key');
       if (!keys.public.author)
         throw new Error.Mismatch('missing author public key');
-      if (assignee && !mac)
-        throw new Error.Mismatch('missing mac for assignee');
-      if (assignee && mac !== await Assignment.mac(assignment, key))
-        throw new Error.Mismatch('assignee mac mismatch');
+      if ((assignee || roster.length) && !mac)
+        throw new Error.Mismatch('missing mac');
+      if (mac && mac !== await Assignment.mac(assignment, key))
+        throw new Error.Mismatch('mac mismatch');
       if (assignee && !find(roster, record => record === assignee))
         throw new Error.Mismatch('assignee does not exist in roster');
-      if (roster.length && !mac)
-        throw new Error.Mismatch('missing mac for roster');
       if (!!issue !== !!issuer)
         throw new Error.Mismatch('issue and issuer must appear together');
       if (issue) {
