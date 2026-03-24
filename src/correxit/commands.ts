@@ -31,6 +31,7 @@ export namespace CommandIDs {
   export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
+  export const redistribute = 'correxit:redistribute';
   export const refer = 'correxit:refer';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
@@ -92,42 +93,77 @@ export function commands(
   };
   const deliver = async (
     args: Partial<Credentials & { quiet: boolean; silent: boolean }>
-  ): Promise<boolean> => {
+  ): Promise<{
+    assignee: string;
+    error: string | null;
+    ok: boolean;
+    path: string;
+  }> => {
     const current = state.workbook();
-    const path = args.path || current?.context.path;
+    const path = args.path || current?.context.path || '';
     const handle = path && normalize({ path });
-    if (!path || !handle) return false;
+    if (!path || !handle) {
+      const error = 'distribute error: invalid path';
+      return { assignee: path, error, ok: false, path };
+    }
 
     const active = current?.context.path === path ? current : null;
     const workbook = active || await fetch(handle, !!args.silent);
-    if (!workbook) return false;
+    if (!workbook) {
+      const error = 'distribute error: workbook unavailable';
+      return { assignee: path, error, ok: false, path };
+    }
 
+    let assignee = path;
     try {
       const rubric = open(workbook);
-      if (!rubric) return false;
-      if (!(await Workbook.unstarted(workbook)))
-        throw new Error.Invalid('distribute error: workbook not unstarted');
-      if (rubric.assignment.distribution !== null) return true;
+      if (!rubric) throw new Error.Invalid('distribute error: invalid rubric');
 
       const identifier = Workbook.identifier(workbook);
       if (!Workbook.Identifier.assigned(identifier))
         throw new Error.Invalid('distribute error: unassigned');
+      assignee = identifier.assignee;
+      if (!(await Workbook.unstarted(workbook)))
+        throw new Error.Invalid('distribute error: unstarted must be true');
+      if (rubric.assignment.distribution !== null)
+        return { assignee, error: null, ok: true, path };
 
       const notebook = workbook.context.model.sharedModel.toJSON();
       await distributor({ identifier, notebook, path });
       await distribute(workbook);
       await workbook.context.save();
-      return true;
+      return { assignee, error: null, ok: true, path };
     } catch (error) {
-      if (args.quiet) {
-        console.warn(CommandIDs.distribute, error);
-        return false;
-      }
-      showErrorMessage(...Error.interpret(error, trans));
-      return false;
+      const reason = `${error}`;
+      if (args.quiet) console.warn(CommandIDs.distribute, error);
+      else showErrorMessage(...Error.interpret(error, trans));
+      return { assignee, error: reason, ok: false, path };
     } finally {
       if (!active) workbook.context.dispose();
     }
+  };
+  const redistribute = async function* (paths: string[]) {
+    const total = paths.length;
+    if (!total) return;
+
+    let progress = 0;
+    yield { type: 'separator', slots: [] };
+    for (const path of paths) {
+      const result = await deliver({ path, quiet: true, silent: true });
+      if (result.ok) {
+        yield {
+          type: 'distributed',
+          slots: [result.assignee, result.path]
+        };
+      } else {
+        yield {
+          type: 'distribute-error',
+          slots: [result.assignee, result.path, result.error || '']
+        };
+      }
+      yield { type: 'progress', slots: [++progress, total] };
+    }
+    yield { type: 'retried', slots: [total] };
   };
   const disposables = [];
   disposables.push(commands.addCommand(CommandIDs.assign, {
@@ -471,7 +507,7 @@ export function commands(
     label: trans.__('Distribute assignment...'),
     execute: async (
       args: Partial<Credentials & { quiet: boolean; silent: boolean }>
-    ): Promise<boolean> => deliver(args)
+    ): Promise<boolean> => (await deliver(args)).ok
   }));
   disposables.push(commands.addCommand(CommandIDs.draft, {
     isEnabled: () => {
@@ -647,6 +683,14 @@ export function commands(
       };
       const identifier = Workbook.identifier(workbook);
       return await registrar(workbook, identifier).catch(warn);
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.redistribute, {
+    label: trans.__('Retry distribution'),
+    execute: async (
+      args: Partial<{ paths: string[] }>
+    ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
+      return translate(redistribute(args.paths || []), trans);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.refer, {
@@ -991,6 +1035,7 @@ async function* translate(
       'error': trans.__('ERROR %1', ...slots),
       'mkdir': trans.__('Created directory %1', ...slots),
       'progress': trans.__('%1 of %2', ...slots),
+      'retried': trans.__('Finished retrying %1', ...slots),
       'saved': trans.__('Saved %1', ...slots),
       'separator': '------------',
       'success': trans.__('Finished! (roster: %1)', ...slots)

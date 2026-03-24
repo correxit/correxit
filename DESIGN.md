@@ -39,7 +39,7 @@ multiple UI surfaces:
 - the Correxit sidebar
 - the Corrector widget for batch grading
 - the Reviewer widget for per-cell manual review
-- cell and notebook toolbar buttons
+- cell and notebook toolbar buttons and decorations
 
 The architecture is divided into three layers:
 

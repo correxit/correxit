@@ -55,20 +55,37 @@
   gap: 6px;
 }
 
-.correxit-propagator-cancel {
+.correxit-propagator-button {
   appearance: none;
-  background-color: var(--jp-error-color1);
   border: none;
   border-radius: 2px;
-  color: white;
+  color: var(--jp-ui-inverse-font-color1, #fff);
   cursor: pointer;
   font-size: var(--jp-ui-font-size1);
   padding: 6px 0;
+  transition: background-color 150ms ease;
   width: 100%;
+}
+
+.correxit-propagator-cancel {
+  background-color: var(--jp-error-color1);
 }
 
 .correxit-propagator-cancel:hover {
   background-color: var(--jp-error-color0);
+}
+
+.correxit-propagator-retry {
+  background-color: var(--jp-brand-color1);
+}
+
+.correxit-propagator-retry:hover {
+  background-color: var(--jp-brand-color0);
+}
+
+.correxit-propagator-button:disabled {
+  cursor: default;
+  opacity: 0.7;
 }
 
 .correxit-propagator-notice {

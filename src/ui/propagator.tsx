@@ -5,6 +5,7 @@ import {
   closeIcon
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
+import { Message } from '@lumino/messaging';
 import React, { useEffect, useRef, useState } from 'react';
 import { Correxit } from '..';
 import type { Emission } from '../correxit/propagator';
@@ -25,7 +26,7 @@ class PropagatorWidget extends ReactWidget {
     super.dispose();
   }
 
-  onCloseRequest(msg: import('@lumino/messaging').Message) {
+  onCloseRequest(msg: Message) {
     super.onCloseRequest(msg);
     this.options.refocus();
   }
@@ -39,26 +40,31 @@ class PropagatorWidget extends ReactWidget {
 
 export function Propagator(props: Propagator.Props) {
   const { close, commands, release, title, trans } = props;
-  const { distribute, propagate } = Correxit.CommandIDs;
+  const { propagate, redistribute } = Correxit.CommandIDs;
   const [cancelled, setCancelled] = useState(false);
   const command = cancelled ? '' : propagate;
   const [timestamp] = useState(Date.now);
   const [log, done] = useCommand<LogEntry>(commands, command, { timestamp });
   const [attempted, setAttempted] = useState(false);
-  const [retried, setRetried] = useState<string[]>([]);
-  const [retrying, setRetrying] = useState(false);
-  const [updates, setUpdates] = useState<string[]>([]);
+  const [retry, setRetry] = useState<Propagator.Retry | null>(null);
+  const [rounds, setRounds] = useState<LogEntry[]>([]);
+  const recover = retry ? redistribute : '';
+  const [extra, idle] = useCommand<LogEntry>(commands, recover, retry || {});
   useEffect(() => void (command && setAttempted(true)), [command]);
   useEffect(() => {
     if (done && attempted) release();
   }, [attempted, done, release]);
+  useEffect(() => {
+    if (!retry || !idle) return;
+    setRounds(current => [...current, ...extra]);
+    setRetry(null);
+  }, [extra, idle, retry]);
 
-  const messages = [
-    ...log
-      .filter(([, { type }]) => type !== 'progress')
-      .map(([message]) => message),
-    ...updates
-  ];
+  const retrying = !!retry;
+  const trail = [...log, ...rounds, ...(retry ? extra : [])];
+  const messages = trail
+    .filter(([, { type }]) => type !== 'progress')
+    .map(([message]) => message);
   const saved = new Set(
     log
       .filter(([, { type }]) => type === 'saved')
@@ -72,38 +78,25 @@ export function Propagator(props: Propagator.Props) {
         .filter(path => saved.has(path))
     )
   );
-  const pending = failed.filter(path => !retried.includes(path));
-  const [value, max]: [number, number] = log.reduce(
+  const recovered = new Set(
+    trail
+      .filter(([, { type }]) => type === 'distributed')
+      .map(([, { slots }]) => slots[1] as string | undefined)
+      .filter((path): path is string => !!path)
+  );
+  const pending = failed.filter(path => !recovered.has(path));
+  const active = retrying ? extra : log;
+  const [value, max]: [number, number] = active.reduce(
     (progress, [, { type, slots }]) =>
       type === 'progress' ? (slots as [number, number]) : progress,
     [0, 1]
   );
   const percent = max > 0 ? Math.round((value / max) * 100) : 0;
-  const retry = async () => {
+  const running = !done || retrying;
+  const retriable = done && (!!pending.length || retrying);
+  const redo = () => {
     if (retrying || !pending.length) return;
-    setRetrying(true);
-
-    const recovered: string[] = [];
-    const fresh: string[] = [];
-    for (const path of pending) {
-      const ok = await commands.execute(distribute, {
-        path,
-        quiet: true,
-        silent: true
-      });
-      if (ok) {
-        recovered.push(path);
-        fresh.push(trans.__('Distributed %1', path));
-      } else {
-        fresh.push(trans.__('Distribution pending %1', path));
-      }
-    }
-    if (fresh.length)
-      setUpdates(current => [...current, '------------', ...fresh]);
-
-    if (recovered.length) setRetried(current => [...current, ...recovered]);
-
-    setRetrying(false);
+    setRetry({ paths: pending, timestamp: Date.now() });
   };
   return (
     <div className="correxit-propagator-content">
@@ -124,37 +117,28 @@ export function Propagator(props: Propagator.Props) {
             : trans.__('No workbooks were created.')}
         </span>
       )}
-      {!done && (
+      {running && (
         <div className="correxit-propagator-controls">
           <div className="correxit-propagator-progress">
             <progress {...{ max, value }} />
             <span>{trans.__('%1%', percent)}</span>
           </div>
-          {!!pending.length && (
+          {!retrying && (
             <button
-              className="correxit-propagator-cancel"
-              disabled={retrying}
-              onClick={() => void retry()}
+              className="correxit-propagator-button correxit-propagator-cancel"
+              onClick={() => setCancelled(true)}
             >
-              {retrying
-                ? trans.__('Retrying...')
-                : trans.__('Retry %1 failed', pending.length)}
+              {trans.__('Cancel')}
             </button>
           )}
-          <button
-            className="correxit-propagator-cancel"
-            onClick={() => setCancelled(true)}
-          >
-            {trans.__('Cancel')}
-          </button>
         </div>
       )}
-      {done && !!pending.length && (
+      {retriable && (
         <div className="correxit-propagator-controls">
           <button
-            className="correxit-propagator-cancel"
+            className="correxit-propagator-button correxit-propagator-retry"
             disabled={retrying}
-            onClick={() => void retry()}
+            onClick={redo}
           >
             {retrying
               ? trans.__('Retrying...')
@@ -174,6 +158,11 @@ export namespace Propagator {
     release: () => void;
     title: string;
     trans: TranslationBundle;
+  };
+
+  export type Retry = {
+    paths: string[];
+    timestamp: number;
   };
 
   export type Widget = PropagatorWidget;
