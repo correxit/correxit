@@ -293,3 +293,118 @@ test('propagate command is disabled for assigned workbooks', async ({
   expect(result).toBe(false);
   await dispose();
 });
+
+test('track archives completed retry output before clearing retry state', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, []);
+
+  await page.evaluate(() => {
+    const { Rubric, Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+    return Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create())
+    );
+  });
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    return app.commands.execute('correxit:assign', {
+      roster: ['alice@example.com']
+    });
+  });
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    const execute = app.commands.execute.bind(app.commands);
+    const emit = async function* (items: any[]) {
+      for (const item of items) yield item;
+    };
+    (window as any).__correxitRestore = () => {
+      app.commands.execute = execute;
+    };
+    app.commands.execute = async (id: string, args: any) => {
+      if (id === 'correxit:propagate') {
+        return emit([
+          ['Created directory fake', { type: 'mkdir', slots: ['fake'] }],
+          ['------------', { type: 'separator', slots: [] }],
+          [
+            'Distribute ERROR alice@example.com (TypeError: Failed to fetch)',
+            {
+              type: 'distribute-error',
+              slots: [
+                'alice@example.com',
+                'fake/alice.ipynb',
+                'TypeError: Failed to fetch'
+              ]
+            }
+          ],
+          [
+            'Assigned to alice@example.com',
+            {
+              type: 'assigned',
+              slots: ['alice@example.com']
+            }
+          ],
+          [
+            'Saved fake/alice.ipynb',
+            {
+              type: 'saved',
+              slots: ['fake/alice.ipynb']
+            }
+          ],
+          ['1 of 1', { type: 'progress', slots: [1, 1] }],
+          ['Finished! (roster: 1)', { type: 'success', slots: [1] }]
+        ]);
+      }
+      if (id === 'correxit:redistribute') {
+        return emit([
+          ['------------', { type: 'separator', slots: [] }],
+          [
+            'Distributed alice@example.com',
+            {
+              type: 'distributed',
+              slots: ['alice@example.com', 'fake/alice.ipynb']
+            }
+          ],
+          ['1 of 1', { type: 'progress', slots: [1, 1] }],
+          ['Finished retrying 1', { type: 'retried', slots: [1] }]
+        ]);
+      }
+      return execute(id, args);
+    };
+  });
+
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    return app.commands.execute('correxit:track');
+  });
+
+  const widget = page.locator('.correxit-propagator');
+  await widget.waitFor({ state: 'visible', timeout: 5000 });
+  const retry = widget.locator('.correxit-propagator-retry');
+  await expect(retry).toHaveText('Retry 1 failed');
+  await retry.click();
+  await expect(retry).toHaveText('Retrying...');
+  await expect(widget.locator('pre')).toContainText('Finished retrying 1');
+  await expect(widget.locator('pre')).toContainText(
+    'Distributed alice@example.com'
+  );
+  await expect(retry).toHaveCount(0);
+
+  await page.evaluate(() => {
+    (window as any).__correxitRestore?.();
+    delete (window as any).__correxitRestore;
+  });
+  await dispose();
+});

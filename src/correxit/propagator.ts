@@ -64,6 +64,7 @@ export async function* propagate({
       const identifier = { ...assigned, issue: issued.issue };
       const propagated = { identifier, notebook, path };
       stamp(notebook, Date.now());
+
       let distributed = true;
       try {
         await distributor(propagated);
@@ -75,12 +76,12 @@ export async function* propagate({
           slots: [assignee, path, `${error}`]
         };
       }
+
       const created = await io.create({ factory, manager, notebook, path });
       yield { type: 'assigned', slots: [assignee] };
       yield { type: created ? 'saved' : 'create-error', slots: [path] };
       if (created && distributed)
         yield { type: 'distributed', slots: [assignee] };
-
       yield { type: 'progress', slots: [++progress, total] };
     }
     await io.cd(commands, directory.path);

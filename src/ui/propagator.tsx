@@ -60,8 +60,8 @@ export function Propagator(props: Propagator.Props) {
       setStarted(false);
       return;
     }
-    if (!idle) setStarted(true);
-  }, [idle, retry]);
+    if (!idle || extra.length) setStarted(true);
+  }, [extra.length, idle, retry]);
   useEffect(() => {
     if (!retry || !started || !idle) return;
     setRetries(current => [...current, ...extra]);
