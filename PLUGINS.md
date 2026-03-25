@@ -216,9 +216,16 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
 ## Moodle Integration
 
 Correxit includes built-in Moodle plugins for the **registrar** (assignment
-metadata and rosters) and **distributor** (delivery to students via Moodle
-file and submission APIs). Both use the Moodle REST API and need one-time
-administrator setup.
+metadata and rosters), **distributor** (delivery to students via Moodle
+feedback attachments), and **collector** (posting certified grades back to
+Moodle with the graded notebook attached). All three use the Moodle REST API
+and need one-time administrator setup.
+
+The built-in **submitter** is manual. Because Correxit runs entirely in the
+browser using the teacher's API token, it cannot safely authenticate as a
+student to submit work on their behalf. Students submit their assignments by
+uploading their downloaded `.ipynb` files through the standard Moodle
+assignment interface.
 
 The integration needs two things:
 
@@ -253,17 +260,40 @@ These steps are performed once by the Moodle administrator.
 Open the Correxit service and add the functions below. This list matches the
 current Correxit code exactly.
 
-| Function                        | Used by                                                |
-| ------------------------------- | ------------------------------------------------------ |
-| `mod_assign_get_assignments`    | Registrar: lists assignments the teacher can see       |
-| `core_enrol_get_enrolled_users` | Registrar & Distributor: fetches the roster / user IDs |
-| `core_grades_update_grades`     | Distributor: sets the assignment's maximum grade       |
-| `mod_assign_save_grade`         | Distributor: attaches the notebook as feedback         |
+| Function                        | Used by                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| `mod_assign_get_assignments`    | Registrar: lists assignments the teacher can see                                |
+| `core_enrol_get_enrolled_users` | Registrar & Distributor: fetches the roster / user IDs                          |
+| `mod_assign_save_grade`         | Distributor & Collector: attach notebook, collector also posts the scaled grade |
 
 The external service must also have **Can upload files** and
 **Can download files** enabled (checkboxes on the service edit page).
 The distributor uploads each workbook notebook to the Moodle draft area
-before attaching it to the student's feedback.
+before attaching it to the student's feedback. The collector uses the same
+upload path for the graded workbook and records the numeric grade in the same
+Moodle assignment.
+
+#### 3a. Service permissions checklist
+
+The registered Moodle external service must be granted all of the following:
+
+- **Enabled**: the external service itself must be enabled.
+- **REST protocol**: the REST protocol must be enabled globally.
+- **Can upload files**: required because Correxit uploads notebooks to the
+  Moodle draft area before attaching them to assignment feedback.
+- **Can download files**: enable this alongside upload support on the service.
+- **Function `mod_assign_get_assignments`**: required by the registrar to list
+  assignments available to the teacher.
+- **Function `core_enrol_get_enrolled_users`**: required by the registrar to
+  build the roster and by the distributor/collector to resolve a Correxit
+  assignee string to a Moodle user id.
+- **Function `mod_assign_save_grade`**: required by the distributor to attach
+  assigned notebooks as feedback files and by the collector to post the final
+  scaled grade plus graded notebook.
+
+Correxit does **not** currently call any other Moodle web service functions.
+In particular, the built-in Moodle integration does not use a separate submit
+API, and it does not call `core_grades_update_grades`.
 
 #### 4. Create a token for the teacher
 
@@ -308,12 +338,19 @@ Once the administrator has completed the steps above and provided a token:
 6. **Settings → Settings Editor → Correxit Distributor**.
 7. Set **Provider** to `moodle`.
 8. Enter the same **Moodle URL** and **API token**.
+9. **Settings → Settings Editor → Correxit Collector**.
+10. Set **Provider** to `moodle`.
+11. Enter the same **Moodle URL** and **API token**.
 
-Registrar and distributor settings are independent, so each can be configured
-or disabled separately.
+Registrar, distributor, and collector settings are independent, so each can be
+configured or disabled separately.
 
 When the teacher opens an unassigned workbook, Correxit fetches courses and
 assignments from Moodle and presents them in a dropdown.
+
+On distribution, Correxit attaches the assigned workbook to the student's
+Moodle assignment feedback area. On collection, Correxit uploads the certified
+workbook the same way and records the scaled numeric grade.
 
 ### Assignment ID convention
 
@@ -330,6 +367,17 @@ The teacher account needs the standard **editingteacher** role in each course.
 No additional capabilities beyond the role defaults are required. The token
 and external service are administrative objects; the teacher needs admin
 access to create a token, not to use one.
+
+If your institution uses custom roles, ensure the token user can do the
+following in each target course:
+
+- view assignments returned by `mod_assign_get_assignments`
+- view enrolled users returned by `core_enrol_get_enrolled_users`
+- grade assignments via `mod_assign_save_grade`
+- attach feedback files to those graded assignments
+
+In practice, this means the token should normally belong to a teacher-grade
+account, not a student or read-only service account.
 
 Propagation progress is a private UI concern. Integrators do not implement a
 streaming progress API.

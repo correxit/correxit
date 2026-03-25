@@ -323,7 +323,6 @@ export namespace Workbook {
   const forensic = (metadata: unknown) => {
     const root = record(metadata) ? metadata : null;
     const assignment = root && record(root.assignment) ? root.assignment : null;
-
     const keys: Keys | null = assignment && record(assignment.keys)
       ? {
           private: record(assignment.keys.private)
