@@ -177,10 +177,7 @@ export function commands(
     for (const path of paths) {
       const result = await deliver({ path, quiet: true, silent: true });
       if (result.ok) {
-        yield {
-          type: 'distributed',
-          slots: [result.assignee, result.path]
-        };
+        yield { type: 'distributed', slots: [result.assignee, result.path] };
       } else {
         yield {
           type: 'distribute-error',
@@ -737,9 +734,7 @@ export function commands(
     execute: async (
       args: Partial<{ path: string; paths: string[] }>
     ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
-      return translate(
-        redistribute(args.path || '', args.paths || []), trans
-      );
+      return translate(redistribute(args.path || '', args.paths || []), trans);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.refer, {

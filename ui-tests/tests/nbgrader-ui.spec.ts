@@ -325,9 +325,9 @@ test.describe('nbgrader conversion (synthetic)', () => {
     expect(summary.some(line => /1 auto-graded/.test(line))).toBe(true);
     expect(summary.some(line => /1 manually graded/.test(line))).toBe(true);
     expect(summary.some(line => /4 total points/.test(line))).toBe(true);
-    expect(
-      summary.some(line => /Expand the Correxit sidebar/.test(line))
-    ).toBe(true);
+    expect(summary.some(line => /Expand the Correxit sidebar/.test(line))).toBe(
+      true
+    );
   });
 
   test('conversion can be cancelled before rewrite', async ({ page }) => {
