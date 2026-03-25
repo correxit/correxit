@@ -38,6 +38,7 @@ export const Header: React.FC<{
   const score = rubric
     ? Rubric.Assignment.summary(rubric.assignment.report)
     : null;
+  const assignment = rubric?.assignment || null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   const scored =
     !!score &&
@@ -47,17 +48,18 @@ export const Header: React.FC<{
   const titled = scored
     ? trans.__('%1 (%2 of %3)', heading, score.points, score.possible)
     : heading;
-  const submitted = !!rubric?.assignment.submission;
-  const sealed = !!rubric?.assignment.seal;
+  const submitted = assignment?.submission !== null;
+  const sealed = assignment?.seal !== null;
   const unlocked = !!rubric && !rubric.locked;
-  const certified = !!rubric?.assignment.certification;
-  const collected = !!rubric?.assignment.collected;
+  const certified = assignment?.certification !== null;
+  const collected = assignment?.collected !== null;
   const unstarted = useUnstarted(workbook, rubric);
   const distributable =
-    !!rubric?.assignment.assignee &&
-    !!rubric.assignment.issue &&
-    !!rubric.assignment.issuer &&
-    rubric.assignment.distribution === null;
+    assignment !== null &&
+    assignment.assignee !== null &&
+    assignment.issue !== null &&
+    assignment.issuer !== null &&
+    assignment.distribution === null;
   const action = unlocked
     ? certified && !collected
       ? collect
@@ -101,23 +103,17 @@ function useUnstarted(workbook: Workbook, rubric: Rubric | null): boolean {
     assignment?.submission === null &&
     assignment?.submitted === null
   );
-
   useEffect(() => {
     if (!needed) {
       setUnstarted(false);
       return;
     }
+
     let cancelled = false;
     void Workbook.unstarted(workbook)
-      .then(current => {
-        if (!cancelled) setUnstarted(current);
-      })
-      .catch(() => {
-        if (!cancelled) setUnstarted(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then(unstarted => !cancelled && setUnstarted(unstarted))
+      .catch(() => !cancelled && setUnstarted(false));
+    return () => void (cancelled = true);
   }, [needed, workbook]);
 
   return unstarted;
