@@ -487,9 +487,7 @@ test('revise rejects tampered sealed cells', async ({ page }) => {
 // Recovery tests
 // ---------------------------------------------------------------------------
 
-test('recovers symmetrically encrypted cells after metadata corruption', async ({
-  page
-}) => {
+test('recovers encrypted cells after metadata corruption', async ({ page }) => {
   // Scenario: author locks a workbook (encrypting secret reference cells),
   // then metadata is corrupted (e.g. git merge conflict). The passphrase
   // should recover the original cell source despite open() returning null.

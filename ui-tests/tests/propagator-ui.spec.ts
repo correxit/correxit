@@ -294,7 +294,7 @@ test('propagate command is disabled for assigned workbooks', async ({
   await dispose();
 });
 
-test('track archives completed retry output before clearing retry state', async ({
+test('track archives retry output before clearing retry state', async ({
   page
 }) => {
   const { dispose } = await setup(page, []);

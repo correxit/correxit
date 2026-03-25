@@ -68,9 +68,11 @@ async function load(page: any, name: string): Promise<void> {
 }
 
 /**
- * Executes `correxit:convert` and fills the passphrase dialog.
- * If the notebook contains nbgrader cells, a summary dialog appears
- * after conversion; this helper dismisses it automatically.
+ * Executes `correxit:convert`.
+ *
+ * nbgrader notebooks first show a conversion confirm, then the
+ * passphrase dialog, then a summary dialog after conversion.
+ * This helper steps through that sequence and dismisses the summary.
  */
 async function convert(page: any): Promise<string[]> {
   const done = page.evaluate(async () => {
@@ -79,6 +81,10 @@ async function convert(page: any): Promise<string[]> {
   });
   const dialog = page.locator('.jp-Dialog');
   await dialog.waitFor({ state: 'visible', timeout: 5000 });
+  if ((await dialog.locator('input').count()) === 0) {
+    await dialog.locator('.jp-mod-accept').click();
+    await dialog.waitFor({ state: 'visible', timeout: 5000 });
+  }
   await dialog.locator('input').fill('test-passphrase');
   await dialog.locator('.jp-mod-accept').click();
   await done;
@@ -312,9 +318,40 @@ test.describe('nbgrader conversion (synthetic)', () => {
     ]);
     const summary = await convert(page);
 
+    expect(summary.some(line => /rewritten in place/.test(line))).toBe(true);
+    expect(
+      summary.some(line => /Keep the original nbgrader notebook/.test(line))
+    ).toBe(true);
     expect(summary.some(line => /1 auto-graded/.test(line))).toBe(true);
     expect(summary.some(line => /1 manually graded/.test(line))).toBe(true);
     expect(summary.some(line => /4 total points/.test(line))).toBe(true);
+    expect(
+      summary.some(line => /Expand the Correxit sidebar/.test(line))
+    ).toBe(true);
+  });
+
+  test('conversion can be cancelled before rewrite', async ({ page }) => {
+    await page.goto();
+    await page.notebook.createNew();
+    await populate(page, [answer('q1', 'x = 1')]);
+
+    const done = page.evaluate(async () => {
+      const app = (window as any).jupyterapp;
+      await app.commands.execute('correxit:convert');
+    });
+    const dialog = page.locator('.jp-Dialog');
+    await dialog.waitFor({ state: 'visible', timeout: 5000 });
+    await dialog.locator('.jp-mod-reject').click();
+    await done;
+
+    const enabled = await page.evaluate(() => {
+      const app = (window as any).jupyterapp;
+      return app.commands.isEnabled('correxit:convert');
+    });
+    expect(enabled).toBe(true);
+
+    const c = await clean(page);
+    expect(c.metadata).toBe(false);
   });
 
   test('summary dialog surfaces warnings', async ({ page }) => {

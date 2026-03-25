@@ -72,12 +72,14 @@ type Registration = Pick<
 >;
 ```
 
-| Return value     | Effect                                                                                                         |
-| ---------------- | -------------------------------------------------------------------------------------------------------------- |
-| `null`           | Assignment input is unlocked; the author may enter details manually.                                           |
-| `[]`             | Assignment input is locked; the assignment has no eligible registrations.                                      |
-| `Grouped[]`      | Assignment input is locked; registrations are shown under group headings.                                      |
-| `Registration[]` | Assignment input is locked; a single registration is auto-selected, multiple registrations present a dropdown. |
+- `null`: assignment input stays unlocked. The author may enter details
+  manually.
+- `[]`: assignment input is locked and there are no eligible
+  registrations.
+- `Grouped[]`: assignment input is locked and registrations are shown
+  under group headings.
+- `Registration[]`: assignment input is locked. A single registration is
+  auto-selected. Multiple registrations produce a dropdown.
 
 Integrators use the `identifier` to fetch roster and assignment metadata.
 
@@ -260,11 +262,12 @@ These steps are performed once by the Moodle administrator.
 Open the Correxit service and add the functions below. This list matches the
 current Correxit code exactly.
 
-| Function                        | Used by                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------- |
-| `mod_assign_get_assignments`    | Registrar: lists assignments the teacher can see                                |
-| `core_enrol_get_enrolled_users` | Registrar & Distributor: fetches the roster / user IDs                          |
-| `mod_assign_save_grade`         | Distributor & Collector: attach notebook, collector also posts the scaled grade |
+- `mod_assign_get_assignments`: registrar lists assignments visible to
+  the teacher.
+- `core_enrol_get_enrolled_users`: registrar and distributor fetch the
+  roster and Moodle user ids.
+- `mod_assign_save_grade`: distributor attaches notebooks. Collector
+  posts the scaled grade and graded notebook.
 
 The external service must also have **Can upload files** and
 **Can download files** enabled (checkboxes on the service edit page).
@@ -384,13 +387,19 @@ streaming progress API.
 
 ### Troubleshooting
 
-| Symptom                        | Likely cause                                                                                   |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Dropdown is empty              | The token user has no courses with assignments, or the external service is missing a function. |
-| Network error / CORS           | Moodle is not returning `Access-Control-Allow-Origin` for the JupyterLab origin.               |
-| `Invalid token`                | Token is expired, revoked, or pasted incorrectly.                                              |
-| Students missing from roster   | The student is not enrolled in the course, or their enrolment is suspended.                    |
-| `Upload failed` / access error | The external service does not have **Can upload files** enabled.                               |
-| `mod_assign_save_grade`        | The function is not added to the external service's function list.                             |
-| `No Moodle user for …`         | The assignee string in the roster does not match any Moodle `username`.                        |
-| `Invalid assignment ID format` | The workbook was registered with the manual registrar, not the Moodle one.                     |
+- **Dropdown is empty**: the token user has no courses with assignments,
+  or the external service is missing a function.
+- **Network error / CORS**: Moodle is not returning
+  `Access-Control-Allow-Origin` for the JupyterLab origin.
+- **`Invalid token`**: the token is expired, revoked, or pasted
+  incorrectly.
+- **Students missing from roster**: the student is not enrolled in the
+  course, or the enrolment is suspended.
+- **`Upload failed` / access error**: the external service does not have
+  **Can upload files** enabled.
+- **`mod_assign_save_grade`**: the function is not in the external
+  service function list.
+- **`No Moodle user for …`**: the assignee string in the roster does not
+  match a Moodle `username`.
+- **`Invalid assignment ID format`**: the workbook was registered with
+  the manual registrar, not the Moodle one.

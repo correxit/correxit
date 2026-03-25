@@ -262,7 +262,8 @@ A locked notebook where:
 
 - Markdown and setup cells are **visible but not editable**.
 - Graded cells are **editable**: these are the blanks to fill in.
-- Secret references appear as **encrypted raw cells** (PGP blocks, hidden source).
+- Secret references appear as **encrypted raw cells**: PGP blocks with
+  hidden source.
 - Shared references are **visible but not editable**.
 - The passphrase is absent. Students cannot unlock the workbook.
 
@@ -271,10 +272,10 @@ Double-clicking a read-only markdown cell will not switch it to edit mode
 
 ## Locking and unlocking
 
-| Action     | What happens                                                     |
-| ---------- | ---------------------------------------------------------------- |
-| **Lock**   | Encrypts secret references, encrypts roster, erases the key.     |
-| **Unlock** | Prompts for passphrase, decrypts references, re-enables editing. |
+- **Lock**: encrypts secret references, encrypts the roster, and erases
+  the key.
+- **Unlock**: prompts for the passphrase, decrypts references, and
+  re-enables editing.
 
 Lock before distributing. You can lock and unlock freely during
 authoring to preview what students will see.

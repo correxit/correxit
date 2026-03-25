@@ -18,13 +18,13 @@
       "properties": {
         "url": {
           "title": "URL",
-          "description": "Base URL of the Moodle instance (e.g. http://localhost:8000)",
+          "description": "Base URL of the Moodle instance",
           "type": "string",
           "default": ""
         },
         "token": {
           "title": "API token",
-          "description": "Web service token for Moodle REST API access. Entered values are moved to the secrets manager and never stored on disk.",
+          "description": "Moodle REST token. Stored in the secrets manager.",
           "type": "string",
           "default": ""
         }

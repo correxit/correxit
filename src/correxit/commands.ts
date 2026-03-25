@@ -403,6 +403,27 @@ export function commands(
       const { workbook } = await reify(args);
       if (!workbook) return;
 
+      const notebook = workbook.context.model.sharedModel;
+      const detected = nbgrader.detect(notebook.cells.map(cell => ({
+        id: cell.id,
+        cell_type: cell.cell_type,
+        source: cell.getSource(),
+        metadata: cell.toJSON().metadata as Record<string, any>
+      })));
+      if (detected) {
+        const { button } = await showDialog({
+          title: trans.__('Convert nbgrader notebook?'),
+          body: trans.__(
+            'This rewrites the current notebook as a Correxit workbook.'
+          ),
+          buttons: [
+            Dialog.cancelButton({ label: trans.__('Cancel') }),
+            Dialog.okButton({ label: trans.__('Convert') })
+          ]
+        });
+        if (!button.accept) return;
+      }
+
       const passphrase = await input.text({
         title: trans.__('Enter a passphrase'),
         label: trans.__('Enter a passphrase for this workbook')
@@ -433,9 +454,9 @@ export function commands(
         node.appendChild(document.createTextNode(line));
       });
       void showDialog({
-        title: trans.__('Converted from nbgrader'),
+        title: trans.__('Conversion summary'),
         body: new Widget({ node }),
-        buttons: [Dialog.okButton()]
+        buttons: [Dialog.okButton({ label: trans.__('Continue') })]
       });
     }
   }));

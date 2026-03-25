@@ -672,9 +672,7 @@ test('intervention on last reviewable cell auto-certifies workbook', async ({
   await dispose();
 });
 
-test('correctable cell with multiple references sums per-reference points', async ({
-  page
-}) => {
+test('correctable cell sums multiple reference points', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref1', source: 'print(42)' },
     { id: 'ref2', source: 'print(99)' },
@@ -830,7 +828,7 @@ test('collect gathers certified workbooks and records receipts', async ({
   expect(result[0].assignee).toBe('alice@example.com');
   expect(result[1].assignee).toBe('bob@example.com');
 
-  // Collecting again without overwrite should yield nothing (already collected).
+  // Collecting again without overwrite should yield nothing.
   const again = await page.evaluate(async (directory: string) => {
     const app = (window as any).jupyterapp;
     const stream: AsyncGenerator<any> = await app.commands.execute(

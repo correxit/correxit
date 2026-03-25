@@ -6,17 +6,24 @@ Cryptographic primitives use `window.crypto` and `openpgp.js`.
 
 ## Threat Profile
 
-| Threat                                   | Mitigation                                             |
-| ---------------------------------------- | ------------------------------------------------------ |
-| Student reads the reference cells        | Secret reference cell encryption (AES-256 via openpgp) |
-| Student reads answerable payload         | Answer payload is a digest (SHA-256 hash)              |
-| Student reads the roster                 | Roster encryption (AES-256 via openpgp)                |
-| Student alters authored assignment state | Assignment MAC (keyed SHA-256 hash)                    |
-| Student edits cells after submission     | Workbook locking + freezing                            |
-| Peer reads answers from file             | Sealed submissions (PGP encryption to author key)      |
-| Student tampers after submit             | Seal hash + transport integrity (see below)            |
-| Student copies peer's sealed blobs       | Assignee + cell id bound inside encrypted payload      |
-| Student starts from a forged blank slate | `issue` digest + `issuer` PGP signature                |
+- Student reads the reference cells:
+  secret reference encryption (`openpgp`, AES-256).
+- Student reads answerable payload:
+  answer payloads are SHA-256 digests.
+- Student reads the roster:
+  roster encryption (`openpgp`, AES-256).
+- Student alters authored assignment state:
+  assignment MAC (keyed SHA-256).
+- Student edits cells after submission:
+  workbook locking and freezing.
+- Peer reads answers from file:
+  sealed submissions to the author key.
+- Student tampers after submit:
+  seal hash plus transport integrity.
+- Student copies peer's sealed blobs:
+  assignee and cell id are bound into the encrypted payload.
+- Student starts from a forged blank slate:
+  `issue` digest plus `issuer` PGP signature.
 
 **Out of scope:** malicious authors, browser memory extraction,
 compromised JupyterLab servers, and preventing cross-student file access
@@ -216,24 +223,26 @@ re-encrypting and comparing.
 
 ### Assignment Fields
 
-| Field           | Type             | Signed? | Meaning                             |
-| --------------- | ---------------- | ------- | ----------------------------------- |
-| `assignee`      | `string`         | Yes     | Student identifier                  |
-| `roster`        | `string[]`       | Yes     | Encrypted on lock                   |
-| `expiration`    | `number \| null` | Yes     | Deadline                            |
-| `id`            | `string \| null` | Yes     | External assignment id              |
-| `keys`          | `Keys`           | Partial | Author keys MACed, student keys not |
-| `name`          | `string`         | Yes     | Assignment display name             |
-| `report`        | `Report`         | Yes     | Scores + interventions              |
-| `issue`         | `string`         | Yes     | Deterministic blank-slate digest    |
-| `issuer`        | `string`         | Yes     | Author PGP signature over `issue`   |
-| `seal`          | `string \| null` | No      | SHA-256 of concatenated ciphertexts |
-| `mac`           | `string`         | -       | Mutable assignment authenticity MAC |
-| `certification` | `number \| null` | No      | When the grade was finalized        |
-| `submission`    | `number \| null` | No      | When the student submitted          |
-| `submitted`     | `string \| null` | No      | External submission receipt         |
-| `distribution`  | `number \| null` | No      | Local distribution timestamp        |
-| `collected`     | `string \| null` | No      | External collection receipt         |
+- `assignee`: `string`, signed, student identifier.
+- `roster`: `string[]`, signed, encrypted on lock.
+- `expiration`: `number | null`, signed, deadline.
+- `id`: `string | null`, signed, external assignment id.
+- `keys`: `Keys`, partially signed. Author keys are MACed, student keys
+  are not.
+- `name`: `string`, signed, assignment display name.
+- `report`: `Report`, signed, scores and interventions.
+- `issue`: `string`, signed, deterministic blank-slate digest.
+- `issuer`: `string`, signed, author PGP signature over `issue`.
+- `seal`: `string | null`, unsigned, SHA-256 of concatenated
+  ciphertexts.
+- `mac`: `string`, mutable assignment authenticity MAC.
+- `certification`: `number | null`, unsigned, final grade timestamp.
+- `submission`: `number | null`, unsigned, student submission
+  timestamp.
+- `submitted`: `string | null`, unsigned, external submission receipt.
+- `distribution`: `number | null`, unsigned, local distribution
+  timestamp.
+- `collected`: `string | null`, unsigned, external collection receipt.
 
 ### Certification Sequence
 

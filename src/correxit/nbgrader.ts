@@ -419,11 +419,14 @@ export function report(
   const reviewable = cells.filter(({ is }) => is === 'reviewable');
   const points = cells.reduce((sum, { points }) => sum + points, 0);
   const lines = [
-    trans.__('Converted from nbgrader format.'),
+    trans.__('This notebook was rewritten in place as a Correxit workbook.'),
     '',
     trans.__(
       '%1 auto-graded, %2 manually graded, %3 total points.',
       correctable.length, reviewable.length, points
+    ),
+    trans.__(
+      'Keep the original nbgrader notebook until you are satisfied with the conversion.'
     )
   ];
   if (splits.length)
@@ -447,7 +450,7 @@ export function report(
   }
   lines.push('');
   lines.push(
-    trans.__('Select a cell to review its configuration in the sidebar.')
+    trans.__('Expand the Correxit sidebar to inspect each cell configuration.')
   );
   return lines;
 }

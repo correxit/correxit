@@ -43,11 +43,18 @@ multiple UI surfaces:
 
 The architecture is divided into three layers:
 
-| Layer                     | Responsibility                                                                                                                              | Modules                                                                                                        |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **User Interface**        | Display state, accept user input, and execute commands. Purely declarative except for minimalist use of `ReactWidget`.                      | `src/ui/`, `src/corrector/`, `src/correxit/input.ts`, `src/correxit/use-command.ts`, `src/corrector/bridge.ts` |
-| **Commands**              | Defines all permissible actions and routes them to the business logic. Acts as an orchestrator of the Rubric/Workbook APIs.                 | `src/correxit/commands.ts`, `src/corrector/commands.ts`                                                        |
-| **`Rubric` & `Workbook`** | Manages mutable state (`Workbook`), immutable operations (`Rubric`), cryptographic operations, file manipulation, and kernel communication. | `src/correxit/rubric.ts`, `src/correxit/workbook.ts`, et al.                                                   |
+- **User Interface**: displays state, accepts user input, and executes
+  commands. It stays declarative except for minimal `ReactWidget` glue.
+  Modules: `src/ui/`, `src/corrector/`, `src/correxit/input.ts`,
+  `src/correxit/use-command.ts`, `src/corrector/bridge.ts`.
+- **Commands**: define permissible actions and route them into the
+  business logic. They orchestrate the `Rubric` and `Workbook` APIs.
+  Modules: `src/correxit/commands.ts`,
+  `src/corrector/commands.ts`.
+- **`Rubric` & `Workbook`**: manage mutable notebook state, immutable
+  rubric operations, cryptography, file manipulation, and kernel
+  communication. Modules: `src/correxit/rubric.ts`,
+  `src/correxit/workbook.ts`, and related helpers.
 
 **Principle:** _All state mutations and actions flow through commands._ UI
 components are declarative. They render state and execute commands, but never
@@ -78,9 +85,11 @@ The `locked` boolean serves as the discriminator for TypeScript narrowing.
 
 ## Data model: `Workbook` (`workbook.ts`)
 
-`Workbook` is an abstraction over Jupyter notebooks. A `Headed` workbook is
-backed by an active `NotebookPanel` (visible in the UI), exposing only its `content` widget and its document `context`. A `Headless` workbook has only a
-`context` and `content: null`. It is used for batch grading and scanning.
+`Workbook` is an abstraction over Jupyter notebooks. A `Headed` workbook
+is backed by an active `NotebookPanel` visible in the UI. It exposes only
+its `content` widget and document `context`. A `Headless` workbook has
+only a `context` and `content: null`. It is used for batch grading and
+scanning.
 
 ### Caching
 
@@ -189,7 +198,11 @@ the Reviewer `navigate()` to a cursor position. The Reviewer subscribes via
 
 ## Kernel pool concurrency model
 
-The kernel pool (`kernels.ts`) manages bounded concurrency for batch grading. It uses a semaphore-like `acquire()` mechanism to limit the number of active and recycling kernels. Released kernels are restarted and cached with a time-to-live (TTL) to avoid the overhead of starting new kernels for subsequent workbooks.
+The kernel pool (`kernels.ts`) manages bounded concurrency for batch
+grading. It uses a semaphore-like `acquire()` mechanism to limit active
+and recycling kernels. Released kernels are restarted and cached with a
+time-to-live (TTL) to avoid the cost of starting fresh kernels for later
+workbooks.
 
 ```mermaid
 stateDiagram-v2
@@ -236,14 +249,16 @@ Correxit provides extension points as JupyterLab plugins, each identified by a
 single token. Core logic is decoupled from IO, e.g. replacing a distributor
 implementation requires no changes to the propagator loop or commands.
 
-| Plugin            | Purpose                                             | Default                       |
-| ----------------- | --------------------------------------------------- | ----------------------------- |
-| **`Distributor`** | Deliver one propagated workbook                     | Manual no-op                  |
-| **`Collector`**   | Collect certified grades                            | Digest receipt                |
-| **`Registrar`**   | Provide assignment registrations                    | Returns null (manual entry)   |
-| **`Submitter`**   | Handle submission receipts                          | Digest receipt                |
-| **`Unlocker`**    | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager           |
-| **`Monitor`**     | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |
+- **`Distributor`**: delivers one propagated workbook. Default: manual
+  no-op.
+- **`Collector`**: collects certified grades. Default: digest receipt.
+- **`Registrar`**: provides assignment registrations. Default: `null`
+  for manual entry.
+- **`Submitter`**: handles submission receipts. Default: digest receipt.
+- **`Unlocker`**: manages rubric key lifecycle. Default:
+  `SecretsManager`.
+- **`Monitor`**: yields the active workbook as the user switches tabs.
+  Default: `Stream`-based async iterable.
 
 Type definitions are in `src/correxit/correxit.ts`. Default implementations are
 in `src/plugins.tsx`. See [PLUGINS.md](PLUGINS.md) for the full integration
