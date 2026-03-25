@@ -779,10 +779,10 @@ export namespace Workbook {
     try {
       const spec = await kernel.spec || null;
       for (const index of range(cell ? scan(cell) : cells.length)) {
-        const cell = cells.get(index) as ICodeCellModel;
-        if (cells.get(index).type !== 'code') continue;
+        const cell = cells.get(index);
+        if (!cell || cell.type !== 'code') continue;
         try {
-          outputs.set(cell.id, await execute(cell, kernel));
+          outputs.set(cell.id, await execute(cell as ICodeCellModel, kernel));
         } catch (error) {
           console.warn('cell execute error', cell, error);
         }

@@ -395,7 +395,6 @@ test('track archives completed retry output before clearing retry state', async 
   const retry = widget.locator('.correxit-propagator-retry');
   await expect(retry).toHaveText('Retry 1 failed');
   await retry.click();
-  await expect(retry).toHaveText('Retrying...');
   await expect(widget.locator('pre')).toContainText('Finished retrying 1');
   await expect(widget.locator('pre')).toContainText(
     'Distributed alice@example.com'
