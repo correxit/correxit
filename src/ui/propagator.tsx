@@ -47,7 +47,8 @@ export function Propagator(props: Propagator.Props) {
   const [log, done] = useCommand<LogEntry>(commands, command, { timestamp });
   const [attempted, setAttempted] = useState(false);
   const [retry, setRetry] = useState<Propagator.Retry | null>(null);
-  const [rounds, setRounds] = useState<LogEntry[]>([]);
+  const [retries, setRetries] = useState<LogEntry[]>([]);
+  const [started, setStarted] = useState(false);
   const recover = retry ? redistribute : '';
   const [extra, idle] = useCommand<LogEntry>(commands, recover, retry || {});
   useEffect(() => void (command && setAttempted(true)), [command]);
@@ -55,16 +56,25 @@ export function Propagator(props: Propagator.Props) {
     if (done && attempted) release();
   }, [attempted, done, release]);
   useEffect(() => {
-    if (!retry || !idle) return;
-    setRounds(current => [...current, ...extra]);
+    if (!retry) {
+      setStarted(false);
+      return;
+    }
+    if (!idle) setStarted(true);
+  }, [idle, retry]);
+  useEffect(() => {
+    if (!retry || !started || !idle) return;
+    setRetries(current => [...current, ...extra]);
     setRetry(null);
-  }, [extra, idle, retry]);
+  }, [extra, idle, retry, started]);
 
   const retrying = !!retry;
-  const trail = [...log, ...rounds, ...(retry ? extra : [])];
+  const trail = [...log, ...retries, ...(retry ? extra : [])];
   const messages = trail
     .filter(([, { type }]) => type !== 'progress')
     .map(([message]) => message);
+  const directory = log.find(([, { type }]) => type === 'mkdir')?.[1]
+    .slots[0] as string | undefined;
   const saved = new Set(
     log
       .filter(([, { type }]) => type === 'saved')
@@ -78,13 +88,18 @@ export function Propagator(props: Propagator.Props) {
         .filter(path => saved.has(path))
     )
   );
-  const recovered = new Set(
-    trail
-      .filter(([, { type }]) => type === 'distributed')
-      .map(([, { slots }]) => slots[1] as string | undefined)
-      .filter((path): path is string => !!path)
+  const start = retries
+    .map(([, { type }]) => type === 'separator')
+    .lastIndexOf(true);
+  const recent = start === -1 ? [] : retries.slice(start);
+  const retried = Array.from(
+    new Set(
+      recent
+        .filter(([, { type }]) => type === 'distribute-error')
+        .map(([, { slots }]) => slots[1] as string)
+    )
   );
-  const pending = failed.filter(path => !recovered.has(path));
+  const pending = retries.length ? retried : failed;
   const active = retrying ? extra : log;
   const [value, max]: [number, number] = active.reduce(
     (progress, [, { type, slots }]) =>
@@ -95,8 +110,8 @@ export function Propagator(props: Propagator.Props) {
   const running = !done || retrying;
   const retriable = done && (!!pending.length || retrying);
   const redo = () => {
-    if (retrying || !pending.length) return;
-    setRetry({ paths: pending, timestamp: Date.now() });
+    if (retrying || !directory || !pending.length) return;
+    setRetry({ path: directory, timestamp: Date.now() });
   };
   return (
     <div className="correxit-propagator-content">
@@ -161,7 +176,7 @@ export namespace Propagator {
   };
 
   export type Retry = {
-    paths: string[];
+    path: string;
     timestamp: number;
   };
 

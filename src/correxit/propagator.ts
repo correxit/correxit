@@ -48,6 +48,7 @@ export async function* propagate({
     for (const reference of encrypted)
       yield { type: 'encrypted', slots: [reference] };
     for (const assignee of roster) {
+      yield { type: 'separator', slots: [] };
       const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
       const file = await io.assigned(base, assignee);
       const path = PathExt.join(directory.path, file);
@@ -75,7 +76,6 @@ export async function* propagate({
         };
       }
       const created = await io.create({ factory, manager, notebook, path });
-      yield { type: 'separator', slots: [] };
       yield { type: 'assigned', slots: [assignee] };
       yield { type: created ? 'saved' : 'create-error', slots: [path] };
       if (created && distributed)

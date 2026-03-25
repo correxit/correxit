@@ -41,6 +41,21 @@ export async function cd(commands: CommandRegistry, path: string) {
   if (commands.hasCommand(command)) commands.execute(command, { path });
 }
 
+/** @returns notebooks in a directory sorted lexically by name. */
+export async function notebooks(
+  { contents }: Pick<ServiceManager.IManager, 'contents'>,
+  path: string
+): Promise<Contents.IModel[]> {
+  const response = await contents.get(path, { content: true });
+  if (response.type !== 'directory')
+    throw new Correxit.Error.Fetch(`Not a directory: ${path}`);
+
+  const notebook = ({ type }: Contents.IModel) => type === 'notebook';
+  const lexical = (a: { name: string }, b: { name: string }) =>
+    a.name.localeCompare(b.name);
+  return (response.content || []).filter(notebook).sort(lexical);
+}
+
 /** @returns a headless workbook or null. */
 export async function create(options: {
   factory: NotebookModelFactory;

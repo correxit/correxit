@@ -142,7 +142,33 @@ export function commands(
       if (!active) workbook.context.dispose();
     }
   };
-  const redistribute = async function* (paths: string[]) {
+  const pending = async (directory: string): Promise<string[]> => {
+    if (!directory) return [];
+
+    const current = state.workbook();
+    try {
+      const notebooks = await io.notebooks(manager, directory);
+      const paths: string[] = [];
+      for (const { path } of notebooks) {
+        const active = current?.context.path === path ? current : null;
+        const handle = normalize({ path });
+        const workbook = active || (handle && await fetch(handle, true));
+        if (!workbook) continue;
+        try {
+          const rubric = open(workbook);
+          if (rubric?.assignment.distribution === null) paths.push(path);
+        } finally {
+          if (!active) workbook.context.dispose();
+        }
+      }
+      return paths;
+    } catch (error) {
+      console.warn(CommandIDs.redistribute, directory, error);
+      return [];
+    }
+  };
+  const redistribute = async function* (directory: string, paths: string[]) {
+    paths = paths.length ? paths : await pending(directory);
     const total = paths.length;
     if (!total) return;
 
@@ -688,9 +714,11 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.redistribute, {
     label: trans.__('Retry distribution'),
     execute: async (
-      args: Partial<{ paths: string[] }>
+      args: Partial<{ path: string; paths: string[] }>
     ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
-      return translate(redistribute(args.paths || []), trans);
+      return translate(
+        redistribute(args.path || '', args.paths || []), trans
+      );
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.refer, {

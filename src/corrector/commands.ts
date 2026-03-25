@@ -212,24 +212,15 @@ export function commands(
       execute: (handle: Partial<Credentials>): AsyncGenerator<Scanned> =>
         (async function* scanner(handle) {
           const directory = handle && handle.path;
-          let response: Contents.IModel;
           if (!directory) return;
+
+          let notebooks: Contents.IModel[];
           try {
-            response = await manager.contents.get(directory, { content: true });
+            notebooks = await io.notebooks(manager, directory);
           } catch (error) {
             console.warn(CommandIDs.scan, directory, error);
             return;
           }
-          if (response.type !== 'directory') {
-            console.warn(CommandIDs.scan, directory, 'not a directory');
-            return;
-          }
-
-          const { content } = response;
-          const notebook = ({ type }: Contents.IModel) => type === 'notebook';
-          const lexical = (a: { name: string }, b: { name: string }) =>
-            a.name.localeCompare(b.name);
-          const notebooks = (content || []).filter(notebook).sort(lexical);
           for (const { path } of notebooks)
             yield { hollow: true, context: { path } };
 
