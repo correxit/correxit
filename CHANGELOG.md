@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/QuantStack/correxit/compare/v1.16.0...v1.17.0) (2026-03-26)
+
+
+### Features
+
+* Distributor ([#63](https://github.com/QuantStack/correxit/issues/63)) ([fc54ebe](https://github.com/QuantStack/correxit/commit/fc54ebeb23139d5a665bf167bcb444fba3e45248))
+
 # [1.16.0](https://github.com/QuantStack/correxit/compare/v1.15.0...v1.16.0) (2026-03-23)
 
 
