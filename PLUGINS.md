@@ -223,6 +223,9 @@ feedback attachments), and **collector** (posting certified grades back to
 Moodle with the graded notebook attached). All three use the Moodle REST API
 and need one-time administrator setup.
 
+For the operational teacher and student workflow, including the browser-only
+constraints that shape it, see [MOODLE](MOODLE.md).
+
 The built-in **submitter** is manual. Because Correxit runs entirely in the
 browser using the teacher's API token, it cannot safely authenticate as a
 student to submit work on their behalf. Students submit their assignments by
