@@ -187,37 +187,36 @@ export namespace Moodle {
     const url = URLExt.normalize(raw);
     if (!token || !url)
       throw new Error.Plugin('Moodle URL or token not configured');
-
-    const metadata = notebook.metadata['correxit'] as Partial<Rubric.Locked>;
-    const assignment = metadata.assignment as Partial<Rubric.Assignment>;
-    const compound = assignment.id;
-    if (!compound)
+    if (!identifier.assignment)
       throw new Error.Plugin('No external assignment ID');
 
-    const [course, id] = compound.split(':');
-    if (!course || !id)
+    const { assignee } = identifier;
+    const [course, assignment] = identifier.assignment.split(':');
+    if (!course || !assignment)
       throw new Error.Plugin('Invalid assignment ID format');
 
     const request = api(url, token);
-    const uid = (await enroll(request, course)).get(identifier.assignee);
-    if (uid === undefined)
-      throw new Error.Plugin(`No Moodle user for ${identifier.assignee}`);
+    const user = (await enroll(request, course)).get(assignee);
+    if (user === undefined)
+      throw new Error.Plugin(`No Moodle user for ${assignee}`);
 
+    const metadata = notebook.metadata['correxit'] as Partial<Rubric.Locked>;
+    const { name } = metadata.assignment as Partial<Rubric.Assignment>;
+    const base = (name || `moodle-${course}-${assignment}`).toLocaleLowerCase();
+    const file = await io.assigned(base, assignee);
     const content = JSON.stringify(notebook);
-    const name = assignment.name || '';
-    const file = await io.assigned(name, identifier.assignee);
-    const item = await upload(url, token, content, file);
+    const uploaded = await upload(url, token, content, file);
     await request(
       'mod_assign_save_grade',
       [
-        `assignmentid=${id}`,
-        `userid=${uid}`,
+        `assignmentid=${assignment}`,
+        `userid=${user}`,
         'grade=-1',
         'attemptnumber=-1',
         'addattempt=0',
         'workflowstate=',
         'applytoall=0',
-        `plugindata[files_filemanager]=${item}`
+        `plugindata[files_filemanager]=${uploaded}`
       ].join('&')
     );
   }
@@ -245,12 +244,12 @@ export namespace Moodle {
           )
       );
     const rosters = await Promise.all(
-      courses.map(async ({ id }) => {
+      courses.map(async ({ id: course }) => {
         const users: User[] = await request(
           'core_enrol_get_enrolled_users',
-          `courseid=${id}`
+          `courseid=${course}`
         );
-        return [id, normalize(users)] as const;
+        return [course, normalize(users)] as const;
       })
     );
     const roster = Object.fromEntries(rosters);
