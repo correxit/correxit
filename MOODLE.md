@@ -70,8 +70,8 @@ With the Moodle distributor enabled, it also attaches each student's assigned
 workbook to that student's Moodle assignment feedback files.
 
 Each distributed workbook is personalized. Correxit locks the rubric,
-encrypts secret references, encrypts the roster, strips the authoring key, and
-binds the workbook to one assignee.
+encrypts secret references, encrypts the roster, removes the in-memory rubric
+key from the distributed copy, and binds the workbook to one assignee.
 
 ### 5. The student downloads the workbook and works locally
 
