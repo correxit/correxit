@@ -3,13 +3,54 @@ import { cd, setup } from './utils';
 
 test.use({ autoGoto: false });
 
+const keys = {
+  private: {
+    assignee: null,
+    author: `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+xUkEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6EgDjg6P4
+JzjqjCIqEGS8Fljrm2FRMpbWiOpUK0TnIETO1g+6zQ1jb3JyZXhpdC10ZXN0
+wsAPBBMbCgCFBYJpwc62AwsJBwkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBu
+b3RhdGlvbnMub3BlbnBncGpzLm9yZ7aeKcxlxXAmARYftBEDMKuRQYKOg+mi
+UNWWvS5pYKcDBRUKCA4MBBYAAgECGQECmwMCHgEWIQRwUHQWg+0lDFYSIKj/
+5WnPG54aeAAAwjLPzmdRtiPAQG4qh7YcqTxABlF/i6mcuUNsQvG79Vkcbgud
+48ZND/OAA3qRMBHeYvEI2EO0zcY4TvGjusPeGNQFx0kEacHOthmr6un0sKA9
+X4aGqEOxqYXCkcUuYSxJoSj3QI47TNOWYwAIuAZB5UGbE5vjq7JFdu682Hnl
+jhYm3Vce+dJFbxnudxBqwroEGBsKAHAFgmnBzrYJEP/lac8bnhp4RRQAAAAA
+ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmeDvNANjX21V+sInrrh
+T7QjHE6/sBEVbi2IVTWRo3ft/wKbDBYhBHBQdBaD7SUMVhIgqP/lac8bnhp4
+AADxaOwzJYh0FXQdc4Y5Vj8oSkixYJTh1YKqdnzbdcL9bjoEpwFbocEVhiil
+wuHeBt2QJmRrZohWA1uC36BzzqaMqQk=
+=3rAl
+-----END PGP PRIVATE KEY BLOCK-----`
+  },
+  public: {
+    assignee: null,
+    author: `-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+xiYEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6Es0NY29y
+cmV4aXQtdGVzdMLADwQTGwoAhQWCacHOtgMLCQcJEP/lac8bnhp4RRQAAAAA
+ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcme2ninMZcVwJgEWH7QR
+AzCrkUGCjoPpolDVlr0uaWCnAwUVCggODAQWAAIBAhkBApsDAh4BFiEEcFB0
+FoPtJQxWEiCo/+VpzxueGngAAMIyz85nUbYjwEBuKoe2HKk8QAZRf4upnLlD
+bELxu/VZHG4LnePGTQ/zgAN6kTAR3mLxCNhDtM3GOE7xo7rD3hjUBc4mBGnB
+zrYZq+rp9LCgPV+GhqhDsamFwpHFLmEsSaEo90COO0zTlmPCugQYGwoAcAWC
+acHOtgkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBn
+cGpzLm9yZ4O80A2NfbVX6wieuuFPtCMcTr+wERVuLYhVNZGjd+3/ApsMFiEE
+cFB0FoPtJQxWEiCo/+VpzxueGngAAPFo7DMliHQVdB1zhjlWPyhKSLFglOHV
+gqp2fNt1wv1uOgSnAVuhwRWGKKXC4d4G3ZAmZGtmiFYDW4LfoHPOpoypCQ==
+=3+uO
+-----END PGP PUBLIC KEY BLOCK-----`
+  }
+} as const;
+
 test('propagates assignment to individual notebooks', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'answer = 42' },
     { id: 'target', source: 'print(answer)' }
   ]);
 
-  const result = await page.evaluate(async () => {
+  const result = await page.evaluate(async keys => {
     const { Rubric, Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const panel = app.shell.currentWidget;
@@ -35,6 +76,8 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
       },
       [{ cell: 'target', referent: 'ref', points: 1, secret: true }]
     );
+    rubric.assignment.keys.private.author = keys.private.author;
+    rubric.assignment.keys.public.author = keys.public.author;
     await Workbook.update(panel, rubric);
     await app.commands.execute('correxit:assign', {
       roster: ['alice@example.com', 'bob@example.com']
@@ -76,9 +119,12 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
 
       return {
         assignee: assignment.assignee,
+        distribution: assignment.distribution,
+        issue: assignment.issue,
+        issuer: assignment.issuer,
         locked: metadata.locked,
+        mac: assignment.mac,
         roster: assignment.roster,
-        signature: assignment.signature,
         source: cell?.source,
         hidden: cell?.metadata?.jupyter?.source_hidden,
         type: cell?.cell_type
@@ -93,7 +139,7 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
       saved,
       checks
     };
-  });
+  }, keys);
 
   expect(result.saved.length).toBe(2);
   expect(result.assigned).toEqual(['alice@example.com', 'bob@example.com']);
@@ -102,9 +148,14 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
 
   for (const check of result.checks) {
     expect(result.assigned).toContain(check.assignee);
+    expect(check.distribution).toEqual(expect.any(Number));
+    expect(typeof check.issue).toBe('string');
+    expect(check.issue.length).toBeGreaterThan(0);
+    expect(typeof check.issuer).toBe('string');
+    expect(check.issuer.length).toBeGreaterThan(0);
     expect(check.locked).toBe(true);
-    expect(typeof check.signature).toBe('string');
-    expect(check.signature.length).toBeGreaterThan(0);
+    expect(typeof check.mac).toBe('string');
+    expect(check.mac.length).toBeGreaterThan(0);
     expect(Array.isArray(check.roster)).toBe(true);
     expect(check.roster.length).toBe(1);
     expect(check.type).toBe('raw');
@@ -132,6 +183,79 @@ test('propagates assignment to individual notebooks', async ({ page }) => {
     },
     { directory: result.directory, paths: result.saved }
   );
+  await dispose();
+});
+
+test('distribute validates issued notebooks before distributing', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'answer = 42' },
+    { id: 'target', source: 'print(answer)' }
+  ]);
+
+  const result = await page.evaluate(async keys => {
+    const { Rubric, Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    const rubric = Rubric.add(
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create()),
+      {
+        id: 'target',
+        is: 'comparable',
+        points: 1,
+        references: ['ref'],
+        payload: null
+      },
+      [{ cell: 'target', referent: 'ref', points: 1, secret: true }]
+    );
+    rubric.assignment.keys.private.author = keys.private.author;
+    rubric.assignment.keys.public.author = keys.public.author;
+    await Workbook.update(panel, rubric);
+    await app.commands.execute('correxit:assign', {
+      roster: ['alice@example.com']
+    });
+
+    const stream = await app.commands.execute('correxit:propagate');
+    let path = '';
+    for await (const [, emission] of stream) {
+      if (emission.type === 'saved') path = emission.slots[0] as string;
+    }
+
+    const contents = app.serviceManager.contents;
+    const file = await contents.get(path, { content: true, type: 'notebook' });
+    const notebook = file.content;
+    notebook.metadata.correxit.assignment.distribution = null;
+    notebook.cells[1].source = 'print(answer + 1)';
+    await contents.save(path, { ...file, content: notebook });
+
+    const ok = await app.commands.execute('correxit:distribute', {
+      path,
+      quiet: true,
+      silent: true
+    });
+    const distribution = (
+      await contents.get(path, { content: true, type: 'notebook' })
+    ).content.metadata.correxit.assignment.distribution;
+
+    await contents.delete(path).catch(() => {});
+    return { distribution, ok };
+  }, keys);
+
+  expect(result.ok).toBe(false);
+  expect(result.distribution).toBeNull();
+  await cd(page, '.');
   await dispose();
 });
 
@@ -167,5 +291,119 @@ test('propagate command is disabled for assigned workbooks', async ({
   });
 
   expect(result).toBe(false);
+  await dispose();
+});
+
+test('track archives retry output before clearing retry state', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, []);
+
+  await page.evaluate(() => {
+    const { Rubric, Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+    return Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create())
+    );
+  });
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    return app.commands.execute('correxit:assign', {
+      roster: ['alice@example.com']
+    });
+  });
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    const execute = app.commands.execute.bind(app.commands);
+    const emit = async function* (items: any[]) {
+      for (const item of items) yield item;
+    };
+    (window as any).__correxitRestore = () => {
+      app.commands.execute = execute;
+    };
+    app.commands.execute = async (id: string, args: any) => {
+      if (id === 'correxit:propagate') {
+        return emit([
+          ['Created directory fake', { type: 'mkdir', slots: ['fake'] }],
+          ['------------', { type: 'separator', slots: [] }],
+          [
+            'Distribute ERROR alice@example.com (TypeError: Failed to fetch)',
+            {
+              type: 'distribute-error',
+              slots: [
+                'alice@example.com',
+                'fake/alice.ipynb',
+                'TypeError: Failed to fetch'
+              ]
+            }
+          ],
+          [
+            'Assigned to alice@example.com',
+            {
+              type: 'assigned',
+              slots: ['alice@example.com']
+            }
+          ],
+          [
+            'Saved fake/alice.ipynb',
+            {
+              type: 'saved',
+              slots: ['fake/alice.ipynb']
+            }
+          ],
+          ['1 of 1', { type: 'progress', slots: [1, 1] }],
+          ['Finished! (roster: 1)', { type: 'success', slots: [1] }]
+        ]);
+      }
+      if (id === 'correxit:redistribute') {
+        return emit([
+          ['------------', { type: 'separator', slots: [] }],
+          [
+            'Distributed alice@example.com',
+            {
+              type: 'distributed',
+              slots: ['alice@example.com', 'fake/alice.ipynb']
+            }
+          ],
+          ['1 of 1', { type: 'progress', slots: [1, 1] }],
+          ['Finished retrying 1', { type: 'retried', slots: [1] }]
+        ]);
+      }
+      return execute(id, args);
+    };
+  });
+
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    return app.commands.execute('correxit:track');
+  });
+
+  const widget = page.locator('.correxit-propagator');
+  await widget.waitFor({ state: 'visible', timeout: 5000 });
+  const retry = widget.locator('.correxit-propagator-retry');
+  await expect(retry).toHaveText('Retry 1 failed');
+  await retry.click();
+  await expect(widget.locator('pre')).toContainText('Finished retrying 1');
+  await expect(widget.locator('pre')).toContainText(
+    'Distributed alice@example.com'
+  );
+  await expect(retry).toHaveCount(0);
+
+  await page.evaluate(() => {
+    (window as any).__correxitRestore?.();
+    delete (window as any).__correxitRestore;
+  });
   await dispose();
 });

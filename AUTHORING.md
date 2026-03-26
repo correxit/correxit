@@ -114,10 +114,10 @@ is an ordinary code cell in the notebook that you link to a graded cell.
 
 References have two modes, toggled via the **Share** button in the sidebar:
 
-| Mode       | During authoring  | After distribution                 |
-| ---------- | ----------------- | ---------------------------------- |
-| **Secret** | Visible, editable | Encrypted (PGP), hidden, read-only |
-| **Shared** | Visible, editable | Visible, read-only                 |
+| Mode       | During authoring  | After distribution           |
+| ---------- | ----------------- | ---------------------------- |
+| **Secret** | Visible, editable | Encrypted, hidden, read-only |
+| **Shared** | Visible, editable | Visible, read-only           |
 
 Secret is the default. Use it when the reference reveals the answer
 (e.g., the correct SQL query). Use shared when the reference is not
@@ -228,11 +228,12 @@ one copy per roster entry:
 1. Secret references are encrypted.
 2. Non-graded cells are marked read-only.
 3. The rubric is locked and the passphrase is stripped.
-4. Each copy is signed with the student's identity.
+4. Each copy is issued to one assignee and carries a stable blank-slate
+   `issue` digest plus author `issuer` signature.
 5. The roster is encrypted so students cannot see classmates.
 
-The Consumer plugin determines where files are written (local directory,
-Moodle, etc.).
+Correxit always writes local copies. An optional Distributor plugin may also
+deliver each notebook elsewhere (Moodle, object storage, etc.).
 
 ### Cell outputs and propagation
 
@@ -261,7 +262,8 @@ A locked notebook where:
 
 - Markdown and setup cells are **visible but not editable**.
 - Graded cells are **editable**: these are the blanks to fill in.
-- Secret references appear as **encrypted raw cells** (PGP blocks, hidden source).
+- Secret references appear as **encrypted raw cells**: PGP blocks with
+  hidden source.
 - Shared references are **visible but not editable**.
 - The passphrase is absent. Students cannot unlock the workbook.
 
@@ -270,20 +272,29 @@ Double-clicking a read-only markdown cell will not switch it to edit mode
 
 ## Locking and unlocking
 
-| Action     | What happens                                                     |
-| ---------- | ---------------------------------------------------------------- |
-| **Lock**   | Encrypts secret references, encrypts roster, erases the key.     |
-| **Unlock** | Prompts for passphrase, decrypts references, re-enables editing. |
+- **Lock**: encrypts secret references, encrypts the roster, and erases
+  the key.
+- **Unlock**: prompts for the passphrase, decrypts references, and
+  re-enables editing.
 
 Lock before distributing. You can lock and unlock freely during
 authoring to preview what students will see.
 
-### Draft
+### Revert to draft
 
-If a student has submitted but needs to revise, reverted copies recover
-an editable state (answer cells become editable again, lifecycle
-timestamps are cleared) while keeping the rubric locked. The student
-does not need the passphrase.
+For submitted workbooks that were not sealed with a student passphrase,
+**Revert to draft** clears the submission state and makes answer cells
+editable again while keeping the rubric locked.
+
+### Revise submission
+
+If the student chose **Set passphrase** when submitting, the workbook is
+sealed to both the author and student keys. In that case the student uses
+**Revise submission** and must enter the same submission passphrase.
+
+Revision decrypts the sealed answers, clears the seal and submission
+metadata, clears the student key material, and makes answer cells editable
+again while keeping the rubric locked.
 
 ## Lifecycle
 
@@ -295,7 +306,7 @@ A workbook moves through these stages:
                          └─────┬─────┘
                                │ lock
                          ┌─────▼─────┐
-                         │  Locked   │ ◂── draft
+                         │  Locked   │ ◂── draft / revise
                          └─────┬─────┘
                                │ submit
                          ┌─────▼─────┐
@@ -311,12 +322,12 @@ A workbook moves through these stages:
                          └───────────┘
 ```
 
-- **Submitted**: the student clicked submit (or the Submitter plugin
-  recorded it). A timestamp is stored.
+- **Submitted**: the student clicked submit. A timestamp is stored. If a
+  Submitter plugin records the submission externally, its receipt is stored too.
 - **Certified**: the grade has been computed and frozen. Certification
   is the grader's seal; it requires all cells to be scored.
-- **Collected**: an external system (Collector plugin) acknowledged
-  receipt of the grade.
+- **Collected**: a Collector plugin acknowledged receipt of the grade and
+  stored the external receipt.
 
 ## Tips
 

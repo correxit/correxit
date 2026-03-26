@@ -11,14 +11,14 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
   - **Controller**: `commands.ts` (orchestrates all mutations).
   - **View**: `ui/` (React components).
 - **Command-Driven**: **Never** mutate state directly from UI components. UI triggers Commands; Commands call Model functions.
-- **Plugin Composition**: Each plugin provides exactly one capability via a JupyterLab token (`Consumer`, `Collector`, `Submitter`, `Unlocker`, `Registrar`, `Monitor`). Core logic is decoupled from IO. Swapping a file-system consumer for an LMS consumer requires no changes to `propagator.ts`.
+- **Plugin Composition**: Each plugin provides exactly one capability via a JupyterLab token (`Distributor`, `Collector`, `Submitter`, `Unlocker`, `Registrar`, `Monitor`). Core logic is decoupled from IO. Swapping one distributor for another requires no changes to `propagator.ts`.
 
 ## 2. Critical Technical Invariants
 
 ### Security Model
 
 - **Explicit Nulls**: Use `field: Type | null` instead of optional `field?: Type`.
-  - _Reason_: Stable JSON serialization is required for cryptographic signatures.
+  - _Reason_: Stable JSON serialization is required for cryptographic checks.
 - **Validate-Before-Encrypt**: Always validate rubric/assignment data _before_ encryption.
   - _Wrong_: Encrypt -> Validate.
   - _Right_: Validate -> Encrypt.
@@ -36,13 +36,13 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - **Discriminated Unions**: Use union types with a common discriminator field to encode mutually exclusive states.
   - _Example_: `Reified` type in `commands.ts` enables safe type narrowing after `if (!rubric)` guards.
   - _Pattern_: After checking `if (!rubric) return`, TypeScript knows `workbook` is non-null.
-- **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, external assignment ID, rubric ID, and signature.
-- **Timestamps**: Lifecycle timestamps (`certification`, `collected`, `submission`, `submitted`) live on `Assignment`. Read them via `Workbook.open()`.
+- **Workbook Identity**: Use `Workbook.identifier()` to get canonical identifier with assignee, external assignment ID, issue digest, and rubric ID.
+- **Timestamps**: Lifecycle timestamps (`certification`, `collected`, `distribution`, `submission`, `submitted`) live on `Assignment`. Read them via `Workbook.open()`.
 
 ## 3. Asynchronous Patterns
 
-- **Pull-Based Generators**: Long-running ops (propagation, grading, scanning) are cold `async function*` generators. They do no work until iterated. Backpressure is inherent. Each `yield` suspends until the consumer pulls.
-- **Generator Pipelines**: Composition is via `yield*` delegation: `propagator yield* consumer`, `consumer yield* stream`. No push channels, no buffers, no callbacks.
+- **Pull-Based Generators**: Long-running ops (propagation, grading, scanning) are cold `async function*` generators. They do no work until iterated. Backpressure is inherent. Each `yield` suspends until the caller pulls.
+- **Generator Pipelines**: Composition is via `yield*` delegation where it earns its keep, but propagation now owns its roster loop and calls a per-notebook distributor leaf. No push channels, no buffers, no callbacks.
 - **UI Consumption**: Use the custom `useCommand` hook to consume these generators.
   - _Pattern_: `const [messages, idle] = useCommand(commands, 'command:id', args);`
   - This hook throttles updates ~60fps and handles cleanup.
@@ -81,10 +81,10 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing (with `bypass` mode to skip re-execution when all cells are already scored), `correct()` with verbose overloads returning `Grade.Verbose` (including cell outputs), `collect()` for recording a collection receipt, `submit()` for sealing + freezing + submission, `seal()` / `revise()` for sealed submission lifecycle, and `Cell.seal()` / `Cell.unseal()` for per-cell PGP operations.
 - `security.ts`: `openpgp` & `window.crypto` wrappers. Symmetric: `encrypt`, `decrypt`, `keygen`, `hmac`, `digest`. Asymmetric: `keypair` (Curve25519), `seal` (encrypt to public keys), `unseal` (decrypt with private key), `parse` (pre-parse a private key for reuse across multiple unseal calls).
 - `commands.ts`: The central controller registry. Defines `Reified` type for safe workbook resolution.
-- `dispatcher.ts`: Plugin factory for provider-dispatched plugins (Consumer, Registrar). The `create` callback returns a `[Plugin, () => void]` tuple. Handles Moodle settings and intercepts secrets via a settings registry transform, moving them to the secrets manager so they never reach disk.
+- `dispatcher.ts`: Plugin factory for provider-dispatched plugins (Distributor, Registrar). The `create` callback returns a `[Plugin, () => void]` tuple. Handles Moodle settings and intercepts secrets via a settings registry transform, moving them to the secrets manager so they never reach disk.
 - `propagator.ts`: Async generator for assignment distribution to rosters.
 - `io.ts`: File system operations (`available`, `cd`, `create`, `mkdir`, workbook fetching).
-- `correxit.ts`: Plugin type definitions (`Collector`, `Consumer`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`). The `Registrar` returns `Registration[]` objects (not raw strings).
+- `correxit.ts`: Plugin type definitions (`Collector`, `Distributor`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`). The `Registrar` returns `Registration[]` objects (not raw strings).
 - `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, retries, timeout })`, `cap()`, `retries()`, and `timeout()` for settings-driven control.
 - `corrector/grader.ts`: Bounded-concurrency async generator for batch grading. Accepts a `recover` callback, `cap`, and `retries`. Scanner accepts `Iterable | AsyncIterable`; failures are recovered and yielded so nothing stalls the pipeline.
 - `state.ts`: In-memory cache for active workbook and cell scores (`Map` with FIFO eviction). Also tracks the reviewer cursor cell via `cursor()` and exposes a `refreshed` signal for sidebar re-renders.

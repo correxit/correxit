@@ -3,6 +3,8 @@ import { ReadonlyPartialJSONObject } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
 import { useEffect, useState } from 'react';
 
+type State<T> = { idle: boolean; list: T[]; };
+
 /**
  * Executes a command that yields an async iterable and streams its results into
  * a state array in a component.
@@ -29,8 +31,7 @@ export function useCommand<T>(
   id: string,
   args?: ReadonlyPartialJSONObject
 ): [T[], boolean] {
-  const [list, setList] = useState([] as T[]);
-  const [idle, setIdle] = useState(true);
+  const [state, setState] = useState<State<T>>({ idle: true, list: [] });
   useEffect((interrupted = false) => {
     (async (stream?: Promise<AsyncIterable<T> | Iterable<T>>) => {
       const buffer: T[] = [];
@@ -38,12 +39,11 @@ export function useCommand<T>(
         if (buffer.length) {
           const chunk = buffer.slice();
           buffer.length = 0;
-          setList(accumulated => [...accumulated, ...chunk]);
+          setState(({ list }) => ({ idle: false, list: [...list, ...chunk] }));
         }
       };
       const throttler = new Throttler(flush, { limit: 16 });
-      setList([]);
-      setIdle(false);
+      setState({ idle: false, list: [] });
       try {
         for await (const item of await (stream || [])) {
           if (interrupted) return;
@@ -53,10 +53,10 @@ export function useCommand<T>(
         flush();
       } finally {
         throttler.dispose();
-        setIdle(true);
+        setState(({ list }) => ({ idle: true, list }));
       }
     })(commands.hasCommand(id) ? commands.execute(id, args) : undefined);
     return () => void (interrupted = true);
   }, [id, JSON.stringify(args)]);
-  return [list, idle];
+  return [state.list, state.idle];
 }

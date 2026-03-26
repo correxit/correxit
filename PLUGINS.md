@@ -1,19 +1,21 @@
 # Correxit Plugin Integration
 
-Correxit is serverless by design. All assignment distribution, submission
-recording, and grade collection are delegated to **plugin tokens** that a
-server-backed JupyterLab extension can satisfy. The five integration points
-are described below.
+Correxit is serverless by design. Distribution, submission recording, and
+grade collection are delegated to plugin tokens that a JupyterLab extension
+can provide.
 
-`Unlocker` and `Monitor` are also plugin tokens but have sensible defaults
-and are rarely overridden. `Monitor` is an internal concern. `Unlocker` is
-documented below for institutional deployments that manage keys externally.
+The main external integration points are `Registrar`, `Distributor`,
+`Submitter`, and `Collector`.
+
+`Unlocker` and `Monitor` are also tokens. `Monitor` is internal. `Unlocker`
+is relevant only for deployments that manage keys externally.
 
 ---
 
 ## `Workbook.Identifier`
 
-Most plugins receive a `Workbook.Identifier`, which provides the core correlation identity for a workbook state:
+Most plugins receive `Workbook.Identifier`, the stable correlation identity
+for a workbook state:
 
 ```typescript
 type Identifier = {
@@ -21,24 +23,28 @@ type Identifier = {
   assignee: string | null;
   // The external assignment ID used for LMS correlation.
   assignment: string | null;
+  // The issued blank-slate digest, if propagation has occurred.
+  issue: string | null;
   // The immutable rubric ID shared by all workbooks.
   rubric: string;
-  // A content hash that changes when the assignment materially changes.
-  signature: string | null;
 };
 ```
 
-Plugins that operate on _assigned_ workbooks (consumer, submitter) receive
-`Identifier.Assigned`, which narrows `assignee` and `signature` to `string`:
+Plugins that operate on assigned workbooks receive
+`Identifier.Assigned`, which narrows `assignee` to `string`:
 
 ```typescript
-type Assigned = Identifier & { assignee: string; signature: string };
+type Assigned = Identifier & { assignee: string };
 ```
 
-A type guard `Identifier.assigned(id)` bridges the two at runtime.
+`Identifier.assigned(id)` narrows at runtime.
 
-An integrator uses these fields to look up a course, validate submission
-integrity, enforce deadlines, or record a grade to an external gradebook.
+Integrators use these fields to look up courses, enforce deadlines, and record
+submissions or grades externally.
+
+`Identifier` intentionally does **not** include `assignment.mac`. The MAC is a
+local integrity proof over broader author-controlled state, not a routing key.
+Plugins need a stable lookup identity. Correxit verifies the MAC internally.
 
 ---
 
@@ -48,11 +54,15 @@ integrity, enforce deadlines, or record a grade to an external gradebook.
 type Registrar = (
   workbook: Workbook,
   identifier: Workbook.Identifier
-) => Promise<Rubric.Assignment.Registration[] | null>;
+) => Promise<
+  | Rubric.Assignment.Registration[]
+  | { group: string; assignments: Rubric.Assignment.Registration[] }[]
+  | null
+>;
 ```
 
-Called when an author opens a workbook that has not yet been assigned.
-Returns assignment registrations for the workbook.
+Called when an author opens an unassigned workbook. Returns available
+assignment registrations.
 
 ```typescript
 // Rubric.Assignment.Registration
@@ -62,52 +72,47 @@ type Registration = Pick<
 >;
 ```
 
-| Return value     | Effect                                                                                                         |
-| ---------------- | -------------------------------------------------------------------------------------------------------------- |
-| `null`           | Assignment input is unlocked; the author may enter details manually.                                           |
-| `[]`             | Assignment input is locked; the assignment has no eligible registrations.                                      |
-| `Registration[]` | Assignment input is locked; a single registration is auto-selected, multiple registrations present a dropdown. |
+- `null`: assignment input stays unlocked. The author may enter details
+  manually.
+- `[]`: assignment input is locked and there are no eligible
+  registrations.
+- `Grouped[]`: assignment input is locked and registrations are shown
+  under group headings.
+- `Registration[]`: assignment input is locked. A single registration is
+  auto-selected. Multiple registrations produce a dropdown.
 
-The integrator relies on the `identifier` values to fetch available
-course roster and assignment metadata.
+Integrators use the `identifier` to fetch roster and assignment metadata.
 
 ---
 
-## `Correxit.Consumer`
+## `Correxit.Distributor`
 
 ```typescript
-type Consumer = (output: {
+type Distributor = (propagated: {
+  identifier: Workbook.Identifier.Assigned;
+  notebook: INotebookContent;
   path: string;
-  rubric: Rubric.Unlocked;
-  stream: Propagator;
-}) => AsyncGenerator<Emitter.Emission>;
+}) => Promise<void>;
 ```
 
-Called when an author triggers propagation. The consumer receives:
+Called when an author propagates a workbook or retries delivery for one saved
+workbook. The distributor receives:
 
-- `path` - the source notebook path.
-- `rubric` - the unlocked rubric, including the resolved roster.
-- `stream` - a factory that, given `{ base, pwd }`, returns an async
-  iterable of personalized notebook objects ready for delivery.
+- `propagated` - one personalized notebook ready for delivery.
 
 ```typescript
-// Propagator.Notebook
-type Notebook = {
+type Propagated = {
   identifier: Workbook.Identifier.Assigned;
   notebook: INotebookContent; // nbformat notebook, ready to save
   path: string; // intended destination path
 };
 ```
 
-The consumer is responsible for delivering each notebook to its destination
-(file system, LMS upload, object store, etc.) and `yield`-ing
-`Emitter.Emission` values - `{ type: string; slots: (string | number)[] }`
+The distributor is responsible only for delivery (LMS upload, object store,
+etc.). Local file creation stays in the core propagator. After successful
+delivery, Correxit records the local `assignment.distribution` timestamp.
 
-- to drive the progress UI.
-
-> The default consumer writes workbooks to a local subdirectory. A
-> server-backed consumer would iterate `stream` and POST each notebook to
-> an LMS endpoint.
+> The default distributor is the manual distributor, which is a no-op.
 
 ---
 
@@ -120,14 +125,14 @@ type Submitter = (
 ) => Promise<string | null>;
 ```
 
-Called when a student submits a workbook. Returns an opaque submission receipt
-that Correxit stores in the workbook metadata, or `null` if the submission
-was not recorded. The identifier is guaranteed to have a non-null `assignee`
-and `signature`.
+Called when a student submits a workbook. Returns an opaque receipt that
+Correxit stores in workbook metadata, or `null` if the submission was not
+recorded. `assignee` is guaranteed non-null.
 
-The default implementation returns a random UUID. A server-backed submitter
-would POST the submission to an LMS, validate the assignee against the
-roster, enforce the deadline, and return the server-issued receipt ID.
+The default implementation returns a content-addressed digest receipt. A
+server-backed submitter would POST the submission to an LMS, validate the
+assignee against the roster, enforce the deadline, and return the server's
+receipt.
 
 ---
 
@@ -137,9 +142,9 @@ roster, enforce the deadline, and return the server-issued receipt ID.
 type Collector = (certified: Workbook.Certified) => Promise<string | null>;
 ```
 
-Called by the corrector after a workbook has been graded and certified.
-Returns an opaque receipt that Correxit stores in the workbook
-metadata, or `null` if the grade was not recorded.
+Called after a workbook has been graded and certified. Returns an opaque
+receipt that Correxit stores in workbook metadata, or `null` if the grade was
+not recorded.
 
 ```typescript
 // Workbook.Certified
@@ -158,9 +163,9 @@ type Grade = {
 };
 ```
 
-The default implementation returns a random UUID. A server-backed collector
-would POST the grade to the gradebook, verify the signature, and return the
-server-issued receipt ID.
+The default implementation returns a content-addressed digest receipt. A
+server-backed collector would POST the grade to the gradebook, correlate the
+workbook via the identifier, and return the server's receipt.
 
 ---
 
@@ -176,21 +181,19 @@ type Unlocker = {
 };
 ```
 
-Manages the rubric key lifecycle. `store` persists a key for a rubric id
-(in memory only; keys must never reach disk). `unlock` attempts to unlock
-a workbook, optionally prompting the user for credentials.
+Manages the rubric key lifecycle. `store` persists a key for a rubric id in
+memory only. `unlock` attempts to unlock a workbook, optionally prompting for
+credentials.
 
-The default implementation uses the JupyterLab `SecretsManager`. An
-institutional deployer might replace it with an HSM-backed or
-vault-backed provider that supplies keys without user interaction.
+The default implementation uses JupyterLab `SecretsManager`. Institutional
+deployments may replace it with an HSM-backed or vault-backed provider.
 
 ---
 
 ## Providing a plugin
 
-Each token is a standard Lumino `Token<T>`. Override the default
-implementation by declaring a `JupyterFrontEndPlugin` that `provides` the
-token:
+Each token is a standard Lumino `Token<T>`. Override a default by declaring a
+`JupyterFrontEndPlugin` that `provides` the token:
 
 ```typescript
 import { JupyterFrontEndPlugin } from '@jupyterlab/application';
@@ -215,23 +218,29 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
 ## Moodle Integration
 
 Correxit includes built-in Moodle plugins for the **registrar** (assignment
-metadata and rosters) and **consumer** (distributing workbooks to students
-via the Moodle file and submission APIs). Both operate via the Moodle REST
-API and require some one-time setup by a Moodle administrator.
+metadata and rosters), **distributor** (delivery to students via Moodle
+feedback attachments), and **collector** (posting certified grades back to
+Moodle with the graded notebook attached). All three use the Moodle REST API
+and need one-time administrator setup.
 
-The integration uses two moving parts:
+The built-in **submitter** is manual. Because Correxit runs entirely in the
+browser using the teacher's API token, it cannot safely authenticate as a
+student to submit work on their behalf. Students submit their assignments by
+uploading their downloaded `.ipynb` files through the standard Moodle
+assignment interface.
+
+The integration needs two things:
 
 1. A **Moodle external service** with a curated set of web service functions.
 2. An **API token** scoped to that service and assigned to a teacher account.
 
-The teacher enters their Moodle server URL and token in the Correxit
-registrar settings (Settings → Correxit Registrar → Moodle). Correxit then
-fetches the teacher's courses, assignments, and enrolled students directly
-from the browser. No backend required.
+The teacher enters the Moodle URL and token in Correxit settings. Correxit
+then fetches courses, assignments, and enrolled students directly from the
+browser. No backend is required.
 
 ### Administrator setup
 
-These steps are performed once by whoever administers the Moodle instance.
+These steps are performed once by the Moodle administrator.
 
 #### 1. Enable web services
 
@@ -250,25 +259,49 @@ These steps are performed once by whoever administers the Moodle instance.
 
 #### 3. Add functions to the service
 
-Open the Correxit service and add the functions listed below. This list
-tracks exactly what the current Correxit code calls, nothing more.
+Open the Correxit service and add the functions below. This list matches the
+current Correxit code exactly.
 
-| Function                        | Used by                                                 |
-| ------------------------------- | ------------------------------------------------------- |
-| `mod_assign_get_assignments`    | Registrar: lists assignments the teacher can see        |
-| `core_enrol_get_enrolled_users` | Registrar & Consumer: fetches the roster / user IDs     |
-| `core_grades_update_grades`     | Consumer: sets the assignment's maximum grade           |
-| `mod_assign_save_grade`         | Consumer: attaches the notebook as feedback per student |
+- `mod_assign_get_assignments`: registrar lists assignments visible to
+  the teacher.
+- `core_enrol_get_enrolled_users`: registrar and distributor fetch the
+  roster and Moodle user ids.
+- `mod_assign_save_grade`: distributor attaches notebooks. Collector
+  posts the scaled grade and graded notebook.
 
 The external service must also have **Can upload files** and
 **Can download files** enabled (checkboxes on the service edit page).
-The consumer uploads each workbook notebook to the Moodle draft area
-before attaching it to the student's submission.
+The distributor uploads each workbook notebook to the Moodle draft area
+before attaching it to the student's feedback. The collector uses the same
+upload path for the graded workbook and records the numeric grade in the same
+Moodle assignment.
+
+#### 3a. Service permissions checklist
+
+The registered Moodle external service must be granted all of the following:
+
+- **Enabled**: the external service itself must be enabled.
+- **REST protocol**: the REST protocol must be enabled globally.
+- **Can upload files**: required because Correxit uploads notebooks to the
+  Moodle draft area before attaching them to assignment feedback.
+- **Can download files**: enable this alongside upload support on the service.
+- **Function `mod_assign_get_assignments`**: required by the registrar to list
+  assignments available to the teacher.
+- **Function `core_enrol_get_enrolled_users`**: required by the registrar to
+  build the roster and by the distributor/collector to resolve a Correxit
+  assignee string to a Moodle user id.
+- **Function `mod_assign_save_grade`**: required by the distributor to attach
+  assigned notebooks as feedback files and by the collector to post the final
+  scaled grade plus graded notebook.
+
+Correxit does **not** currently call any other Moodle web service functions.
+In particular, the built-in Moodle integration does not use a separate submit
+API, and it does not call `core_grades_update_grades`.
 
 #### 4. Create a token for the teacher
 
 A token must be created by an account with the _moodle/webservice:createtoken_
-capability (typically an admin) and assigned to the teacher's account.
+capability, typically an admin, and assigned to the teacher's account.
 
 - **Site administration → Server → Web services → Manage tokens → Create
   token**.
@@ -276,14 +309,13 @@ capability (typically an admin) and assigned to the teacher's account.
 - Select the **Correxit** service.
 - Optionally set an expiry date.
 
-Give the resulting token to the teacher. The teacher will paste it into
-Correxit's settings; it is never written to disk by Correxit.
+Give the resulting token to the teacher. Correxit does not write it to disk.
 
 #### 5. Configure CORS
 
-Because Correxit runs entirely in the browser, the Moodle server must return
-CORS headers that allow requests from the origin where JupyterLab is served
-(e.g. `http://localhost:8888`).
+Because Correxit runs entirely in the browser, Moodle must return CORS headers
+that allow requests from the JupyterLab origin (for example
+`http://localhost:8888`).
 
 How you achieve this depends on your deployment:
 
@@ -306,45 +338,68 @@ Once the administrator has completed the steps above and provided a token:
 3. Set **Provider** to `moodle`.
 4. Enter the **Moodle URL** (e.g. `https://moodle.example.edu`).
 5. Paste the **API token**.
-6. **Settings → Settings Editor → Correxit Consumer**.
+6. **Settings → Settings Editor → Correxit Distributor**.
 7. Set **Provider** to `moodle`.
 8. Enter the same **Moodle URL** and **API token**.
+9. **Settings → Settings Editor → Correxit Collector**.
+10. Set **Provider** to `moodle`.
+11. Enter the same **Moodle URL** and **API token**.
 
-The registrar and consumer maintain independent settings and secrets so
-that each can be configured (or disabled) separately.
+Registrar, distributor, and collector settings are independent, so each can be
+configured or disabled separately.
 
-When the teacher opens a workbook that has not yet been assigned, Correxit
-will fetch their courses and assignments from Moodle and present them in a
-dropdown.
+When the teacher opens an unassigned workbook, Correxit fetches courses and
+assignments from Moodle and presents them in a dropdown.
+
+On distribution, Correxit attaches the assigned workbook to the student's
+Moodle assignment feedback area. On collection, Correxit uploads the certified
+workbook the same way and records the scaled numeric grade.
 
 ### Assignment ID convention
 
 The Moodle registrar encodes the assignment `id` as `courseId:assignmentId`
-(e.g. `2:5`). The Moodle consumer parses this compound ID to directly look
-up the course's enrolled users without re-fetching all assignments. Other
-LMS integrations may adopt a similar colon-delimited convention. Registrars
-that do not use an LMS (e.g. manual mode) store a plain opaque string;
-the core treats `id` as `string | null` and never interprets it.
+(for example `2:5`). The Moodle distributor parses this compound id to look
+up enrolled users without re-fetching all assignments. Other LMS integrations
+may adopt a similar convention. Registrars that do not use an LMS store any
+opaque string; the core treats `id` as `string | null` and does not interpret
+it.
 
 ### Minimum permissions
 
-The teacher account needs the standard **editingteacher** role in each
-course they teach. No additional capabilities beyond the role defaults are
-required. The web service functions above operate within the teacher's
-normal course-level permissions.
+The teacher account needs the standard **editingteacher** role in each course.
+No additional capabilities beyond the role defaults are required. The token
+and external service are administrative objects; the teacher needs admin
+access to create a token, not to use one.
 
-The token and external service are administrative objects; the teacher does
-not need admin access to _use_ a token, only to _create_ one.
+If your institution uses custom roles, ensure the token user can do the
+following in each target course:
+
+- view assignments returned by `mod_assign_get_assignments`
+- view enrolled users returned by `core_enrol_get_enrolled_users`
+- grade assignments via `mod_assign_save_grade`
+- attach feedback files to those graded assignments
+
+In practice, this means the token should normally belong to a teacher-grade
+account, not a student or read-only service account.
+
+Propagation progress is a private UI concern. Integrators do not implement a
+streaming progress API.
 
 ### Troubleshooting
 
-| Symptom                        | Likely cause                                                                                   |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Dropdown is empty              | The token user has no courses with assignments, or the external service is missing a function. |
-| Network error / CORS           | Moodle is not returning `Access-Control-Allow-Origin` for the JupyterLab origin.               |
-| `Invalid token`                | Token is expired, revoked, or pasted incorrectly.                                              |
-| Students missing from roster   | The student is not enrolled in the course, or their enrolment is suspended.                    |
-| `Upload failed` / access error | The external service does not have **Can upload files** enabled.                               |
-| `mod_assign_save_grade`        | The function is not added to the external service's function list.                             |
-| `No Moodle user for …`         | The assignee string in the roster does not match any Moodle `username`.                        |
-| `Invalid assignment ID format` | The workbook was registered with the manual registrar, not the Moodle one.                     |
+- **Dropdown is empty**: the token user has no courses with assignments,
+  or the external service is missing a function.
+- **Network error / CORS**: Moodle is not returning
+  `Access-Control-Allow-Origin` for the JupyterLab origin.
+- **`Invalid token`**: the token is expired, revoked, or pasted
+  incorrectly.
+- **Students missing from roster**: the student is not enrolled in the
+  course, or the enrolment is suspended.
+- **`Upload failed` / access error**: the external service does not have
+  **Can upload files** enabled.
+- **`mod_assign_save_grade`**: the function is not in the external
+  service function list.
+- **`No Moodle user for …`**: the assignee string in the roster does not
+  match a Moodle `username`.
+- **`Invalid assignment ID format`**: the workbook was registered with
+  the manual registrar, not the Moodle one.

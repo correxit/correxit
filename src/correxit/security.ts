@@ -105,6 +105,18 @@ export async function seal(
   return pgp.encrypt({ message, encryptionKeys: await Promise.all(keys) });
 }
 
+/** Create an armored cleartext signature over public text. */
+export async function sign(
+  text: string,
+  signer: string | PrivateKey
+): Promise<string> {
+  const key = typeof signer === 'string'
+    ? await parse(signer)
+    : signer;
+  const message = await pgp.createCleartextMessage({ text });
+  return pgp.sign({ message, signingKeys: key }) as Promise<string>;
+}
+
 /** Decrypt PGP ciphertext using a parsed or armored private key. */
 export async function unseal(
   text: string,
@@ -115,4 +127,16 @@ export async function unseal(
   const message = await pgp.readMessage({ armoredMessage: text });
   return (await pgp.decrypt({ message, decryptionKeys: key }))
     .data as string;
+}
+
+/** Verify an armored cleartext signature and return its signed text. */
+export async function verify(text: string, signer: string): Promise<string> {
+  const message = await pgp.readCleartextMessage({ cleartextMessage: text });
+  const key = await pgp.readKey({ armoredKey: signer });
+  const verification = await pgp.verify({
+    message,
+    verificationKeys: key
+  });
+  await verification.signatures[0].verified;
+  return message.getText();
 }

@@ -1,14 +1,23 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { Assignment } from './assignment';
 
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-const { certify, collect, convert, draft, lock, revise, submit, unlock } =
-  Correxit.CommandIDs;
+const {
+  certify,
+  collect,
+  convert,
+  distribute,
+  draft,
+  lock,
+  revise,
+  submit,
+  unlock
+} = Correxit.CommandIDs;
 
 export const Header: React.FC<{
   commands: CommandRegistry;
@@ -29,6 +38,7 @@ export const Header: React.FC<{
   const score = rubric
     ? Rubric.Assignment.summary(rubric.assignment.report)
     : null;
+  const assignment = rubric?.assignment || null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');
   const scored =
     !!score &&
@@ -38,11 +48,18 @@ export const Header: React.FC<{
   const titled = scored
     ? trans.__('%1 (%2 of %3)', heading, score.points, score.possible)
     : heading;
-  const submitted = !!rubric?.assignment.submission;
-  const sealed = !!rubric?.assignment.seal;
+  const submitted = assignment?.submission !== null;
+  const sealed = assignment?.seal !== null;
   const unlocked = !!rubric && !rubric.locked;
-  const certified = !!rubric?.assignment.certification;
-  const collected = !!rubric?.assignment.collected;
+  const certified = assignment?.certification !== null;
+  const collected = assignment?.collected !== null;
+  const unstarted = useUnstarted(workbook, rubric);
+  const distributable =
+    assignment !== null &&
+    assignment.assignee !== null &&
+    assignment.issue !== null &&
+    assignment.issuer !== null &&
+    assignment.distribution === null;
   const action = unlocked
     ? certified && !collected
       ? collect
@@ -64,34 +81,89 @@ export const Header: React.FC<{
       {!!rubric && <Assignment {...{ commands, trans, workbook }} />}
       <CommandToolbarButtonComponent commands={commands} id={convert} />
       <div className="correxit-sidebar-submission-actions">
-        <Lifecycle {...{ rubric, trans }} />
+        <Lifecycle {...{ rubric, trans, unstarted }} />
+        {distributable && (
+          <CommandToolbarButtonComponent commands={commands} id={distribute} />
+        )}
         <CommandToolbarButtonComponent commands={commands} id={action} />
       </div>
     </section>
   );
 };
 
+function useUnstarted(workbook: Workbook, rubric: Rubric | null): boolean {
+  const [unstarted, setUnstarted] = useState(false);
+  const assignment = rubric?.assignment;
+  const needed = !!(
+    assignment?.issue &&
+    assignment?.issuer &&
+    assignment?.certification === null &&
+    assignment?.collected === null &&
+    assignment?.distribution === null &&
+    assignment?.submission === null &&
+    assignment?.submitted === null
+  );
+  useEffect(() => {
+    if (!needed) {
+      setUnstarted(false);
+      return;
+    }
+
+    let cancelled = false;
+    void Workbook.unstarted(workbook)
+      .then(unstarted => !cancelled && setUnstarted(unstarted))
+      .catch(() => !cancelled && setUnstarted(false));
+    return () => void (cancelled = true);
+  }, [needed, workbook]);
+
+  return unstarted;
+}
+
 const Lifecycle: React.FC<{
   rubric: Rubric | null;
   trans: TranslationBundle;
-}> = ({ rubric, trans }) => {
+  unstarted: boolean;
+}> = ({ rubric, trans, unstarted }) => {
   if (!rubric) return <></>;
 
   const {
-    assignment: { certification, collected, submission, submitted }
+    assignment: {
+      assignee,
+      certification,
+      collected,
+      distribution,
+      submission,
+      submitted
+    }
   } = rubric;
+  const blank_slate =
+    unstarted &&
+    certification === null &&
+    collected === null &&
+    distribution === null &&
+    submission === null &&
+    submitted === null;
   const lines: string[] = [];
+  if (distribution !== null)
+    lines.push(trans.__('Distribution %1', Rubric.timestamp(distribution)));
   if (submission !== null)
     lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
   if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
   if (certification !== null)
     lines.push(trans.__('Certification %1', Rubric.timestamp(certification)));
   if (collected !== null) lines.push(trans.__('Collected: %1', collected));
+  if (blank_slate) lines.push(trans.__('Unstarted'));
 
   const label = lines.length
     ? lines[lines.length - 1]
-    : trans.__('Unsubmitted');
-  const title = lines.length ? lines.join('\n') : trans.__('Unsubmitted');
+    : assignee
+      ? trans.__('Started')
+      : trans.__('Unsubmitted');
+  const title = lines.length
+    ? lines.join('\n')
+    : assignee
+      ? trans.__('Started')
+      : trans.__('Unsubmitted');
   return (
     <div
       aria-label={title}

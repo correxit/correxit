@@ -1,12 +1,15 @@
 export const COLLECTOR = 'A collector of certified workbook grades';
 
-export const CONSUMER = 'A consumer of propagated Correxit workbook assignments';
+export const DISTRIBUTOR = 'A distributor of propagated Correxit workbooks';
 
-export const CORRECTOR = 'Correxit Corrector user interface for batch grading workbooks';
+export const CORRECTOR =
+	'Correxit Corrector UI for batch grading workbooks';
 
-export const MONITOR = 'Correxit monitor connects/disconnects active workbooks and yields them';
+export const MONITOR =
+	'Correxit monitor connects active workbooks and yields them';
 
-export const REGISTRAR = 'Correxit registrar to provide assignment registrations for workbooks';
+export const REGISTRAR =
+	'Correxit registrar for workbook assignment registrations';
 
 export const SUBMITTER = 'Correxit submitter to receive workbook submissions';
 

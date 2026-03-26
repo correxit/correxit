@@ -24,8 +24,8 @@ type Headless = { content: null; context: { path: string } };
 const BOM = '\uFEFF';
 const header =
   'assignee,assignment,expiration,title,rubric,' +
-  'signature,points,possible,' +
-  'submission,submitted,certification,collected,' +
+  'issue,points,possible,' +
+  'distribution,submission,submitted,certification,collected,' +
   'resolved,path';
 
 const report = (): Rubric.Assignment.Report => ({
@@ -40,14 +40,17 @@ const assignment = (
   assignee: '',
   certification: null,
   collected: null,
+  distribution: null,
   expiration: null,
   id: null,
+  issue: '',
+  issuer: '',
   keys: Rubric.Assignment.Keys.empty(),
+  mac: '',
   name: '',
   report: report(),
   roster: [],
   seal: null,
-  signature: '',
   submission: null,
   submitted: null,
   ...overrides
@@ -137,8 +140,8 @@ describe('csv', () => {
         assignment: assignment({
           assignee: 'Alice',
           id: 'hw-1',
-          name: 'Homework 1',
-          signature: 'sig-abc'
+          issue: 'issue-abc',
+          name: 'Homework 1'
         })
       })
     );
@@ -148,7 +151,7 @@ describe('csv', () => {
     expect(row[1]).toBe('hw-1');
     expect(row[3]).toBe('Homework 1');
     expect(row[4]).toBe('r-42');
-    expect(row[5]).toBe('sig-abc');
+    expect(row[5]).toBe('issue-abc');
   });
 
   it('uses grade score when provided', () => {
@@ -173,7 +176,7 @@ describe('csv', () => {
     const [, row] = rows;
     expect(row[6]).toBe('8');
     expect(row[7]).toBe('10');
-    expect(row[12]).toBe('true');
+    expect(row[13]).toBe('true');
   });
 
   it('falls back to rubric summary when no grade exists', () => {
@@ -274,10 +277,10 @@ describe('csv', () => {
     );
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     const [, row] = rows;
-    expect(row[8]).not.toBe('');
-    expect(row[10]).not.toBe('');
-    expect(row[9]).toBe('sub-xyz');
-    expect(row[11]).toBe('receipt-abc');
+    expect(row[9]).not.toBe('');
+    expect(row[11]).not.toBe('');
+    expect(row[10]).toBe('sub-xyz');
+    expect(row[12]).toBe('receipt-abc');
   });
 
   it('handles multiple workbooks mixing hollow and reified', () => {

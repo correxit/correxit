@@ -24,7 +24,7 @@ Curve25519 asymmetric encryption (sealed submissions), and native
 `window.crypto` for HMAC-SHA-256 signing and PBKDF2 key derivation. All fields
 use explicit nulls (`field: Type | null`) rather than optional markers
 (`field?: Type`) to ensure stable JSON serialization, which is required for
-deterministic cryptographic signatures. The plaintext PGP private key exists
+deterministic cryptographic checks. The plaintext PGP private key exists
 only in local scope during `unlock` and is discarded when the function returns.
 
 ## Architecture
@@ -39,15 +39,22 @@ multiple UI surfaces:
 - the Correxit sidebar
 - the Corrector widget for batch grading
 - the Reviewer widget for per-cell manual review
-- cell and notebook toolbar buttons
+- cell and notebook toolbar buttons and decorations
 
 The architecture is divided into three layers:
 
-| Layer                     | Responsibility                                                                                                                              | Modules                                                                                                        |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **User Interface**        | Display state, accept user input, and execute commands. Purely declarative except for minimalist use of `ReactWidget`.                      | `src/ui/`, `src/corrector/`, `src/correxit/input.ts`, `src/correxit/use-command.ts`, `src/corrector/bridge.ts` |
-| **Commands**              | Defines all permissible actions and routes them to the business logic. Acts as an orchestrator of the Rubric/Workbook APIs.                 | `src/correxit/commands.ts`, `src/corrector/commands.ts`                                                        |
-| **`Rubric` & `Workbook`** | Manages mutable state (`Workbook`), immutable operations (`Rubric`), cryptographic operations, file manipulation, and kernel communication. | `src/correxit/rubric.ts`, `src/correxit/workbook.ts`, et al.                                                   |
+- **User Interface**: displays state, accepts user input, and executes
+  commands. It stays declarative except for minimal `ReactWidget` glue.
+  Modules: `src/ui/`, `src/corrector/`, `src/correxit/input.ts`,
+  `src/correxit/use-command.ts`, `src/corrector/bridge.ts`.
+- **Commands**: define permissible actions and route them into the
+  business logic. They orchestrate the `Rubric` and `Workbook` APIs.
+  Modules: `src/correxit/commands.ts`,
+  `src/corrector/commands.ts`.
+- **`Rubric` & `Workbook`**: manage mutable notebook state, immutable
+  rubric operations, cryptography, file manipulation, and kernel
+  communication. Modules: `src/correxit/rubric.ts`,
+  `src/correxit/workbook.ts`, and related helpers.
 
 **Principle:** _All state mutations and actions flow through commands._ UI
 components are declarative. They render state and execute commands, but never
@@ -78,9 +85,11 @@ The `locked` boolean serves as the discriminator for TypeScript narrowing.
 
 ## Data model: `Workbook` (`workbook.ts`)
 
-`Workbook` is an abstraction over Jupyter notebooks. A `Headed` workbook is
-backed by an active `NotebookPanel` (visible in the UI), exposing only its `content` widget and its document `context`. A `Headless` workbook has only a
-`context` and `content: null`. It is used for batch grading and scanning.
+`Workbook` is an abstraction over Jupyter notebooks. A `Headed` workbook
+is backed by an active `NotebookPanel` visible in the UI. It exposes only
+its `content` widget and document `context`. A `Headless` workbook has
+only a `context` and `content: null`. It is used for batch grading and
+scanning.
 
 ### Caching
 
@@ -116,16 +125,16 @@ unrepresentable.
 
 Long-running operations (propagation, grading, scanning) are implemented as
 cold `async function*` generators. They do no work until iterated. Each `yield`
-suspends execution until the consumer pulls the next value, providing automatic
+suspends execution until the caller pulls the next value, providing automatic
 backpressure.
 
 ### Generator pipelines
 
 Each pipeline is a pull-driven chain of generators. Nothing moves until asked.
 
-**Assignment propagation:** the propagator defines a roster loop (one notebook
-per assignee) and hands it to the consumer as a factory via `yield*`. The
-consumer decides _where_ to write by calling `stream(location)`, then iterates:
+**Assignment propagation:** the propagator defines the roster loop, creates the
+local notebooks unconditionally, and optionally calls a distributor leaf
+function per assignee:
 
 ```mermaid
 flowchart TB
@@ -135,14 +144,12 @@ flowchart TB
 
     UI(["useCommand"]):::ui
     P["propagator()"]:::gen
-    C["consumer()"]:::gen
+    D["distributor()"]:::gen
     R{{"roster loop"}}:::src
 
   UI -->|for await| P
-  P -->|yield*| C
-  C -->|for await| R
-  R -. notebook .-> C
-  C -. progress .-> P
+  P -->|call| D
+  R -. notebook .-> P
   P -. progress .-> UI
 ```
 
@@ -191,7 +198,11 @@ the Reviewer `navigate()` to a cursor position. The Reviewer subscribes via
 
 ## Kernel pool concurrency model
 
-The kernel pool (`kernels.ts`) manages bounded concurrency for batch grading. It uses a semaphore-like `acquire()` mechanism to limit the number of active and recycling kernels. Released kernels are restarted and cached with a time-to-live (TTL) to avoid the overhead of starting new kernels for subsequent workbooks.
+The kernel pool (`kernels.ts`) manages bounded concurrency for batch
+grading. It uses a semaphore-like `acquire()` mechanism to limit active
+and recycling kernels. Released kernels are restarted and cached with a
+time-to-live (TTL) to avoid the cost of starting fresh kernels for later
+workbooks.
 
 ```mermaid
 stateDiagram-v2
@@ -235,17 +246,19 @@ identifiers are acceptable when convention demands it (e.g., `useCommand`,
 ## Plugins
 
 Correxit provides extension points as JupyterLab plugins, each identified by a
-single token. Core logic is decoupled from IO, e.g. replacing the file-system
-consumer with an LMS consumer requires no changes to the propagator or commands.
+single token. Core logic is decoupled from IO, e.g. replacing a distributor
+implementation requires no changes to the propagator loop or commands.
 
-| Plugin          | Purpose                                             | Default                       |
-| --------------- | --------------------------------------------------- | ----------------------------- |
-| **`Consumer`**  | Process propagated assignments                      | Writes to local filesystem    |
-| **`Collector`** | Collect certified grades                            | Returns a UUID                |
-| **`Registrar`** | Provide assignment registrations                    | Returns null (manual entry)   |
-| **`Submitter`** | Handle submission receipts                          | Returns a UUID                |
-| **`Unlocker`**  | Manage rubric key lifecycle (store and unlock)      | Uses SecretsManager           |
-| **`Monitor`**   | Yield the active workbook as the user switches tabs | `Stream`-based async iterable |
+- **`Distributor`**: delivers one propagated workbook. Default: manual
+  no-op.
+- **`Collector`**: collects certified grades. Default: digest receipt.
+- **`Registrar`**: provides assignment registrations. Default: `null`
+  for manual entry.
+- **`Submitter`**: handles submission receipts. Default: digest receipt.
+- **`Unlocker`**: manages rubric key lifecycle. Default:
+  `SecretsManager`.
+- **`Monitor`**: yields the active workbook as the user switches tabs.
+  Default: `Stream`-based async iterable.
 
 Type definitions are in `src/correxit/correxit.ts`. Default implementations are
 in `src/plugins.tsx`. See [PLUGINS.md](PLUGINS.md) for the full integration
@@ -268,7 +281,7 @@ Some guiding principles:
   `workbook`, `rubric`, `grade`, `cell`, `lease`: these are domain terms with
   stable definitions. Naming is load-bearing.
 - **Pull over push.** Async generators compose via `yield*` delegation. The
-  consumer controls the pace. This is simpler and more composable than signal
+  caller controls the pace. This is simpler and more composable than signal
   graphs or event emitters.
 - **Framework seams.** Correxit integrates with JupyterLab's core primitives
   (commands, widget lifecycle, plugin tokens) while adopting functional

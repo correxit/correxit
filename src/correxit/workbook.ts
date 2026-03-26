@@ -86,20 +86,19 @@ export namespace Workbook {
   export type Identifier = {
     assignee: string | null;
     assignment: string | null;
+    issue: string | null;
     rubric: string;
-    signature: string | null;
   };
 
   export namespace Identifier {
-    /** An identifier with a guaranteed assignee and signature. */
+    /** An identifier with a guaranteed assignee. */
     export type Assigned = Identifier & {
       assignee: string;
-      signature: string;
     };
 
     /** Type guard for assigned identifiers. */
     export function assigned(id: Identifier): id is Assigned {
-      return id.assignee !== null && id.signature !== null;
+      return id.assignee !== null;
     }
   }
 
@@ -250,23 +249,28 @@ export namespace Workbook {
       assignee = assignment.assignee,
       expiration = assignment.expiration,
       id = assignment.id,
+      issue = assignment.issue,
+      issuer = assignment.issuer,
+      mac = assignment.mac,
       name = assignment.name,
       submission = assignment.submission,
       submitted = assignment.submitted,
       roster = assignment.roster,
-      signature = assignment.signature
     }: Partial<Rubric.Assignment>
   ): boolean => (
     assignee !== assignment.assignee ||
     expiration !== assignment.expiration ||
     id !== assignment.id ||
+    issue !== assignment.issue ||
+    issuer !== assignment.issuer ||
+    mac !== assignment.mac ||
     name !== assignment.name ||
     submission !== assignment.submission ||
     submitted !== assignment.submitted ||
     (roster !== assignment.roster &&
       (roster.length !== assignment.roster.length ||
         roster.some((record, i) => record !== assignment.roster[i]))) ||
-    signature !== assignment.signature
+    false
   );
   const transact = (workbook: Workbook, prepared: Cell.Prepared[]): void => {
     if (!prepared.length) return;
@@ -280,6 +284,98 @@ export namespace Workbook {
     if (workbook.content)
       NotebookActions.deselectAll(workbook.content);
   };
+  const verify = async (
+    workbook: Workbook,
+    rubric: Rubric.Locked,
+    action: 'unlock' | 'revise'
+  ): Promise<string[]> => {
+    const { seal } = rubric.assignment;
+    if (!seal) return [];
+
+    const ids = Object.keys(rubric.cells).sort();
+    const notebook = workbook.context.model.sharedModel;
+    const index = Object.fromEntries(
+      notebook.cells.map(cell => [cell.id, cell])
+    );
+    const present = ids.filter(id => id in index);
+    const missing = ids.filter(id => !(id in index));
+    if (missing.length) {
+      if (!workbook.content)
+        throw new Error.Unseal(`${action} seal error: missing cells`);
+      console.warn(`${action}: skipping seal verify, missing cells`, missing);
+      return present;
+    }
+
+    const ciphertexts = present.map(id => index[id].getSource());
+    const hash = await security.digest(ciphertexts.join('\n'));
+    if (hash !== seal)
+      throw new Error.Mismatch('seal mismatch: ciphertexts tampered');
+    return present;
+  };
+  type Keys = { private: Record<string, unknown> | null; };
+  type Payload = {
+    assignee?: unknown;
+    id?: unknown;
+    source?: unknown;
+    type?: unknown;
+  };
+  type Recovered = Cell.Prepared & { payload: Payload | null; };
+  const forensic = (metadata: unknown) => {
+    const root = record(metadata) ? metadata : null;
+    const assignment = root && record(root.assignment) ? root.assignment : null;
+    const keys: Keys | null = assignment && record(assignment.keys)
+      ? {
+          private: record(assignment.keys.private)
+            ? assignment.keys.private
+            : null
+        }
+      : null;
+    return {
+      assignment,
+      assignee: text(assignment?.assignee),
+      id: text(root?.id),
+      keys
+    };
+  };
+  const record = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+  const rescue = async (
+    field: unknown,
+    key: string,
+    recipients: security.PrivateKey[]
+  ): Promise<void> => {
+    const armored = text(field);
+    if (!armored) return;
+    try {
+      const decrypted = await security.decrypt(armored, key);
+      if (decrypted !== armored)
+        recipients.push(await security.parse(decrypted));
+    } catch { /* wrong key or corrupt */ }
+  };
+  const reveal = async (
+    source: string,
+    key: string,
+    recipients: security.PrivateKey[]
+  ): Promise<{ payload: Payload | null; recovered: string | null; }> => {
+    try {
+      const decrypted = await security.decrypt(source, key);
+      if (decrypted !== source)
+        return { payload: null, recovered: decrypted };
+    } catch { /* wrong key */ }
+    for (const recipient of recipients) {
+      try {
+        const json = await security.unseal(source, recipient);
+        const decoded = JSON.parse(json) as unknown;
+        return {
+          payload: record(decoded) ? decoded : null,
+          recovered: null
+        };
+      } catch { /* wrong key or not sealed to this recipient */ }
+    }
+    return { payload: null, recovered: null };
+  };
+  const text = (value: unknown): string | null =>
+    typeof value === 'string' ? value : null;
 
   /** Add a cell to a workbook's rubric. */
   export async function add(
@@ -342,12 +438,11 @@ export namespace Workbook {
   export function audit(workbook: Workbook, rubric: Rubric | null): Audit {
     if (!rubric) return { ok: false, error: 'null rubric', rubric };
     if (rubric.locked) return { ok: true, pruned: [], rubric };
-
     const notebook = workbook.context.model.sharedModel;
-    const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
     const types = Object.fromEntries(
-      notebook.cells.map(({ id, cell_type }) => [id, cell_type])
+      notebook.cells.map(cell => [cell.id, cell.cell_type])
     );
+    const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
     const executable = (id: string) =>
       types[id] === 'code' || types[id] === 'raw';
     for (const id in rubric.cells) {
@@ -359,9 +454,8 @@ export namespace Workbook {
       const references = Object.values(rubric.references)
         .filter(reference => reference.cell === id);
       const valid = is === 'answerable'
-        ? !!payload.length
-        : is === 'reviewable' ? true
-        : references.every(reference => executable(reference.referent));
+        ? !!payload.length : is === 'reviewable'
+        ? true : references.every(reference => executable(reference.referent));
       if (present && valid) continue;
 
       const reason = id in types ? 'invalid cell' : 'unknown cell';
@@ -371,8 +465,7 @@ export namespace Workbook {
       console.warn('audit pruned these rubric cells', pruned);
       if (!workbook.content)
         return { ok: false, error: 'missing cells', rubric };
-
-      const modified: Rubric = pruned.reduce(
+      const modified = pruned.reduce(
         (rubric, { cell: { id } }) => Rubric.remove(rubric, id),
         rubric
       );
@@ -390,6 +483,13 @@ export namespace Workbook {
     if (!rubric || !rubric.locked || !rubric.assignment.certification)
       throw new Error.Certify('collect error');
     return update(workbook, Rubric.collect(rubric, receipt));
+  }
+
+  export async function distribute(workbook: Workbook): Promise<Rubric> {
+    const rubric = open(workbook, quiet);
+    if (!rubric || !rubric.locked || !rubric.assignment.assignee)
+      throw new Error.Invalid('distribute error');
+    return update(workbook, Rubric.distribute(rubric));
   }
 
   /**
@@ -678,10 +778,10 @@ export namespace Workbook {
     try {
       const spec = await kernel.spec || null;
       for (const index of range(cell ? scan(cell) : cells.length)) {
-        const cell = cells.get(index) as ICodeCellModel;
-        if (cells.get(index).type !== 'code') continue;
+        const cell = cells.get(index);
+        if (!cell || cell.type !== 'code') continue;
         try {
-          outputs.set(cell.id, await execute(cell, kernel));
+          outputs.set(cell.id, await execute(cell as ICodeCellModel, kernel));
         } catch (error) {
           console.warn('cell execute error', cell, error);
         }
@@ -697,8 +797,19 @@ export namespace Workbook {
     if (!rubric) throw new Error.Invalid('identifier error');
     const assignee = rubric.assignment.assignee || null;
     const assignment = rubric.assignment.id;
-    const signature = rubric.assignment.signature || null;
-    return { assignee, assignment, rubric: rubric.id, signature };
+    const issue = rubric.assignment.issue || null;
+    return { assignee, assignment, issue, rubric: rubric.id };
+  }
+
+  export async function unstarted(workbook: Workbook): Promise<boolean> {
+    const rubric = open(workbook, quiet);
+    if (!rubric) return false;
+    const notebook = workbook.context.model.sharedModel.toJSON();
+    return Rubric.Assignment.unstarted({
+      assignment: rubric.assignment,
+      notebook,
+      rubric
+    });
   }
 
   /** Lock a workbook if its rubric is unlocked. */
@@ -821,61 +932,54 @@ export namespace Workbook {
     passphrase: string
   ): Promise<number> {
     const notebook = workbook.context.model.sharedModel;
-    const metadata = notebook.getMetadata('correxit') as any;
-    const id = metadata?.id;
-    if (!id || typeof id !== 'string') return 0;
+    const { assignee, id, keys } = forensic(
+      notebook.getMetadata('correxit') as unknown
+    );
+    if (!id) return 0;
 
     const key = await security.keygen(passphrase, id);
-    const keys: security.PrivateKey[] = [];
-    const armored = metadata?.assignment?.keys?.private;
-    const recover = async (field: unknown) => {
-      if (!field || typeof field !== 'string') return;
-      try {
-        const decrypted = await security.decrypt(field, key);
-        if (decrypted !== field) keys.push(await security.parse(decrypted));
-      } catch { /* wrong key or corrupt */ }
+    const recipients: security.PrivateKey[] = [];
+    const types = new Set(['code', 'markdown', 'raw']);
+    const sanitize = ({ index, payload, replacement }: Recovered) => {
+      if (!payload) return [{ index, replacement }];
+      if (payload.id !== notebook.cells[index].id) return [];
+      if (typeof payload.source !== 'string') return [];
+      if (typeof payload.type !== 'string' || !types.has(payload.type))
+        return [];
+      if (assignee && payload.assignee !== assignee) return [];
+      return [{ index, replacement }];
     };
-    await recover(armored?.author);
-    await recover(armored?.assignee);
+    await rescue(keys?.private?.author, key, recipients);
+    await rescue(keys?.private?.assignee, key, recipients);
 
-    const prepared: Cell.Prepared[] = [];
+    const prepared: Recovered[] = [];
     for (const [index, cell] of notebook.cells.entries()) {
       const source = cell.getSource();
       if (!security.encrypted(source)) continue;
 
-      let recovered: string | null = null;
-      let payload: { type?: string; source?: string } | null = null;
-      try {
-        const decrypted = await security.decrypt(source, key);
-        if (decrypted !== source) recovered = decrypted;
-      } catch { /* wrong key */ }
-      if (!recovered) {
-        for (const recipient of keys) {
-          try {
-            const json = await security.unseal(source, recipient);
-            payload = JSON.parse(json);
-            break;
-          } catch { /* wrong key or not sealed to this recipient */ }
-        }
-      }
+      const { payload, recovered } = await reveal(source, key, recipients);
       if (!recovered && !payload) continue;
 
-      const jupyter = { ...(cell.getMetadata('jupyter') as any || {}) };
+      const raw = cell.getMetadata('jupyter');
+      const jupyter = record(raw) ? { ...raw } : {};
       delete jupyter['source_hidden'];
 
       const snapshot = cell.toJSON();
+      const metadata = { ...snapshot.metadata, jupyter, trusted: true };
+      delete (metadata as { editable?: unknown }).editable;
+
+      const cell_type = text(payload?.type) || 'code';
+      const unsealed = text(payload?.source) || recovered!;
       const replacement = {
-        ...snapshot,
-        cell_type: payload?.type ?? 'code',
-        metadata: { ...snapshot.metadata as any, jupyter, trusted: true },
-        source: payload?.source ?? recovered!
+        ...snapshot, cell_type, metadata, source: unsealed
       };
-      delete replacement.metadata['editable'];
-      prepared.push({ index, replacement });
+      prepared.push({ index, payload, replacement });
     }
-    transact(workbook, prepared);
-    if (prepared.length) defrost(workbook);
-    return prepared.length;
+
+    const sanitized = prepared.flatMap(sanitize);
+    transact(workbook, sanitized);
+    if (sanitized.length) defrost(workbook);
+    return sanitized.length;
   }
 
   /** Add a reference to an existing comparable or correctable cell. */
@@ -914,7 +1018,7 @@ export namespace Workbook {
       throw new Error.Revise('revise error');
 
     const { assignee } = rubric.assignment;
-    const ids = Object.keys(rubric.cells).sort();
+    const ids = await verify(workbook, rubric, 'revise');
     const prepared = await Promise.all(
       ids.map(id => Cell.unseal(workbook, id, assignee, key))
     );
@@ -1005,27 +1109,7 @@ export namespace Workbook {
         assignment.keys.private.author, key
       );
       const author = await security.parse(armored);
-
-      // Partition rubric cell IDs into present and missing.
-      const ids = Object.keys(rubric.cells).sort();
-      const notebook = workbook.context.model.sharedModel;
-      const index = Object.fromEntries(
-        notebook.cells.map(cell => [cell.id, cell])
-      );
-      const present = ids.filter(id => id in index);
-      const missing = ids.filter(id => !(id in index));
-
-      if (missing.length) {
-        if (!workbook.content)
-          throw new Error.Unseal('unlock seal error: missing cells');
-        console.warn('unlock: skipping seal verify, missing cells', missing);
-      } else {
-        // Verify seal integrity before decrypting.
-        const ciphertexts = present.map(id => index[id].getSource());
-        const hash = await security.digest(ciphertexts.join('\n'));
-        if (hash !== assignment.seal)
-          throw new Error.Mismatch('seal mismatch: ciphertexts tampered');
-      }
+      const present = await verify(workbook, rubric, 'unlock');
 
       // Unseal each rubric cell present in the notebook.
       const { assignee } = assignment;

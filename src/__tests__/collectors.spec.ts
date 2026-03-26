@@ -16,33 +16,36 @@ const certified = (
   overrides: {
     assignee?: string;
     certification?: Rubric.Timestamp;
+    issue?: string | null;
     points?: number;
     possible?: number;
     rubric?: string;
-    signature?: string;
   } = {}
 ): Workbook.Certified => {
   const {
     assignee = 'alice@example.com',
     certification = 1704067200000,
+    issue = 'issue-abc',
     points = 8,
     possible = 10,
-    rubric = 'rubric-1',
-    signature = 'sig-abc'
+    rubric = 'rubric-1'
   } = overrides;
 
   const assignment: Rubric.Assignment = {
     assignee,
     certification,
     collected: null,
+    distribution: null,
     expiration: null,
     id: '',
+    issue: '',
+    issuer: '',
     keys: Rubric.Assignment.Keys.empty(),
+    mac: '',
     name: '',
     report: Rubric.Assignment.Report.empty(),
     roster: [],
     seal: null,
-    signature: '',
     submission: null,
     submitted: null
   };
@@ -59,7 +62,7 @@ const certified = (
       score: { ...Rubric.Score.CORRECT, points, possible },
       spec: null
     },
-    identifier: { assignee, assignment: '', rubric, signature },
+    identifier: { assignee, assignment: '', issue, rubric },
     workbook: {} as Workbook
   };
 };
@@ -76,10 +79,10 @@ describe('manual collector', () => {
     expect(payload).toEqual({
       assignee: 'alice@example.com',
       certification: 1704067200000,
+      issue: 'issue-abc',
       points: 8,
       possible: 10,
-      rubric: 'rubric-1',
-      signature: 'sig-abc'
+      rubric: 'rubric-1'
     });
   });
 

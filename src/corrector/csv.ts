@@ -10,8 +10,14 @@ export function generate(
 ): string {
   const { summary } = Rubric.Assignment;
   const identity = ['assignee', 'assignment', 'expiration', 'title', 'rubric'];
-  const resolution = ['signature', 'points', 'possible'];
-  const lifecycle = ['submission', 'submitted', 'certification', 'collected'];
+  const resolution = ['issue', 'points', 'possible'];
+  const lifecycle = [
+    'distribution',
+    'submission',
+    'submitted',
+    'certification',
+    'collected'
+  ];
   const diagnostic = ['resolved', 'path'];
   const header = [...identity, ...resolution, ...lifecycle, ...diagnostic];
   const reified = workbooks.filter(workbook => !workbook.hollow);
@@ -22,12 +28,13 @@ export function generate(
     const assignee = rubric?.assignment.assignee || '';
     const assignment = rubric?.assignment.id || '';
     const title = rubric?.assignment.name || '';
-    const signature = rubric?.assignment.signature || '';
+    const issue = rubric?.assignment.issue || '';
     const { points, possible, status } =
       grade?.score ??
       (rubric ? summary(rubric.assignment.report) : null) ??
       Rubric.Score.UNSCORED;
     const expiration = rubric?.assignment.expiration ?? null;
+    const distribution = rubric?.assignment.distribution ?? null;
     const submission = rubric?.assignment.submission ?? null;
     const submitted = rubric?.assignment.submitted ?? null;
     const certification = rubric?.assignment.certification ?? null;
@@ -40,9 +47,10 @@ export function generate(
       Rubric.timestamp(expiration),
       title,
       rubric?.id || '',
-      signature,
+      issue,
       unscored ? '' : String(points),
       unscored ? '' : String(possible),
+      Rubric.timestamp(distribution),
       Rubric.timestamp(submission),
       submitted ?? '',
       Rubric.timestamp(certification),

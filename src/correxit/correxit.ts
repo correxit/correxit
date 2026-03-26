@@ -12,36 +12,16 @@ export namespace Correxit {
     certified: Workbook.Certified
   ) => Promise<string | null>;
 
-  export type Consumer = (output: {
+  export type Distributor = (propagated: {
+    identifier: Workbook.Identifier.Assigned;
+    notebook: INotebookContent;
     path: string;
-    rubric: Rubric.Unlocked;
-    stream: Propagator;
-  }) => AsyncGenerator<Emitter.Emission>;
-
-  /** A message emitter for notifications and other Correxit UI updates. */
-  export type Emitter = AsyncIterable<Emitter.Emission>;
-
-  export namespace Emitter {
-    /** An emission with slots to populate interpolations. */
-    export type Emission = { slots: (string | number)[]; type: string; };
-  }
+  }) => Promise<void>;
 
   export type Injector = (workbook: Workbook | null) => void;
 
   /** Connects/disconnects workbooks and yields them to plugins. */
   export type Monitor = AsyncIterable<Workbook | null>;
-
-  /** An async propagator of assigned workbook content. */
-  export type Propagator = (location: { base: string; pwd: string } | null) =>
-    Promise<AsyncIterable<Propagator.Notebook>>;
-
-  export namespace Propagator {
-    export type Notebook = {
-      identifier: Workbook.Identifier.Assigned;
-      notebook: INotebookContent;
-      path: string;
-    };
-  }
 
   /**
     * A registrar that provides assignment registrations for a workbook.
@@ -83,15 +63,15 @@ export namespace Correxit {
 
   export const commands = COMMANDS;
 
-  export const CONSUMER = '@quantstack/correxit:consumer';
+  export const DISTRIBUTOR = '@quantstack/correxit:distributor';
 
-  export const Consumer = new Token<Consumer>(CONSUMER);
+  export const Distributor = new Token<Distributor>(DISTRIBUTOR);
 
   export const CORRECTOR = '@quantstack/correxit:corrector';
 
   export const DESCRIPTION = {
     COLLECTOR: description.COLLECTOR,
-    CONSUMER: description.CONSUMER,
+    DISTRIBUTOR: description.DISTRIBUTOR,
     CORRECTOR: description.CORRECTOR,
     MONITOR: description.MONITOR,
     REGISTRAR: description.REGISTRAR,

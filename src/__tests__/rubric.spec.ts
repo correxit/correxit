@@ -259,17 +259,17 @@ describe('Rubric', () => {
   });
 
   describe('Assignment Flow', () => {
-    it('assigns to a student and validates signature', async () => {
+    it('assigns to a student and validates mac', async () => {
       const { validate } = Rubric.Assignment;
       const assignee = 'assignee@example.com';
       const roster = [assignee];
       const rubric = await Rubric.assign(create(), { assignee, roster });
       expect(rubric.assignment.assignee).toBe(assignee);
-      expect(rubric.assignment.signature).toBeTruthy();
+      expect(rubric.assignment.mac).toBeTruthy();
       await expect(validate(rubric)).resolves.not.toThrow();
     });
 
-    it('fails validation if signature is tampered', async () => {
+    it('fails validation if mac is invalidated', async () => {
       const { validate } = Rubric.Assignment;
       const assignee = 'assignee@example.com';
       const hacker = 'hacker@example.com';
@@ -336,7 +336,7 @@ describe('Rubric', () => {
       expect(rubric.assignment.report.scores).toEqual({});
     });
 
-    it('includes expiration in signature', async () => {
+    it('includes expiration in mac', async () => {
       const { validate } = Rubric.Assignment;
       const expiration = Date.now() + 86400000;
       const rubric = await Rubric.assign(create(), {
@@ -353,6 +353,65 @@ describe('Rubric', () => {
         assignment: { ...rubric.assignment, expiration: expiration + 1000 }
       };
       await expect(validate(tampered)).rejects.toThrow('match');
+    });
+
+    it('computes and verifies an issued blank slate', async () => {
+      const rubric = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null,
+        id: 'hw-1',
+        name: 'Homework 1'
+      });
+      const notebook = {
+        cells: [{ cell_type: 'code', id: 'c1', source: 'print(1)' }],
+        metadata: {}
+      } as any;
+      const issue = await Rubric.Assignment.issue({
+        assignment: rubric.assignment,
+        notebook,
+        rubric
+      });
+      const issuer = await Rubric.Assignment.issuer(issue, 'PGP_PRIVATE_KEY');
+      const assignment = { ...rubric.assignment, issue, issuer };
+      await expect(
+        Rubric.Assignment.unstarted({
+          assignment,
+          notebook,
+          rubric
+        })
+      ).resolves.toBe(true);
+    });
+
+    it('rejects a changed notebook as unstarted', async () => {
+      const rubric = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null,
+        id: 'hw-1',
+        name: 'Homework 1'
+      });
+      const notebook = {
+        cells: [{ cell_type: 'code', id: 'c1', source: 'print(1)' }],
+        metadata: {}
+      } as any;
+      const issue = await Rubric.Assignment.issue({
+        assignment: rubric.assignment,
+        notebook,
+        rubric
+      });
+      const issuer = await Rubric.Assignment.issuer(issue, 'PGP_PRIVATE_KEY');
+      const changed = {
+        cells: [{ cell_type: 'code', id: 'c1', source: 'print(2)' }],
+        metadata: {}
+      } as any;
+      await expect(
+        Rubric.Assignment.unstarted({
+          assignment: { ...rubric.assignment, issue, issuer },
+          notebook: changed,
+          rubric
+        })
+      ).resolves.toBe(false);
     });
 
     it(
@@ -450,7 +509,7 @@ describe('Rubric', () => {
       expect(drafted.locked).toBe(true);
     });
 
-    it('excludes submitted from signature', async () => {
+    it('excludes submitted from mac', async () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',
         roster: ['student@example.com'],
@@ -459,7 +518,7 @@ describe('Rubric', () => {
       const locked = await Rubric.lock(unlocked);
       const first = Rubric.acknowledge(Rubric.submit(locked), 'receipt-a');
       const second = Rubric.acknowledge(Rubric.submit(locked), 'receipt-b');
-      expect(first.assignment.signature).toBe(second.assignment.signature);
+      expect(first.assignment.mac).toBe(second.assignment.mac);
     });
 
     it('collects a certified rubric with receipt', async () => {
@@ -510,6 +569,29 @@ describe('Rubric', () => {
       expect(() => Rubric.collect(locked)).toThrow(
         'collect error: not certified'
       );
+    });
+
+    it('records a distribution timestamp', async () => {
+      const rubric = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null
+      });
+      const distributed = Rubric.distribute(rubric);
+      expect(distributed.assignment.distribution).toEqual(expect.any(Number));
+    });
+
+    it('clears distribution on stale reassign', async () => {
+      const rubric = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com', 'other@example.com'],
+        expiration: null
+      });
+      const distributed = Rubric.distribute(rubric);
+      const reassigned = await Rubric.assign(distributed, {
+        assignee: 'other@example.com'
+      });
+      expect(reassigned.assignment.distribution).toBeNull();
     });
   });
 

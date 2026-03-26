@@ -18,8 +18,8 @@ const identifier = (
 ): Workbook.Identifier.Assigned => ({
   assignee: 'alice@example.com',
   assignment: '',
+  issue: 'issue-abc',
   rubric: 'rubric-1',
-  signature: 'sig-abc',
   ...overrides
 });
 
@@ -48,14 +48,17 @@ const workbook = (
     assignee: 'alice@example.com',
     certification: null,
     collected: null,
+    distribution: null,
     expiration: null,
     id: '',
+    issue: '',
+    issuer: '',
     keys: Rubric.Assignment.Keys.empty(),
+    mac: '',
     name: '',
     report: Rubric.Assignment.Report.empty(),
     roster: [],
     seal: null,
-    signature: '',
     submission,
     submitted: null
   };
@@ -76,8 +79,8 @@ describe('manual submitter', () => {
     const payload = JSON.parse(receipt.slice('manual:DIGEST<'.length, -1));
     expect(payload).toMatchObject({
       assignee: 'alice@example.com',
-      rubric: 'rubric-1',
-      signature: 'sig-abc'
+      issue: 'issue-abc',
+      rubric: 'rubric-1'
     });
     expect(payload.sources).toBeDefined();
     expect(payload.submission).toBe(1704067200000);

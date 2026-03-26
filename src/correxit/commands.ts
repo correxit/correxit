@@ -23,6 +23,7 @@ export namespace CommandIDs {
   export const convert = 'correxit:convert';
   export const correct = 'correxit:correct';
   export const dereference = 'correxit:dereference';
+  export const distribute = 'correxit:distribute';
   export const draft = 'correxit:draft';
   export const enroll = 'correxit:enroll';
   export const fetch = 'correxit:fetch';
@@ -30,6 +31,7 @@ export namespace CommandIDs {
   export const intervene = 'correxit:intervene';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
+  export const redistribute = 'correxit:redistribute';
   export const refer = 'correxit:refer';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
@@ -56,8 +58,8 @@ type Reified =
 const { get, has } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert,
-  correct, dereference, draft, intervene, lock, recover, refer, remove, reset,
-  revise, reweight, submit, toggle
+  correct, dereference, distribute, draft, intervene, lock, recover, refer,
+  remove, reset, revise, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -65,7 +67,7 @@ export function commands(
   app: JupyterFrontEnd,
   utilities: {
     collector: Correxit.Collector;
-    consumer: Correxit.Consumer;
+    distributor: Correxit.Distributor;
     injector: Correxit.Injector;
     registrar: Correxit.Registrar;
     submitter: Correxit.Submitter;
@@ -76,7 +78,7 @@ export function commands(
   const { commands, serviceManager: manager, shell } = app;
   const { Error, Icons } = Correxit;
   const {
-    collector, consumer, injector, registrar, submitter, unlocker
+    collector, distributor, injector, registrar, submitter, unlocker
   } = utilities;
   const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
@@ -88,6 +90,103 @@ export function commands(
     const workbook = handle ? await fetch(handle) : state.workbook();
     const rubric = open(workbook);
     return { handle, rubric, workbook } as Reified;
+  };
+  const deliver = async (
+    args: Partial<Credentials & { quiet: boolean; silent: boolean }>
+  ): Promise<{
+    assignee: string;
+    error: string | null;
+    ok: boolean;
+    path: string;
+  }> => {
+    const current = state.workbook();
+    const path = args.path || current?.context.path || '';
+    const handle = path && normalize({ path });
+    if (!path || !handle) {
+      const error = 'distribute error: invalid path';
+      return { assignee: path, error, ok: false, path };
+    }
+
+    const active = current?.context.path === path ? current : null;
+    const workbook = active || await fetch(handle, !!args.silent);
+    if (!workbook) {
+      const error = 'distribute error: workbook unavailable';
+      return { assignee: path, error, ok: false, path };
+    }
+
+    let assignee = path;
+    try {
+      const rubric = open(workbook);
+      if (!rubric) throw new Error.Invalid('distribute error: invalid rubric');
+
+      const identifier = Workbook.identifier(workbook);
+      if (!Workbook.Identifier.assigned(identifier))
+        throw new Error.Invalid('distribute error: unassigned');
+      assignee = identifier.assignee;
+      if (!(await Workbook.unstarted(workbook)))
+        throw new Error.Invalid('distribute error: unstarted must be true');
+      if (rubric.assignment.distribution !== null)
+        return { assignee, error: null, ok: true, path };
+
+      const notebook = workbook.context.model.sharedModel.toJSON();
+      await distributor({ identifier, notebook, path });
+      await distribute(workbook);
+      await workbook.context.save();
+      return { assignee, error: null, ok: true, path };
+    } catch (error) {
+      const reason = `${error}`;
+      if (args.quiet) console.warn(CommandIDs.distribute, error);
+      else showErrorMessage(...Error.interpret(error, trans));
+      return { assignee, error: reason, ok: false, path };
+    } finally {
+      if (!active) workbook.context.dispose();
+    }
+  };
+  const pending = async (directory: string): Promise<string[]> => {
+    if (!directory) return [];
+
+    const current = state.workbook();
+    try {
+      const notebooks = await io.notebooks(manager, directory);
+      const paths: string[] = [];
+      for (const { path } of notebooks) {
+        const active = current?.context.path === path ? current : null;
+        const handle = normalize({ path });
+        const workbook = active || (handle && await fetch(handle, true));
+        if (!workbook) continue;
+        try {
+          const rubric = open(workbook);
+          if (rubric?.assignment.distribution === null) paths.push(path);
+        } finally {
+          if (!active) workbook.context.dispose();
+        }
+      }
+      return paths;
+    } catch (error) {
+      console.warn(CommandIDs.redistribute, directory, error);
+      return [];
+    }
+  };
+  const redistribute = async function* (directory: string, paths: string[]) {
+    paths = paths.length ? paths : await pending(directory);
+    const total = paths.length;
+    if (!total) return;
+
+    let progress = 0;
+    yield { type: 'separator', slots: [] };
+    for (const path of paths) {
+      const result = await deliver({ path, quiet: true, silent: true });
+      if (result.ok) {
+        yield { type: 'distributed', slots: [result.assignee, result.path] };
+      } else {
+        yield {
+          type: 'distribute-error',
+          slots: [result.assignee, result.path, result.error || '']
+        };
+      }
+      yield { type: 'progress', slots: [++progress, total] };
+    }
+    yield { type: 'retried', slots: [total] };
   };
   const disposables = [];
   disposables.push(commands.addCommand(CommandIDs.assign, {
@@ -301,6 +400,27 @@ export function commands(
       const { workbook } = await reify(args);
       if (!workbook) return;
 
+      const notebook = workbook.context.model.sharedModel;
+      const detected = nbgrader.detect(notebook.cells.map(cell => ({
+        id: cell.id,
+        cell_type: cell.cell_type,
+        source: cell.getSource(),
+        metadata: cell.toJSON().metadata as Record<string, any>
+      })));
+      if (detected) {
+        const { button } = await showDialog({
+          title: trans.__('Convert nbgrader notebook?'),
+          body: trans.__(
+            'This rewrites the current notebook as a Correxit workbook.'
+          ),
+          buttons: [
+            Dialog.cancelButton({ label: trans.__('Cancel') }),
+            Dialog.okButton({ label: trans.__('Convert') })
+          ]
+        });
+        if (!button.accept) return;
+      }
+
       const passphrase = await input.text({
         title: trans.__('Enter a passphrase'),
         label: trans.__('Enter a passphrase for this workbook')
@@ -331,9 +451,9 @@ export function commands(
         node.appendChild(document.createTextNode(line));
       });
       void showDialog({
-        title: trans.__('Converted from nbgrader'),
+        title: trans.__('Conversion summary'),
         body: new Widget({ node }),
-        buttons: [Dialog.okButton()]
+        buttons: [Dialog.okButton({ label: trans.__('Continue') })]
       });
     }
   }));
@@ -415,6 +535,23 @@ export function commands(
       if (!workbook || !args.referent) return;
       dereference(workbook, args.referent);
     }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.distribute, {
+    icon: Icons.assignment,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!(
+        rubric?.assignment.assignee &&
+        rubric.assignment.issue &&
+        rubric.assignment.issuer &&
+        rubric.assignment.distribution === null
+      );
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.distribute),
+    label: trans.__('Distribute assignment...'),
+    execute: async (
+      args: Partial<Credentials & { quiet: boolean; silent: boolean }>
+    ): Promise<boolean> => (await deliver(args)).ok
   }));
   disposables.push(commands.addCommand(CommandIDs.draft, {
     isEnabled: () => {
@@ -522,11 +659,20 @@ export function commands(
     isVisible: () => commands.isEnabled(CommandIDs.propagate),
     execute: async (
       args: Partial<Credentials>
-    ): Promise<AsyncIterable<[string, Correxit.Emitter.Emission]>> => {
+    ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked) return (async function* empty() {})();
       try {
-        return translate(propagator.propagate({ consumer, workbook }), trans);
+        return translate(
+          propagator.propagate({
+            commands,
+            distributor,
+            factory,
+            manager,
+            workbook
+          }),
+          trans
+        );
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
@@ -581,6 +727,14 @@ export function commands(
       };
       const identifier = Workbook.identifier(workbook);
       return await registrar(workbook, identifier).catch(warn);
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.redistribute, {
+    label: trans.__('Retry distribution'),
+    execute: async (
+      args: Partial<{ path: string; paths: string[] }>
+    ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
+      return translate(redistribute(args.path || '', args.paths || []), trans);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.refer, {
@@ -910,19 +1064,22 @@ successful, an unlocked rubric.
 }
 
 async function* translate(
-  emitter: Correxit.Emitter,
+  emitter: propagator.Emitter,
   trans: IRenderMime.TranslationBundle
-): AsyncGenerator<[string, Correxit.Emitter.Emission]> {
-  const translate = (emission: Correxit.Emitter.Emission) => {
+): AsyncGenerator<[string, propagator.Emission]> {
+  const translate = (emission: propagator.Emission) => {
     const { slots, type } = emission;
     return ({
       '': slots.join(' '),
       'assigned': trans.__('Assigned to %1', ...slots),
       'create-error': trans.__('Create ERROR %1', ...slots),
+      'distributed': trans.__('Distributed %1', slots[0]),
+      'distribute-error': trans.__('Distribute ERROR %1 (%3)', ...slots),
       'encrypted': trans.__('Encrypted cell %1', ...slots),
       'error': trans.__('ERROR %1', ...slots),
       'mkdir': trans.__('Created directory %1', ...slots),
       'progress': trans.__('%1 of %2', ...slots),
+      'retried': trans.__('Finished retrying %1', ...slots),
       'saved': trans.__('Saved %1', ...slots),
       'separator': '------------',
       'success': trans.__('Finished! (roster: %1)', ...slots)
