@@ -222,7 +222,10 @@ export function Corrector(props: Corrector.Props) {
   useEffect(() => bridge.publish({ workbooks: memo, grades }), [memo, grades]);
   useEffect(() => () => bridge.clear(), []);
   return (
-    <table className="correxit-corrector">
+    <table
+      aria-label={trans.__('Corrector workbooks')}
+      className="correxit-corrector"
+    >
       <Columns />
       <tbody>
         <Progress {...{ ...progress, trans }} />
@@ -292,7 +295,11 @@ const Progress: React.FC<{
       <td colSpan={5}>
         {active ? (
           <div className="correxit-corrector-progress-bar">
-            <progress max={total} value={progress} />
+            <progress
+              aria-label={trans.__('Corrector progress')}
+              max={total}
+              value={progress}
+            />
             <span>{trans.__('%1%', percent)}</span>
           </div>
         ) : null}
@@ -344,8 +351,20 @@ const Row: React.FC<{
   if (workbook.hollow) return <HollowRow {...{ className, path }} />;
   const spec = pending ? null : grade.spec;
   const title = history(workbook, trans);
+  const toggle = () => select(selected ? '' : path);
+  const keydown = (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggle();
+  };
   return (
-    <tr className={className} onClick={() => select(selected ? '' : path)}>
+    <tr
+      aria-selected={selected}
+      className={className}
+      onClick={toggle}
+      onKeyDown={keydown}
+      tabIndex={0}
+    >
       <Notebook {...{ commands, trans, workbook }} />
       <Assignee {...{ workbook }} />
       <Breakdown {...{ commands, failed, trans, workbook }} />
@@ -365,7 +384,6 @@ const Breakdown: React.FC<{
 
   const rubric = open(workbook);
   if (!rubric) return <td className="correxit-corrector-breakdown" />;
-
   const { cells } = rubric;
   const { report } = rubric.assignment;
   const breakdown = workbook.context.model.sharedModel.cells
@@ -389,10 +407,10 @@ const Breakdown: React.FC<{
   const { review } = COMMAND_IDS;
   return (
     <td className="correxit-corrector-breakdown">
-      <span
-        aria-label={breakdown.map(label).join(', ')}
+      <div
+        aria-label={trans.__('Workbook cell breakdown')}
         className="correxit-corrector-breakdown-bar"
-        role="img"
+        role="group"
       >
         {breakdown.map(id => {
           const className = [
@@ -400,8 +418,8 @@ const Breakdown: React.FC<{
             `correxit-corrector-breakdown-${status(id)}`
           ].join(' ');
           return (
-            <span
-              aria-hidden="true"
+            <button
+              aria-label={trans.__('Review %1', label(id))}
               className={className}
               key={id}
               onClick={event => {
@@ -412,10 +430,11 @@ const Breakdown: React.FC<{
                 });
               }}
               title={label(id)}
+              type="button"
             />
           );
         })}
-      </span>
+      </div>
     </td>
   );
 };

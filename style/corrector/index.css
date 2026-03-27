@@ -52,8 +52,12 @@ td {
 }
 
 .correxit-corrector-breakdown-segment {
+  appearance: none;
+  border: none;
+  cursor: pointer;
   flex: 1;
   min-width: 2px;
+  padding: 0;
 
   &.correxit-corrector-breakdown-correct {
     background-color: var(--correxit-correct-color);
@@ -90,6 +94,15 @@ td {
   &.correxit-corrector-breakdown-unscored {
     background-color: var(--correxit-unscored-color);
     background-image: none;
+  }
+
+  &:focus-visible {
+    box-shadow:
+      0 0 0 1px var(--jp-layout-color1),
+      0 0 0 3px var(--jp-brand-color1);
+    outline: none;
+    position: relative;
+    z-index: 1;
   }
 }
 
@@ -209,6 +222,10 @@ table.correxit-corrector {
 
     &:hover {
       background-color: var(--jp-rendermime-table-row-hover-background);
+    }
+
+    &:focus-visible td {
+      box-shadow: inset 0 0 0 2px var(--jp-brand-color1);
     }
 
     td {
