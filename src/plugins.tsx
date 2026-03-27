@@ -350,8 +350,6 @@ const ui: JupyterFrontEndPlugin<void> = {
 const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
   Correxit.UNLOCKER,
   token => {
-    if (!token)
-      throw new Correxit.Error.Plugin('Secrets manager token unavailable');
     return {
       id: Correxit.UNLOCKER,
       description: Correxit.DESCRIPTION.UNLOCKER,
@@ -365,6 +363,19 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
           manager: ISecretsManager,
           translator: ITranslator | null
         ) => {
+          if (!token) {
+            console.warn(
+              Correxit.UNLOCKER,
+              'Secrets manager token unavailable'
+            );
+            return {
+              store: () => Promise.resolve(),
+              unlock: () =>
+                Promise.reject(
+                  new Correxit.Error.Plugin('Secrets manager token unavailable')
+                )
+            } as Correxit.Unlocker;
+          }
           const trans = (translator || nullTranslator).load('correxit');
           const secrets = {
             manager,

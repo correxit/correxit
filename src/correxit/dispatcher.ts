@@ -5,7 +5,6 @@ import {
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { Token } from '@lumino/coreutils';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
-import { Correxit } from '.';
 
 type Provider = 'manual' | 'moodle';
 type Provision = {
@@ -21,8 +20,6 @@ export function dispatch<Plugin>(
   create: (app: JupyterFrontEnd, provision: Provision) => [Plugin, () => void]
 ): JupyterFrontEndPlugin<Plugin> {
   return SecretsManager.sign(id, token => {
-    if (!token)
-      throw new Correxit.Error.Plugin('Secrets manager token unavailable');
     let deactivator = () => {};
     const state: State = { active: 'manual', secret: '', url: '' };
     const provision: Provision = {
@@ -42,21 +39,24 @@ export function dispatch<Plugin>(
         registry: ISettingRegistry | null
       ): Promise<Plugin> => {
         const [plugin, deactivate] = create(app, provision);
-        const stored = await secrets.get(token, id, 'moodle-token');
-        if (stored?.value) state.secret = stored.value;
-        if (!registry) {
+        if (token && registry) {
+          try {
+            const stored = await secrets.get(token, id, 'moodle-token');
+            if (stored?.value) state.secret = stored.value;
+            const subscriber = { id, secrets, state, token };
+            const unsubscribe = await subscribe({ registry, ...subscriber });
+            deactivator = () => {
+              unsubscribe();
+              deactivate();
+            };
+          } catch (reason) {
+            console.warn(id, 'settings error', reason);
+            deactivator = deactivate;
+          }
+        } else {
+          if (!token)
+            console.warn(id, 'Secrets manager token unavailable');
           deactivator = deactivate;
-          return plugin;
-        }
-        try {
-          const subscriber = { id, secrets, state, token };
-          const unsubscribe = await subscribe({ registry, ...subscriber });
-          deactivator = () => {
-            unsubscribe();
-            deactivate();
-          };
-        } catch (reason) {
-          console.warn(id, 'settings error', reason);
         }
         return plugin;
       },
