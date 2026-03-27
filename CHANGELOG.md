@@ -1,3 +1,10 @@
+## [1.17.1](https://github.com/QuantStack/correxit/compare/v1.17.0...v1.17.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* avoid throwing when plugin is disabled ([#66](https://github.com/QuantStack/correxit/issues/66)) ([ae3fd4a](https://github.com/QuantStack/correxit/commit/ae3fd4acee086359bbbd267b08f2a45233a76e03))
+
 # [1.17.0](https://github.com/QuantStack/correxit/compare/v1.16.0...v1.17.0) (2026-03-26)
 
 
