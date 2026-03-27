@@ -22,13 +22,14 @@ export const Body: React.FC<{
   const active = headed
     ? workbook.content.activeCell?.model.id
     : state.cursor();
-  if (!rubric || !active)
+  if (!rubric || !active) {
     return (
       <section
         aria-label={trans.__('Cell controls')}
         className="correxit-sidebar-body"
       ></section>
     );
+  }
 
   const id = active;
 
