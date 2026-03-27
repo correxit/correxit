@@ -26,7 +26,10 @@ export const Header: React.FC<{
 }> = ({ commands, trans, workbook }) => {
   if (!workbook) {
     return (
-      <section className="correxit-sidebar-header">
+      <section
+        aria-label={trans.__('Workbook summary')}
+        className="correxit-sidebar-header"
+      >
         <div className="correxit-sidebar-inner-header">
           <h4>{trans.__('Correxit: idle')}</h4>
         </div>
@@ -70,7 +73,10 @@ export const Header: React.FC<{
         ? draft
         : submit;
   return (
-    <section className="correxit-sidebar-header">
+    <section
+      aria-label={trans.__('Workbook summary')}
+      className="correxit-sidebar-header"
+    >
       <div className="correxit-sidebar-inner-header">
         <h4>{titled}</h4>
         <div className="correxit-sidebar-lock-controls">
@@ -109,11 +115,11 @@ function useUnstarted(workbook: Workbook, rubric: Rubric | null): boolean {
       return;
     }
 
-    let cancelled = false;
+    let canceled = false;
     void Workbook.unstarted(workbook)
-      .then(unstarted => !cancelled && setUnstarted(unstarted))
-      .catch(() => !cancelled && setUnstarted(false));
-    return () => void (cancelled = true);
+      .then(unstarted => !canceled && setUnstarted(unstarted))
+      .catch(() => !canceled && setUnstarted(false));
+    return () => void (canceled = true);
   }, [needed, workbook]);
 
   return unstarted;

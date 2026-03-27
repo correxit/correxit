@@ -21,7 +21,10 @@ export function Sidebar(props: Sidebar.Props) {
       {workbook && (
         <>
           <Body {...{ commands, trans, workbook }} />
-          <section className="correxit-sidebar-footer">
+          <section
+            aria-label={trans.__('Sidebar actions')}
+            className="correxit-sidebar-footer"
+          >
             <CommandToolbarButtonComponent commands={commands} id={reset} />
           </section>
         </>

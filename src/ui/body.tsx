@@ -23,7 +23,12 @@ export const Body: React.FC<{
     ? workbook.content.activeCell?.model.id
     : state.cursor();
   if (!rubric || !active)
-    return <section className="correxit-sidebar-body"></section>;
+    return (
+      <section
+        aria-label={trans.__('Cell controls')}
+        className="correxit-sidebar-body"
+      ></section>
+    );
 
   const id = active;
 
@@ -36,7 +41,10 @@ export const Body: React.FC<{
   };
   const hint = get(rubric, id)?.is ?? (id in rubric.references && 'reference');
   return (
-    <section className="correxit-sidebar-body">
+    <section
+      aria-label={trans.__('Cell controls')}
+      className="correxit-sidebar-body"
+    >
       <div className="correxit-sidebar-cell-config">
         <CommandToolbarButtonComponent {...{ commands, id: correct }} />
         <CommandToolbarButtonComponent
