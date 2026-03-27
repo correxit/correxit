@@ -330,7 +330,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     );
   });
 
-  test('conversion can be cancelled before rewrite', async ({ page }) => {
+  test('conversion can be canceled before rewrite', async ({ page }) => {
     await page.goto();
     await page.notebook.createNew();
     await populate(page, [answer('q1', 'x = 1')]);

@@ -41,8 +41,9 @@ class PropagatorWidget extends ReactWidget {
 export function Propagator(props: Propagator.Props) {
   const { close, commands, release, title, trans } = props;
   const { propagate, redistribute } = Correxit.CommandIDs;
-  const [cancelled, setCancelled] = useState(false);
-  const command = cancelled ? '' : propagate;
+  const [canceled, setCanceled] = useState(false);
+  const [archived, setArchived] = useState<LogEntry[] | null>(null);
+  const command = canceled ? '' : propagate;
   const [timestamp] = useState(Date.now);
   const [log, done] = useCommand<LogEntry>(commands, command, { timestamp });
   const [attempted, setAttempted] = useState(false);
@@ -70,19 +71,20 @@ export function Propagator(props: Propagator.Props) {
 
   const retrying = !!retry;
   const trail = [...log, ...retries, ...(retry ? extra : [])];
-  const messages = trail
+  const record = archived ?? trail;
+  const messages = record
     .filter(([, { type }]) => type !== 'progress')
     .map(([message]) => message);
-  const directory = log.find(([, { type }]) => type === 'mkdir')?.[1]
+  const directory = record.find(([, { type }]) => type === 'mkdir')?.[1]
     .slots[0] as string | undefined;
   const saved = new Set(
-    log
+    record
       .filter(([, { type }]) => type === 'saved')
       .map(([, { slots }]) => slots[0] as string)
   );
   const failed = Array.from(
     new Set(
-      log
+      record
         .filter(([, { type }]) => type === 'distribute-error')
         .map(([, { slots }]) => slots[1] as string)
         .filter(path => saved.has(path))
@@ -113,8 +115,12 @@ export function Propagator(props: Propagator.Props) {
     if (retrying || !directory || !pending.length) return;
     setRetry({ path: directory, timestamp: Date.now() });
   };
+  const cancel = () => {
+    setArchived(trail);
+    setCanceled(true);
+  };
   return (
-    <div className="correxit-propagator-content">
+    <div aria-busy={running} className="correxit-propagator-content">
       <div className="correxit-propagator-header">
         <span className="correxit-propagator-title">{title}</span>
         <ToolbarButtonComponent
@@ -124,24 +130,30 @@ export function Propagator(props: Propagator.Props) {
           noFocusOnClick
         />
       </div>
-      <Log {...{ done, messages }} />
-      {done && !messages.length && (
-        <span className="correxit-propagator-notice">
-          {cancelled
-            ? trans.__('Cancelled.')
-            : trans.__('No workbooks were created.')}
+      <Log {...{ done, messages, trans }} />
+      {done && canceled && (
+        <span className="correxit-propagator-notice" role="status">
+          {trans.__('Canceled.')}
+        </span>
+      )}
+      {done && !canceled && !messages.length && (
+        <span className="correxit-propagator-notice" role="status">
+          {trans.__('No workbooks were created.')}
         </span>
       )}
       {running && (
         <div className="correxit-propagator-controls">
           <div className="correxit-propagator-progress">
-            <progress {...{ max, value }} />
+            <progress
+              aria-label={trans.__('Propagation progress')}
+              {...{ max, value }}
+            />
             <span>{trans.__('%1%', percent)}</span>
           </div>
           {!retrying && (
             <button
               className="correxit-propagator-button correxit-propagator-cancel"
-              onClick={() => setCancelled(true)}
+              onClick={cancel}
             >
               {trans.__('Cancel')}
             </button>
@@ -187,14 +199,23 @@ export namespace Propagator {
 const Log: React.FC<{
   done: boolean;
   messages: string[];
-}> = ({ done, messages }) => {
+  trans: TranslationBundle;
+}> = ({ done, messages, trans }) => {
   const ref = useRef<HTMLPreElement | null>(null);
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [messages.length]);
   if (done && !messages.length) return null;
   return (
-    <pre ref={ref}>
+    <pre
+      aria-atomic="false"
+      aria-busy={!done}
+      aria-label={trans.__('Propagation log')}
+      aria-live="polite"
+      aria-relevant="additions text"
+      ref={ref}
+      role="log"
+    >
       {messages.map((message, key) => (
         <Emission {...{ key, message }} />
       ))}
