@@ -654,8 +654,8 @@ const Minimap: React.FC<{
       role="grid"
       aria-label={trans.__('Score minimap')}
       style={{
-        gridTemplateColumns: `repeat(${columns.length}, 1fr)`,
-        gridTemplateRows: `repeat(${rows.length}, 1fr)`
+        gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows.length}, minmax(0, 1fr))`
       }}
     >
       {grid.map((line, row) =>
