@@ -36,7 +36,7 @@ const integer = (value: string): number | '' => {
   return Math.max(0, Math.floor(parsed));
 };
 
-const context = (
+const instructions = (
   workbook: Headless | null,
   cursor: Cursor | null,
   rubric: Rubric | null
@@ -170,7 +170,7 @@ export function Reviewer(props: Reviewer.Props) {
   const source = model?.getSource() ?? '';
 
   const question = useMemo(
-    () => context(workbook, cursor, rubric),
+    () => instructions(workbook, cursor, rubric),
     [workbook, cursor?.cell, rubric]
   );
   const saved: any[] = type === 'code' ? ((model as any)?.outputs ?? []) : [];
