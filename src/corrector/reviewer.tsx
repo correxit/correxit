@@ -168,7 +168,6 @@ export function Reviewer(props: Reviewer.Props) {
   }, [workbook, cursor?.cell]);
   const type = model?.cell_type ?? 'code';
   const source = model?.getSource() ?? '';
-
   const question = useMemo(
     () => instructions(workbook, cursor, rubric),
     [workbook, cursor?.cell, rubric]
@@ -256,8 +255,8 @@ export function Reviewer(props: Reviewer.Props) {
     },
     [commit, score, possible]
   );
-  const scored = useRef<(action: 'pass' | 'fail') => void>(a => judge(a));
-  scored.current = a => judge(a);
+  const scored = useRef<(action: 'pass' | 'fail') => void>(judge);
+  scored.current = judge;
   useEffect(() => props.on.score(scored), []);
 
   const rerun = async () => {

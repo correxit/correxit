@@ -33,8 +33,9 @@ function emit() {
 /**
  * Inject a workbook into the monitor stream.
  *
- * The `correxit:inject` command returns a single-emission
- * function. Subsequent calls after the first are no-ops.
+ * ### Notes
+ * This invokes the `correxit:inject` command, which updates the monitor with
+ * the given workbook, which notifies relevant commands, etc.
  */
 export function inject(commands: CommandRegistry, workbook: unknown) {
   void (async () => (await commands.execute('correxit:inject'))?.(workbook))();
