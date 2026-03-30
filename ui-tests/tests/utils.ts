@@ -3,6 +3,7 @@ import { expect } from '@jupyterlab/galata';
 export interface Cell {
   id: string;
   source: string;
+  type?: 'code' | 'markdown';
 }
 
 export interface Fixture {
@@ -42,7 +43,7 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
       }
       cells.forEach((cell, index) => {
         notebook.insertCell(index, {
-          cell_type: 'code',
+          cell_type: cell.type || 'code',
           id: cell.id,
           metadata: {},
           source: cell.source
