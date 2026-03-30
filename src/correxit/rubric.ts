@@ -905,13 +905,16 @@ export namespace Rubric {
   /** @returns the given rubric, locked. */
   export async function lock(rubric: Rubric): Promise<Locked> {
     if (rubric.locked) return rubric;
-    await Assignment.validate(rubric);
+
+    const mac = await Assignment.mac(rubric.assignment, rubric.key);
+    const signed = { ...rubric, assignment: { ...rubric.assignment, mac } };
+    await Assignment.validate(signed);
 
     const locked = true;
-    const { cells, id, key, references } = rubric;
-    const serialized = JSON.stringify(rubric.assignment.roster);
+    const { cells, id, key, references } = signed;
+    const serialized = JSON.stringify(signed.assignment.roster);
     const roster = [await security.encrypt(serialized, key)];
-    const assignment = { ...rubric.assignment, roster };
+    const assignment = { ...signed.assignment, roster };
     const revised = Date.now();
     return { assignment, cells, id, key: null, locked, references, revised };
   }

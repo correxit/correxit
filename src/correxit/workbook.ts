@@ -818,7 +818,6 @@ export namespace Workbook {
   ): Promise<void> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) return;
-    await Rubric.Assignment.validate(rubric);
 
     const { key, references } = rubric;
     const secrets = Object.values(references).filter(({ secret }) => secret);
