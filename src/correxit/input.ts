@@ -1,29 +1,24 @@
 import { InputDialog } from '@jupyterlab/apputils';
 import { Cell, ICellModel } from '@jupyterlab/cells';
-import { filter } from '@lumino/algorithm';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
 import { Workbook } from '..';
 
 const EXCLUDE = 'cxt-mod-exclude';
-
 const INCLUDE = 'cxt-mod-include';
-
 const OVERLAY = 'correxit-overlay';
-
 const PANEL = 'correxit-chooser';
-
 const TARGET_CELL = 'correxit-target-cell';
 
 /** @returns a user input cell or `null`. */
 export function cell(
   workbook: Workbook.Headed,
   options: {
-    blocked?: Iterable<string>;
+    blocked: Iterable<string>;
     empty: string;
-    id?: string | null;
+    id: string | null;
     message: (
-      cell: { id: string; index: number; valid: boolean; }
+      cell: { id: string; index: number; valid: boolean }
     ) => string;
     prompt: string;
     title: string;
@@ -31,21 +26,7 @@ export function cell(
 ): Promise<ICellModel | null> {
   const notebook = workbook.content;
   const cells = [...notebook.widgets];
-  const blocked = new Set(options.blocked || []);
-  const delegate = new PromiseDelegate<ICellModel | null>();
-  const overlay = document.createElement('div');
-  const panel = document.createElement('div');
-  const heading = document.createElement('h2');
-  const prompt = document.createElement('p');
-  const status = document.createElement('p');
-  const restore = document.activeElement instanceof HTMLElement
-    ? document.activeElement
-    : null;
-  const claim = () => {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && !panel.contains(active)) active.blur();
-    panel.focus({ preventScroll: true });
-  };
+  const blocked = new Set(options.blocked);
   const usable = (
     cell: Cell<ICellModel> | null
   ): cell is Cell<ICellModel> => {
@@ -53,8 +34,48 @@ export function cell(
   };
   const selectable = cells.filter(usable);
   const first = selectable[0] || null;
-  const last = selectable[selectable.length - 1] || null;
+  const last = selectable.at(-1) || null;
+  const delegate = new PromiseDelegate<ICellModel | null>();
+  const restore = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+  const overlay = document.createElement('div');
+  const panel = document.createElement('div');
+  const heading = document.createElement('h2');
+  const prompt = document.createElement('p');
+  const status = document.createElement('p');
+
+  overlay.classList.add(OVERLAY, 'cxt-mod-choose');
+  overlay.setAttribute('aria-describedby', `${PANEL}-prompt ${PANEL}-status`);
+  overlay.setAttribute('aria-labelledby', `${PANEL}-title`);
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('role', 'dialog');
+
+  panel.className = PANEL;
+  panel.tabIndex = -1;
+
+  heading.className = `${PANEL}-title`;
+  heading.id = `${PANEL}-title`;
+  heading.textContent = options.title;
+
+  prompt.className = `${PANEL}-prompt`;
+  prompt.id = `${PANEL}-prompt`;
+  prompt.textContent = options.prompt;
+
+  status.className = `${PANEL}-status`;
+  status.id = `${PANEL}-status`;
+  status.setAttribute('aria-live', 'polite');
+  status.setAttribute('role', 'status');
+
+  panel.append(heading, prompt, status);
+  overlay.appendChild(panel);
+
   let target: Cell<ICellModel> | null = null;
+  const claim = () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && !panel.contains(active)) active.blur();
+    panel.focus({ preventScroll: true });
+  };
   const clear = (cell: Cell<ICellModel> | null) => {
     cell?.removeClass(TARGET_CELL);
     cell?.removeClass(EXCLUDE);
@@ -73,50 +94,21 @@ export function cell(
 
     const index = cells.indexOf(cell) + 1;
     const valid = usable(cell);
-    const state = valid ? INCLUDE : EXCLUDE;
     cell.addClass(TARGET_CELL);
-    cell.addClass(state);
+    cell.addClass(valid ? INCLUDE : EXCLUDE);
     status.dataset.state = valid ? 'valid' : 'invalid';
     status.textContent = options.message({ id: cell.model.id, index, valid });
   };
-  const close = (model: ICellModel | null) => {
-    clear(target);
-    overlay.removeEventListener('click', click);
-    overlay.removeEventListener('pointermove', pointermove);
-    document.removeEventListener('keydown', keydown, true);
-    overlay.remove();
-    target = null;
-    throttler.dispose();
-    if (restore?.isConnected) restore.focus();
-    else notebook.activeCell?.node.focus();
-    delegate.resolve(model);
-  };
-  const reveal = async (cell: Cell<ICellModel> | null) => {
-    if (cell) await notebook.scrollToCell(cell);
-    requestAnimationFrame(claim);
-  };
-  const start = () => {
-    if (!selectable.length) return null;
-
-    const current = cells.findIndex(({ model }) => model.id === options.id);
-    for (let index = current + 1; index < cells.length; ++index) {
-      const cell = cells[index];
-      if (usable(cell)) return cell;
-    }
-    for (let index = 0; index < current; ++index) {
-      const cell = cells[index];
-      if (usable(cell)) return cell;
-    }
-    return first;
-  };
   const pick = (clientX: number, clientY: number) => {
-    for (const cell of filter(cells, cell => cell.inViewport)) {
+    for (const cell of cells) {
+      if (!cell.inViewport) continue;
       const rect = cell.node.getBoundingClientRect();
-      const overlap = clientY >= rect.y &&
+      if (
+        clientY >= rect.y &&
         clientY <= rect.y + rect.height &&
         clientX >= rect.x &&
-        clientX <= rect.x + rect.width;
-      if (overlap) return cell;
+        clientX <= rect.x + rect.width
+      ) return cell;
     }
     return null;
   };
@@ -136,6 +128,36 @@ export function cell(
     }
     if (usable(target)) return target;
     return step > 0 ? last : first;
+  };
+  const start = () => {
+    if (!selectable.length) return null;
+
+    const current = cells.findIndex(({ model }) => model.id === options.id);
+    for (let index = current + 1; index < cells.length; ++index) {
+      const cell = cells[index];
+      if (usable(cell)) return cell;
+    }
+    for (let index = 0; index < current; ++index) {
+      const cell = cells[index];
+      if (usable(cell)) return cell;
+    }
+    return first;
+  };
+  const reveal = async (cell: Cell<ICellModel> | null) => {
+    if (cell) await notebook.scrollToCell(cell);
+    requestAnimationFrame(claim);
+  };
+  const close = (model: ICellModel | null) => {
+    clear(target);
+    overlay.removeEventListener('click', click);
+    overlay.removeEventListener('pointermove', pointermove);
+    document.removeEventListener('keydown', keydown, true);
+    overlay.remove();
+    target = null;
+    throttler.dispose();
+    if (restore?.isConnected) restore.focus();
+    else notebook.activeCell?.node.focus();
+    delegate.resolve(model);
   };
   const keydown = (event: KeyboardEvent) => {
     const { key } = event;
@@ -192,25 +214,6 @@ export function cell(
     event.preventDefault();
     void throttler.invoke(event);
   };
-  heading.className = `${PANEL}-title`;
-  heading.id = `${PANEL}-title`;
-  heading.textContent = options.title;
-  overlay.classList.add(OVERLAY, 'cxt-mod-choose');
-  overlay.setAttribute('aria-describedby', `${PANEL}-prompt ${PANEL}-status`);
-  overlay.setAttribute('aria-labelledby', heading.id);
-  overlay.setAttribute('aria-modal', 'true');
-  overlay.setAttribute('role', 'dialog');
-  panel.className = PANEL;
-  panel.tabIndex = -1;
-  prompt.className = `${PANEL}-prompt`;
-  prompt.id = `${PANEL}-prompt`;
-  prompt.textContent = options.prompt;
-  status.className = `${PANEL}-status`;
-  status.id = `${PANEL}-status`;
-  status.setAttribute('aria-live', 'polite');
-  status.setAttribute('role', 'status');
-  panel.append(heading, prompt, status);
-  overlay.appendChild(panel);
   notebook.viewportNode.appendChild(overlay);
   requestAnimationFrame(() => {
     set(start());

@@ -96,15 +96,12 @@ export function commands(
     id: string
   ) => input.cell(workbook, {
     blocked: block(rubric, id),
-    empty: trans.__('No selectable code cells are available.'),
+    empty: trans.__('No code cells available.'),
     id,
-    message: ({ id: referent, index, valid }) => valid
-      ? trans.__('Cell %1: %2 selected.', index, referent)
-      : trans.__('Cell %1: %2 is unavailable.', index, referent),
-    prompt: trans.__(
-      'Use ArrowUp and ArrowDown to move, Home and End to jump, '
-      + 'Enter to confirm, and Escape to cancel.'
-    ),
+    message: ({ index, valid }) => valid
+      ? trans.__('Cell %1 selected.', index)
+      : trans.__('Cell %1 is unavailable.', index),
+    prompt: trans.__('↑ ↓ to move, Enter to confirm, Escape to cancel.'),
     title: trans.__('Choose a reference cell')
   });
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {

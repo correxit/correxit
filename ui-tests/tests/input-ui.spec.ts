@@ -67,24 +67,24 @@ test('selects a reference cell from the keyboard for comparison', async ({
 
   await expect(overlay).toBeVisible();
   await expect(overlay).toContainText('Choose a reference cell');
-  await expect(overlay).toContainText('Cell 4: target selected.');
+  await expect(overlay).toContainText('Cell 4 selected.');
   await expect(target).toHaveClass(/correxit-target-cell/);
 
   await page.keyboard.press('ArrowDown');
-  await expect(overlay).toContainText('Cell 5: extra selected.');
+  await expect(overlay).toContainText('Cell 5 selected.');
   await expect(target).not.toHaveClass(/correxit-target-cell/);
   await expect(extra).toHaveClass(/correxit-target-cell/);
 
   await page.keyboard.press('ArrowUp');
-  await expect(overlay).toContainText('Cell 4: target selected.');
+  await expect(overlay).toContainText('Cell 4 selected.');
   await expect(target).toHaveClass(/correxit-target-cell/);
 
   await page.keyboard.press('End');
-  await expect(overlay).toContainText('Cell 5: extra selected.');
+  await expect(overlay).toContainText('Cell 5 selected.');
   await expect(extra).toHaveClass(/correxit-target-cell/);
 
   await page.keyboard.press('Home');
-  await expect(overlay).toContainText('Cell 4: target selected.');
+  await expect(overlay).toContainText('Cell 4 selected.');
   await expect(target).toHaveClass(/correxit-target-cell/);
 
   await page.keyboard.press('Enter');
