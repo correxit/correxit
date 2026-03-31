@@ -59,7 +59,7 @@ export class SidebarWidget extends ReactWidget {
   protected render() {
     const { annotate, commands, trans, workbook } = this;
     const label = trans.__('Something went wrong rendering the sidebar.');
-    const key = Date.now();
+    const key = workbook ? workbook.context.path : 'idle';
     return (
       <Boundary key={key} label={label}>
         <Sidebar {...{ annotate, commands, trans, workbook }} />
