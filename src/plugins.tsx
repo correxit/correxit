@@ -329,7 +329,7 @@ const ui: JupyterFrontEndPlugin<void> = {
       palette: ICommandPalette | null,
       translator: ITranslator | null,
       restorer: ILayoutRestorer | null,
-      registry: ISettingRegistry
+      registry: ISettingRegistry | null
     ) => {
       const settings = registry ? registry.load(Correxit.UI) : null;
       const trans = (translator || nullTranslator).load('correxit');

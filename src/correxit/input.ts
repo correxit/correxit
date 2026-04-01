@@ -150,7 +150,7 @@ export function cell(
   const close = (model: ICellModel | null) => {
     clear(target);
     overlay.removeEventListener('click', click);
-    overlay.removeEventListener('pointermove', pointermove);
+    document.removeEventListener('pointermove', pointermove, true);
     document.removeEventListener('keydown', keydown, true);
     overlay.remove();
     target = null;
@@ -200,13 +200,13 @@ export function cell(
     event.stopPropagation();
 
     const cell = pick(event.clientX, event.clientY);
-    if (cell) set(cell);
-    if (usable(target)) close(target.model);
+    set(cell);
+    if (usable(cell)) close(cell.model);
   };
   const throttler = new Throttler(
     ({ clientX, clientY }: PointerEvent) => {
       const cell = pick(clientX, clientY);
-      if (cell) set(cell);
+      set(cell);
     },
     { limit: 100 }
   );
@@ -217,7 +217,7 @@ export function cell(
   notebook.viewportNode.appendChild(overlay);
   requestAnimationFrame(() => {
     set(start());
-    overlay.addEventListener('pointermove', pointermove);
+    document.addEventListener('pointermove', pointermove, true);
     overlay.addEventListener('click', click);
     document.addEventListener('keydown', keydown, true);
     void reveal(target);

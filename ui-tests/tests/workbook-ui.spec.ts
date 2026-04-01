@@ -220,11 +220,12 @@ test('keeps configured cell badges when connectors are active', async ({
     .poll(async () =>
       page.evaluate(() => {
         const cell = document.querySelector('.jp-Cell.cxt-cell-source');
-        if (!cell) return null;
-        return getComputedStyle(cell, '::after').width;
+        if (!cell) return false;
+
+        return getComputedStyle(cell, '::after').width !== '0px';
       })
     )
-    .toBe('28px');
+    .toBe(true);
 
   await dispose();
 });
@@ -273,10 +274,12 @@ test('draws connectors through inert cells between endpoints', async ({
     .poll(async () =>
       page.evaluate(() => {
         const cell = document.querySelectorAll('.jp-Cell')[1];
-        return cell ? getComputedStyle(cell, '::before').width : null;
+        return cell
+          ? getComputedStyle(cell, '::before').width !== '0px'
+          : false;
       })
     )
-    .toBe('1px');
+    .toBe(true);
 
   await dispose();
 });

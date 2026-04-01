@@ -639,6 +639,17 @@ const Minimap: React.FC<{
     cell: rows[row],
     path: columns[col]
   });
+  const identity = (row: number, col: number) =>
+    `correxit-reviewer-minimap-${col}-${row}`;
+  const active = {
+    column: columns.indexOf(cursor.path),
+    row: rows.indexOf(cursor.cell),
+    id: undefined as string | undefined
+  };
+  active.id =
+    active.row < 0 || active.column < 0
+      ? undefined
+      : identity(active.row, active.column);
 
   const label = (row: number, col: number, status: string, active: boolean) =>
     active
@@ -647,7 +658,7 @@ const Minimap: React.FC<{
 
   return (
     <div
-      aria-activedescendant={`${cursor.path}:${cursor.cell}`}
+      aria-activedescendant={active.id}
       className="correxit-reviewer-minimap"
       ref={host}
       role="grid"
@@ -674,7 +685,7 @@ const Minimap: React.FC<{
               aria-label={label(row, col, status, active)}
               aria-selected={active}
               className={className}
-              id={`${columns[col]}:${rows[row]}`}
+              id={identity(row, col)}
               key={`${row}-${col}`}
               onClick={() => setCursor(target)}
               ref={active ? focus : undefined}
