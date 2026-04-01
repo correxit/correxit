@@ -1,3 +1,10 @@
+# [1.18.0](https://github.com/QuantStack/correxit/compare/v1.17.1...v1.18.0) (2026-04-01)
+
+
+### Features
+
+* Improve ergonomics, safety, and usability ([#65](https://github.com/QuantStack/correxit/issues/65)) ([e0c98fa](https://github.com/QuantStack/correxit/commit/e0c98faef4d18ebb52dce05c014d3ad8be334405))
+
 ## [1.17.1](https://github.com/QuantStack/correxit/compare/v1.17.0...v1.17.1) (2026-03-27)
 
 
