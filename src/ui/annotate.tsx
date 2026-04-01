@@ -155,27 +155,38 @@ function rules(
   const first = `.jp-Notebook.${scope} .jp-Cell.${stamp(head)}`;
   const last = `.jp-Notebook.${scope} .jp-Cell.${stamp(tail)}`;
   const sibling = `${first} ~ .jp-Cell:not(${last} ~ .jp-Cell)`;
-
-  return [
-    `${endpoints} {
-  box-shadow: inset 2px 0 0 var(--correxit-insistent-color);
-}`,
-    `${first}::before,
-${sibling}::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 10px;
-  width: 1px;
-  border-radius: 999px;
-  background: var(--correxit-insistent-color);
-  opacity: 0.28;
-  pointer-events: none;
-}`,
-    `${first}::before {\n  top: calc(50% + 1px);\n}`,
-    `${last}::before {\n  bottom: calc(50% + 1px);\n}`
-  ].join('\n');
+  return `
+    ${first}, ${sibling} { position: relative; }
+    ${endpoints} { box-shadow: inset 2px 0 0 var(--correxit-insistent-color); }
+    ${first}::before,
+    ${sibling}::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: calc(var(--jp-cell-collapser-width) + 1px);
+      width: 1px;
+      border-radius: 999px;
+      background: var(--correxit-insistent-color);
+      opacity: 0.28;
+      pointer-events: none;
+    }
+    ${first}::before { top: var(--jp-cell-padding); }
+    ${last}::before { bottom: 0; }
+    ${first}::after,
+    ${last}::after {
+      content: '';
+      position: absolute;
+      left: calc(var(--jp-cell-collapser-width) + 1px);
+      width: 10px;
+      height: 1px;
+      background: var(--correxit-insistent-color);
+      opacity: 0.28;
+      pointer-events: none;
+    }
+    ${first}::after { top: var(--jp-cell-padding); }
+    ${last}::after { bottom: 0; }
+  `;
 }
 
 function stamp(id: string) {
