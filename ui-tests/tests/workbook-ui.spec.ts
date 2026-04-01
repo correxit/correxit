@@ -156,6 +156,131 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
   await dispose();
 });
 
+test('keeps configured cell badges when connectors are active', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'source', source: 'source' },
+    { id: 'target', source: 'target' }
+  ]);
+
+  await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const rubric = Rubric.add(
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create()),
+      {
+        id: 'source',
+        is: 'comparable',
+        points: 1,
+        references: ['target'],
+        payload: null
+      },
+      [{ cell: 'source', referent: 'target', points: 1, secret: true }]
+    );
+    await Workbook.update(workbook, rubric);
+  });
+
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        () =>
+          !!document.querySelector(
+            '.jp-Cell.cxt-cell-source.cxt-mod-comparable'
+          )
+      )
+    )
+    .toBe(true);
+
+  await page.locator('.jp-Cell').nth(1).click();
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() =>
+        Array.from(
+          document.querySelector('.jp-Notebook')?.classList || []
+        ).some(name => name.startsWith('cxt-scope-'))
+      )
+    )
+    .toBe(true);
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const cell = document.querySelector('.jp-Cell.cxt-cell-source');
+        if (!cell) return null;
+        return getComputedStyle(cell, '::after').width;
+      })
+    )
+    .toBe('28px');
+
+  await dispose();
+});
+
+test('draws connectors through inert cells between endpoints', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'source', source: 'source' },
+    { id: 'note', source: 'Expected output', type: 'markdown' },
+    { id: 'target', source: 'target' }
+  ]);
+
+  await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const rubric = Rubric.add(
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create()),
+      {
+        id: 'source',
+        is: 'comparable',
+        points: 1,
+        references: ['target'],
+        payload: null
+      },
+      [{ cell: 'source', referent: 'target', points: 1, secret: true }]
+    );
+    await Workbook.update(workbook, rubric);
+  });
+
+  await page.locator('.jp-Cell').nth(2).click();
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const cell = document.querySelectorAll('.jp-Cell')[1];
+        return cell ? getComputedStyle(cell, '::before').width : null;
+      })
+    )
+    .toBe('1px');
+
+  await dispose();
+});
+
 test('locks cleanly when the last referent cell is missing', async ({
   page
 }) => {

@@ -10,14 +10,17 @@ const incorrect = 'cxt-mod-incorrect';
 const partial = 'cxt-mod-partial';
 
 /**
- * A side-effect component that synchronizes rubric state with the notebook UI.
+ * Synchronizes rubric state with the active notebook UI.
  *
- * Renders `null` but uses Lumino's widget API to apply visual indicators to
- * workbook cells based on their rubric status (correct, incorrect, etc.).
+ * The component does two kinds of work. Imperatively, it stamps notebook cells
+ * with transient classes for rubric role, grading state, and encryption.
+ * Declaratively, it renders a scoped stylesheet whose rules draw connector
+ * geometry for the active cell's reference group.
  *
- * Lifecycle is bound to the Correxit sidebar: on mount, it augments the active
- * notebook if it is a workbook. On unmount or update, it cleans up and
- * restores widgets to their original state.
+ * Lifecycle is bound to the Correxit sidebar. On mount and update it replays
+ * the current decorations against the active notebook. On cleanup it removes
+ * the classes and notebook scope it owns. Static annotation styling lives in
+ * CSS; only the connector topology is synthesized here from notebook order.
  */
 export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
   const { workbook } = props;
@@ -25,24 +28,25 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
   const notebook = workbook?.content;
   const active = notebook?.activeCell?.model.id || null;
   const layout = JSON.stringify(notebook?.widgets.map(({ model }) => model.id));
+  const scope = rubric ? track(rubric.id) : null;
+  const linked = active && rubric ? referents(rubric, active) : [];
+  const order = notebook
+    ? new Map(notebook.widgets.map(({ model }, i) => [model.id, i] as const))
+    : null;
+  const css =
+    active && scope && order ? rules(scope, active, linked, order) : '';
   useEffect(() => {
     if (!notebook || !rubric || notebook.isDisposed) return;
 
     const marks: Marks = {
       notebook,
       scope: null,
-      style: null,
       widgets: new Map()
     };
-    const references = referents(rubric, active);
     const ids = new Set([
       ...Object.keys(rubric.cells),
       ...Object.values(rubric.references).map(({ referent }) => referent)
     ]);
-    const index = new Map(
-      notebook.widgets.map((widget, i) => [widget.model.id, i] as const)
-    );
-
     for (const widget of notebook.widgets) {
       const { id } = widget.model;
       if (!ids.has(id)) continue;
@@ -52,37 +56,24 @@ export const Annotate: React.FC<{ workbook: Workbook | null }> = props => {
       if (security.encrypted(widget.model.sharedModel.getSource()))
         mark(marks, widget, encrypted);
     }
-    if (active && references.length) {
-      const scope = track(rubric.id);
+    if (scope && css) {
       notebook.addClass(scope);
       marks.scope = scope;
-
-      const css = rules(scope, active, references, index);
-      if (css) {
-        const style = document.createElement('style');
-        style.textContent = css;
-        notebook.node.appendChild(style);
-        marks.style = style;
-      }
     }
-
     return () => clear(marks);
-  }, [active, layout, notebook, rubric, workbook]);
-  return null;
+  }, [active, css, layout, notebook, rubric, scope, workbook]);
+  return <style>{css}</style>;
 };
 
 type Marks = {
   notebook: Workbook['content'];
   scope: string | null;
-  style: HTMLStyleElement | null;
   widgets: Map<Widget, Set<string>>;
 };
 
 function clear(marks: Marks) {
-  const { notebook, scope, style, widgets } = marks;
-  if (style) style.remove();
+  const { notebook, scope, widgets } = marks;
   if (scope && notebook && !notebook.isDisposed) notebook.removeClass(scope);
-
   widgets.forEach((decorations, widget) => {
     if (widget.isDisposed) return;
     decorations.forEach(decoration => widget.removeClass(decoration));
@@ -141,51 +132,71 @@ function rules(
   active: string,
   linked: string[],
   order: Map<string, number>
-) {
+): string {
   const group = [active, ...linked]
     .filter(id => order.has(id))
     .sort((a, b) => order.get(a)! - order.get(b)!);
   if (group.length < 2) return '';
 
+  const lane =
+    'calc(var(--jp-cell-padding) + var(--jp-cell-collapser-width) / 2 - 1px)';
+  const tone = 'var(--jp-brand-color1)';
+  const cap = (id: string, y: string) =>
+    id === active
+      ? ''
+      : `
+    .jp-Notebook.${scope} .jp-Cell.${stamp(id)} {
+      background-image: linear-gradient(to right, ${tone}, ${tone});
+      background-position: ${lane} ${y};
+      background-repeat: no-repeat;
+      background-size: 10px 1px;
+    }
+  `;
   const editor = (id: string) =>
     `.jp-Notebook.${scope} .jp-Cell.${stamp(id)} .jp-InputArea-editor`;
   const endpoints = group.map(editor).join(',\n');
   const head = group[0];
   const tail = group[group.length - 1];
+  const gap = order.get(tail)! - order.get(head)!;
+  const floor = tail === active ? 'var(--jp-cell-padding)' : '0';
   const first = `.jp-Notebook.${scope} .jp-Cell.${stamp(head)}`;
   const last = `.jp-Notebook.${scope} .jp-Cell.${stamp(tail)}`;
-  const sibling = `${first} ~ .jp-Cell:not(${last} ~ .jp-Cell)`;
+  const middle =
+    gap < 2 ? '' : `${first} ~ .jp-Cell:not(${last}):not(${last} ~ .jp-Cell)`;
+  const span = [first, middle, last].filter(Boolean);
+  const chain = span.join(',\n');
+  const bars = span.map(selector => `${selector}::before`).join(',\n');
+  const gutters = span.map(selector => `${selector} .jp-Collapser`).join(',\n');
   return `
-    ${first}, ${sibling} { position: relative; }
-    ${endpoints} { box-shadow: inset 2px 0 0 var(--correxit-insistent-color); }
-    ${first}::before,
-    ${sibling}::before {
+    ${chain} { position: relative; }
+    ${gutters} {
+      position: relative;
+      z-index: 1;
+    }
+    ${endpoints} { box-shadow: inset 2px 0 0 ${tone}; }
+    ${bars} {
       content: '';
       position: absolute;
       top: 0;
       bottom: 0;
-      left: calc(var(--jp-cell-collapser-width) + 1px);
+      left: ${lane};
       width: 1px;
       border-radius: 999px;
-      background: var(--correxit-insistent-color);
-      opacity: 0.28;
+      background: repeating-linear-gradient(
+        to bottom,
+        ${tone},
+        ${tone} 2px,
+        transparent 2px,
+        transparent 6px
+      );
+      opacity: 0.7;
+      z-index: 0;
       pointer-events: none;
     }
     ${first}::before { top: var(--jp-cell-padding); }
-    ${last}::before { bottom: 0; }
-    ${first}::after,
-    ${last}::after {
-      content: '';
-      position: absolute;
-      left: calc(var(--jp-cell-collapser-width) + 1px);
-      width: 10px;
-      height: 1px;
-      background: var(--correxit-insistent-color);
-      opacity: 0.28;
-      pointer-events: none;
-    }
-    ${first}::after { top: var(--jp-cell-padding); }
-    ${last}::after { bottom: 0; }
+    ${last}::before { bottom: ${floor}; }
+    ${cap(head, 'var(--jp-cell-padding)')}
+    ${cap(tail, 'calc(100% - 1px)')}
   `;
 }
 
