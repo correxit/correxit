@@ -203,7 +203,7 @@ jobs:
           owner: notebook-link
           repositories: ${{ env.NO_ORG_REPO_NAME }}
 
-      - name: Sync commit from quantsack to notebook-link
+      - name: Sync commit from quantstack to notebook-link
         uses: QuantStack/cluster-app-template/.github/actions/mirror-repo@main
         with:
           source_access_token: ${{ secrets.GITHUB_TOKEN }}
