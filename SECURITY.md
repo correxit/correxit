@@ -186,8 +186,9 @@ external system.
 
 If rubric cells are missing from the notebook, headed workbooks skip seal
 verification and unseal only the remaining cells. Headless workbooks
-hard-fail. This matches `audit()`, which tolerates and prunes missing cells
-in headed mode but rejects incomplete notebooks in headless mode.
+hard-fail. This matches `audit()`, which repairs headed workbooks by
+removing orphaned references and dropping invalid or unscorable cell
+configurations, but rejects incomplete notebooks in headless mode.
 
 ### Payload Binding
 

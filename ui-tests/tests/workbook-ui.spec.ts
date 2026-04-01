@@ -3,8 +3,11 @@ import { setup } from './utils';
 
 test.use({ autoGoto: false });
 
-test('audits and prunes invalid rubric cells', async ({ page }) => {
-  const { dispose } = await setup(page, [{ id: 'known', source: '' }]);
+test('audits and dereferences orphaned references', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'keep', source: 'answer' },
+    { id: 'cell', source: 'compare' }
+  ]);
 
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
@@ -24,26 +27,34 @@ test('audits and prunes invalid rubric cells', async ({ page }) => {
         }
       }))(Rubric.create()),
       {
-        id: 'missing-ref',
-        is: 'comparable',
-        points: 1,
-        references: ['nope'],
+        id: 'cell',
+        is: 'correctable',
+        points: 2,
+        references: ['keep', 'gone'],
         payload: null
       },
-      [{ cell: 'missing-ref', referent: 'nope', points: 1, secret: true }]
+      [
+        { cell: 'cell', referent: 'keep', points: 1, secret: true },
+        { cell: 'cell', referent: 'gone', points: 1, secret: true }
+      ]
     );
 
     const audit = Workbook.audit(workbook, rubric);
+    const cell = audit.ok ? Rubric.get(audit.rubric, 'cell') : null;
     return {
       ok: audit.ok,
-      pruned: audit.ok ? audit.pruned.length : 0,
-      invalid: audit.ok ? Rubric.has(audit.rubric, 'missing-ref') : null
+      points: cell?.points ?? null,
+      present: audit.ok ? Rubric.has(audit.rubric, 'cell') : null,
+      references: cell?.references ?? null,
+      refCount: audit.ok ? Object.keys(audit.rubric.references).length : null
     };
   });
 
   expect(result.ok).toBe(true);
-  expect(result.pruned).toBe(1);
-  expect(result.invalid).toBe(false);
+  expect(result.present).toBe(true);
+  expect(result.points).toBe(1);
+  expect(result.references).toEqual(['keep']);
+  expect(result.refCount).toBe(1);
   await dispose();
 });
 
@@ -142,6 +153,67 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
   expect(result.unlocked.source).toBe('answer');
   expect(result.unlocked.jupyter.source_hidden).toBeUndefined();
   expect(result.unlocked.editable).toBeUndefined();
+  await dispose();
+});
+
+test('locks cleanly when the last referent cell is missing', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'answer' },
+    { id: 'cell', source: 'compare' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const rubric = Rubric.add(
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create()),
+      {
+        id: 'cell',
+        is: 'comparable',
+        points: 1,
+        references: ['ref'],
+        payload: null
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
+    );
+    await Workbook.update(workbook, rubric);
+
+    // Delete the referent cell exactly as a user might (index 0 is 'ref').
+    const notebook = panel.context.model.sharedModel;
+    notebook.deleteCell(0);
+
+    const error = await (async () => {
+      try {
+        await Workbook.lock(workbook);
+        return null;
+      } catch (error) {
+        return error instanceof Error ? error.message : `${error}`;
+      }
+    })();
+
+    const audited = Workbook.open(workbook);
+    return {
+      error,
+      present: Rubric.has(audited, 'cell')
+    };
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.present).toBe(false);
   await dispose();
 });
 

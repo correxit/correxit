@@ -27,7 +27,6 @@ export namespace Workbook {
   namespace Audit {
     export type Pass = {
       ok: true;
-      pruned: { cell: Rubric.Cell; reason: string; }[];
       rubric: Rubric;
     };
 
@@ -425,53 +424,67 @@ export namespace Workbook {
   }
 
   /**
-   * Audits a workbook's rubric, prunes unknown or invalid cells. Never throws.
+   * Audits a workbook's rubric, pruning impossible cells and references.
+   * Never throws.
    *
    * #### Notes
    * If the rubric is locked, it is left unmodified.
    *
-   * Headed workbooks tolerate missing cells: the pruned rubric is returned
-   * with `ok: true` so the author can still interact with what remains.
+   * Headed workbooks repair missing notebook state when possible: orphaned
+   * references are removed, and cells left invalid or unscorable are dropped.
    * Headless workbooks fail immediately. Batch grading cannot recover from
    * a structurally incomplete notebook.
    */
   export function audit(workbook: Workbook, rubric: Rubric | null): Audit {
     if (!rubric) return { ok: false, error: 'null rubric', rubric };
-    if (rubric.locked) return { ok: true, pruned: [], rubric };
+    if (rubric.locked) return { ok: true, rubric };
     const notebook = workbook.context.model.sharedModel;
     const types = Object.fromEntries(
       notebook.cells.map(cell => [cell.id, cell.cell_type])
     );
-    const pruned: { cell: Rubric.Cell; reason: string; }[] = [];
+    const orphaned: string[] = [];
+    const dangling: { cell: Rubric.Cell; reason: string; }[] = [];
     const executable = (id: string) =>
       types[id] === 'code' || types[id] === 'raw';
     for (const id in rubric.cells) {
       const cell = rubric.cells[id];
       const { is, payload } = cell;
-      const present = is === 'reviewable'
-        ? id in types
-        : executable(id);
+      const present = is === 'reviewable' ? id in types : executable(id);
+      const valid = is === 'answerable' ? !!payload.length : true;
+      if (!present || !valid) {
+        const reason = id in types ? 'invalid cell' : 'unknown cell';
+        dangling.push({ cell: { ...cell }, reason });
+        continue;
+      }
+
       const references = Object.values(rubric.references)
         .filter(reference => reference.cell === id);
-      const valid = is === 'answerable'
-        ? !!payload.length : is === 'reviewable'
-        ? true : references.every(reference => executable(reference.referent));
-      if (present && valid) continue;
-
-      const reason = id in types ? 'invalid cell' : 'unknown cell';
-      pruned.push({ cell: { ...cell }, reason });
-    }
-    if (pruned.length) {
-      console.warn('audit pruned these rubric cells', pruned);
-      if (!workbook.content)
-        return { ok: false, error: 'missing cells', rubric };
-      const modified = pruned.reduce(
-        (rubric, { cell: { id } }) => Rubric.remove(rubric, id),
-        rubric
+      orphaned.push(
+        ...references
+          .filter(reference => !executable(reference.referent))
+          .map(reference => reference.referent)
       );
-      return { ok: true, pruned, rubric: modified };
     }
-    return { ok: true, pruned: [], rubric };
+    if (dangling.length || orphaned.length) {
+      if (dangling.length)
+        console.warn('audit pruned these rubric cells', dangling);
+      if (orphaned.length)
+        console.warn('audit pruned these references', orphaned);
+      if (!workbook.content) {
+        const error = dangling.length ? 'missing cells' : 'missing references';
+        return { ok: false, error, rubric };
+      }
+      const dereferenced = orphaned.reduce(
+        (unlocked, referent) => Rubric.dereference(unlocked, referent),
+        rubric as Rubric.Unlocked
+      );
+      const scrubbed = dangling.reduce(
+        (unlocked, { cell: { id } }) => Rubric.remove(unlocked, id),
+        dereferenced
+      );
+      return { ok: true, rubric: scrubbed };
+    }
+    return { ok: true, rubric };
   }
 
   /** Collect a certified workbook grade. */
@@ -621,8 +634,8 @@ export namespace Workbook {
       return expand({ path, resolved: false, score, spec: null }, empty);
     }
 
-    // Re-audit to get the pruned rubric: headed workbooks tolerate
-    // missing cells (they are pruned), headless ones fail outright.
+    // Re-audit to get the repaired rubric: headed workbooks remove
+    // orphaned references and drop impossible cells, headless ones fail.
     const audited = audit(workbook, opened);
     if (!audited.ok) {
       const score = { ...Rubric.Score.UNSCORED, comment: audited.error };
@@ -702,8 +715,6 @@ export namespace Workbook {
     const audited = Workbook.audit(workbook, rubric);
     if (!audited.ok)
       throw new Error.Decrypt(`decrypt error: ${audited.error}`);
-    if (audited.pruned.length)
-      console.warn('decrypt: workbook has missing cells', audited.pruned);
 
     const { key, references } = audited.rubric as Rubric.Unlocked;
     const secrets = Object.values(references).filter(({ secret }) => secret);
@@ -712,8 +723,8 @@ export namespace Workbook {
     );
     transact(workbook, prepared);
     defrost(workbook);
-    // Keep the original (un-pruned) rubric for downstream audits.
-    return update(workbook, rubric, { ok: true, pruned: [], rubric });
+    // Keep the original rubric. Decrypt should not persist audit repairs.
+    return update(workbook, rubric, { ok: true, rubric });
   }
 
   /** Remove a single reference from a cell. */
@@ -819,13 +830,17 @@ export namespace Workbook {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) return;
 
-    const { key, references } = rubric;
+    const audited = audit(workbook, rubric);
+    if (!audited.ok) throw new Error.Invalid(`lock error: ${audited.error}`);
+    const valid = audited.rubric as Rubric.Unlocked;
+
+    const { key, references } = valid;
     const secrets = Object.values(references).filter(({ secret }) => secret);
     const prepared = await Promise.all(
       secrets.map(({ referent }) => Cell.encrypt(workbook, referent, key))
     );
     transact(workbook, prepared);
-    update(workbook, await Rubric.lock(rubric));
+    update(workbook, await Rubric.lock(valid));
   }
 
   /**
