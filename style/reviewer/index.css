@@ -57,18 +57,33 @@
 /* Minimap */
 
 .correxit-reviewer-minimap {
+  align-content: start;
   border-bottom: 1px solid var(--jp-border-color1);
+  gap: 1px 0;
   display: grid;
-  gap: 1px;
   min-height: 48px;
   overflow: auto;
   padding: 8px 0;
 }
 
 .correxit-reviewer-minimap-cell {
+  appearance: none;
+  background-image: linear-gradient(
+    to right,
+    transparent calc(100% - 1px),
+    color-mix(in srgb, var(--jp-border-color2) 60%, transparent) 0
+  );
+  background-repeat: no-repeat;
+  border: none;
   cursor: pointer;
   min-height: 3px;
-  min-width: 3px;
+  min-width: 0;
+  padding: 0;
+  position: relative;
+  scroll-margin: 24px;
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
 
   &.correxit-reviewer-minimap-correct {
     background-color: var(--correxit-correct-color);
@@ -91,8 +106,19 @@
   }
 
   &.cxt-mod-active {
-    outline: 1px solid var(--jp-brand-color1);
-    outline-offset: -1px;
+    box-shadow:
+      0 0 0 1px var(--jp-layout-color1),
+      0 0 0 2px var(--jp-brand-color1),
+      0 0 0 3px color-mix(in srgb, var(--jp-brand-color1) 24%, transparent);
+    transform: scale(1.25);
+    z-index: 1;
+  }
+
+  &:focus-visible {
+    box-shadow:
+      0 0 0 1px var(--jp-layout-color1),
+      0 0 0 3px var(--jp-brand-color1);
+    outline: none;
   }
 }
 

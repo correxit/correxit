@@ -370,13 +370,16 @@ function ReviewerInfo({ trans }: { trans: IRenderMime.TranslationBundle }) {
     .map(cell => cell.id)
     .filter(id => id in rubric.cells);
   const index = rows.indexOf(cursor.cell);
-  const assignee = rubric.assignment.assignee || workbook.context.path;
+  if (index < 0) return null;
+
+  const issue = rubric.assignment.issue.replace(/[^a-z0-9]/gi, '');
+  const token = issue ? issue.slice(-6).toUpperCase() : `${index + 1}`;
   const score =
     Rubric.Score.resolve(rubric.assignment.report, cursor.cell) ?? null;
 
   return (
     <span>
-      {assignee}
+      {trans.__('Review %1', token)}
       {' \u00b7 '}
       {trans.__('Cell %1 of %2', index + 1, rows.length)}
       {' \u00b7 '}

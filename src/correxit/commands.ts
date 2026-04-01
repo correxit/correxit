@@ -85,6 +85,25 @@ export function commands(
   const fetch = (handle: Credentials, silent = false) =>
     io.request(handle, factory, manager, unlocker, silent);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
+  const block = (rubric: Rubric.Unlocked, id: string) => new Set([
+    id,
+    ...Object.keys(rubric.cells),
+    ...Object.keys(rubric.references)
+  ]);
+  const choose = (
+    workbook: Workbook.Headed,
+    rubric: Rubric.Unlocked,
+    id: string
+  ) => input.cell(workbook, {
+    blocked: block(rubric, id),
+    empty: trans.__('No code cells available.'),
+    id,
+    message: ({ index, valid }) => valid
+      ? trans.__('Cell %1 selected.', index)
+      : trans.__('Cell %1 is unavailable.', index),
+    prompt: trans.__('↑ ↓ to move, Enter to confirm, Escape to cancel.'),
+    title: trans.__('Choose a reference cell')
+  });
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
     const workbook = handle ? await fetch(handle) : state.workbook();
@@ -325,7 +344,7 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       const id = state.cell(args);
       const is = args.is;
-      if (!rubric || !id || !is) return;
+      if (!rubric || !id || !is || rubric.locked) return;
 
       const confirm = () => showDialog({
         title: trans.__('Reset cell configuration?'),
@@ -337,7 +356,7 @@ export function commands(
       });
       if (has(rubric, id)) {
         if (!(await confirm()).button.accept) return;
-        remove(workbook, id);
+        await remove(workbook, id);
       }
       if (is === 'answerable') {
         const expected = await input.text({
@@ -363,7 +382,9 @@ export function commands(
 
       let references: string[] | null = args.references || null;
       if (!references) {
-        const selected = workbook.content && await input.cell(workbook);
+        const rubric = open(workbook);
+        if (!rubric || rubric.locked) return;
+        const selected = workbook.content && await choose(workbook, rubric, id);
         references = selected && [selected.id];
       }
       if (!references || references.includes(id)) return;
@@ -752,43 +773,33 @@ export function commands(
     },
     isVisible: args => commands.isEnabled(CommandIDs.refer, args),
     label: trans.__('Add a reference cell'),
-    execute: async (args: Partial<Cell>) => {
-      const workbook = state.workbook();
+    execute: async (args: Partial<Cell & Credentials>) => {
+      const { rubric, workbook } = await reify(args);
       const id = state.cell(args);
-      if (!workbook?.content || !id) return;
+      if (!rubric || !id || rubric.locked || !workbook.content) return;
 
-      const selected = await input.cell(workbook);
-      if (!selected) return;
+      const { id: referent } = await choose(workbook, rubric, id) ?? {};
+      if (!referent) return;
 
-      const rubric = open(workbook);
-      if (!rubric || rubric.locked) return;
+      {
+        const rubric = open(workbook);
+        if (!rubric || rubric.locked) return;
 
-      const cell = get(rubric, id);
-      if (!cell) return;
-      if (
-        cell.is !== 'comparable' &&
-        cell.is !== 'correctable'
-      ) return;
+        const { is } = get(rubric, id) ?? {};
+        if (!is || is !== 'comparable' && is !== 'correctable') return;
+        if (
+          referent === id ||
+          referent in rubric.references ||
+          referent in rubric.cells
+        ) return;
+      }
 
-      const referent = selected.id;
-      if (
-        referent === id ||
-        referent in rubric.references ||
-        referent in rubric.cells
-      ) return;
-
-      const reference = {
-        cell: id,
-        referent,
-        points: 1,
-        secret: true
-      };
+      const reference = { cell: id, referent, points: 1, secret: true };
       await refer(workbook, id, reference);
 
       const { widgets } = workbook.content;
       const original = find(widgets, ({ model }) => model.id === id);
-      if (original)
-        await workbook.content.scrollToCell(original);
+      if (original) await workbook.content.scrollToCell(original);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.remove, {

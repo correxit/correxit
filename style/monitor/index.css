@@ -1,11 +1,18 @@
 .correxit-overlay {
+  background: var(--jp-dialog-background);
   height: 100%;
-  width: 100%;
+  left: 0;
   position: absolute;
   top: 0;
-  background-color: white;
-  opacity: 0.4;
+  width: 100%;
   z-index: 10;
+}
+
+.correxit-overlay.cxt-mod-choose {
+  cursor: cell;
+  overflow: hidden;
+  padding: 0;
+  pointer-events: all;
 }
 
 .correxit-overlay.cxt-mod-loading {
@@ -33,6 +40,69 @@
   color: var(--jp-ui-font-color1);
   content: attr(data-label);
   font-size: var(--jp-ui-font-size1);
+}
+
+.correxit-chooser {
+  background: linear-gradient(
+    180deg,
+    var(--jp-layout-color1) 0%,
+    var(--jp-layout-color0) 100%
+  );
+  border: 1px solid var(--jp-brand-color2);
+  border-radius: 8px;
+  border-top-width: 3px;
+  box-shadow:
+    var(--jp-elevation-z8),
+    0 0 0 1px rgb(0 0 0 / 6%);
+  color: var(--jp-ui-font-color1);
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 12px 16px;
+  pointer-events: auto;
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100vw - 48px);
+  max-width: 440px;
+  z-index: 1;
+}
+
+.correxit-chooser-title,
+.correxit-chooser-prompt,
+.correxit-chooser-status {
+  margin: 0;
+}
+
+.correxit-chooser-title {
+  font-size: var(--jp-ui-font-size2);
+}
+
+.correxit-chooser-prompt {
+  color: var(--jp-ui-font-color2);
+  line-height: 1.4;
+}
+
+.correxit-chooser-status {
+  background-color: rgb(0 0 0 / 4%);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.correxit-chooser-status[data-state='empty'] {
+  color: var(--jp-ui-font-color2);
+}
+
+.correxit-chooser-status[data-state='invalid'] {
+  color: var(--jp-reject-color-active);
+}
+
+.correxit-chooser-status[data-state='valid'] {
+  color: var(--jp-accept-color-active);
 }
 
 @keyframes correxit-spin {

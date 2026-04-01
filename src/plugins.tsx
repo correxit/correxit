@@ -135,8 +135,8 @@ const corrector: JupyterFrontEndPlugin<void> = {
           activeStateChanged: active
         });
       }
-      if (palette) palette.addItem({ category: 'correxit', command: launch });
-      if (palette) palette.addItem({ category: 'correxit', command: review });
+      if (palette) palette.addItem({ category: 'Correxit', command: launch });
+      if (palette) palette.addItem({ category: 'Correxit', command: review });
       if (restorer) {
         restorer.restore(tracker.corrector, {
           command: launch,
@@ -321,14 +321,15 @@ const ui: JupyterFrontEndPlugin<void> = {
   description: Correxit.DESCRIPTION.UI,
   autoStart: true,
   requires: [Correxit.Monitor],
-  optional: [ITranslator, ILayoutRestorer, ISettingRegistry],
+  optional: [ICommandPalette, ITranslator, ILayoutRestorer, ISettingRegistry],
   ...((deactivator?: () => void) => ({
     activate: (
       { commands, shell },
       monitor: Correxit.Monitor,
+      palette: ICommandPalette | null,
       translator: ITranslator | null,
       restorer: ILayoutRestorer | null,
-      registry: ISettingRegistry
+      registry: ISettingRegistry | null
     ) => {
       const settings = registry ? registry.load(Correxit.UI) : null;
       const trans = (translator || nullTranslator).load('correxit');
@@ -339,7 +340,25 @@ const ui: JupyterFrontEndPlugin<void> = {
       widget.title.icon = Correxit.Icons.correct;
       shell.add(widget, 'right', {});
       if (restorer) restorer.add(widget, widget.id);
-
+      if (palette) {
+        const { CommandIDs } = Correxit;
+        const exposed = [
+          CommandIDs.convert,
+          CommandIDs.lock,
+          CommandIDs.unlock,
+          CommandIDs.track,
+          CommandIDs.certify,
+          CommandIDs.correct,
+          CommandIDs.collect,
+          CommandIDs.distribute,
+          CommandIDs.submit,
+          CommandIDs.revise,
+          CommandIDs.draft,
+          CommandIDs.reset
+        ];
+        for (const command of exposed)
+          palette.addItem({ category: 'Correxit', command });
+      }
       deactivator = () => widget.dispose();
     },
     deactivate: () => deactivator?.()

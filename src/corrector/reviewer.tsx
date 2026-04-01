@@ -36,6 +36,33 @@ const integer = (value: string): number | '' => {
   return Math.max(0, Math.floor(parsed));
 };
 
+const instructions = (
+  workbook: Headless | null,
+  cursor: Cursor | null,
+  rubric: Rubric | null
+) => {
+  if (!workbook || !cursor || !rubric) return null;
+
+  const cells = workbook.context.model.sharedModel.cells;
+  const index = cells.findIndex(cell => cell.id === cursor.cell);
+  if (index <= 0) return null;
+
+  const span = 3;
+  const block: string[] = [];
+  for (let i = index - 1; i >= 0 && block.length < span; i--) {
+    const preceding = cells[i];
+    if (preceding.cell_type !== 'markdown') break;
+    if (preceding.id in rubric.cells) break;
+    if (preceding.id in rubric.references) break;
+
+    const source = preceding.getSource();
+    if (!source.trim()) break;
+    block.unshift(source);
+  }
+
+  return block.length ? block.join('\n\n') : null;
+};
+
 export function Reviewer(props: Reviewer.Props) {
   const { commands, factory, rendermime, trans, cursor: initial } = props;
   const snapshot = bridge.useSnapshot();
@@ -141,19 +168,10 @@ export function Reviewer(props: Reviewer.Props) {
   }, [workbook, cursor?.cell]);
   const type = model?.cell_type ?? 'code';
   const source = model?.getSource() ?? '';
-
-  // Preceding markdown cell as question context (if not graded or a reference).
-  const question = useMemo(() => {
-    if (!workbook || !cursor || !rubric) return null;
-    const cells = workbook.context.model.sharedModel.cells;
-    const index = cells.findIndex(cell => cell.id === cursor.cell);
-    if (index <= 0) return null;
-    const preceding = cells[index - 1];
-    if (preceding.cell_type !== 'markdown') return null;
-    if (preceding.id in rubric.cells) return null;
-    if (preceding.id in rubric.references) return null;
-    return preceding.getSource() || null;
-  }, [workbook, cursor?.cell, rubric]);
+  const question = useMemo(
+    () => instructions(workbook, cursor, rubric),
+    [workbook, cursor?.cell, rubric]
+  );
   const saved: any[] = type === 'code' ? ((model as any)?.outputs ?? []) : [];
   const [corrected, setCorrected] = useState<Rubric.Cell.Output[]>([]);
   useEffect(() => void setCorrected([]), [cursor?.path, cursor?.cell]);
@@ -237,8 +255,8 @@ export function Reviewer(props: Reviewer.Props) {
     },
     [commit, score, possible]
   );
-  const scored = useRef<(action: 'pass' | 'fail') => void>(a => judge(a));
-  scored.current = a => judge(a);
+  const scored = useRef<(action: 'pass' | 'fail') => void>(judge);
+  scored.current = judge;
   useEffect(() => props.on.score(scored), []);
 
   const rerun = async () => {
@@ -285,6 +303,7 @@ export function Reviewer(props: Reviewer.Props) {
           {question && (
             <CellSource
               factory={null}
+              label={trans.__('Question context')}
               placeholder=""
               rendermime={rendermime}
               source={question}
@@ -294,13 +313,17 @@ export function Reviewer(props: Reviewer.Props) {
           )}
           <CellSource
             factory={factory}
+            label={trans.__('Current cell')}
             placeholder={trans.__('(blank)')}
             rendermime={rendermime}
             source={source}
             type={type}
           />
           {type === 'code' && outputs.length > 0 && (
-            <div className="correxit-reviewer-outputs">
+            <div
+              aria-label={trans.__('Cell outputs')}
+              className="correxit-reviewer-outputs"
+            >
               {outputs.map((output: any, i: number) => (
                 <CellOutput key={i} output={output} rendermime={rendermime} />
               ))}
@@ -313,6 +336,7 @@ export function Reviewer(props: Reviewer.Props) {
           ) : (
             <div className="correxit-reviewer-scoring">
               <textarea
+                aria-label={trans.__('Reviewer comment')}
                 className="correxit-reviewer-comment"
                 data-lm-suppress-shortcuts="true"
                 onChange={({ target: { value } }) => setComment(value)}
@@ -331,6 +355,7 @@ export function Reviewer(props: Reviewer.Props) {
                 </button>
                 <span className="correxit-reviewer-score-display">
                   <input
+                    aria-label={trans.__('Score')}
                     className="correxit-reviewer-score-input"
                     inputMode="numeric"
                     min="0"
@@ -427,12 +452,13 @@ export namespace Reviewer {
 
 const CellSource: React.FC<{
   factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
+  label?: string;
   muted?: boolean;
   placeholder: string;
   rendermime: IRenderMimeRegistry | null;
   source: string;
   type: string;
-}> = ({ factory, muted, placeholder, rendermime, source, type }) => {
+}> = ({ factory, label, muted, placeholder, rendermime, source, type }) => {
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<CodeEditor.IEditor | null>(null);
   const className = [
@@ -489,7 +515,7 @@ const CellSource: React.FC<{
     type === 'raw';
   if (unavailable) {
     return (
-      <div key="plain" className={className}>
+      <div aria-label={label} key="plain" className={className}>
         <pre>
           {source || (
             <span className="correxit-reviewer-source-blank">{empty}</span>
@@ -500,7 +526,7 @@ const CellSource: React.FC<{
   }
   if (!source) {
     return (
-      <div key="blank" className={className}>
+      <div aria-label={label} key="blank" className={className}>
         <pre>
           <span className="correxit-reviewer-source-blank">{empty}</span>
         </pre>
@@ -508,7 +534,7 @@ const CellSource: React.FC<{
     );
   }
 
-  return <div key="rich" className={className} ref={host} />;
+  return <div aria-label={label} key="rich" className={className} ref={host} />;
 };
 
 /**
@@ -575,6 +601,9 @@ const Minimap: React.FC<{
   trans,
   workbooks
 }) => {
+  const host = useRef<HTMLDivElement>(null);
+  const focus = useRef<HTMLButtonElement | null>(null);
+
   const grid = useMemo(() => {
     const rubrics = new Map(
       workbooks
@@ -598,14 +627,45 @@ const Minimap: React.FC<{
     );
   }, [columns, rows, workbooks, grades, revision]);
 
+  useEffect(() => {
+    const current = focus.current;
+    if (!current) return;
+
+    current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (host.current?.contains(document.activeElement)) current.focus();
+  }, [cursor.cell, cursor.path]);
+
+  const keyed = (row: number, col: number) => ({
+    cell: rows[row],
+    path: columns[col]
+  });
+  const identity = (row: number, col: number) =>
+    `correxit-reviewer-minimap-${col}-${row}`;
+  const active = {
+    column: columns.indexOf(cursor.path),
+    row: rows.indexOf(cursor.cell),
+    id: undefined as string | undefined
+  };
+  active.id =
+    active.row < 0 || active.column < 0
+      ? undefined
+      : identity(active.row, active.column);
+
+  const label = (row: number, col: number, status: string, active: boolean) =>
+    active
+      ? trans.__('%1, cell %2, %3, active', columns[col], row + 1, status)
+      : trans.__('%1, cell %2, %3', columns[col], row + 1, status);
+
   return (
     <div
+      aria-activedescendant={active.id}
       className="correxit-reviewer-minimap"
+      ref={host}
       role="grid"
       aria-label={trans.__('Score minimap')}
       style={{
-        gridTemplateColumns: `repeat(${columns.length}, 1fr)`,
-        gridTemplateRows: `repeat(${rows.length}, 1fr)`
+        gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows.length}, minmax(0, 1fr))`
       }}
     >
       {grid.map((line, row) =>
@@ -619,13 +679,20 @@ const Minimap: React.FC<{
           ]
             .filter(Boolean)
             .join(' ');
+          const target = keyed(row, col);
           return (
-            <div
-              aria-label={`${columns[col]} cell ${row + 1}: ${status}`}
+            <button
+              aria-label={label(row, col, status, active)}
+              aria-selected={active}
               className={className}
+              id={identity(row, col)}
               key={`${row}-${col}`}
-              onClick={() => setCursor({ path: columns[col], cell: rows[row] })}
+              onClick={() => setCursor(target)}
+              ref={active ? focus : undefined}
               role="gridcell"
+              tabIndex={active ? 0 : -1}
+              title={label(row, col, status, active)}
+              type="button"
             />
           );
         })
