@@ -160,12 +160,17 @@ test('keeps pointer selection and rejects invalid targets for correction', async
     const x = noteBox.x + noteBox.width / 2;
     const y = noteBox.y + noteBox.height / 2;
     await page.mouse.move(x, y);
+    await expect(overlay).toContainText('Cell 2 is unavailable.');
     await expect(note).toHaveClass(/correxit-target-cell/);
     await expect(note).toHaveClass(/cxt-mod-exclude/);
     await page.mouse.click(x, y);
   }
 
   await expect(overlay).toBeVisible();
+  await expect(overlay).toContainText('Cell 2 is unavailable.');
+  await expect(note).toHaveClass(/correxit-target-cell/);
+  await expect(note).toHaveClass(/cxt-mod-exclude/);
+  await expect(target).not.toHaveClass(/correxit-target-cell/);
   await expect
     .poll(async () =>
       page.evaluate(() => {
@@ -184,6 +189,7 @@ test('keeps pointer selection and rejects invalid targets for correction', async
     const x = targetBox.x + targetBox.width / 2;
     const y = targetBox.y + targetBox.height / 2;
     await page.mouse.move(x, y);
+    await expect(overlay).toContainText('Cell 4 selected.');
     await expect(target).toHaveClass(/correxit-target-cell/);
     await expect(target).toHaveClass(/cxt-mod-include/);
     await page.mouse.click(x, y);
