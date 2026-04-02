@@ -65,7 +65,7 @@ namespace Draft {
   }
 
   export function edit(state: State, assignment: Assignment): State {
-    return equal(state.assignment, assignment) && state.local
+    return equal(state.assignment, assignment)
       ? state
       : { assignment, local: true };
   }
@@ -173,12 +173,12 @@ export const Assignment: React.FC<{
     merge(current => freeze(current, matched));
   }, [locked, registered, selected]);
   useEffect(() => {
-    const pending = Draft.persist(
+    const dirty = Draft.persist(
       { assignment, local },
       rubric.assignment,
       locked
     );
-    if (!pending) return;
+    if (!dirty) return;
     void reassign(assignment, locked);
   }, [assignment, local, locked, rubric.assignment]);
 
