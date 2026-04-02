@@ -1,3 +1,10 @@
+## [1.18.1](https://github.com/QuantStack/correxit/compare/v1.18.0...v1.18.1) (2026-04-02)
+
+
+### Bug Fixes
+
+* wheel typo ([#67](https://github.com/QuantStack/correxit/issues/67)) ([c49fed2](https://github.com/QuantStack/correxit/commit/c49fed2b4c01845f2a0db6c4299379c40664b290))
+
 # [1.18.0](https://github.com/QuantStack/correxit/compare/v1.17.1...v1.18.0) (2026-04-01)
 
 
