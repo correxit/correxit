@@ -202,7 +202,10 @@ describe('kernels', () => {
     it('limits outstanding leases to workers', async () => {
       const name = named();
       const workbook = create({ name });
+      // workers = 3 (drain default); acquire all three slots
       const first3 = [lease(workbook), lease(workbook), lease(workbook)];
+
+      // 4th lease must wait
       const fourth = lease(workbook);
       let resolved = false;
       void fourth.then(() => {
