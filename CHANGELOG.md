@@ -1,3 +1,10 @@
+## [1.18.2](https://github.com/QuantStack/correxit/compare/v1.18.1...v1.18.2) (2026-04-02)
+
+
+### Bug Fixes
+
+* assignment integrity error ([#68](https://github.com/QuantStack/correxit/issues/68)) ([6b2baf4](https://github.com/QuantStack/correxit/commit/6b2baf47c694fd3b67baf757fc5e613995cbbbae))
+
 ## [1.18.1](https://github.com/QuantStack/correxit/compare/v1.18.0...v1.18.1) (2026-04-02)
 
 
