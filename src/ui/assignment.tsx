@@ -32,6 +32,7 @@ const blank = (assignment: Assignment): Assignment => ({
   name: '',
   roster: []
 });
+const equal = Equal.assignment;
 const freeze = (assignment: Assignment, active: Registration): Assignment => ({
   ...assignment,
   ...active,
@@ -64,7 +65,7 @@ namespace Draft {
   }
 
   export function edit(state: State, assignment: Assignment): State {
-    return Equal.assignment(state.assignment, assignment) && state.local
+    return equal(state.assignment, assignment) && state.local
       ? state
       : { assignment, local: true };
   }
@@ -81,13 +82,11 @@ namespace Draft {
     assignment: Assignment,
     locked: boolean
   ): boolean {
-    return (
-      state.local && !locked && !Equal.assignment(state.assignment, assignment)
-    );
+    return state.local && !locked && !equal(state.assignment, assignment);
   }
 
   export function sync(state: State, assignment: Assignment): State {
-    return Equal.assignment(state.assignment, assignment)
+    return equal(state.assignment, assignment)
       ? state.local
         ? { ...state, local: false }
         : state
@@ -124,7 +123,7 @@ export const Assignment: React.FC<{
     setView(to);
   };
   const reassign = (assignment: Assignment, locked: boolean) => {
-    if (!locked && !Equal.assignment(rubric.assignment, assignment))
+    if (!locked && !equal(rubric.assignment, assignment))
       void commands.execute(assign, assignment).catch(_ => {});
   };
   const request = async () => {
