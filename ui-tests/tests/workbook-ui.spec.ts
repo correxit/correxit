@@ -156,6 +156,205 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
   await dispose();
 });
 
+test('unlock keeps the manual roster plaintext in the sidebar', async ({
+  page
+}) => {
+  const assignee = 'student@example.com';
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  await page.evaluate(async (assignee: string) => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget as any;
+
+    const base = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create());
+    const rubric = await Rubric.assign(base, {
+      assignee,
+      roster: [assignee]
+    });
+    await Workbook.update(panel, rubric);
+    await Workbook.lock(panel);
+    await Workbook.unlock(panel, rubric.key);
+  }, assignee);
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget as any;
+        const rubric = Workbook.open(panel, true);
+        return rubric?.assignment.roster ?? null;
+      })
+    )
+    .toEqual([assignee]);
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() =>
+        Array.from(
+          document.querySelectorAll(
+            'select[name="correxit-assignment-assignee"] option'
+          )
+        ).map(option => (option as HTMLOptionElement).value)
+      )
+    )
+    .toEqual(['', assignee]);
+
+  await expect
+    .poll(async () => page.locator('.correxit-sidebar').textContent())
+    .not.toContain('ENC[');
+
+  await dispose();
+});
+
+test('dropping registrar keeps assigned roster details', async ({ page }) => {
+  const assignee = 'student@example.com';
+  const id = 'course:assignment';
+  const name = 'Assignment 1';
+
+  await page.goto();
+  await page.evaluate(() => {
+    const context = window as any;
+    const app = context.jupyterapp;
+    const original = app.commands.execute.bind(app.commands);
+    context.__correxit_date = Date.now.bind(Date);
+    context.__correxit_now = context.__correxit_date();
+    context.__correxit_enroll = null;
+    app.commands.execute = (...args: any[]) =>
+      args[0] === 'correxit:enroll'
+        ? Promise.resolve(context.__correxit_enroll)
+        : original(...args);
+  });
+
+  const file = await page.notebook.createNew();
+  expect(file).toBeTruthy();
+  await page.evaluate(
+    ({ assignee, id, name }) => {
+      const context = window as any;
+      const app = context.jupyterapp;
+      const panel = app.shell.currentWidget as any;
+      const notebook = panel.context.model.sharedModel;
+      while (notebook.cells.length) notebook.deleteCell(0);
+      notebook.insertCell(0, {
+        cell_type: 'code',
+        id: 'cell',
+        metadata: {},
+        source: 'print(42)'
+      });
+      context.__correxit_enroll = [
+        { expiration: null, id, name, roster: [assignee] }
+      ];
+    },
+    { assignee, id, name }
+  );
+
+  await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget as any;
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create());
+    await Workbook.update(panel, rubric);
+  });
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget as any;
+        const rubric = Workbook.open(panel, true);
+        const { assignment } = rubric || ({} as any);
+        return assignment
+          ? {
+              assignee: assignment.assignee,
+              id: assignment.id,
+              name: assignment.name,
+              roster: assignment.roster
+            }
+          : null;
+      })
+    )
+    .toEqual({ assignee: '', id, name, roster: [assignee] });
+
+  await page.evaluate(async () => {
+    const context = window as any;
+    const app = context.jupyterapp;
+    const panel = app.shell.currentWidget as any;
+    context.__correxit_now += 20_000;
+    Date.now = () => context.__correxit_now;
+    context.__correxit_enroll = null;
+
+    const clear = await app.commands.execute('correxit:inject');
+    clear(null);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const restore = await app.commands.execute('correxit:inject');
+    restore(panel);
+  });
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget as any;
+        const rubric = Workbook.open(panel, true);
+        const { assignment } = rubric || ({} as any);
+        return assignment
+          ? {
+              assignee: assignment.assignee,
+              id: assignment.id,
+              name: assignment.name,
+              roster: assignment.roster
+            }
+          : null;
+      })
+    )
+    .toEqual({ assignee: '', id, name, roster: [assignee] });
+
+  await page.getByRole('tab', { name: 'Correxit' }).click();
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() =>
+        Array.from(
+          document.querySelectorAll(
+            'select[name="correxit-assignment-assignee"] option'
+          )
+        ).map(option => (option as HTMLOptionElement).value)
+      )
+    )
+    .toEqual(['', assignee]);
+
+  await page.evaluate(() => {
+    const context = window as any;
+    Date.now = context.__correxit_date;
+  });
+
+  await page.notebook.close(true);
+  await page.contents.deleteFile(file!);
+});
+
 test('keeps configured cell badges when connectors are active', async ({
   page
 }) => {

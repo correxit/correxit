@@ -1063,7 +1063,7 @@ successful, an unlocked rubric.
       const { handle, workbook } = await reify(args);
       if (!workbook) return null;
       try {
-        return unlocker.unlock(workbook, handle);
+        return await unlocker.unlock(workbook, handle);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }

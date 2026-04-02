@@ -52,6 +52,18 @@ describe('Rubric', () => {
       expect(Rubric.get(unlocked, id)!.payload).toEqual(['42']);
     });
 
+    it('decrypts roster on unlock', async () => {
+      const assignee = 'student@example.com';
+      const roster = [assignee, 'peer@example.com'];
+      const rubric = await Rubric.assign(create(), { assignee, roster });
+      const { key } = rubric;
+      const locked = await Rubric.lock(rubric);
+      expect(locked.assignment.roster).toHaveLength(1);
+      expect(locked.assignment.roster[0]).toContain('ENC[');
+      const unlocked = await Rubric.unlock(locked, key);
+      expect(unlocked.assignment.roster).toEqual(roster);
+    });
+
     it('toggles a cell between shared and secret', () => {
       const id = 'cell-1';
       const reference: Rubric.Cell.Reference = {

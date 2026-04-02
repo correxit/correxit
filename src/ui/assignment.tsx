@@ -53,6 +53,48 @@ const option = (registration: Registration) => (
   </option>
 );
 
+namespace Draft {
+  export type State = Readonly<{
+    assignment: Assignment;
+    local: boolean;
+  }>;
+
+  export function create(assignment: Assignment): State {
+    return { assignment, local: false };
+  }
+
+  export function edit(state: State, assignment: Assignment): State {
+    return Equal.assignment(state.assignment, assignment) && state.local
+      ? state
+      : { assignment, local: true };
+  }
+
+  export function merge(
+    state: State,
+    mutate: (assignment: Assignment) => Assignment
+  ): State {
+    return edit(state, mutate(state.assignment));
+  }
+
+  export function persist(
+    state: State,
+    assignment: Assignment,
+    locked: boolean
+  ): boolean {
+    return (
+      state.local && !locked && !Equal.assignment(state.assignment, assignment)
+    );
+  }
+
+  export function sync(state: State, assignment: Assignment): State {
+    return Equal.assignment(state.assignment, assignment)
+      ? state.local
+        ? { ...state, local: false }
+        : state
+      : { assignment, local: false };
+  }
+}
+
 export const Assignment: React.FC<{
   commands: CommandRegistry;
   trans: TranslationBundle;
@@ -60,21 +102,17 @@ export const Assignment: React.FC<{
 }> = ({ commands, trans, workbook }) => {
   const rubric = Workbook.open(workbook, true)!;
   const { locked } = rubric;
-  const [assignment, setAssignment] = useState<Assignment>(rubric.assignment);
+  const [state, setState] = useState(() => Draft.create(rubric.assignment));
   const [registered, setRegistered] = useState<Registered>(null);
   const [pending, setPending] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<'assignee' | 'roster'>('assignee');
+  const { assignment, local } = state;
   const cached = rubric.id;
   const keep = (next: Assignment) =>
-    setAssignment(current =>
-      Equal.assignment(current, next) ? current : next
-    );
+    setState(current => Draft.sync(current, next));
   const merge = (mutate: (assignment: Assignment) => Assignment) =>
-    setAssignment(current => {
-      const next = mutate(current);
-      return Equal.assignment(current, next) ? current : next;
-    });
+    setState(current => Draft.merge(current, mutate));
   const pick = (next: string | null) =>
     setSelected(current => (current === next ? current : next));
   const store = (next: Registered) =>
@@ -82,7 +120,7 @@ export const Assignment: React.FC<{
       Equal.registered(current, next) ? current : next
     );
   const toggle = (to: 'assignee' | 'roster', updated: Assignment) => {
-    setAssignment(updated);
+    setState(current => Draft.edit(current, updated));
     setView(to);
   };
   const reassign = (assignment: Assignment, locked: boolean) => {
@@ -135,7 +173,15 @@ export const Assignment: React.FC<{
     pick(identify(matched));
     merge(current => freeze(current, matched));
   }, [locked, registered, selected]);
-  useEffect(() => void reassign(assignment, locked), [assignment, locked]);
+  useEffect(() => {
+    const pending = Draft.persist(
+      { assignment, local },
+      rubric.assignment,
+      locked
+    );
+    if (!pending) return;
+    void reassign(assignment, locked);
+  }, [assignment, local, locked, rubric.assignment]);
 
   const all =
     courses(registered) ??
