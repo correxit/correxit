@@ -234,8 +234,9 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
         Correxit.CommandIDs.submit,
         Correxit.CommandIDs.unlock
       ];
+      let ready = false;
       const notify = () =>
-        ui.forEach(command => commands.notifyCommandChanged(command));
+        ready && ui.forEach(command => commands.notifyCommandChanged(command));
       const monitor = new Stream<null, Workbook | null>(null);
       const swap = (prev: Workbook | null, next: Workbook | null) => {
         prev?.context.fileChanged.disconnect(notify);
@@ -254,6 +255,19 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
           notify();
         }
       )(null as Workbook | null);
+      const slots = {
+        shell: (_: unknown, { newValue }: { newValue: unknown }) =>
+          injector(newValue instanceof NotebookPanel ? newValue : null),
+        tracker: (_: unknown, workbook: Workbook.Headed | null) =>
+          injector(workbook)
+      };
+      shell.currentChanged?.connect(slots.shell);
+      tracker.currentChanged.connect(slots.tracker);
+      injector(
+        shell.currentWidget instanceof NotebookPanel
+          ? shell.currentWidget
+          : null
+      );
       const added = Correxit.commands(app, {
         collector,
         distributor,
@@ -263,14 +277,8 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
         translator,
         unlocker
       });
-      const slots = {
-        shell: (_: unknown, { newValue }: { newValue: unknown }) =>
-          injector(newValue instanceof NotebookPanel ? newValue : null),
-        tracker: (_: unknown, workbook: Workbook.Headed | null) =>
-          injector(workbook)
-      };
-      shell.currentChanged?.connect(slots.shell);
-      tracker.currentChanged.connect(slots.tracker);
+      ready = true;
+      notify();
       deactivator = () => {
         for (const command of added) command.dispose();
         shell.currentChanged?.disconnect(slots.shell);

@@ -799,7 +799,7 @@ export namespace Workbook {
       }
       return { outputs, spec };
     } finally {
-      release();
+      await release();
     }
   }
 

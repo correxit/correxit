@@ -529,11 +529,21 @@ function executor(kernel: Kernel.IKernelConnection): Executor {
   };
 }
 
+function guess(name: string | null | undefined): string | null {
+  const label = name?.toLowerCase() ?? null;
+  if (!label) return null;
+  return label.includes('python') ? 'python' : label;
+}
+
 async function language(
   kernel: Kernel.IKernelConnection
 ): Promise<string | null> {
   const info = await (kernel as Informative).info.catch(_ => null);
-  return info?.language_info?.name?.toLowerCase() ?? null;
+  const name = guess(info?.language_info?.name);
+  if (name) return name;
+
+  const spec = await kernel.spec.catch(_ => null);
+  return guess(spec?.language || kernel.name);
 }
 
 function resolver(
@@ -665,7 +675,7 @@ export async function expand(
   cells: Cellular[],
   classification: Classification
 ): Promise<Classification> {
-  const leased = await kernels.lease(workbook, { async: true });
+  const leased = await kernels.lease(workbook);
   if (!leased) {
     const { defaultKernelName: name } = workbook.context.model;
     const warnings = [
@@ -677,7 +687,8 @@ export async function expand(
 
   const [kernel, release] = leased;
   try {
-    const name = await language(kernel);
+    const fallback = workbook.context.model.defaultKernelName || null;
+    const name = await language(kernel) ?? guess(fallback);
     const execute = executor(kernel);
     if (name !== 'python') {
       const resolve: Resolver =
@@ -685,7 +696,7 @@ export async function expand(
       const warnings = [
         ...classification.warnings,
         `Autotest conversion requires a Python kernel; found "${
-          name ?? (workbook.context.model.defaultKernelName || 'unknown')
+          name ?? fallback ?? 'unknown'
         }"`
       ];
       return await spread(

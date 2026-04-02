@@ -102,7 +102,7 @@ describe('kernels', () => {
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
 
-      const first = await lease(workbook, { async: true });
+      const first = await lease(workbook);
       expect(first).not.toBeNull();
       const [, release] = first!;
       await release();
@@ -121,7 +121,7 @@ describe('kernels', () => {
         name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
-      const first = await lease(workbook, { async: true });
+      const first = await lease(workbook);
       await first![1]();
 
       const second = await lease(workbook);
@@ -144,7 +144,7 @@ describe('kernels', () => {
         }
       });
 
-      const first = await lease(workbook, { async: true });
+      const first = await lease(workbook);
       await first![1]();
 
       const second = await lease(workbook);
@@ -168,7 +168,7 @@ describe('kernels', () => {
         }
       });
 
-      const first = await lease(workbook, { async: true });
+      const first = await lease(workbook);
       await first![1]();
       await lease(workbook);
       expect(failing.shutdown).toHaveBeenCalled();
@@ -182,7 +182,7 @@ describe('kernels', () => {
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
 
-      const first = await lease(workbook, { async: true });
+      const first = await lease(workbook);
       await first![1]();
       jest.advanceTimersByTime(5000);
       expect(mock.shutdown).toHaveBeenCalled();
@@ -196,7 +196,7 @@ describe('kernels', () => {
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
 
-      const first = await lease(workbook, { async: true });
+      const first = await lease(workbook);
       await first![1]();
       jest.advanceTimersByTime(5000);
       expect(mock.shutdown).not.toHaveBeenCalled();
@@ -207,14 +207,10 @@ describe('kernels', () => {
       const workbook = create({ name });
 
       // workers = 3 (drain default); acquire all three slots
-      const first3 = [
-        lease(workbook, { async: true }),
-        lease(workbook, { async: true }),
-        lease(workbook, { async: true })
-      ];
+      const first3 = [lease(workbook), lease(workbook), lease(workbook)];
 
       // 4th lease must wait
-      const fourth = lease(workbook, { async: true });
+      const fourth = lease(workbook);
       let resolved = false;
       void fourth.then(() => {
         resolved = true;
