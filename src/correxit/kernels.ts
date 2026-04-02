@@ -5,9 +5,9 @@ import { Workbook } from '.';
  * A kernel connection paired with a release function. Call `release` when
  * finished to return the kernel to the pool.
  */
-type Leased<ASYNC extends boolean = false> = [
+type Leased = [
   kernel: Kernel.IKernelConnection,
-  release: ASYNC extends true ? () => Promise<void> : () => void
+  release: () => Promise<void>
 ];
 
 /** A cached idle kernel and its eviction timer. */
@@ -66,17 +66,7 @@ export function drain(): void {
  * are disposed. When `timeout > 0`, a deadline reclaims zombie leases by
  * interrupting the kernel and freeing the semaphore slot.
  */
-export async function lease(workbook: Workbook): Promise<Leased | null>;
-export async function lease(
-  workbook: Workbook, _: { async: false }
-): Promise<Leased | null>;
-export async function lease(
-  workbook: Workbook, _: { async: true }
-): Promise<Leased<true> | null>;
-export async function lease(
-  workbook: Workbook,
-  { async }: { async?: boolean } = {}
-): Promise<Leased | Leased<true> | null> {
+export async function lease(workbook: Workbook): Promise<Leased | null> {
   await acquire();
 
   const name = workbook.context.model.defaultKernelName;
@@ -104,8 +94,7 @@ export async function lease(
     await recycle(kernel);
   };
 
-  const release = async ? reclaim : () => void reclaim();
-  return [kernel, release] as Leased;
+  return [kernel, reclaim];
 }
 
 /** @returns the configured retry count. */
