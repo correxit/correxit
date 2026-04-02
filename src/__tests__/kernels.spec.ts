@@ -104,6 +104,7 @@ describe('kernels', () => {
 
       const first = await lease(workbook);
       expect(first).not.toBeNull();
+
       const [, release] = first!;
       await release();
 
@@ -143,7 +144,6 @@ describe('kernels', () => {
           startNew: jest.fn(async () => (calls++ === 0 ? failing : fresh))
         }
       });
-
       const first = await lease(workbook);
       await first![1]();
 
@@ -167,7 +167,6 @@ describe('kernels', () => {
           startNew: jest.fn(async () => (calls++ === 0 ? failing : fresh))
         }
       });
-
       const first = await lease(workbook);
       await first![1]();
       await lease(workbook);
@@ -181,7 +180,6 @@ describe('kernels', () => {
         name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
-
       const first = await lease(workbook);
       await first![1]();
       jest.advanceTimersByTime(5000);
@@ -195,7 +193,6 @@ describe('kernels', () => {
         name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
-
       const first = await lease(workbook);
       await first![1]();
       jest.advanceTimersByTime(5000);
@@ -205,11 +202,7 @@ describe('kernels', () => {
     it('limits outstanding leases to workers', async () => {
       const name = named();
       const workbook = create({ name });
-
-      // workers = 3 (drain default); acquire all three slots
       const first3 = [lease(workbook), lease(workbook), lease(workbook)];
-
-      // 4th lease must wait
       const fourth = lease(workbook);
       let resolved = false;
       void fourth.then(() => {
