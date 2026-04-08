@@ -683,6 +683,40 @@ describe('Rubric', () => {
         expect(score.status).toBe('correct');
       });
 
+      it('scores correct when JSON data keys are reordered', async () => {
+        const id = 'student';
+        const referent = 'teacher';
+        const rubric = populate(id, referent);
+        const outputs = new Map([
+          [
+            id,
+            [
+              data({
+                'text/plain': '42',
+                'application/json': {
+                  foo: [1, 2],
+                  bar: { baz: 1, qux: 2 }
+                }
+              })
+            ]
+          ],
+          [
+            referent,
+            [
+              data({
+                'application/json': {
+                  bar: { qux: 2, baz: 1 },
+                  foo: [1, 2]
+                },
+                'text/plain': '42'
+              })
+            ]
+          ]
+        ]);
+        const score = await Rubric.Cell.score(rubric, id, outputs);
+        expect(score.status).toBe('correct');
+      });
+
       it('scores incorrect when JSON data differs', async () => {
         const id = 'student';
         const referent = 'teacher';

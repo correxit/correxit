@@ -8,7 +8,7 @@
     "jsx": "react",
     "lib": ["DOM", "ES2019", "ES2020.Intl"],
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noEmitOnError": true,
     "noImplicitAny": true,
     "noUnusedLocals": true,

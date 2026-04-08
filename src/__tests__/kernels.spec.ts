@@ -42,11 +42,17 @@ function create(
 }
 
 describe('kernels', () => {
+  let warn: jest.SpyInstance;
+
   beforeEach(() => {
     jest.useFakeTimers();
+    warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     drain();
   });
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => {
+    warn.mockRestore();
+    jest.useRealTimers();
+  });
   const named = () => `python3-${serial++}`;
 
   describe('lease', () => {

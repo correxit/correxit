@@ -103,6 +103,7 @@
         "@types/react-addons-linked-state-mixin": "^0.14.22",
         "@typescript-eslint/eslint-plugin": "^6.1.0",
         "@typescript-eslint/parser": "^6.1.0",
+        "baseline-browser-mapping": "2.10.16",
         "css-loader": "^6.7.1",
         "eslint": "^8.36.0",
         "eslint-config-prettier": "^8.8.0",
@@ -121,6 +122,7 @@
         "stylelint-csstree-validator": "^3.0.0",
         "stylelint-prettier": "^4.0.0",
         "typescript": "~5.0.2",
+        "webpack": "^5.76.1",
         "yjs": "^13.5.0"
     },
     "sideEffects": [
