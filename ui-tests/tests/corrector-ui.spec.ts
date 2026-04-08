@@ -53,21 +53,24 @@ gqp2fNt1wv1uOgSnAVuhwRWGKKXC4d4G3ZAmZGtmiFYDW4LfoHPOpoypCQ==
  */
 async function propagate(
   page: any,
-  roster: string[]
+  roster: string[],
+  metadata: Record<string, unknown> = {
+    kernelspec: {
+      display_name: 'Python 3 (ipykernel)',
+      language: 'python',
+      name: 'python3'
+    }
+  }
 ): Promise<{ directory: string; paths: string[] }> {
   return page.evaluate(
-    async ({ keys, roster }: any) => {
+    async ({ keys, metadata, roster }: any) => {
       const { Rubric, Workbook } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
 
-      // Galata creates notebooks with an empty kernelspec. Set it explicitly so
-      // propagated headless workbooks can start kernels for grading.
-      panel.context.model.sharedModel.setMetadata('kernelspec', {
-        display_name: 'Python 3 (ipykernel)',
-        language: 'python',
-        name: 'python3'
-      });
+      for (const [key, value] of Object.entries(metadata)) {
+        panel.context.model.sharedModel.setMetadata(key, value);
+      }
 
       const rubric = Rubric.add(
         (r => ({
@@ -105,7 +108,7 @@ async function propagate(
 
       return { directory, paths };
     },
-    { keys, roster }
+    { keys, metadata, roster }
   );
 }
 
@@ -269,6 +272,54 @@ test('scan does not silence next fetch after first fetch failure', async ({
   }, propagated.directory);
 
   expect(silentCalls).toEqual([false, false]);
+
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('reviewer uses notebook mimetype for code cells', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'SELECT 42 AS answer;' },
+    { id: 'target', source: 'SELECT 42 AS answer;' }
+  ]);
+  const propagated = await propagate(page, ['alice@example.com'], {
+    kernelspec: {
+      display_name: 'SQL',
+      language: 'sql',
+      name: 'sql'
+    },
+    language_info: {
+      mimetype: 'application/sql',
+      name: 'sql'
+    }
+  });
+  await cd(page, '.');
+
+  await page.evaluate(async (directory: string) => {
+    const app = (window as any).jupyterapp;
+    await app.commands.execute('correxit-corrector:launch', {
+      path: directory
+    });
+  }, propagated.directory);
+
+  const review = page.getByRole('button', { name: /^Review comparable:/ });
+  await expect(review).toBeVisible();
+  await review.click();
+
+  await expect(page.locator('.correxit-reviewer')).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.getByLabel('Current cell').getAttribute('data-mimetype')
+    )
+    .toBe('application/sql');
+
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    for (const widget of Array.from(app.shell.widgets('main'))) {
+      if (widget.id === 'correxit-corrector-widget') widget.dispose();
+      if (widget.id === 'correxit-reviewer-widget') widget.dispose();
+    }
+  });
 
   await cleanup(page, propagated);
   await dispose();
