@@ -64,3 +64,12 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
     }
   };
 }
+
+/**
+ * Wait until reviewer is interactive (not in idle placeholder state).
+ */
+export async function reviewer(page: any): Promise<void> {
+  await expect(page.locator('.correxit-reviewer')).toBeVisible();
+  await expect(page.locator('.correxit-reviewer-idle')).toHaveCount(0);
+  await expect(page.getByLabel('Current cell')).toBeVisible();
+}

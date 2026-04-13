@@ -1,5 +1,5 @@
 import { expect, test } from '@jupyterlab/galata';
-import { cd, setup } from './utils';
+import { cd, reviewer, setup } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -306,7 +306,7 @@ test('reviewer uses notebook mimetype for code cells', async ({ page }) => {
   await expect(review).toBeVisible();
   await review.click();
 
-  await expect(page.locator('.correxit-reviewer')).toBeVisible();
+  await reviewer(page);
   await expect
     .poll(async () =>
       page.getByLabel('Current cell').getAttribute('data-mimetype')
