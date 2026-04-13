@@ -477,6 +477,6 @@ class ReviewerContent extends ReactWidget {
   }
 
   protected props: Reviewer.Props;
-  protected ref: React.MutableRefObject<(direction: string) => void>;
+  protected ref: Reviewer.Navigate;
   protected scored: React.MutableRefObject<(action: 'pass' | 'fail') => void>;
 }
