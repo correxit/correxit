@@ -315,7 +315,11 @@ test('reviewer uses notebook mimetype for code cells', async ({ page }) => {
 
   await page.evaluate(() => {
     const app = (window as any).jupyterapp;
-    for (const widget of Array.from(app.shell.widgets('main'))) {
+    const widgets = Array.from(app.shell.widgets('main')) as Array<{
+      dispose: () => void;
+      id: string;
+    }>;
+    for (const widget of widgets) {
       if (widget.id === 'correxit-corrector-widget') widget.dispose();
       if (widget.id === 'correxit-reviewer-widget') widget.dispose();
     }
