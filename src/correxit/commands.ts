@@ -1,6 +1,6 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
-import { NotebookModelFactory } from '@jupyterlab/notebook';
+import { NotebookModelFactory, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
@@ -104,9 +104,13 @@ export function commands(
     prompt: trans.__('↑ ↓ to move, Enter to confirm, Escape to cancel.'),
     title: trans.__('Choose a reference cell')
   });
+  const current = (): Workbook.Headed | null =>
+    shell.currentWidget instanceof NotebookPanel ? shell.currentWidget : null;
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
-    const workbook = handle ? await fetch(handle) : state.workbook();
+    const workbook = handle
+      ? await fetch(handle)
+      : state.workbook() || current();
     const rubric = open(workbook);
     return { handle, rubric, workbook } as Reified;
   };

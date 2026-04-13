@@ -63,8 +63,9 @@ const mime = (
   workbook: Headless | null,
   mimeTypeService: IEditorMimeTypeService | null
 ) => {
-  if (!mimeTypeService) return IEditorMimeTypeService.defaultMimeType;
   const info = language(workbook);
+  if (typeof info?.mimetype === 'string' && info.mimetype) return info.mimetype;
+  if (!mimeTypeService) return IEditorMimeTypeService.defaultMimeType;
   return info
     ? mimeTypeService.getMimeTypeByLanguage(info)
     : IEditorMimeTypeService.defaultMimeType;
