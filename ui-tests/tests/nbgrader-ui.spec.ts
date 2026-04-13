@@ -15,6 +15,13 @@ const FIXTURES = path.resolve(
 );
 
 async function close(page: any): Promise<void> {
+  const file = await page
+    .evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const path = panel?.context?.path ?? null;
+      return typeof path === 'string' && path.endsWith('.ipynb') ? path : null;
+    })
+    .catch(() => null);
   try {
     await page.unrouteAll({ behavior: 'ignoreErrors' });
   } catch {
@@ -22,6 +29,31 @@ async function close(page: any): Promise<void> {
   }
   try {
     await page.notebook.close(true);
+  } catch {
+    /* ok */
+  }
+  if (file) {
+    try {
+      await page.contents.deleteFile(file);
+    } catch {
+      /* ok */
+    }
+  }
+  try {
+    await page.evaluate(async () => {
+      const app = (window as any).jupyterapp;
+      await app.serviceManager.sessions.shutdownAll();
+    });
+  } catch {
+    /* ok */
+  }
+  try {
+    await page.evaluate(() => {
+      const original = (window as any).__warns_original__;
+      if (original) console.warn = original;
+      delete (window as any).__warns__;
+      delete (window as any).__warns_original__;
+    });
   } catch {
     /* ok */
   }
@@ -164,7 +196,8 @@ async function clean(page: any): Promise<{
  */
 async function warnings(page: any): Promise<() => Promise<string[]>> {
   await page.evaluate(() => {
-    const original = console.warn;
+    const original = (window as any).__warns_original__ || console.warn;
+    (window as any).__warns_original__ = original;
     (window as any).__warns__ = [];
     console.warn = (...args: any[]) => {
       (window as any).__warns__.push(args.join(' '));
@@ -176,7 +209,10 @@ async function warnings(page: any): Promise<() => Promise<string[]>> {
       () => (window as any).__warns__ as string[]
     );
     await page.evaluate(() => {
+      const original = (window as any).__warns_original__;
+      if (original) console.warn = original;
       delete (window as any).__warns__;
+      delete (window as any).__warns_original__;
     });
     return captured.filter((w: string) => w.includes('nbgrader convert:'));
   };
