@@ -8,6 +8,7 @@ import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
+import * as state from '../correxit/state';
 import { useCommand } from '../correxit/use-command';
 import * as bridge from './bridge';
 import {
@@ -53,6 +54,14 @@ const cache = (cached: { [path: string]: Headless }, workbooks: Headless[]) => {
  */
 const dispose = (workbooks: Headless[]) =>
   workbooks.forEach(({ context }) => context.dispose());
+
+const release = (cached: { [path: string]: Headless }) => {
+  dispose(Object.values(cached));
+
+  const workbook = state.workbook();
+  if (Workbook.headless(workbook)) state.workbook(null);
+  bridge.clear();
+};
 
 /** @returns a multi-line lifecycle history for tooltips. */
 const history = (workbook: Scanned, trans: TranslationBundle): string => {
@@ -215,12 +224,11 @@ export function Corrector(props: Corrector.Props) {
   const focus = workbook?.context.path || null;
   const total = memo.length;
   const progress = { graded, grading, loaded, resolved, scanned, total };
-  useEffect(() => () => dispose(Object.values(cached.current)), []);
+  useEffect(() => () => release(cached.current), []);
   useEffect(() => bridge.inject(commands, workbook), [workbook]);
   useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
   useEffect(() => reconcile(cached.current, memo, focus), [focus, memo]);
   useEffect(() => bridge.publish({ workbooks: memo, grades }), [memo, grades]);
-  useEffect(() => () => bridge.clear(), []);
   return (
     <table
       aria-label={trans.__('Corrector workbooks')}

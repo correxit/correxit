@@ -210,15 +210,20 @@ async function score(page: Page) {
 
 async function saved(page: any, path: string) {
   return page.evaluate(async (path: string) => {
-    const { Rubric, Workbook } = (window as any).__correxit__;
+    const { Rubric } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
-    const workbook = await app.commands.execute('correxit:fetch', {
-      path,
-      silent: true
-    });
-    if (!workbook) return null;
-
-    const rubric = Workbook.open(workbook, true);
+    let file: any = null;
+    try {
+      file = await app.serviceManager.contents.get(path, { content: true });
+    } catch {
+      return null;
+    }
+    const notebook = file.type === 'notebook' ? file.content : null;
+    const rubric =
+      notebook && typeof notebook === 'object'
+        ? ((notebook as { metadata?: { correxit?: any } }).metadata?.correxit ??
+          null)
+        : null;
     const score = rubric
       ? Rubric.Score.resolve(rubric.assignment.report, 'manual')
       : null;
@@ -229,7 +234,6 @@ async function saved(page: any, path: string) {
       points: score?.points ?? null,
       status: score?.status ?? null
     };
-    workbook.context.dispose();
     return result;
   }, path);
 }

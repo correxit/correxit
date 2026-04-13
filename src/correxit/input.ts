@@ -215,13 +215,11 @@ export function cell(
     void throttler.invoke(event);
   };
   notebook.viewportNode.appendChild(overlay);
-  requestAnimationFrame(() => {
-    set(start());
-    document.addEventListener('pointermove', pointermove, true);
-    overlay.addEventListener('click', click);
-    document.addEventListener('keydown', keydown, true);
-    void reveal(target);
-  });
+  set(start());
+  document.addEventListener('pointermove', pointermove, true);
+  overlay.addEventListener('click', click);
+  document.addEventListener('keydown', keydown, true);
+  void reveal(target);
   return delegate.promise;
 }
 

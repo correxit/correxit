@@ -27,7 +27,7 @@ export const References: React.FC<{
 
   const correctable = cell.is === 'correctable';
   const editable = !rubric.locked && !rubric.assignment.assignee;
-  const notebook = workbook.content;
+  const notebook = Workbook.headed(workbook) ? workbook.content : null;
   const source = (referent: string) => {
     const cell = notebook?.widgets.find(({ model }) => model.id === referent);
     return cell?.model.sharedModel.getSource().split('\n')[0] ?? '';

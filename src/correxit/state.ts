@@ -42,7 +42,8 @@ export function cache(workbook: Workbook, id: string, score: Rubric.Score) {
 
 /** @returns the resolved cell id from command arguments. */
 export function cell(args: Partial<Rubric.Cell & Rubric.Cell.Toolbar>): string {
-  const notebook = workbook()?.content;
+  const active = workbook();
+  const notebook = Workbook.headed(active) ? active.content : null;
   const toolbar = args[Rubric.Cell.TOOLBAR];
   return args.id || (toolbar && notebook?.activeCell?.model.id) || '';
 }
@@ -81,6 +82,7 @@ export function report(
 /** @returns the active workbook; caches the update if given. */
 export function workbook(update?: Workbook | null): Workbook | null {
   state.workbook = update === undefined ? state.workbook : update;
-  if (state.workbook?.content) guard(state.workbook);
+  const active = state.workbook;
+  if (Workbook.headed(active)) guard(active);
   return state.workbook;
 }

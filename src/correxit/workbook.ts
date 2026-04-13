@@ -81,6 +81,16 @@ export namespace Workbook {
     readonly context: DocumentRegistry.IContext<INotebookModel>;
   };
 
+  /** Type guard for workbooks with a live notebook widget. */
+  export function headed(workbook: Workbook | null): workbook is Headed {
+    return !!workbook?.content;
+  }
+
+  /** Type guard for workbooks without a live notebook widget. */
+  export function headless(workbook: Workbook | null): workbook is Headless {
+    return !!workbook && workbook.content === null;
+  }
+
   /** A type for plugins to identify a workbook/assignment/assignee match. */
   export type Identifier = {
     assignee: string | null;
@@ -280,8 +290,7 @@ export namespace Workbook {
         notebook.insertCell(index, replacement);
       }
     }, false);
-    if (workbook.content)
-      NotebookActions.deselectAll(workbook.content);
+    if (headed(workbook)) NotebookActions.deselectAll(workbook.content);
   };
   const verify = async (
     workbook: Workbook,
@@ -299,7 +308,7 @@ export namespace Workbook {
     const present = ids.filter(id => id in index);
     const missing = ids.filter(id => !(id in index));
     if (missing.length) {
-      if (!workbook.content)
+      if (headless(workbook))
         throw new Error.Unseal(`${action} seal error: missing cells`);
       console.warn(`${action}: skipping seal verify, missing cells`, missing);
       return present;
@@ -470,7 +479,7 @@ export namespace Workbook {
         console.warn('audit pruned these rubric cells', dangling);
       if (orphaned.length)
         console.warn('audit pruned these references', orphaned);
-      if (!workbook.content) {
+      if (headless(workbook)) {
         const error = dangling.length ? 'missing cells' : 'missing references';
         return { ok: false, error, rubric };
       }

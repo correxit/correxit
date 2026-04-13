@@ -1,6 +1,7 @@
 import { expect, test } from '@jupyterlab/galata';
 import * as fs from 'fs';
 import * as path from 'path';
+import { cd } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -22,6 +23,7 @@ async function close(page: any): Promise<void> {
       return typeof path === 'string' && path.endsWith('.ipynb') ? path : null;
     })
     .catch(() => null);
+  await cd(page, '.').catch(() => {});
   try {
     await page.unrouteAll({ behavior: 'ignoreErrors' });
   } catch {
@@ -39,6 +41,7 @@ async function close(page: any): Promise<void> {
       /* ok */
     }
   }
+  await cd(page, '.').catch(() => {});
   try {
     await page.evaluate(async () => {
       const app = (window as any).jupyterapp;

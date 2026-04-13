@@ -57,9 +57,9 @@ type Reified =
 
 const { get, has } = Rubric;
 const {
-  acknowledge, add, assign, certify, collect, comment, convert,
-  correct, dereference, distribute, draft, intervene, lock, recover, refer,
-  remove, reset, revise, reweight, submit, toggle
+  acknowledge, add, assign, certify, collect, comment, convert, correct,
+  dereference, distribute, draft, headed, headless, intervene, lock, recover,
+  refer, remove, reset, revise, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -388,11 +388,13 @@ export function commands(
       if (!references) {
         const rubric = open(workbook);
         if (!rubric || rubric.locked) return;
-        const selected = workbook.content && await choose(workbook, rubric, id);
+        const selected = headed(workbook)
+          ? await choose(workbook, rubric, id)
+          : null;
         references = selected && [selected.id];
       }
       if (!references || references.includes(id)) return;
-      if (workbook.content) {
+      if (headed(workbook)) {
         const { widgets } = workbook.content;
         const original = find(widgets, ({ model }) => model.id === id);
         if (original) await workbook.content.scrollToCell(original);
@@ -488,9 +490,8 @@ export function commands(
       const workbook = state.workbook();
       const rubric = open(workbook);
       const id = state.cell(args);
-      const headed = workbook && workbook.content;
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
-      if (!rubric || !headed) return false;
+      if (!rubric || !headed(workbook)) return false;
       if (!id) {
         const cells = Object.values(rubric.cells);
         const references = rubric.references;
@@ -531,7 +532,7 @@ export function commands(
         return { resolved: true, score: Rubric.Score.UNSCORED, spec: null };
 
       const result = await correct(workbook, id);
-      if (!workbook.content) return result;
+    if (headless(workbook)) return result;
 
       const unscored = result.score.status === 'unscored';
       const [x, y] = [result.score.points, result.score.possible];
@@ -650,8 +651,7 @@ export function commands(
     isEnabled: () => {
       const workbook = state.workbook();
       const rubric = open(workbook);
-      const headed = !!workbook?.content;
-      return !!(workbook && headed && rubric && !rubric.locked);
+      return !!(headed(workbook) && rubric && !rubric.locked);
     },
     isVisible: () => commands.isEnabled(CommandIDs.lock),
     label: trans.__('Lock'),
@@ -778,26 +778,23 @@ export function commands(
     isVisible: args => commands.isEnabled(CommandIDs.refer, args),
     label: trans.__('Add a reference cell'),
     execute: async (args: Partial<Cell & Credentials>) => {
-      const { rubric, workbook } = await reify(args);
+      const { rubric: unmodified, workbook } = await reify(args);
       const id = state.cell(args);
-      if (!rubric || !id || rubric.locked || !workbook.content) return;
+      if (!unmodified || !id || unmodified.locked || !headed(workbook)) return;
 
-      const { id: referent } = await choose(workbook, rubric, id) ?? {};
+      const { id: referent } = await choose(workbook, unmodified, id) ?? {};
       if (!referent) return;
 
-      {
-        const rubric = open(workbook);
-        if (!rubric || rubric.locked) return;
+      const rubric = open(workbook);
+      if (!rubric || rubric.locked) return;
 
-        const { is } = get(rubric, id) ?? {};
-        if (!is || is !== 'comparable' && is !== 'correctable') return;
-        if (
-          referent === id ||
-          referent in rubric.references ||
-          referent in rubric.cells
-        ) return;
-      }
-
+      const { is } = get(rubric, id) ?? {};
+      if (!is || is !== 'comparable' && is !== 'correctable') return;
+      if (
+        referent === id ||
+        referent in rubric.references ||
+        referent in rubric.cells
+      ) return;
       const reference = { cell: id, referent, points: 1, secret: true };
       await refer(workbook, id, reference);
 
@@ -1049,8 +1046,7 @@ Or do you just want to seal and submit? This document will be locked.`
     isEnabled: () => {
       const workbook = state.workbook();
       const rubric = open(workbook);
-      const headed = !!workbook?.content;
-      return !!(workbook && headed && rubric && rubric.locked);
+      return !!(headed(workbook) && rubric && rubric.locked);
     },
     isVisible: () => commands.isEnabled(CommandIDs.unlock),
     label: trans.__('Unlock'),
