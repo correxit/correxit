@@ -3,7 +3,14 @@ jest.mock('../correxit/commands', () => ({ CommandIDs: {} }));
 jest.mock('../correxit/icons', () => ({ Icons: {} }));
 jest.mock('../correxit/input', () => ({ text: jest.fn() }));
 jest.mock('../correxit/security', () => require('./mocks/security'));
-jest.mock('../correxit/workbook', () => ({ Workbook: { open: jest.fn() } }));
+jest.mock('../correxit/workbook', () => ({
+  Workbook: {
+    headed: (workbook: { content?: unknown } | null) => !!workbook?.content,
+    headless: (workbook: { content?: unknown } | null) =>
+      !!workbook && workbook.content === null,
+    open: jest.fn()
+  }
+}));
 
 import { Rubric } from '../correxit/rubric';
 import { Workbook } from '../correxit/workbook';

@@ -1,5 +1,5 @@
 import { MainAreaWidget } from '@jupyterlab/apputils';
-import { CodeEditor } from '@jupyterlab/codeeditor';
+import { CodeEditor, IEditorMimeTypeService } from '@jupyterlab/codeeditor';
 import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import {
@@ -334,6 +334,7 @@ export namespace ReviewerWidget {
   export interface IOptions {
     commands: CommandRegistry;
     factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
+    mimeTypeService: IEditorMimeTypeService | null;
     rendermime: IRenderMimeRegistry | null;
     trans: IRenderMime.TranslationBundle;
   }
@@ -427,7 +428,10 @@ function ScoreBadge(props: {
 
 class ReviewerContent extends ReactWidget {
   constructor(
-    props: Pick<Reviewer.Props, 'commands' | 'factory' | 'rendermime' | 'trans'>
+    props: Pick<
+      Reviewer.Props,
+      'commands' | 'factory' | 'mimeTypeService' | 'rendermime' | 'trans'
+    >
   ) {
     super();
     this.props = {
@@ -473,6 +477,6 @@ class ReviewerContent extends ReactWidget {
   }
 
   protected props: Reviewer.Props;
-  protected ref: React.MutableRefObject<(direction: string) => void>;
+  protected ref: Reviewer.Navigate;
   protected scored: React.MutableRefObject<(action: 'pass' | 'fail') => void>;
 }

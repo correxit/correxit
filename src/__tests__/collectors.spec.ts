@@ -4,7 +4,12 @@ jest.mock('../correxit/icons', () => ({ Icons: {} }));
 jest.mock('../correxit/input', () => ({ text: jest.fn() }));
 jest.mock('../correxit/security', () => require('./mocks/security'));
 jest.mock('../correxit/workbook', () => ({
-  Workbook: { open: jest.fn(() => null) }
+  Workbook: {
+    headed: (workbook: { content?: unknown } | null) => !!workbook?.content,
+    headless: (workbook: { content?: unknown } | null) =>
+      !!workbook && workbook.content === null,
+    open: jest.fn(() => null)
+  }
 }));
 jest.mock('../plugins', () => ({ plugins: [] }));
 

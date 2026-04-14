@@ -31,6 +31,7 @@ export async function cd(page: any, path = '.'): Promise<void> {
  */
 export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
   await page.goto();
+  await cd(page, '.');
 
   const name = await page.notebook.createNew();
   expect(name).toBeTruthy();
@@ -55,10 +56,20 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
 
   return {
     async dispose() {
+      await cd(page, '.');
       await page.notebook.close(true);
       if (name) {
         await page.contents.deleteFile(name);
       }
     }
   };
+}
+
+/**
+ * Wait until reviewer is interactive (not in idle placeholder state).
+ */
+export async function reviewer(page: any): Promise<void> {
+  await expect(page.locator('.correxit-reviewer')).toBeVisible();
+  await expect(page.locator('.correxit-reviewer-idle')).toHaveCount(0);
+  await expect(page.getByLabel('Current cell')).toBeVisible();
 }

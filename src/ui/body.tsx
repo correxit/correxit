@@ -18,8 +18,7 @@ export const Body: React.FC<{
   workbook: Workbook;
 }> = ({ commands, trans, workbook }) => {
   const rubric = Workbook.open(workbook, true);
-  const headed = !!workbook?.content;
-  const active = headed
+  const active = Workbook.headed(workbook)
     ? workbook.content.activeCell?.model.id
     : state.cursor();
   if (!rubric || !active) {

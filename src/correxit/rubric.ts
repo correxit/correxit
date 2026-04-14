@@ -132,6 +132,14 @@ export namespace Rubric {
         return { ...Score.UNSCORED, code: 'empty-expected' };
       if (!given.length) return { ...Score.INCORRECT, code: 'empty-given' };
 
+      const order = (value: unknown): unknown => {
+        if (Array.isArray(value)) return value.map(order);
+        if (typeof value !== 'object' || value === null) return value;
+        const record = value as { [key: string]: unknown };
+        return Object.fromEntries(
+          Object.keys(record).sort().map(key => [key, order(record[key])])
+        );
+      };
       const shape = (content: Output['content']) =>
         Object.keys(content).sort().join('');
       const [{ content: x }] = expected.slice(-1);
@@ -139,7 +147,8 @@ export namespace Rubric {
       if (shape(x) !== shape(y))
         return { ...Score.INCORRECT, code: 'mismatch-congruence' };
       if ('data' in x && 'data' in y) {
-        const equal = JSON.stringify(x.data) === JSON.stringify(y.data);
+        const equal = JSON.stringify(order(x.data)) ===
+          JSON.stringify(order(y.data));
         const error: Score = { ...Score.INCORRECT, code: 'mismatch-data' };
         return equal ? Score.CORRECT : error;
       }

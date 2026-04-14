@@ -1,5 +1,15 @@
-import { CodeEditor } from '@jupyterlab/codeeditor';
+import { CodeEditor, IEditorMimeTypeService } from '@jupyterlab/codeeditor';
+import {
+  ILanguageInfoMetadata,
+  IMimeBundle,
+  IOutput,
+  isDisplayData,
+  isError,
+  isExecuteResult,
+  isStream
+} from '@jupyterlab/nbformat';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
+import { KernelMessage } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import React, {
   useCallback,
@@ -18,16 +28,48 @@ import { ReviewerWidget } from './widget';
 type Collated = Corrector.Collated;
 type Cursor = bridge.Cursor;
 type Headless = Workbook.Headless;
-type NavigateRef = React.MutableRefObject<(direction: string) => void>;
+type Output = Rubric.Cell.Output | IOutput;
 type ScoreRef = React.MutableRefObject<(action: 'pass' | 'fail') => void>;
+type Shared = Headless['context']['model']['sharedModel']['cells'][number];
 type TranslationBundle = IRenderMime.TranslationBundle;
 
-/** Open a workbook rubric quietly. */
 const open = (workbook: Scanned | null) =>
   workbook && !workbook.hollow ? Workbook.open(workbook, true) : null;
 
-/** A filter function that filters out hollow workbooks. */
 const reified = (workbook: Scanned): workbook is Headless => !workbook.hollow;
+
+const record = (value: unknown): value is { [key: string]: unknown } =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const code = (
+  cell: Shared | null
+): cell is Extract<Shared, { cell_type: 'code' }> =>
+  !!cell && cell.cell_type === 'code';
+
+const language = (workbook: Headless | null): ILanguageInfoMetadata | null => {
+  if (!workbook) return null;
+
+  const notebook = workbook.context.model.sharedModel;
+  const info = notebook.getMetadata('language_info');
+  if (record(info)) return info as ILanguageInfoMetadata;
+
+  const spec = notebook.getMetadata('kernelspec');
+  const name =
+    record(spec) && typeof spec.language === 'string' ? spec.language : null;
+  return name ? { name } : null;
+};
+
+const mime = (
+  workbook: Headless | null,
+  mimeTypeService: IEditorMimeTypeService | null
+) => {
+  const info = language(workbook);
+  if (typeof info?.mimetype === 'string' && info.mimetype) return info.mimetype;
+  if (!mimeTypeService) return IEditorMimeTypeService.defaultMimeType;
+  return info
+    ? mimeTypeService.getMimeTypeByLanguage(info)
+    : IEditorMimeTypeService.defaultMimeType;
+};
 
 const integer = (value: string): number | '' => {
   if (value === '') return '';
@@ -64,7 +106,14 @@ const instructions = (
 };
 
 export function Reviewer(props: Reviewer.Props) {
-  const { commands, factory, rendermime, trans, cursor: initial } = props;
+  const {
+    commands,
+    factory,
+    mimeTypeService,
+    rendermime,
+    trans,
+    cursor: initial
+  } = props;
   const snapshot = bridge.useSnapshot();
   const { workbooks, grades } = snapshot;
   const empty = workbooks.length === 0;
@@ -107,7 +156,7 @@ export function Reviewer(props: Reviewer.Props) {
 
   // Navigation helpers.
   const navigate = useCallback(
-    (direction: string) => {
+    (direction: Reviewer.Direction) => {
       if (!cursor) return;
       const col = columns.indexOf(cursor.path);
       const row = rows.indexOf(cursor.cell);
@@ -156,27 +205,31 @@ export function Reviewer(props: Reviewer.Props) {
     [cursor, columns, rows]
   );
 
-  const ref = useRef<(direction: string) => void>(navigate);
+  const ref = useRef<(direction: Reviewer.Direction) => void>(navigate);
   ref.current = navigate;
   useEffect(() => props.on.navigate(ref), []);
 
   const cell = rubric && cursor ? rubric.cells[cursor.cell] : null;
-  const model = useMemo(() => {
+  const model = useMemo<Shared | null>(() => {
     if (!workbook || !cursor) return null;
     const cells = workbook.context.model.sharedModel.cells;
     return cells.find(cell => cell.id === cursor.cell) ?? null;
   }, [workbook, cursor?.cell]);
   const type = model?.cell_type ?? 'code';
   const source = model?.getSource() ?? '';
+  const mimetype = useMemo(
+    () => mime(workbook, mimeTypeService),
+    [workbook, mimeTypeService]
+  );
   const question = useMemo(
     () => instructions(workbook, cursor, rubric),
     [workbook, cursor?.cell, rubric]
   );
-  const saved: any[] = type === 'code' ? ((model as any)?.outputs ?? []) : [];
-  const [corrected, setCorrected] = useState<Rubric.Cell.Output[]>([]);
-  useEffect(() => void setCorrected([]), [cursor?.path, cursor?.cell]);
+  const stored: Output[] = code(model) ? model.outputs : [];
+  const [corrected, setCorrected] = useState<Rubric.Cell.Output[] | null>(null);
+  useEffect(() => void setCorrected(null), [cursor?.path, cursor?.cell]);
 
-  const outputs = corrected.length ? corrected : saved;
+  const outputs: Output[] = corrected ?? stored;
   const report = rubric
     ? (Rubric.Score.resolve(rubric.assignment.report, cursor?.cell ?? '') ??
       null)
@@ -304,6 +357,7 @@ export function Reviewer(props: Reviewer.Props) {
             <CellSource
               factory={null}
               label={trans.__('Question context')}
+              mimetype={mimetype}
               placeholder=""
               rendermime={rendermime}
               source={question}
@@ -314,6 +368,7 @@ export function Reviewer(props: Reviewer.Props) {
           <CellSource
             factory={factory}
             label={trans.__('Current cell')}
+            mimetype={mimetype}
             placeholder={trans.__('(blank)')}
             rendermime={rendermime}
             source={source}
@@ -324,7 +379,7 @@ export function Reviewer(props: Reviewer.Props) {
               aria-label={trans.__('Cell outputs')}
               className="correxit-reviewer-outputs"
             >
-              {outputs.map((output: any, i: number) => (
+              {outputs.map((output, i: number) => (
                 <CellOutput key={i} output={output} rendermime={rendermime} />
               ))}
             </div>
@@ -357,6 +412,7 @@ export function Reviewer(props: Reviewer.Props) {
                   <input
                     aria-label={trans.__('Score')}
                     className="correxit-reviewer-score-input"
+                    data-lm-suppress-shortcuts="true"
                     inputMode="numeric"
                     min="0"
                     onChange={({ target: { value } }) =>
@@ -432,12 +488,15 @@ export function Reviewer(props: Reviewer.Props) {
 }
 
 export namespace Reviewer {
+  export type Direction = 'down' | 'left' | 'right' | 'up';
+  export type Navigate = React.MutableRefObject<(direction: Direction) => void>;
   export type Props = {
     commands: CommandRegistry;
     cursor: Cursor | null;
     factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
+    mimeTypeService: IEditorMimeTypeService | null;
     on: {
-      navigate: (ref: NavigateRef) => void;
+      navigate: (ref: Navigate) => void;
       score: (ref: ScoreRef) => void;
       workbook: (workbook: Headless | null) => void;
     };
@@ -453,14 +512,25 @@ export namespace Reviewer {
 const CellSource: React.FC<{
   factory: ((options: CodeEditor.IOptions) => CodeEditor.IEditor) | null;
   label?: string;
+  mimetype: string;
   muted?: boolean;
   placeholder: string;
   rendermime: IRenderMimeRegistry | null;
   source: string;
   type: string;
-}> = ({ factory, label, muted, placeholder, rendermime, source, type }) => {
+}> = ({
+  factory,
+  label,
+  mimetype,
+  muted,
+  placeholder,
+  rendermime,
+  source,
+  type
+}) => {
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<CodeEditor.IEditor | null>(null);
+  const mime = type === 'code' ? mimetype : undefined;
   const className = [
     'correxit-reviewer-source',
     `cxt-cell-${type}`,
@@ -473,7 +543,7 @@ const CellSource: React.FC<{
   useEffect(() => {
     if (type !== 'code' || !factory || !host.current) return;
     host.current.textContent = '';
-    const model = new CodeEditor.Model({ mimeType: 'text/x-python' });
+    const model = new CodeEditor.Model({ mimeType: mimetype });
     model.sharedModel.setSource(source);
 
     const cached = factory({
@@ -487,7 +557,7 @@ const CellSource: React.FC<{
       cached.dispose();
       model.dispose();
     };
-  }, [source, type, factory]);
+  }, [factory, mimetype, source, type]);
 
   // Markdown cells: use rendermime for rich rendering.
   useEffect(() => {
@@ -515,7 +585,12 @@ const CellSource: React.FC<{
     type === 'raw';
   if (unavailable) {
     return (
-      <div aria-label={label} key="plain" className={className}>
+      <div
+        aria-label={label}
+        className={className}
+        data-mimetype={mime}
+        key="plain"
+      >
         <pre>
           {source || (
             <span className="correxit-reviewer-source-blank">{empty}</span>
@@ -526,7 +601,12 @@ const CellSource: React.FC<{
   }
   if (!source) {
     return (
-      <div aria-label={label} key="blank" className={className}>
+      <div
+        aria-label={label}
+        className={className}
+        data-mimetype={mime}
+        key="blank"
+      >
         <pre>
           <span className="correxit-reviewer-source-blank">{empty}</span>
         </pre>
@@ -534,41 +614,78 @@ const CellSource: React.FC<{
     );
   }
 
-  return <div aria-label={label} key="rich" className={className} ref={host} />;
+  return (
+    <div
+      aria-label={label}
+      className={className}
+      data-mimetype={mime}
+      key="rich"
+      ref={host}
+    />
+  );
 };
 
-/**
- * Normalize an output to a renderable MIME bundle.
- */
-const bundle = (output: any): Record<string, string> => {
-  // Kernel message: content lives under output.content.
-  const content = output.content ?? output;
-  const data: Record<string, string> | undefined = content.data;
-  if (data) return data;
+const kernel = (output: Output): output is Rubric.Cell.Output =>
+  'header' in output && 'content' in output;
 
-  // Stream: text may be string or string[].
-  const text = content.text;
-  if (text !== null && text !== undefined) {
-    const joined = Array.isArray(text) ? text.join('') : String(text);
-    return { 'text/plain': joined };
+const text = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(text).join('');
+  return JSON.stringify(value);
+};
+
+const bundle = (output: Output): IMimeBundle => {
+  if (kernel(output)) {
+    if (
+      KernelMessage.isDisplayDataMsg(output) ||
+      KernelMessage.isExecuteResultMsg(output)
+    )
+      return output.content.data;
+
+    if (KernelMessage.isStreamMsg(output))
+      return { 'text/plain': text(output.content.text) };
+
+    if (!KernelMessage.isErrorMsg(output)) return {};
+
+    const { ename, evalue, traceback } = output.content;
+    const error = traceback.length
+      ? traceback.join('\n')
+      : `${ename}: ${evalue}`;
+    return { 'text/plain': error };
   }
-  return {};
+
+  if (isDisplayData(output) || isExecuteResult(output)) return output.data;
+  if (isStream(output)) return { 'text/plain': text(output.text) };
+  if (!isError(output)) return {};
+
+  const error = output.traceback.length
+    ? output.traceback.join('\n')
+    : `${output.ename}: ${output.evalue}`;
+  return { 'text/plain': error };
+};
+
+const plain = (mime: IMimeBundle, output: Output): string => {
+  const value = mime['text/plain'];
+  return value === undefined ? JSON.stringify(output) : text(value);
 };
 
 const CellOutput: React.FC<{
-  output: any;
+  output: Output;
   rendermime: IRenderMimeRegistry | null;
 }> = ({ output, rendermime }) => {
   const host = useRef<HTMLDivElement>(null);
-  const data = bundle(output);
-  const fallback = data['text/plain'] ?? JSON.stringify(output);
+  const mime = useMemo(() => bundle(output), [output]);
+  const mimetype = useMemo(
+    () => rendermime?.preferredMimeType(mime, 'prefer') ?? null,
+    [mime, rendermime]
+  );
+  const fallback = useMemo(() => plain(mime, output), [mime, output]);
   useEffect(() => {
-    if (!rendermime || !host.current) return;
-    const mimeType = rendermime.preferredMimeType(data, 'prefer');
-    if (!mimeType) return;
+    if (!rendermime || !mimetype || !host.current) return;
     host.current.textContent = '';
-    const renderer = rendermime.createRenderer(mimeType);
-    const model = rendermime.createModel({ data, trusted: false });
+
+    const renderer = rendermime.createRenderer(mimetype);
+    const model = rendermime.createModel({ data: mime, trusted: false });
     void renderer.renderModel(model).then(() => {
       if (host.current) {
         host.current.textContent = '';
@@ -576,8 +693,8 @@ const CellOutput: React.FC<{
       }
     });
     return () => renderer.dispose();
-  }, [output, rendermime]);
-  if (!rendermime)
+  }, [mime, mimetype, rendermime]);
+  if (!rendermime || !mimetype)
     return <pre className="correxit-reviewer-output">{fallback}</pre>;
   return <div className="correxit-reviewer-output" ref={host} />;
 };
@@ -603,7 +720,6 @@ const Minimap: React.FC<{
 }) => {
   const host = useRef<HTMLDivElement>(null);
   const focus = useRef<HTMLButtonElement | null>(null);
-
   const grid = useMemo(() => {
     const rubrics = new Map(
       workbooks
@@ -626,11 +742,9 @@ const Minimap: React.FC<{
       })
     );
   }, [columns, rows, workbooks, grades, revision]);
-
   useEffect(() => {
     const current = focus.current;
     if (!current) return;
-
     current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     if (host.current?.contains(document.activeElement)) current.focus();
   }, [cursor.cell, cursor.path]);
@@ -655,7 +769,6 @@ const Minimap: React.FC<{
     active
       ? trans.__('%1, cell %2, %3, active', columns[col], row + 1, status)
       : trans.__('%1, cell %2, %3', columns[col], row + 1, status);
-
   return (
     <div
       aria-activedescendant={active.id}

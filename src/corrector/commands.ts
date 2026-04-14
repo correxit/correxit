@@ -247,6 +247,7 @@ export function commands(
             factory: editors
               ? options => editors.factoryService.newInlineEditor(options)
               : null,
+            mimeTypeService: editors?.mimeTypeService || null,
             rendermime,
             trans
           });

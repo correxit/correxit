@@ -25,6 +25,9 @@ jest.mock('../correxit/workbook', () => ({
         } as Workbook.Credentials;
       }
     },
+    headed: (workbook: { content?: unknown } | null) => !!workbook?.content,
+    headless: (workbook: { content?: unknown } | null) =>
+      !!workbook && workbook.content === null,
     open: jest.fn(),
     unlock: jest.fn()
   }
