@@ -1,9 +1,6 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import {
-  CommandToolbarButtonComponent,
-  notebookIcon
-} from '@jupyterlab/ui-components';
+import { Button, notebookIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Rubric, Workbook } from '..';
@@ -42,7 +39,7 @@ type Walk = {
   clear: () => void;
   move: (path: string, step: -1 | 1) => void;
   node: (path: string, row: HTMLTableRowElement | null) => void;
-  select: (path: string, focus?: boolean) => void;
+  select: (path: string) => void;
 };
 
 const FAILED = 'cxt-mod-failed';
@@ -128,8 +125,7 @@ const useWalk = (workbooks: Scanned[]): Walk => {
       return selected;
     return workbooks[0]?.context.path || '';
   }, [cursor, selected, workbooks]);
-  const select = useCallback((path: string, focus = false) => {
-    if (focus) target.current = path;
+  const select = useCallback((path: string) => {
     setCursor(path);
     setSelected(path);
   }, []);
@@ -137,7 +133,9 @@ const useWalk = (workbooks: Scanned[]): Walk => {
   const move = useCallback(
     (path: string, step: -1 | 1) => {
       const next = advance(workbooks, path, step);
-      if (next) select(next, true);
+      if (!next) return;
+      target.current = next;
+      select(next);
     },
     [select, workbooks]
   );
@@ -447,7 +445,10 @@ const Line: React.FC<{
       aria-selected={selected}
       className={className}
       data-path={path}
-      onClick={() => walk.select(path, true)}
+      onClick={event => {
+        walk.select(path);
+        event.currentTarget.focus();
+      }}
       onFocus={() => walk.select(path)}
       onKeyDown={keydown(path, walk)}
       ref={row => walk.node(path, row)}
@@ -495,7 +496,7 @@ const Row: React.FC<{
   const title = history(workbook, trans);
   return (
     <Line {...{ className, path, walk }}>
-      <Notebook {...{ commands, trans, workbook }} />
+      <Notebook {...{ active, commands, trans, workbook }} />
       <Assignee {...{ workbook }} />
       <Breakdown {...{ active, commands, failed, trans, workbook }} />
       <Kernel {...{ spec }} />
@@ -583,20 +584,35 @@ const Assignee: React.FC<{ workbook: Workbook.Headless }> = ({ workbook }) => {
 };
 
 const Notebook: React.FC<{
+  active: boolean;
   commands: CommandRegistry;
   trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = ({ commands, trans, workbook }) => {
+}> = ({ active, commands, trans, workbook }) => {
   const id = 'docmanager:open';
   const args = { path: workbook.context.path };
   const caption = trans.__('Open workbook');
   return (
-    <td className="correxit-corrector-open" onKeyDown={retreat}>
+    <td
+      className="correxit-corrector-open"
+      onClick={event => event.stopPropagation()}
+      onKeyDown={retreat}
+    >
       <div className="correxit-corrector-icon">
-        <CommandToolbarButtonComponent
-          {...{ args, caption, commands, icon: notebookIcon, id, label: '' }}
-          noFocusOnClick
-        />
+        <Button
+          aria-label={caption}
+          className="jp-ToolbarButtonComponent"
+          data-command={id}
+          minimal
+          onClick={() => {
+            void commands.execute(id, args);
+          }}
+          tabIndex={active ? 0 : -1}
+          title={caption}
+          type="button"
+        >
+          <notebookIcon.react tag={null} />
+        </Button>
       </div>
     </td>
   );
