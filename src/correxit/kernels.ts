@@ -69,7 +69,7 @@ export function drain(): void {
 export async function lease(workbook: Workbook): Promise<Leased | null> {
   await acquire();
 
-  const name = workbook.context.model.defaultKernelName;
+  const name = await settle(workbook);
   const kernel = revive(take(name)) ?? await start(workbook);
   if (!kernel) {
     relinquish();
@@ -168,6 +168,13 @@ function revive(idle: Idle | null): Kernel.IKernelConnection | null {
   return idle && !idle.kernel.isDisposed ? idle.kernel : null;
 }
 
+/** @returns the default kernel name after waiting for the document model. */
+async function settle(workbook: Workbook): Promise<string> {
+  const { context } = workbook;
+  await context.ready.catch(() => {});
+  return context.model.defaultKernelName;
+}
+
 /** @returns the idle-kernel list for `name`, creating it on first access. */
 function shelf(name: string): Idle[] {
   let entries = pool.get(name);
@@ -180,7 +187,7 @@ async function start(
   workbook: Workbook
 ): Promise<Kernel.IKernelConnection | null> {
   const { kernelManager } = workbook.context.sessionContext;
-  const name = workbook.context.model.defaultKernelName;
+  const name = await settle(workbook);
   if (!kernelManager || !name) {
     console.warn('kernels: missing kernel manager or name');
     return null;

@@ -36,6 +36,7 @@ function create(
   return {
     context: {
       model: { defaultKernelName: name },
+      ready: Promise.resolve(),
       sessionContext: { kernelManager: manager }
     }
   } as any;
@@ -81,6 +82,7 @@ describe('kernels', () => {
       const wb = {
         context: {
           model: { defaultKernelName: '' },
+          ready: Promise.resolve(),
           sessionContext: { kernelManager: { startNew: jest.fn() } }
         }
       } as any;
