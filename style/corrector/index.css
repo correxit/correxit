@@ -236,6 +236,10 @@ table.correxit-corrector {
       box-shadow: inset 0 0 0 2px var(--jp-brand-color1);
     }
 
+    &:focus-within td {
+      box-shadow: inset 0 0 0 2px var(--jp-brand-color1);
+    }
+
     &.cxt-mod-failed td {
       opacity: 0.6;
     }
@@ -249,26 +253,6 @@ table.correxit-corrector {
       .correxit-corrector-breakdown-segment {
         animation: correxit-corrector-pending-pulse 1.4s infinite ease-in-out;
         opacity: 0.6;
-      }
-    }
-
-    &.cxt-mod-selected {
-      td {
-        background-color: var(--jp-brand-color1);
-        color: var(--jp-ui-inverse-font-color1);
-
-        .jp-icon-selectable[fill] {
-          fill: var(--jp-ui-inverse-font-color0);
-        }
-      }
-
-      .correxit-corrector-chip {
-        border-left-color: currentcolor;
-
-        &.cxt-mod-collected {
-          background-color: var(--jp-ui-inverse-font-color1);
-          color: var(--jp-brand-color1);
-        }
       }
     }
 
@@ -295,12 +279,36 @@ table.correxit-corrector {
           }
         }
       }
+    }
 
-      &.cxt-mod-active td {
-        position: sticky;
-        top: 0;
-        z-index: 1;
+    &.cxt-mod-selected {
+      td {
+        background-color: var(--jp-brand-color1);
+        color: var(--jp-ui-inverse-font-color1);
+
+        .jp-icon-selectable[fill] {
+          fill: var(--jp-ui-inverse-font-color0);
+        }
       }
+
+      .correxit-corrector-chip {
+        border-left-color: currentcolor;
+
+        &.cxt-mod-collected {
+          background-color: var(--jp-ui-inverse-font-color1);
+          color: var(--jp-brand-color1);
+        }
+      }
+
+      &:focus-within td {
+        box-shadow: inset 0 0 0 2px var(--jp-layout-color1);
+      }
+    }
+
+    &.correxit-corrector-progress.cxt-mod-active td {
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
   }
 }

@@ -6,7 +6,6 @@ import {
 } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { useCommand } from '../correxit/use-command';
@@ -17,6 +16,13 @@ import {
   Scanned
 } from './commands';
 import { CorrectorStatus, CorrectorWidget } from './widget';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 
 type Batched = [path: string, file: { grade: Grade; workbook: Headless }];
 type Collated = Corrector.Collated;
@@ -30,6 +36,14 @@ type Phase =
   | 'review'
   | 'scanned';
 type TranslationBundle = IRenderMime.TranslationBundle;
+type Walk = {
+  active: string;
+  selected: string;
+  clear: () => void;
+  move: (path: string, step: -1 | 1) => void;
+  node: (path: string, row: HTMLTableRowElement | null) => void;
+  select: (path: string, focus?: boolean) => void;
+};
 
 const FAILED = 'cxt-mod-failed';
 const PENDING = 'cxt-mod-pending';
@@ -61,6 +75,94 @@ const release = (cached: { [path: string]: Headless }) => {
   const workbook = state.workbook();
   if (Workbook.headless(workbook)) state.workbook(null);
   bridge.clear();
+};
+
+const advance = (workbooks: Scanned[], path: string, step: -1 | 1) => {
+  const order = workbooks.map(({ context }) => context.path);
+  const index = order.indexOf(path);
+  if (index === -1) return null;
+  return order[index + step] || null;
+};
+
+const retreat = (event: React.KeyboardEvent<HTMLElement>) => {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  const row = event.currentTarget.closest('tr');
+  if (row instanceof HTMLTableRowElement) row.focus();
+};
+
+const keydown =
+  (path: string, walk: Walk) =>
+  (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      walk.move(path, -1);
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      walk.move(path, 1);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      walk.clear();
+      return;
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    walk.select(path);
+  };
+
+const useWalk = (workbooks: Scanned[]): Walk => {
+  const rows = useRef({} as { [path: string]: HTMLTableRowElement | null });
+  const target = useRef('');
+  const [cursor, setCursor] = useState('');
+  const [selected, setSelected] = useState('');
+  const active = useMemo(() => {
+    if (workbooks.some(({ context }) => context.path === cursor)) return cursor;
+    if (workbooks.some(({ context }) => context.path === selected))
+      return selected;
+    return workbooks[0]?.context.path || '';
+  }, [cursor, selected, workbooks]);
+  const select = useCallback((path: string, focus = false) => {
+    if (focus) target.current = path;
+    setCursor(path);
+    setSelected(path);
+  }, []);
+  const clear = useCallback(() => setSelected(''), []);
+  const move = useCallback(
+    (path: string, step: -1 | 1) => {
+      const next = advance(workbooks, path, step);
+      if (next) select(next, true);
+    },
+    [select, workbooks]
+  );
+  const node = useCallback((path: string, row: HTMLTableRowElement | null) => {
+    rows.current[path] = row;
+  }, []);
+
+  useEffect(() => {
+    if (!cursor) return;
+    if (workbooks.some(({ context }) => context.path === cursor)) return;
+    setCursor('');
+  }, [cursor, workbooks]);
+  useEffect(() => {
+    if (!selected) return;
+    if (workbooks.some(({ context }) => context.path === selected)) return;
+    setSelected('');
+  }, [selected, workbooks]);
+  useEffect(() => {
+    const row = rows.current[target.current];
+    if (!row) return;
+    row.focus();
+    target.current = '';
+  }, [selected, workbooks]);
+
+  return { active, clear, move, node, select, selected };
 };
 
 /** @returns a multi-line lifecycle history for tooltips. */
@@ -219,8 +321,11 @@ export function Corrector(props: Corrector.Props) {
   const resolved = useMemo(() => resolutions(grades), [grades]);
   const memo = useMemo(() => merge(workbooks, grades), [workbooks, grades]);
   const cached = useRef({} as { [path: string]: Headless });
-  const [selection, setSelection] = useState('');
-  const workbook = useMemo(() => match(memo, selection), [memo, selection]);
+  const walk = useWalk(memo);
+  const workbook = useMemo(
+    () => match(memo, walk.selected),
+    [memo, walk.selected]
+  );
   const focus = workbook?.context.path || null;
   const total = memo.length;
   const progress = { graded, grading, loaded, resolved, scanned, total };
@@ -238,11 +343,14 @@ export function Corrector(props: Corrector.Props) {
       <tbody>
         <Progress {...{ ...progress, trans }} />
         {memo.map(workbook => {
-          const { path } = workbook.context;
           const grade = resolve(workbook, grades, graded);
-          const flags = { graded, selected: path === selection };
-          const props = { commands, grade, select: setSelection, workbook };
-          return <Row key={path} {...{ ...flags, ...props, trans }} />;
+          const { path } = workbook.context;
+          return (
+            <Row
+              key={path}
+              {...{ commands, grade, graded, trans, walk, workbook }}
+            />
+          );
         })}
       </tbody>
     </table>
@@ -326,68 +434,83 @@ const Columns: React.FC = () => (
   </colgroup>
 );
 
+const Line: React.FC<{
+  className: string;
+  children: React.ReactNode;
+  path: string;
+  walk: Walk;
+}> = ({ children, className, path, walk }) => {
+  const active = path === walk.active;
+  const selected = path === walk.selected;
+  return (
+    <tr
+      aria-selected={selected}
+      className={className}
+      data-path={path}
+      onClick={() => walk.select(path, true)}
+      onFocus={() => walk.select(path)}
+      onKeyDown={keydown(path, walk)}
+      ref={row => walk.node(path, row)}
+      tabIndex={active ? 0 : -1}
+    >
+      {children}
+    </tr>
+  );
+};
+
 const HollowRow: React.FC<{
   className: string;
   path: string;
-}> = ({ className, path }) => (
-  <tr {...{ className }}>
+  walk: Walk;
+}> = ({ className, path, walk }) => (
+  <Line {...{ className, path, walk }}>
     <td className="correxit-corrector-open" />
     <td className="correxit-corrector-assignee">{basename(path)}</td>
     <td className="correxit-corrector-breakdown" />
     <td className="correxit-corrector-kernel" />
     <Pending />
-  </tr>
+  </Line>
 );
 
 const Row: React.FC<{
   commands: CommandRegistry;
   grade: Grade | 'pending';
   graded: boolean;
-  select: (path: string) => void;
-  selected: boolean;
   trans: TranslationBundle;
+  walk: Walk;
   workbook: Scanned;
 }> = React.memo(props => {
-  const { commands, grade, graded, select, selected, trans, workbook } = props;
+  const { commands, grade, graded, trans, walk, workbook } = props;
   const { path } = workbook.context;
+  const active = path === walk.active;
+  const selected = path === walk.selected;
   const pending = grade === 'pending';
   const failed = !pending && !grade.resolved;
   const phase = lifecycle(workbook, grade);
   const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');
-  if (workbook.hollow) return <HollowRow {...{ className, path }} />;
+  if (workbook.hollow) return <HollowRow {...{ className, path, walk }} />;
   const spec = pending ? null : grade.spec;
   const title = history(workbook, trans);
-  const toggle = () => select(selected ? '' : path);
-  const keydown = (event: React.KeyboardEvent<HTMLTableRowElement>) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    toggle();
-  };
   return (
-    <tr
-      aria-selected={selected}
-      className={className}
-      onClick={toggle}
-      onKeyDown={keydown}
-      tabIndex={0}
-    >
+    <Line {...{ className, path, walk }}>
       <Notebook {...{ commands, trans, workbook }} />
       <Assignee {...{ workbook }} />
-      <Breakdown {...{ commands, failed, trans, workbook }} />
+      <Breakdown {...{ active, commands, failed, trans, workbook }} />
       <Kernel {...{ spec }} />
       <Status {...{ grade, graded, phase, title, trans }} />
-    </tr>
+    </Line>
   );
 });
 
 const Breakdown: React.FC<{
+  active: boolean;
   commands: CommandRegistry;
   failed: boolean;
   trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = ({ commands, failed, trans, workbook }) => {
+}> = ({ active, commands, failed, trans, workbook }) => {
   if (failed) return <td className="correxit-corrector-breakdown" />;
 
   const rubric = open(workbook);
@@ -430,6 +553,7 @@ const Breakdown: React.FC<{
               aria-label={trans.__('Review %1', label(id))}
               className={className}
               key={id}
+              onKeyDown={retreat}
               onClick={event => {
                 event.stopPropagation();
                 void commands.execute(review, {
@@ -437,6 +561,7 @@ const Breakdown: React.FC<{
                   cell: id
                 });
               }}
+              tabIndex={active ? 0 : -1}
               title={label(id)}
               type="button"
             />
@@ -466,7 +591,7 @@ const Notebook: React.FC<{
   const args = { path: workbook.context.path };
   const caption = trans.__('Open workbook');
   return (
-    <td className="correxit-corrector-open">
+    <td className="correxit-corrector-open" onKeyDown={retreat}>
       <div className="correxit-corrector-icon">
         <CommandToolbarButtonComponent
           {...{ args, caption, commands, icon: notebookIcon, id, label: '' }}

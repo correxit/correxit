@@ -73,3 +73,13 @@ export async function reviewer(page: any): Promise<void> {
   await expect(page.locator('.correxit-reviewer-idle')).toHaveCount(0);
   await expect(page.getByLabel('Current cell')).toBeVisible();
 }
+
+/**
+ * Wait until corrector is interactive and has a focusable row.
+ */
+export async function corrector(page: any): Promise<void> {
+  await expect(page.locator('.correxit-corrector')).toBeVisible();
+  await expect(
+    page.locator('.correxit-corrector tbody tr[tabindex="0"]').first()
+  ).toBeVisible();
+}

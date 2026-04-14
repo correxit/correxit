@@ -1,5 +1,5 @@
 import { expect, test } from '@jupyterlab/galata';
-import { cd, reviewer, setup } from './utils';
+import { cd, corrector, reviewer, setup } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -129,6 +129,58 @@ async function cleanup(
     },
     { directory, paths }
   );
+}
+
+async function close(page: any) {
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    const widgets = Array.from(app.shell.widgets('main')) as Array<{
+      dispose: () => void;
+      id: string;
+    }>;
+    for (const widget of widgets) {
+      if (widget.id === 'correxit-corrector-widget') widget.dispose();
+      if (widget.id === 'correxit-reviewer-widget') widget.dispose();
+    }
+  });
+}
+
+async function focus(page: any) {
+  const row = page
+    .locator('.correxit-corrector tbody tr[tabindex="0"]')
+    .first();
+  await expect(row).toBeVisible();
+  await row.locator('.correxit-corrector-assignee').click();
+  await expect.poll(async () => row.getAttribute('aria-selected')).toBe('true');
+  await expect.poll(() => aligned(page)).toBe(true);
+  return row;
+}
+
+async function launch(page: any, path: string) {
+  await page.evaluate(async (path: string) => {
+    const app = (window as any).jupyterapp;
+    await app.commands.execute('correxit-corrector:launch', { path });
+  }, path);
+  await corrector(page);
+}
+
+const selected = (page: any) =>
+  page.locator('.correxit-corrector tbody tr[aria-selected="true"]');
+
+const active = (page: any) =>
+  page.locator('.correxit-corrector tbody tr[tabindex="0"]').first();
+
+const open = (page: any) =>
+  active(page).locator('.correxit-corrector-open button').first();
+
+async function aligned(page: any) {
+  return page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    const row = document.querySelector(
+      '.correxit-corrector tbody tr[aria-selected="true"]'
+    ) as HTMLElement | null;
+    return active?.getAttribute('data-path') === row?.getAttribute('data-path');
+  });
 }
 
 test('scans a directory and yields headless workbooks', async ({ page }) => {
@@ -295,12 +347,7 @@ test('reviewer uses notebook mimetype for code cells', async ({ page }) => {
   });
   await cd(page, '.');
 
-  await page.evaluate(async (directory: string) => {
-    const app = (window as any).jupyterapp;
-    await app.commands.execute('correxit-corrector:launch', {
-      path: directory
-    });
-  }, propagated.directory);
+  await launch(page, propagated.directory);
 
   const review = page.getByRole('button', { name: /^Review comparable:/ });
   await expect(review).toBeVisible();
@@ -313,18 +360,119 @@ test('reviewer uses notebook mimetype for code cells', async ({ page }) => {
     )
     .toBe('application/sql');
 
-  await page.evaluate(() => {
-    const app = (window as any).jupyterapp;
-    const widgets = Array.from(app.shell.widgets('main')) as Array<{
-      dispose: () => void;
-      id: string;
-    }>;
-    for (const widget of widgets) {
-      if (widget.id === 'correxit-corrector-widget') widget.dispose();
-      if (widget.id === 'correxit-reviewer-widget') widget.dispose();
-    }
-  });
+  await close(page);
 
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('corrector navigates rows with keyboard', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+  await focus(page);
+
+  await expect(selected(page)).toContainText('alice@example.com');
+
+  await page.keyboard.press('ArrowDown');
+  await expect(selected(page)).toContainText('bob@example.com');
+  await expect.poll(() => aligned(page)).toBe(true);
+
+  await page.keyboard.press('ArrowUp');
+  await expect(selected(page)).toContainText('alice@example.com');
+  await expect.poll(() => aligned(page)).toBe(true);
+
+  await close(page);
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('corrector clears row selection with escape', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+  await focus(page);
+
+  await page.keyboard.press('Escape');
+  await expect(selected(page)).toHaveCount(0);
+  await expect(active(page)).toContainText('alice@example.com');
+  await expect(active(page)).toBeFocused();
+
+  await page.keyboard.press('ArrowDown');
+  await expect(selected(page)).toContainText('bob@example.com');
+  await expect.poll(() => aligned(page)).toBe(true);
+
+  await close(page);
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('corrector tabs to open button and escape returns to row', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, ['alice@example.com']);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+  await focus(page);
+
+  await page.keyboard.press('Tab');
+  await expect(open(page)).toBeFocused();
+  await expect(selected(page)).toContainText('alice@example.com');
+
+  await page.keyboard.press('Escape');
+  await expect(active(page)).toBeFocused();
+  await expect(selected(page)).toContainText('alice@example.com');
+  await expect.poll(() => aligned(page)).toBe(true);
+
+  await close(page);
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('corrector tabs into breakdown buttons and opens reviewer', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, ['alice@example.com']);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+  await focus(page);
+
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+
+  const review = page.getByRole('button', { name: /^Review comparable:/ });
+  await expect(review).toBeFocused();
+
+  await page.keyboard.press('Enter');
+  await reviewer(page);
+
+  await close(page);
   await cleanup(page, propagated);
   await dispose();
 });
