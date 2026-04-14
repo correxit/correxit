@@ -674,9 +674,12 @@ const CellOutput: React.FC<{
   rendermime: IRenderMimeRegistry | null;
 }> = ({ output, rendermime }) => {
   const host = useRef<HTMLDivElement>(null);
-  const mime = bundle(output);
-  const mimetype = rendermime?.preferredMimeType(mime, 'prefer') ?? null;
-  const fallback = plain(mime, output);
+  const mime = useMemo(() => bundle(output), [output]);
+  const mimetype = useMemo(
+    () => rendermime?.preferredMimeType(mime, 'prefer') ?? null,
+    [mime, rendermime]
+  );
+  const fallback = useMemo(() => plain(mime, output), [mime, output]);
   useEffect(() => {
     if (!rendermime || !mimetype || !host.current) return;
     host.current.textContent = '';
