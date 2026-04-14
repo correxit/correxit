@@ -585,8 +585,8 @@ const Notebook: React.FC<{
   trans: TranslationBundle;
   workbook: Workbook.Headless;
 }> = ({ active, commands, trans, workbook }) => {
-  const id = 'docmanager:open';
-  const args = { path: workbook.context.path };
+  const open = 'docmanager:open';
+  const file = { path: workbook.context.path };
   const caption = trans.__('Open workbook');
   return (
     <td
@@ -598,11 +598,9 @@ const Notebook: React.FC<{
         <Button
           aria-label={caption}
           className="jp-ToolbarButtonComponent"
-          data-command={id}
+          data-command={open}
           minimal
-          onClick={() => {
-            void commands.execute(id, args);
-          }}
+          onClick={() => void commands.execute(open, file)}
           tabIndex={active ? 0 : -1}
           title={caption}
           type="button"
