@@ -343,12 +343,8 @@ export function Corrector(props: Corrector.Props) {
         {memo.map(workbook => {
           const grade = resolve(workbook, grades, graded);
           const { path } = workbook.context;
-          return (
-            <Row
-              key={path}
-              {...{ commands, grade, graded, trans, walk, workbook }}
-            />
-          );
+          const props = { commands, grade, graded, trans, walk, workbook };
+          return <Row {...props} key={path} />;
         })}
       </tbody>
     </table>
