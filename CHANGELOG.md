@@ -1,3 +1,10 @@
+## [1.18.3](https://github.com/QuantStack/correxit/compare/v1.18.2...v1.18.3) (2026-04-14)
+
+
+### Bug Fixes
+
+* Improve language-agnosticness of reviewer, et al. ([#70](https://github.com/QuantStack/correxit/issues/70)) ([251fe5a](https://github.com/QuantStack/correxit/commit/251fe5a2dd9d54ea2805bd9b819dbd35df006fab))
+
 ## [1.18.2](https://github.com/QuantStack/correxit/compare/v1.18.1...v1.18.2) (2026-04-02)
 
 
