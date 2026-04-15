@@ -25,11 +25,6 @@ async function close(page: any): Promise<void> {
     .catch(() => null);
   await cd(page, '.').catch(() => {});
   try {
-    await page.unrouteAll({ behavior: 'ignoreErrors' });
-  } catch {
-    /* ok */
-  }
-  try {
     await page.notebook.close(true);
   } catch {
     /* ok */

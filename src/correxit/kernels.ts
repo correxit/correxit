@@ -86,16 +86,13 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
     void dispose(kernel);
     relinquish();
   };
-
   const deadline = lifespan > 0 ? setTimeout(expire, lifespan * 1000) : null;
-
   const reclaim = async () => {
     if (released) return;
     released = true;
     if (deadline) clearTimeout(deadline);
     await recycle(kernel);
   };
-
   return [kernel, reclaim];
 }
 
