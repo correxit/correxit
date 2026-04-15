@@ -52,6 +52,9 @@ test('launch expands the Correxit sidebar', async ({ page }) => {
   expect(result.before).toBe(true);
   expect(result.after).toBe(false);
   await expect(page.locator('.correxit-sidebar')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Correxit' })).toContainText(
+    'Correxit'
+  );
   await dispose();
 });
 
