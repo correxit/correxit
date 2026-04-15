@@ -522,7 +522,7 @@ test('batch grades and certifies workbooks', async ({ page }) => {
   await dispose();
 });
 
-test('batch should reuse pooled kernels across a larger roster', async ({
+test('batch should bound live kernels across a larger roster', async ({
   page
 }) => {
   const { dispose } = await setup(page, [
@@ -543,10 +543,23 @@ test('batch should reuse pooled kernels across a larger roster', async ({
     const app = (window as any).jupyterapp;
     const manager = app.serviceManager.kernels;
     const start = manager.startNew.bind(manager);
+    let live = 0;
+    let peak = 0;
     const starts: string[] = [];
     manager.startNew = async (options: { name?: string }) => {
       starts.push(options?.name ?? '');
-      return start(options);
+      const kernel = await start(options);
+      live++;
+      peak = Math.max(peak, live);
+      const shutdown = kernel.shutdown.bind(kernel);
+      kernel.shutdown = async () => {
+        try {
+          return await shutdown();
+        } finally {
+          live = Math.max(0, live - 1);
+        }
+      };
+      return kernel;
     };
     try {
       const stream: AsyncGenerator<any> = await app.commands.execute(
@@ -567,6 +580,7 @@ test('batch should reuse pooled kernels across a larger roster', async ({
       }
       return {
         grades: grades.sort((a, b) => a.path.localeCompare(b.path)),
+        peak,
         starts
       };
     } finally {
@@ -582,7 +596,8 @@ test('batch should reuse pooled kernels across a larger roster', async ({
     expect(grade.status).not.toBe('unscored');
   }
 
-  expect(result.starts).toHaveLength(cap);
+  expect(result.peak).toBe(cap);
+  expect(result.starts.length).toBeLessThan(total);
 
   await cleanup(page, propagated);
   await dispose();

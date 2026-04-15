@@ -41,6 +41,8 @@ async function open(
         });
       }
       await Workbook.update(panel, rubric);
+      const inject = app.commands.execute('correxit:inject');
+      if (typeof inject === 'function') inject(panel);
       void app.commands.execute('correxit:configure', { id, is });
     },
     { ...args, taken: args.taken || [] }
