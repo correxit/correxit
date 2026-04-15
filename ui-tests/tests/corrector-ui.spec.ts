@@ -522,6 +522,72 @@ test('batch grades and certifies workbooks', async ({ page }) => {
   await dispose();
 });
 
+test('batch should reuse pooled kernels across a larger roster', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const cap = 3;
+  const total = cap * 4;
+  const roster = Array.from(
+    { length: total },
+    (_, i) => `student${i}@example.com`
+  );
+  const propagated = await propagate(page, roster);
+  await cd(page, '.');
+
+  const result = await page.evaluate(async (directory: string) => {
+    const { Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const manager = app.serviceManager.kernels;
+    const start = manager.startNew.bind(manager);
+    const starts: string[] = [];
+    manager.startNew = async (options: { name?: string }) => {
+      starts.push(options?.name ?? '');
+      return start(options);
+    };
+    try {
+      const stream: AsyncGenerator<any> = await app.commands.execute(
+        'correxit-corrector:batch',
+        { key: 'secret', path: directory }
+      );
+      const grades: any[] = [];
+      for await (const [path, { grade, workbook }] of stream) {
+        const rubric = Workbook.open(workbook, true);
+        grades.push({
+          assignee: rubric?.assignment?.assignee ?? null,
+          certification: rubric?.assignment?.certification !== null,
+          path,
+          possible: grade.score.possible,
+          status: grade.score.status
+        });
+        workbook.context.dispose();
+      }
+      return {
+        grades: grades.sort((a, b) => a.path.localeCompare(b.path)),
+        starts
+      };
+    } finally {
+      manager.startNew = start;
+    }
+  }, propagated.directory);
+
+  expect(result.grades).toHaveLength(total);
+  for (const grade of result.grades) {
+    expect(roster).toContain(grade.assignee);
+    expect(grade.certification).toBe(true);
+    expect(grade.possible).toBeGreaterThan(0);
+    expect(grade.status).not.toBe('unscored');
+  }
+
+  expect(result.starts).toHaveLength(cap);
+
+  await cleanup(page, propagated);
+  await dispose();
+});
+
 test('batch yields nothing for a directory with no workbooks', async ({
   page
 }) => {
