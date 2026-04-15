@@ -327,6 +327,13 @@ test('reviewer navigates with reviewer keyboard bindings', async ({ page }) => {
   await page.keyboard.press('L');
   await expect(await active(page)).toHaveAttribute('aria-label', /bob/);
 
+  const minimap = page.locator('.correxit-reviewer-minimap');
+  const { clientWidth, scrollWidth } = await minimap.evaluate(node => ({
+    clientWidth: node.clientWidth,
+    scrollWidth: node.scrollWidth
+  }));
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+
   await page.keyboard.press('H');
   await expect(await active(page)).toHaveAttribute('aria-label', /alice/);
 

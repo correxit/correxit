@@ -344,11 +344,10 @@ const ui: JupyterFrontEndPlugin<void> = {
       const options = { commands, monitor, settings, trans };
       const widget = new Sidebar.Widget(options);
       const launch = Correxit.CommandIDs.launch;
-      const label = trans.__('Correxit');
+      const caption = trans.__('Correxit');
       widget.id = 'correxit-sidebar';
-      widget.title.caption = label;
-      widget.title.label = label;
-      widget.title.icon = Correxit.Icons.correct;
+      widget.title.caption = caption;
+      widget.title.label = caption;
       shell.add(widget, 'right', {});
       const added = [
         commands.addCommand(launch, {
