@@ -15,6 +15,7 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
       }),
       assign: app.commands.isEnabled('correxit:assign'),
       convert: app.commands.isEnabled('correxit:convert'),
+      launch: app.commands.isEnabled('correxit:launch'),
       lock: app.commands.isEnabled('correxit:lock'),
       propagate: app.commands.isEnabled('correxit:propagate'),
       remove: app.commands.isEnabled('correxit:remove', { id: 'cell' }),
@@ -25,10 +26,32 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
   expect(result.add).toBe(false);
   expect(result.assign).toBe(false);
   expect(result.convert).toBe(true);
+  expect(result.launch).toBe(true);
   expect(result.lock).toBe(false);
   expect(result.propagate).toBe(false);
   expect(result.remove).toBe(false);
   expect(result.toggle).toBe(false);
+  await dispose();
+});
+
+test('launch expands the Correxit sidebar', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const app = (window as any).jupyterapp;
+    const shell = app.shell as any;
+    shell.collapseRight();
+    const before = shell.rightCollapsed;
+    await app.commands.execute('correxit:launch');
+    return {
+      before,
+      after: shell.rightCollapsed
+    };
+  });
+
+  expect(result.before).toBe(true);
+  expect(result.after).toBe(false);
+  await expect(page.locator('.correxit-sidebar')).toBeVisible();
   await dispose();
 });
 

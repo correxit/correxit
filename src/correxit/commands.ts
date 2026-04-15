@@ -29,6 +29,7 @@ export namespace CommandIDs {
   export const fetch = 'correxit:fetch';
   export const inject = 'correxit:inject';
   export const intervene = 'correxit:intervene';
+  export const launch = 'correxit:launch';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
   export const redistribute = 'correxit:redistribute';

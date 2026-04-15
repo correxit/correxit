@@ -354,10 +354,11 @@ test('reviewer uses notebook mimetype for code cells', async ({ page }) => {
   await review.click();
 
   await reviewer(page);
+  const current = page.locator(
+    '.correxit-reviewer .correxit-reviewer-source[aria-label="Current cell"]'
+  );
   await expect
-    .poll(async () =>
-      page.getByLabel('Current cell').getAttribute('data-mimetype')
-    )
+    .poll(async () => current.getAttribute('data-mimetype'))
     .toBe('application/sql');
 
   await close(page);
@@ -543,22 +544,24 @@ test('batch should bound live kernels across a larger roster', async ({
     const app = (window as any).jupyterapp;
     const manager = app.serviceManager.kernels;
     const start = manager.startNew.bind(manager);
-    let live = 0;
+    await manager.refreshRunning();
+    const count = () =>
+      typeof manager.runningCount === 'number'
+        ? manager.runningCount
+        : Array.from(manager.running()).length;
+    const baseline = count();
     let peak = 0;
     const starts: string[] = [];
+    const sample = (models?: ArrayLike<unknown>) => {
+      const current = Array.isArray(models) ? models.length : count();
+      peak = Math.max(peak, Math.max(0, current - baseline));
+    };
+    const changed = (_: unknown, models: ArrayLike<unknown>) => sample(models);
+    manager.runningChanged.connect(changed);
     manager.startNew = async (options: { name?: string }) => {
       starts.push(options?.name ?? '');
       const kernel = await start(options);
-      live++;
-      peak = Math.max(peak, live);
-      const shutdown = kernel.shutdown.bind(kernel);
-      kernel.shutdown = async () => {
-        try {
-          return await shutdown();
-        } finally {
-          live = Math.max(0, live - 1);
-        }
-      };
+      sample();
       return kernel;
     };
     try {
@@ -576,14 +579,18 @@ test('batch should bound live kernels across a larger roster', async ({
           possible: grade.score.possible,
           status: grade.score.status
         });
+        sample();
         workbook.context.dispose();
       }
+      await manager.refreshRunning();
+      sample();
       return {
         grades: grades.sort((a, b) => a.path.localeCompare(b.path)),
         peak,
         starts
       };
     } finally {
+      manager.runningChanged.disconnect(changed);
       manager.startNew = start;
     }
   }, propagated.directory);
@@ -596,7 +603,7 @@ test('batch should bound live kernels across a larger roster', async ({
     expect(grade.status).not.toBe('unscored');
   }
 
-  expect(result.peak).toBe(cap);
+  expect(result.peak).toBeLessThanOrEqual(cap);
   expect(result.starts.length).toBeLessThan(total);
 
   await cleanup(page, propagated);

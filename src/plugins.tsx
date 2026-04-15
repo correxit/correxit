@@ -343,14 +343,24 @@ const ui: JupyterFrontEndPlugin<void> = {
       const trans = (translator || nullTranslator).load('correxit');
       const options = { commands, monitor, settings, trans };
       const widget = new Sidebar.Widget(options);
+      const launch = Correxit.CommandIDs.launch;
       widget.id = 'correxit-sidebar';
       widget.title.caption = 'Correxit';
       widget.title.icon = Correxit.Icons.correct;
       shell.add(widget, 'right', {});
+      const added = [
+        commands.addCommand(launch, {
+          icon: Correxit.Icons.correct,
+          caption: trans.__('Open Correxit sidebar'),
+          label: trans.__('Open Correxit sidebar'),
+          execute: () => shell.activateById(widget.id)
+        })
+      ];
       if (restorer) restorer.add(widget, widget.id);
       if (palette) {
         const { CommandIDs } = Correxit;
         const exposed = [
+          CommandIDs.launch,
           CommandIDs.convert,
           CommandIDs.lock,
           CommandIDs.unlock,
@@ -367,7 +377,10 @@ const ui: JupyterFrontEndPlugin<void> = {
         for (const command of exposed)
           palette.addItem({ category: 'Correxit', command });
       }
-      deactivator = () => widget.dispose();
+      deactivator = () => {
+        added.forEach(command => command.dispose());
+        widget.dispose();
+      };
     },
     deactivate: () => deactivator?.()
   }))()

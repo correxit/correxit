@@ -32,6 +32,18 @@ only in local scope during `unlock` and is discarded when the function returns.
 Correxit is entirely client-side, there is no backend. All logic runs in the
 browser.
 
+## Accessibility
+
+Correxit is built for education. That creates an explicit obligation to be
+approachable by as many people as possible. Accessibility is not polish here,
+it is part of the product's integrity.
+
+UI work must preserve durable keyboard flows, explicit labels, visible focus,
+live feedback for changing state, and cues that do not rely on color alone.
+Prefer native controls when they fit. When a custom interaction is necessary,
+its accessible name, focus behavior, and keyboard contract must be treated as
+part of the feature, not as follow-up work.
+
 Jupyter/Lumino commands serve as the controller layer. All user interactions and
 long-running operations are mediated by a small API of commands that drive
 multiple UI surfaces:
