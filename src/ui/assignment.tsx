@@ -1,12 +1,8 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
-import {
-  checkIcon,
-  CommandToolbarButtonComponent
-} from '@jupyterlab/ui-components';
+import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import { Toggle } from './toggle';
 
 type Assignment = Rubric.Assignment;
 type Registered = Awaited<ReturnType<Correxit.Registrar>>;
@@ -19,6 +15,7 @@ type Registration = Rubric.Assignment.Registration;
 type Course = { assignments: Registration[]; group: string };
 type TranslationBundle = IRenderMime.TranslationBundle;
 
+const DELAY = 150;
 const TTL = 10_000;
 const { assign, enroll, track } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
@@ -48,6 +45,33 @@ const courses = (registered: Registered): Course[] | null =>
       : [{ assignments: registered as Registration[], group: '' }];
 const flat = (course: Course[]): Registration[] =>
   course.flatMap(({ assignments }) => assignments);
+const split = (value: string) =>
+  Array.from(
+    new Set(
+      value
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+    )
+  );
+const same = (x: string[], y: string[]) =>
+  x.length === y.length && x.every((record, i) => record === y[i]);
+
+const count = ({ roster }: Assignment, trans: TranslationBundle) =>
+  trans.__('%1 entries', roster.length);
+
+const due = ({ expiration }: Assignment, trans: TranslationBundle) =>
+  Rubric.timestamp(expiration, trans.__('No deadline'));
+
+const headline = (
+  { name }: Assignment,
+  manual: boolean,
+  trans: TranslationBundle
+) => {
+  if (name) return name;
+  return manual ? trans.__('Manual roster') : trans.__('No assignment');
+};
+
 const option = (registration: Registration) => (
   <option key={identify(registration)} value={identify(registration)}>
     {registration.name}
@@ -105,11 +129,12 @@ export const Assignment: React.FC<{
   const [registered, setRegistered] = useState<Registered>(null);
   const [pending, setPending] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const [view, setView] = useState<'assignee' | 'roster'>('assignee');
   const { assignment, local } = state;
   const cached = rubric.id;
   const keep = (next: Assignment) =>
     setState(current => Draft.sync(current, next));
+  const edit = (assignment: Assignment) =>
+    setState(current => Draft.edit(current, assignment));
   const merge = (mutate: (assignment: Assignment) => Assignment) =>
     setState(current => Draft.merge(current, mutate));
   const pick = (next: string | null) =>
@@ -118,10 +143,6 @@ export const Assignment: React.FC<{
     setRegistered(current =>
       Equal.registered(current, next) ? current : next
     );
-  const toggle = (to: 'assignee' | 'roster', updated: Assignment) => {
-    setState(current => Draft.edit(current, updated));
-    setView(to);
-  };
   const reassign = (assignment: Assignment, locked: boolean) => {
     if (!locked && !equal(rubric.assignment, assignment))
       void commands.execute(assign, assignment).catch(_ => {});
@@ -151,7 +172,6 @@ export const Assignment: React.FC<{
       pick(null);
       return;
     }
-    setView('assignee');
     if (!roster.length) {
       pick(null);
       merge(blank);
@@ -179,7 +199,8 @@ export const Assignment: React.FC<{
       locked
     );
     if (!dirty) return;
-    void reassign(assignment, locked);
+    const delay = window.setTimeout(() => reassign(assignment, locked), DELAY);
+    return () => window.clearTimeout(delay);
   }, [assignment, local, locked, rubric.assignment]);
 
   const all =
@@ -191,28 +212,30 @@ export const Assignment: React.FC<{
   if (pending) return <div className="correxit-assignment cxt-mod-pending" />;
   return (
     <div className="correxit-assignment">
-      {manual ? (
-        view === 'assignee' ? (
-          <Assignee {...{ assignment, locked, toggle, trans }} />
+      <Facts {...{ assignment, manual, trans }} />
+      <div className="correxit-assignment-controls">
+        {manual ? (
+          <>
+            <Roster {...{ assignment, edit, locked, trans }} />
+            <Assignee {...{ assignment, edit, locked, trans }} />
+          </>
         ) : (
-          <Roster {...{ assignment, locked, toggle, trans }} />
-        )
-      ) : (
-        <Enrollment
-          {...{
-            all: all!,
-            assignment,
-            commands,
-            locked,
-            multiple,
-            registered: roster,
-            selected,
-            setSelected,
-            trans
-          }}
-        />
-      )}
-      {manual && <Expiration {...{ assignment, locked, toggle, trans }} />}
+          <Enrollment
+            {...{
+              all: all!,
+              assignment,
+              commands,
+              locked,
+              multiple,
+              registered: roster,
+              selected,
+              setSelected,
+              trans
+            }}
+          />
+        )}
+        {manual && <Expiration {...{ assignment, edit, locked, trans }} />}
+      </div>
       {!locked && (
         <div className="correxit-assignment-propagate">
           <CommandToolbarButtonComponent commands={commands} id={track} />
@@ -222,39 +245,78 @@ export const Assignment: React.FC<{
   );
 };
 
+const Facts: React.FC<{
+  assignment: Assignment;
+  manual: boolean;
+  trans: TranslationBundle;
+}> = ({ assignment, manual, trans }) => {
+  const facts = [
+    {
+      label: trans.__('Assignment'),
+      value: headline(assignment, manual, trans)
+    },
+    {
+      label: trans.__('Assignee'),
+      value: assignment.assignee || trans.__('Template')
+    },
+    {
+      label: trans.__('Roster'),
+      value: count(assignment, trans)
+    },
+    {
+      label: trans.__('Deadline'),
+      value: due(assignment, trans)
+    }
+  ];
+  return (
+    <div className="correxit-assignment-facts">
+      {facts.map(({ label, value }) => (
+        <div className="correxit-assignment-fact" key={label}>
+          <span className="correxit-assignment-fact-label">{label}</span>
+          <span className="correxit-assignment-fact-value" title={value}>
+            {value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const Assignee: React.FC<{
   assignment: Assignment;
+  edit: (assignment: Assignment) => void;
   locked: boolean;
-  toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
   trans: TranslationBundle;
-}> = ({ assignment, locked, toggle, trans }) => {
+}> = ({ assignment, edit, locked, trans }) => {
+  const id = 'correxit-assignment-assignee';
   const unassigned = trans.__('Template - unassigned');
   const { assignee, roster } = assignment;
   if (locked) {
-    const { Icons } = Correxit;
     const assignee = assignment.assignee || unassigned;
-    const icon = assignment.assignee ? Icons.assignee : Icons.template;
     return (
       <div className="correxit-assignment-assignee">
-        <Toggle disabled icon={icon} title={trans.__('Roster view')} />
-        <div className="correxit-monospace">{assignee}</div>
+        <div>
+          <label>{trans.__('Assignee')}</label>
+          <div className="correxit-monospace">{assignee}</div>
+        </div>
       </div>
     );
   }
   return (
     <div className="correxit-assignment-assignee">
-      <Toggle
-        {...{
-          icon: Correxit.Icons.roster,
-          title: trans.__('Roster view'),
-          toggle: () => toggle('roster', assignment)
-        }}
-      />
       <div>
+        <label htmlFor={id}>{trans.__('Assignee')}</label>
+        {!roster.length && (
+          <div className="correxit-assignment-hint">
+            {trans.__('Add roster entries first.')}
+          </div>
+        )}
         <select
+          disabled={!roster.length}
+          id={id}
           name="correxit-assignment-assignee"
           onChange={({ target: { value } }) =>
-            toggle('assignee', { ...assignment, assignee: value })
+            edit({ ...assignment, assignee: value })
           }
           value={assignee}
         >
@@ -274,10 +336,10 @@ const Assignee: React.FC<{
 
 const Expiration: React.FC<{
   assignment: Assignment;
+  edit: (assignment: Assignment) => void;
   locked: boolean;
-  toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
   trans: TranslationBundle;
-}> = ({ assignment, locked, toggle, trans }) => {
+}> = ({ assignment, edit, locked, trans }) => {
   const { expiration } = assignment;
   const className =
     expiration !== null && Date.now() > expiration
@@ -303,7 +365,7 @@ const Expiration: React.FC<{
   };
   const update = (value: string) => {
     const expiration = value ? new Date(value).getTime() : null;
-    toggle('assignee', { ...assignment, expiration });
+    edit({ ...assignment, expiration });
   };
   return (
     <div className={className}>
@@ -325,44 +387,67 @@ const Expiration: React.FC<{
 
 const Roster: React.FC<{
   assignment: Assignment;
+  edit: (assignment: Assignment) => void;
   locked: boolean;
-  toggle: (to: 'assignee' | 'roster', assignment: Assignment) => void;
   trans: TranslationBundle;
-}> = ({ assignment: seed, locked, toggle, trans }) => {
+}> = ({ assignment, edit, locked, trans }) => {
   const id = 'correxit-assignment-roster';
-  const [assignment, setAssignment] = useState<Assignment>(seed);
-  const [value, setValue] = useState<string>(assignment.roster.join('\n'));
-  const roster = value.split('\n').filter(Boolean);
-  useEffect(
-    () =>
-      setAssignment(({ assignee, ...assignment }) => ({
-        ...assignment,
-        assignee: roster.includes(assignee) ? assignee : '',
-        roster
-      })),
-    [value]
-  );
-  if (locked) return <></>;
+  const hint = `${id}-hint`;
+  const seed = assignment.roster.join('\n');
+  const [value, setValue] = useState<string>(seed);
+  useEffect(() => {
+    if (same(split(value), assignment.roster)) return;
+    setValue(seed);
+  }, [assignment.roster, seed, value]);
+
+  const update = (value: string) => {
+    const roster = split(value);
+    setValue(value);
+    edit({
+      ...assignment,
+      assignee: roster.includes(assignment.assignee) ? assignment.assignee : '',
+      roster
+    });
+  };
+
+  if (locked) {
+    const title = seed || undefined;
+    return (
+      <div className="correxit-assignment-roster">
+        <div>
+          <label>{trans.__('Roster')}</label>
+          <div
+            className={
+              assignment.roster.length
+                ? 'correxit-assignment-list'
+                : 'correxit-assignment-list cxt-mod-empty'
+            }
+            title={title}
+          >
+            {seed || trans.__('No roster entries')}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="correxit-assignment-roster">
-      <Toggle
-        {...{
-          icon: checkIcon,
-          title: trans.__('Assignee view'),
-          toggle: () => toggle('assignee', assignment)
-        }}
-      />
       <div>
-        <label htmlFor={id}>
-          {trans.__('Assignment roster (line-separated)')}
-        </label>
+        <label htmlFor={id}>{trans.__('Roster')}</label>
+        <div className="correxit-assignment-hint" id={hint}>
+          {trans.__('One assignee per line.')}
+        </div>
         <textarea
+          aria-describedby={hint}
           id={id}
           data-lm-suppress-shortcuts="true"
-          rows={8}
           name="correxit-assignment-roster"
+          onBlur={() => setValue(assignment.roster.join('\n'))}
+          onChange={({ target: { value } }) => update(value)}
+          rows={6}
+          spellCheck={false}
           value={value}
-          onChange={({ target: { value } }) => setValue(value)}
         />
       </div>
     </div>
@@ -384,7 +469,7 @@ const Enrollment: React.FC<{
 }> = props => {
   const {
     all,
-    assignment: { assignee, expiration, name, roster },
+    assignment: { assignee },
     commands,
     locked,
     multiple,
@@ -404,19 +489,6 @@ const Enrollment: React.FC<{
     );
   }
 
-  const due = Rubric.timestamp(expiration, trans.__('No deadline'));
-  const lookup = locked ? props.assignment.id : selected;
-  const active = all.find(course =>
-    course.assignments.some(record => identify(record) === lookup)
-  );
-  const { group } = active || {};
-  const line = locked
-    ? group
-      ? trans.__('%1: %2 (%3)', group, name, due)
-      : trans.__('%1 (%2)', name, due)
-    : active?.group
-      ? trans.__('%1: %2 (%3) roster: %4', group, name, due, roster.length)
-      : trans.__('%1 (%2) roster: %3', name, due, roster.length);
   const unassigned = trans.__('Template - unassigned');
   return (
     <>
@@ -445,9 +517,6 @@ const Enrollment: React.FC<{
           </div>
         </div>
       )}
-      <div className="correxit-assignment-chip" title={line}>
-        {line}
-      </div>
       <div className="correxit-assignment-assignee">
         <div className="correxit-monospace">{assignee || unassigned}</div>
         <CommandToolbarButtonComponent
