@@ -1,5 +1,5 @@
 import { expect, test } from '@jupyterlab/galata';
-import { setup } from './utils';
+import { setup, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -429,9 +429,11 @@ test('dropping registrar keeps assigned roster details', async ({ page }) => {
         delete context.__correxit_now;
       })
       .catch(() => {});
-    if (!file) return;
-    await page.notebook.close(true).catch(() => {});
-    await page.contents.deleteFile(file).catch(() => {});
+    if (file) {
+      await page.notebook.close(true).catch(() => {});
+      await page.contents.deleteFile(file).catch(() => {});
+    }
+    await shutdown(page);
   }
 });
 

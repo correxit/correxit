@@ -1,5 +1,5 @@
 import { expect, test } from '@jupyterlab/galata';
-import { cd, corrector, reviewer, setup } from './utils';
+import { cd, corrector, reviewer, setup, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -143,6 +143,7 @@ async function close(page: any) {
       if (widget.id === 'correxit-reviewer-widget') widget.dispose();
     }
   });
+  await shutdown(page);
 }
 
 async function focus(page: any) {

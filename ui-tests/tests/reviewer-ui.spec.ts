@@ -1,5 +1,5 @@
 import { expect, test } from '@jupyterlab/galata';
-import { cd, setup } from './utils';
+import { cd, setup, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -93,6 +93,7 @@ async function close(page: Page) {
       if (widget.id === 'correxit-reviewer-widget') widget.dispose();
     }
   });
+  await shutdown(page);
 }
 
 async function launch(page: Page, path: string) {
@@ -328,11 +329,20 @@ test('reviewer navigates with reviewer keyboard bindings', async ({ page }) => {
   await expect(await active(page)).toHaveAttribute('aria-label', /bob/);
 
   const minimap = page.locator('.correxit-reviewer-minimap');
-  const { clientWidth, scrollWidth } = await minimap.evaluate(node => ({
-    clientWidth: node.clientWidth,
-    scrollWidth: node.scrollWidth
-  }));
-  expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+  await expect
+    .poll(() =>
+      minimap.evaluate(node => {
+        const active = node.querySelector(
+          '.correxit-reviewer-minimap-cell.cxt-mod-active'
+        );
+        if (!(active instanceof HTMLElement)) return false;
+        const host = node.getBoundingClientRect();
+        const cell = active.getBoundingClientRect();
+        const center = cell.left + cell.width / 2;
+        return center >= host.left && center <= host.right;
+      })
+    )
+    .toBe(true);
 
   await page.keyboard.press('H');
   await expect(await active(page)).toHaveAttribute('aria-label', /alice/);

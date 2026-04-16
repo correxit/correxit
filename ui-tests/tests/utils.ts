@@ -26,6 +26,15 @@ export async function cd(page: any, path = '.'): Promise<void> {
   }, path);
 }
 
+export async function shutdown(page: any): Promise<void> {
+  await page
+    .evaluate(async () => {
+      const app = (window as any).jupyterapp;
+      await app.serviceManager.sessions.shutdownAll();
+    })
+    .catch(() => {});
+}
+
 /**
  * Creates a notebook with the given cells and returns a dispose function.
  */
@@ -56,10 +65,14 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
 
   return {
     async dispose() {
-      await cd(page, '.');
-      await page.notebook.close(true);
-      if (name) {
-        await page.contents.deleteFile(name);
+      try {
+        await cd(page, '.').catch(() => {});
+        await page.notebook.close(true).catch(() => {});
+        if (name) {
+          await page.contents.deleteFile(name).catch(() => {});
+        }
+      } finally {
+        await shutdown(page);
       }
     }
   };

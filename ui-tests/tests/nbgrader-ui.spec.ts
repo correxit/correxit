@@ -1,7 +1,7 @@
 import { expect, test } from '@jupyterlab/galata';
 import * as fs from 'fs';
 import * as path from 'path';
-import { cd } from './utils';
+import { cd, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -37,14 +37,7 @@ async function close(page: any): Promise<void> {
     }
   }
   await cd(page, '.').catch(() => {});
-  try {
-    await page.evaluate(async () => {
-      const app = (window as any).jupyterapp;
-      await app.serviceManager.sessions.shutdownAll();
-    });
-  } catch {
-    /* ok */
-  }
+  await shutdown(page);
   try {
     await page.evaluate(() => {
       const original = (window as any).__warns_original__;
