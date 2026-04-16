@@ -3,6 +3,13 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import { Button, notebookIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { useCommand } from '../correxit/use-command';
@@ -13,13 +20,6 @@ import {
   Scanned
 } from './commands';
 import { CorrectorStatus, CorrectorWidget } from './widget';
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
 
 type Batched = [path: string, file: { grade: Grade; workbook: Headless }];
 type Collated = Corrector.Collated;
@@ -142,7 +142,6 @@ const useWalk = (workbooks: Scanned[]): Walk => {
   const node = useCallback((path: string, row: HTMLTableRowElement | null) => {
     rows.current[path] = row;
   }, []);
-
   useEffect(() => {
     if (!cursor) return;
     if (workbooks.some(({ context }) => context.path === cursor)) return;
@@ -159,7 +158,6 @@ const useWalk = (workbooks: Scanned[]): Walk => {
     row.focus();
     target.current = '';
   }, [selected, workbooks]);
-
   return { active, clear, move, node, select, selected };
 };
 
@@ -187,11 +185,14 @@ const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
   if (grade === 'pending') return 'pending';
   if (!grade.resolved) return 'failed';
   if (workbook.hollow) return 'scanned';
+
   const rubric = open(workbook);
   if (!rubric) return 'scanned';
+
   const { assignment } = rubric;
   if (assignment.collected) return 'collected';
   if (assignment.certification) return 'certified';
+
   const pending = Object.values(rubric.cells)
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !assignment.report.interventions[cell.id]);
@@ -267,6 +268,7 @@ const resolve = (
   const { path } = workbook.context;
   if (collated.has(path)) return collated.get(path)!.grade;
   if (workbook.hollow || !graded) return 'pending';
+
   const rubric = open(workbook);
   const report = rubric?.assignment.report;
   const summary = report && Rubric.Assignment.summary(report);
@@ -488,6 +490,7 @@ const Row: React.FC<{
     .filter(Boolean)
     .join(' ');
   if (workbook.hollow) return <HollowRow {...{ className, path, walk }} />;
+
   const spec = pending ? null : grade.spec;
   const title = history(workbook, trans);
   return (
@@ -512,6 +515,7 @@ const Breakdown: React.FC<{
 
   const rubric = open(workbook);
   if (!rubric) return <td className="correxit-corrector-breakdown" />;
+
   const { cells } = rubric;
   const { report } = rubric.assignment;
   const breakdown = workbook.context.model.sharedModel.cells
@@ -648,6 +652,7 @@ const Kernel: React.FC<{
   spec: Workbook.Grade['spec'];
 }> = ({ spec }) => {
   if (!spec) return <td className="correxit-corrector-kernel" />;
+
   const src = logo(spec);
   return (
     <td className="correxit-corrector-kernel">
