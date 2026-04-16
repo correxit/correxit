@@ -218,7 +218,9 @@ test('unlock keeps the manual roster plaintext in the sidebar', async ({
   await dispose();
 });
 
-test('manual roster editing updates assignee choices live', async ({ page }) => {
+test('manual roster editing updates assignee choices live', async ({
+  page
+}) => {
   const read = () =>
     page.evaluate(() => {
       const { Workbook } = (window as any).__correxit__;
@@ -256,7 +258,9 @@ test('manual roster editing updates assignee choices live', async ({ page }) => 
 
   const area = page.locator('textarea[name="correxit-assignment-roster"]');
   await expect(area).toBeVisible();
-  await area.fill(' alice@example.com \n bob@example.com \n alice@example.com ');
+  await area.fill(
+    ' alice@example.com \n bob@example.com \n alice@example.com '
+  );
 
   await expect.poll(read).toEqual({
     assignee: '',
@@ -281,9 +285,7 @@ test('manual roster editing updates assignee choices live', async ({ page }) => 
   });
   await expect
     .poll(async () =>
-      page
-        .locator('select[name="correxit-assignment-assignee"]')
-        .inputValue()
+      page.locator('select[name="correxit-assignment-assignee"]').inputValue()
     )
     .toBe('');
 

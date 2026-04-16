@@ -11,9 +11,11 @@ const ready = async (page: any) => {
           const app = (window as any).jupyterapp;
           return {
             bridge: !!(window as any).__correxit__,
-            convert: !!app?.commands?.hasCommand &&
+            convert:
+              !!app?.commands?.hasCommand &&
               app.commands.hasCommand('correxit:convert'),
-            launch: !!app?.commands?.hasCommand &&
+            launch:
+              !!app?.commands?.hasCommand &&
               app.commands.hasCommand('correxit:launch')
           };
         }),
