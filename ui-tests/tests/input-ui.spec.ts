@@ -7,6 +7,10 @@ async function open(
   page: any,
   args: { id: string; is: 'comparable' | 'correctable'; taken?: string[] }
 ) {
+  await page.waitForFunction(() => {
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    return !!panel?.context?.model?.sharedModel;
+  });
   await page.evaluate(
     async ({
       id,
