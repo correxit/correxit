@@ -8,27 +8,27 @@ async function open(
   args: { id: string; is: 'comparable' | 'correctable'; taken?: string[] }
 ) {
   await page.waitForFunction((id: string) => {
-    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
     const notebook = panel?.context?.model?.sharedModel;
     return (
       !!panel?.context?.path?.endsWith('.ipynb') &&
       !panel.context.isDisposed &&
-      !!notebook?.cells?.some((cell: { id: string }) => cell.id === id)
+      !!notebook?.cells?.some((cell: { id: string }) => cell.id === id) &&
+      app.commands.hasCommand('correxit:configure')
     );
   }, args.id);
-  await page.evaluate(
-    async ({
-      id,
-      taken,
-      is
-    }: {
-      id: string;
-      taken: string[];
-      is: 'comparable' | 'correctable';
-    }) => {
+
+  // Build the rubric, fire the configure command, and wait for the
+  // overlay to appear, all inside one evaluate. The evaluate resolves
+  // as soon as the overlay DOM node is created, before the command
+  // itself finishes (the command blocks on user interaction).
+  const status = await page.evaluate(
+    async ({ id, taken, is }: { id: string; taken: string[]; is: string }) => {
       const { Workbook, Rubric } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
+      if (!panel) return 'no-panel';
       let rubric = (r => ({
         ...r,
         key: 'secret',
@@ -49,18 +49,45 @@ async function open(
           references: null
         });
       }
-      await Workbook.update(panel, rubric);
-      // Deferred: the configure command opens an overlay that blocks until
-      // user interaction. Scheduling it after the current microtask lets
-      // this evaluate return immediately.
-      setTimeout(
-        () => app.commands.execute('correxit:configure', { id, is }),
-        0
-      );
+      try {
+        await Workbook.update(panel, rubric);
+      } catch {
+        return 'update-failed';
+      }
+      const opened = Workbook.open(panel, true);
+      if (!opened) return 'open-null';
+      if (opened.locked) return 'open-locked';
+
+      // Arm a MutationObserver that resolves when the overlay appears.
+      const appeared = new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          observer.disconnect();
+          reject(new Error('overlay did not appear'));
+        }, 10_000);
+        const check = () => {
+          if (document.querySelector('.correxit-overlay')) {
+            clearTimeout(timer);
+            observer.disconnect();
+            resolve();
+          }
+        };
+        const observer = new MutationObserver(check);
+        observer.observe(document.body, { childList: true, subtree: true });
+        check();
+      });
+
+      // Fire the command without awaiting (it blocks on user interaction).
+      app.commands
+        .execute('correxit:configure', { id, is })
+        .catch((e: Error) => console.error('correxit:configure', e));
+
+      // Return once the overlay exists.
+      await appeared;
+      return 'ok';
     },
     { id: args.id, taken: args.taken || [], is: args.is }
   );
-  await page.locator('.correxit-overlay').waitFor({ state: 'visible' });
+  if (status !== 'ok') throw new Error(`open: rubric setup: ${status}`);
 }
 
 test('selects a reference cell from the keyboard for comparison', async ({

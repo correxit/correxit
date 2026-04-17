@@ -845,12 +845,13 @@ describe('Rubric', () => {
           points: 5,
           possible: 5
         };
+        const base = populate(id);
         const rubric = {
-          ...populate(id),
+          ...base,
           assignment: {
-            ...populate(id).assignment,
+            ...base.assignment,
             report: {
-              ...populate(id).assignment.report,
+              ...base.assignment.report,
               interventions: { [id]: intervention }
             }
           }
@@ -869,12 +870,13 @@ describe('Rubric', () => {
           points: 3,
           possible: 5
         });
+        const base = populate(id);
         const rubric = {
-          ...populate(id),
+          ...base,
           assignment: {
-            ...populate(id).assignment,
+            ...base.assignment,
             report: {
-              ...populate(id).assignment.report,
+              ...base.assignment.report,
               interventions: { [id]: intervention }
             }
           }
@@ -1089,39 +1091,25 @@ describe('Rubric', () => {
     });
 
     it('rejects non-positive possible', () => {
-      expect(() =>
+      const fn = () =>
         Rubric.Score.intervene('c1', {
           comment: '',
           points: 0,
           possible: 0
-        })
-      ).toThrow(RangeError);
-
-      expect(() =>
-        Rubric.Score.intervene('c1', {
-          comment: '',
-          points: 0,
-          possible: 0
-        })
-      ).toThrow('possible < 1');
+        });
+      expect(fn).toThrow(RangeError);
+      expect(fn).toThrow('possible < 1');
     });
 
     it('rejects non-finite and non-integer values', () => {
-      expect(() =>
+      const nan = () =>
         Rubric.Score.intervene('c1', {
           comment: '',
           points: Number.NaN,
           possible: 5
-        })
-      ).toThrow(TypeError);
-
-      expect(() =>
-        Rubric.Score.intervene('c1', {
-          comment: '',
-          points: Number.NaN,
-          possible: 5
-        })
-      ).toThrow('points invalid');
+        });
+      expect(nan).toThrow(TypeError);
+      expect(nan).toThrow('points invalid');
 
       expect(() =>
         Rubric.Score.intervene('c1', {

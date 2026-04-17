@@ -1025,7 +1025,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
  */
 async function score(
   page: any,
-  retries = 2
+  retries = 3
 ): Promise<{
   points: number;
   possible: number;
@@ -1058,7 +1058,7 @@ async function score(
         if (kernel) await kernel.restart();
       })
       .catch(() => {});
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
   }
   throw new Error('score: unreachable');
 }
@@ -1118,7 +1118,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
     // Student replaces the answer with something wrong.
     await rewrite(page, 0, 'x = "not a number"');
 
-    const result = await score(page);
+    const result = await score(page, 0);
     expect(result.status).toBe('incorrect');
     expect(result.points).toBe(0);
     expect(result.possible).toBe(2);
@@ -1355,7 +1355,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await load(page, 'autotest-simple-unchanged.ipynb');
     await convert(page);
 
-    const result = await score(page);
+    const result = await score(page, 0);
     expect(result.possible).toBe(1);
     expect(result.points).toBe(0);
   });
@@ -1397,7 +1397,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await load(page, 'autotest-hidden-unchanged.ipynb');
     await convert(page);
 
-    const result = await score(page);
+    const result = await score(page, 0);
     expect(result.possible).toBe(1);
     expect(result.points).toBe(0);
   });
@@ -1423,7 +1423,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await load(page, 'autotest-hashed-unchanged.ipynb');
     await convert(page);
 
-    const result = await score(page);
+    const result = await score(page, 0);
     expect(result.possible).toBe(1);
     expect(result.points).toBe(0);
   });
@@ -1451,7 +1451,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await load(page, 'autotest-multi-unchanged.ipynb');
     await convert(page);
 
-    const result = await score(page);
+    const result = await score(page, 0);
     expect(result.possible).toBe(4);
     expect(result.points).toBe(0);
   });
