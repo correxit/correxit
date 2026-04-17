@@ -16,6 +16,7 @@ module.exports = {
     // empty or disposed bodies in CI.
     kernels: null,
     sessions: null,
+    terminals: null,
     actionTimeout: 30 * 1000,
     navigationTimeout: 30 * 1000
   },

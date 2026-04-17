@@ -1023,21 +1023,34 @@ test.describe('nbgrader conversion (fixtures)', () => {
  * Runs `Workbook.correct()` which executes all cells in kernel
  * order and evaluates test references.
  */
-async function score(page: any): Promise<{
+async function score(
+  page: any,
+  retries = 1
+): Promise<{
   points: number;
   possible: number;
   status: string;
 }> {
-  return page.evaluate(async () => {
-    const { Workbook } = (window as any).__correxit__;
-    const panel = (window as any).jupyterapp.shell.currentWidget;
-    const { score } = await Workbook.correct(panel);
-    return {
-      points: score.points,
-      possible: score.possible,
-      status: score.status
-    };
-  });
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const result = await page.evaluate(async () => {
+        const { Workbook } = (window as any).__correxit__;
+        const panel = (window as any).jupyterapp.shell.currentWidget;
+        const { score } = await Workbook.correct(panel);
+        return {
+          points: score.points,
+          possible: score.possible,
+          status: score.status
+        };
+      });
+      if (result.status !== 'unscored' || attempt === retries) return result;
+    } catch (e) {
+      if (attempt === retries) throw e;
+    }
+    // Brief pause before retrying to let the kernel recover.
+    await page.waitForTimeout(1000);
+  }
+  throw new Error('score: unreachable');
 }
 
 /**

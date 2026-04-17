@@ -17,7 +17,15 @@ async function open(
     );
   }, args.id);
   await page.evaluate(
-    async ({ id, taken }: { id: string; taken: string[] }) => {
+    async ({
+      id,
+      taken,
+      is
+    }: {
+      id: string;
+      taken: string[];
+      is: 'comparable' | 'correctable';
+    }) => {
       const { Workbook, Rubric } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
@@ -42,16 +50,17 @@ async function open(
         });
       }
       await Workbook.update(panel, rubric);
+      // Deferred: the configure command opens an overlay that blocks until
+      // user interaction. Scheduling it after the current microtask lets
+      // this evaluate return immediately.
+      setTimeout(
+        () => app.commands.execute('correxit:configure', { id, is }),
+        0
+      );
     },
-    { id: args.id, taken: args.taken || [] }
+    { id: args.id, taken: args.taken || [], is: args.is }
   );
-  await page.evaluate(
-    ({ id, is }: { id: string; is: 'comparable' | 'correctable' }) => {
-      const app = (window as any).jupyterapp;
-      void app.commands.execute('correxit:configure', { id, is });
-    },
-    { id: args.id, is: args.is }
-  );
+  await page.locator('.correxit-overlay').waitFor({ state: 'visible' });
 }
 
 test('selects a reference cell from the keyboard for comparison', async ({
@@ -166,7 +175,7 @@ test('keeps pointer selection and rejects invalid targets for correction', async
   if (noteBox) {
     const x = noteBox.x + noteBox.width / 2;
     const y = noteBox.y + noteBox.height / 2;
-    await page.mouse.move(x, y);
+    await page.mouse.move(x, y, { steps: 5 });
     await expect(overlay).toContainText('Cell 2 is unavailable.');
     await expect(note).toHaveClass(/correxit-target-cell/);
     await expect(note).toHaveClass(/cxt-mod-exclude/);
@@ -195,7 +204,7 @@ test('keeps pointer selection and rejects invalid targets for correction', async
   if (targetBox) {
     const x = targetBox.x + targetBox.width / 2;
     const y = targetBox.y + targetBox.height / 2;
-    await page.mouse.move(x, y);
+    await page.mouse.move(x, y, { steps: 5 });
     await expect(overlay).toContainText('Cell 4 selected.');
     await expect(target).toHaveClass(/correxit-target-cell/);
     await expect(target).toHaveClass(/cxt-mod-include/);
