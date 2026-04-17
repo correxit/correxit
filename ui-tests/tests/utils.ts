@@ -44,6 +44,10 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
 
   const name = await page.notebook.createNew();
   expect(name).toBeTruthy();
+  await page.waitForFunction((name: string) => {
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    return panel?.context?.path === name && !panel.context.isDisposed;
+  }, name);
   await page.evaluate(
     ({ cells }: { cells: Cell[] }) => {
       const panel = (window as any).jupyterapp.shell.currentWidget;

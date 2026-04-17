@@ -106,6 +106,17 @@ async function propagate(
         .filter(({ type }) => type === 'saved')
         .map(({ slots }) => slots[0] as string);
 
+      const contents = app.serviceManager.contents;
+      for (const path of paths) {
+        const file = await contents.get(path, {
+          content: true,
+          type: 'notebook'
+        });
+        const notebook = file.content;
+        notebook.metadata = { ...notebook.metadata, ...metadata };
+        await contents.save(path, { ...file, content: notebook });
+      }
+
       return { directory, paths };
     },
     { keys, metadata, roster }

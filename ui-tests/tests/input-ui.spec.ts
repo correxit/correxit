@@ -7,20 +7,17 @@ async function open(
   page: any,
   args: { id: string; is: 'comparable' | 'correctable'; taken?: string[] }
 ) {
-  await page.waitForFunction(() => {
+  await page.waitForFunction((id: string) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
-    return !!panel?.context?.model?.sharedModel;
-  });
+    const notebook = panel?.context?.model?.sharedModel;
+    return (
+      !!panel?.context?.path?.endsWith('.ipynb') &&
+      !panel.context.isDisposed &&
+      !!notebook?.cells?.some((cell: { id: string }) => cell.id === id)
+    );
+  }, args.id);
   await page.evaluate(
-    async ({
-      id,
-      is,
-      taken
-    }: {
-      id: string;
-      is: 'comparable' | 'correctable';
-      taken: string[];
-    }) => {
+    async ({ id, taken }: { id: string; taken: string[] }) => {
       const { Workbook, Rubric } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
@@ -45,11 +42,15 @@ async function open(
         });
       }
       await Workbook.update(panel, rubric);
-      const inject = await app.commands.execute('correxit:inject');
-      if (typeof inject === 'function') inject(panel);
+    },
+    { id: args.id, taken: args.taken || [] }
+  );
+  await page.evaluate(
+    ({ id, is }: { id: string; is: 'comparable' | 'correctable' }) => {
+      const app = (window as any).jupyterapp;
       void app.commands.execute('correxit:configure', { id, is });
     },
-    { ...args, taken: args.taken || [] }
+    { id: args.id, is: args.is }
   );
 }
 
