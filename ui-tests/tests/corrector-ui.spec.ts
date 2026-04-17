@@ -1,4 +1,4 @@
-import { expect, test } from '@jupyterlab/galata';
+import { expect, test } from './fixtures';
 import { cd, corrector, reviewer, setup, shutdown } from './utils';
 
 test.use({ autoGoto: false });

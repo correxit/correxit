@@ -1,4 +1,4 @@
-import { expect, test } from '@jupyterlab/galata';
+import { expect, test } from './fixtures';
 import { Cell, Fixture, setup } from './utils';
 
 test.use({ autoGoto: false });

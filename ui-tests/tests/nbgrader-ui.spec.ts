@@ -1,4 +1,4 @@
-import { expect, test } from '@jupyterlab/galata';
+import { expect, test } from './fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
 import { cd, shutdown } from './utils';
@@ -1025,7 +1025,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
  */
 async function score(
   page: any,
-  retries = 1
+  retries = 2
 ): Promise<{
   points: number;
   possible: number;
@@ -1047,7 +1047,14 @@ async function score(
     } catch (e) {
       if (attempt === retries) throw e;
     }
-    // Brief pause before retrying to let the kernel recover.
+    // Restart the kernel before retrying so a corrupted session is replaced.
+    await page
+      .evaluate(async () => {
+        const panel = (window as any).jupyterapp.shell.currentWidget;
+        const kernel = panel?.context?.sessionContext?.session?.kernel;
+        if (kernel) await kernel.restart();
+      })
+      .catch(() => {});
     await page.waitForTimeout(1000);
   }
   throw new Error('score: unreachable');

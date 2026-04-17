@@ -12,11 +12,6 @@ module.exports = {
   timeout: 120 * 1000,
   use: {
     ...baseConfig.use,
-    // Galata's runner-route mocks can proxy kernel and session responses with
-    // empty or disposed bodies in CI.
-    kernels: null,
-    sessions: null,
-    terminals: null,
     actionTimeout: 30 * 1000,
     navigationTimeout: 30 * 1000
   },
