@@ -1043,7 +1043,10 @@ async function score(
           status: score.status
         };
       });
-      if (result.status !== 'unscored' || attempt === retries) return result;
+      const retry =
+        result.status === 'unscored' ||
+        (result.status === 'incorrect' && result.points === 0);
+      if (!retry || attempt === retries) return result;
     } catch (e) {
       if (attempt === retries) throw e;
     }
