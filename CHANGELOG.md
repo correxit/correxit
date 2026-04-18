@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/QuantStack/correxit/compare/v1.18.3...v1.19.0) (2026-04-18)
+
+
+### Features
+
+* Keyboard navigation for corrector, improved lifecycle ([#71](https://github.com/QuantStack/correxit/issues/71)) ([df27f5e](https://github.com/QuantStack/correxit/commit/df27f5ec42a06f45abb9747e6273f6823bb41572))
+
 ## [1.18.3](https://github.com/QuantStack/correxit/compare/v1.18.2...v1.18.3) (2026-04-14)
 
 
