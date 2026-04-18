@@ -29,6 +29,7 @@ export namespace CommandIDs {
   export const fetch = 'correxit:fetch';
   export const inject = 'correxit:inject';
   export const intervene = 'correxit:intervene';
+  export const launch = 'correxit:launch';
   export const lock = 'correxit:lock';
   export const propagate = 'correxit:propagate';
   export const redistribute = 'correxit:redistribute';
@@ -106,11 +107,18 @@ export function commands(
   });
   const current = (): Workbook.Headed | null =>
     shell.currentWidget instanceof NotebookPanel ? shell.currentWidget : null;
+  const active = (): Workbook.Headed | null => {
+    const workbook = state.workbook();
+    if (Workbook.headed(workbook) && !workbook.context.isDisposed)
+      return workbook;
+    if (workbook?.context.isDisposed) state.workbook(null);
+    return current();
+  };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
     const workbook = handle
       ? await fetch(handle)
-      : state.workbook() || current();
+      : active();
     const rubric = open(workbook);
     return { handle, rubric, workbook } as Reified;
   };
@@ -304,11 +312,12 @@ export function commands(
     className: 'correxit-configure',
     icon: ({ is }: Partial<Cell>) => is && Icons[is] || undefined,
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
-      const notebook = state.workbook()?.context.model.sharedModel;
+      const workbook = active();
+      const notebook = workbook?.context.model.sharedModel;
       const id = state.cell(args);
       const cell = find(notebook?.cells || [], cell => cell.id === id);
       const references = args.references;
-      const rubric = open(state.workbook());
+      const rubric = open(workbook);
       if (!cell || !rubric || !id || references?.includes(id)) return false;
       if (rubric.locked || rubric.assignment.assignee) return false;
       if (has(rubric, id)) return get(rubric, id)?.is === args.is;
@@ -319,12 +328,12 @@ export function commands(
     },
     isToggled: (args: Partial<Cell>) => {
       const id = state.cell(args);
-      const rubric = open(state.workbook());
+      const rubric = open(active());
       return !!rubric && !!id && get(rubric, id)?.is === args.is;
     },
     isVisible: (args: Partial<Cell>) => {
       const id = state.cell(args);
-      const rubric = open(state.workbook());
+      const rubric = open(active());
       if (!id || !rubric) return false;
       if (rubric.locked || rubric.assignment.assignee) return false;
       if (has(rubric, id)) return get(rubric, id)?.is === args.is;

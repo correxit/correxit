@@ -582,28 +582,27 @@ export namespace Workbook {
       const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
       return update(workbook, rubric);
     } catch (error) {
-      if (error === Correxit.NO_CORREXIT_METADATA) {
-        const model = workbook.context.model;
-        if (model.nbformatMinor < 5) {
-          // Ensure nbformat 4.5 so cell IDs persist on save.
-          const notebook = model.toJSON() as INotebookContent;
-          notebook.nbformat_minor = 5;
-          model.fromJSON(notebook);
-        }
+      if (error !== Correxit.NO_CORREXIT_METADATA) throw error;
 
-        const created = Rubric.create();
-        const key = await security.keygen(passphrase, created.id);
-        const pair = await security.keypair();
-        const armored = await security.encrypt(pair.private, key);
-        const keys: Rubric.Assignment.Keys = {
-          private: { assignee: null, author: armored },
-          public: { assignee: null, author: pair.public }
-        };
-        const assignment = { ...created.assignment, keys };
-        unlocker.store(created.id, key);
-        return update(workbook, { ...created, assignment, key });
+      const model = workbook.context.model;
+      if (model.nbformatMinor < 5) {
+        // Ensure nbformat 4.5 so cell IDs persist on save.
+        const notebook = model.toJSON() as INotebookContent;
+        notebook.nbformat_minor = 5;
+        model.fromJSON(notebook);
       }
-      throw error;
+
+      const created = Rubric.create();
+      const key = await security.keygen(passphrase, created.id);
+      const pair = await security.keypair();
+      const armored = await security.encrypt(pair.private, key);
+      const keys: Rubric.Assignment.Keys = {
+        private: { assignee: null, author: armored },
+        public: { assignee: null, author: pair.public }
+      };
+      const assignment = { ...created.assignment, keys };
+      unlocker.store(created.id, key);
+      return update(workbook, { ...created, assignment, key });
     }
   }
 

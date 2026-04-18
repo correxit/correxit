@@ -1,12 +1,15 @@
 import { PathExt } from '@jupyterlab/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import {
-  CommandToolbarButtonComponent,
-  notebookIcon
-} from '@jupyterlab/ui-components';
+import { Button, notebookIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { useCommand } from '../correxit/use-command';
@@ -30,6 +33,14 @@ type Phase =
   | 'review'
   | 'scanned';
 type TranslationBundle = IRenderMime.TranslationBundle;
+type Walk = {
+  active: string;
+  selected: string;
+  clear: () => void;
+  move: (path: string, step: -1 | 1) => void;
+  node: (path: string, row: HTMLTableRowElement | null) => void;
+  select: (path: string) => void;
+};
 
 const FAILED = 'cxt-mod-failed';
 const PENDING = 'cxt-mod-pending';
@@ -63,6 +74,93 @@ const release = (cached: { [path: string]: Headless }) => {
   bridge.clear();
 };
 
+const advance = (workbooks: Scanned[], path: string, step: -1 | 1) => {
+  const order = workbooks.map(({ context }) => context.path);
+  const index = order.indexOf(path);
+  if (index === -1) return null;
+  return order[index + step] || null;
+};
+
+const retreat = (event: React.KeyboardEvent<HTMLElement>) => {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  const row = event.currentTarget.closest('tr');
+  if (row instanceof HTMLTableRowElement) row.focus();
+};
+
+const keydown =
+  (path: string, walk: Walk) =>
+  (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      walk.move(path, -1);
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      walk.move(path, 1);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      walk.clear();
+      return;
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    walk.select(path);
+  };
+
+const useWalk = (workbooks: Scanned[]): Walk => {
+  const rows = useRef({} as { [path: string]: HTMLTableRowElement | null });
+  const target = useRef('');
+  const [cursor, setCursor] = useState('');
+  const [selected, setSelected] = useState('');
+  const active = useMemo(() => {
+    if (workbooks.some(({ context }) => context.path === cursor)) return cursor;
+    if (workbooks.some(({ context }) => context.path === selected))
+      return selected;
+    return workbooks[0]?.context.path || '';
+  }, [cursor, selected, workbooks]);
+  const select = useCallback((path: string) => {
+    setCursor(path);
+    setSelected(path);
+  }, []);
+  const clear = useCallback(() => setSelected(''), []);
+  const move = useCallback(
+    (path: string, step: -1 | 1) => {
+      const next = advance(workbooks, path, step);
+      if (!next) return;
+      target.current = next;
+      select(next);
+    },
+    [select, workbooks]
+  );
+  const node = useCallback((path: string, row: HTMLTableRowElement | null) => {
+    rows.current[path] = row;
+  }, []);
+  useEffect(() => {
+    if (!cursor) return;
+    if (workbooks.some(({ context }) => context.path === cursor)) return;
+    setCursor('');
+  }, [cursor, workbooks]);
+  useEffect(() => {
+    if (!selected) return;
+    if (workbooks.some(({ context }) => context.path === selected)) return;
+    setSelected('');
+  }, [selected, workbooks]);
+  useEffect(() => {
+    const row = rows.current[target.current];
+    if (!row) return;
+    row.focus();
+    target.current = '';
+  }, [selected, workbooks]);
+  return { active, clear, move, node, select, selected };
+};
+
 /** @returns a multi-line lifecycle history for tooltips. */
 const history = (workbook: Scanned, trans: TranslationBundle): string => {
   const rubric = open(workbook);
@@ -87,11 +185,14 @@ const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
   if (grade === 'pending') return 'pending';
   if (!grade.resolved) return 'failed';
   if (workbook.hollow) return 'scanned';
+
   const rubric = open(workbook);
   if (!rubric) return 'scanned';
+
   const { assignment } = rubric;
   if (assignment.collected) return 'collected';
   if (assignment.certification) return 'certified';
+
   const pending = Object.values(rubric.cells)
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !assignment.report.interventions[cell.id]);
@@ -167,6 +268,7 @@ const resolve = (
   const { path } = workbook.context;
   if (collated.has(path)) return collated.get(path)!.grade;
   if (workbook.hollow || !graded) return 'pending';
+
   const rubric = open(workbook);
   const report = rubric?.assignment.report;
   const summary = report && Rubric.Assignment.summary(report);
@@ -219,8 +321,11 @@ export function Corrector(props: Corrector.Props) {
   const resolved = useMemo(() => resolutions(grades), [grades]);
   const memo = useMemo(() => merge(workbooks, grades), [workbooks, grades]);
   const cached = useRef({} as { [path: string]: Headless });
-  const [selection, setSelection] = useState('');
-  const workbook = useMemo(() => match(memo, selection), [memo, selection]);
+  const walk = useWalk(memo);
+  const workbook = useMemo(
+    () => match(memo, walk.selected),
+    [memo, walk.selected]
+  );
   const focus = workbook?.context.path || null;
   const total = memo.length;
   const progress = { graded, grading, loaded, resolved, scanned, total };
@@ -238,11 +343,10 @@ export function Corrector(props: Corrector.Props) {
       <tbody>
         <Progress {...{ ...progress, trans }} />
         {memo.map(workbook => {
-          const { path } = workbook.context;
           const grade = resolve(workbook, grades, graded);
-          const flags = { graded, selected: path === selection };
-          const props = { commands, grade, select: setSelection, workbook };
-          return <Row key={path} {...{ ...flags, ...props, trans }} />;
+          const { path } = workbook.context;
+          const props = { commands, grade, graded, trans, walk, workbook };
+          return <Row {...props} key={path} />;
         })}
       </tbody>
     </table>
@@ -326,72 +430,92 @@ const Columns: React.FC = () => (
   </colgroup>
 );
 
+const Line: React.FC<{
+  className: string;
+  children: React.ReactNode;
+  path: string;
+  walk: Walk;
+}> = ({ children, className, path, walk }) => {
+  const active = path === walk.active;
+  const selected = path === walk.selected;
+  return (
+    <tr
+      aria-selected={selected}
+      className={className}
+      data-path={path}
+      onClick={event => {
+        walk.select(path);
+        event.currentTarget.focus();
+      }}
+      onFocus={() => walk.select(path)}
+      onKeyDown={keydown(path, walk)}
+      ref={row => walk.node(path, row)}
+      tabIndex={active ? 0 : -1}
+    >
+      {children}
+    </tr>
+  );
+};
+
 const HollowRow: React.FC<{
   className: string;
   path: string;
-}> = ({ className, path }) => (
-  <tr {...{ className }}>
+  walk: Walk;
+}> = ({ className, path, walk }) => (
+  <Line {...{ className, path, walk }}>
     <td className="correxit-corrector-open" />
     <td className="correxit-corrector-assignee">{basename(path)}</td>
     <td className="correxit-corrector-breakdown" />
     <td className="correxit-corrector-kernel" />
     <Pending />
-  </tr>
+  </Line>
 );
 
 const Row: React.FC<{
   commands: CommandRegistry;
   grade: Grade | 'pending';
   graded: boolean;
-  select: (path: string) => void;
-  selected: boolean;
   trans: TranslationBundle;
+  walk: Walk;
   workbook: Scanned;
 }> = React.memo(props => {
-  const { commands, grade, graded, select, selected, trans, workbook } = props;
+  const { commands, grade, graded, trans, walk, workbook } = props;
   const { path } = workbook.context;
+  const active = path === walk.active;
+  const selected = path === walk.selected;
   const pending = grade === 'pending';
   const failed = !pending && !grade.resolved;
   const phase = lifecycle(workbook, grade);
   const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');
-  if (workbook.hollow) return <HollowRow {...{ className, path }} />;
+  if (workbook.hollow) return <HollowRow {...{ className, path, walk }} />;
+
   const spec = pending ? null : grade.spec;
   const title = history(workbook, trans);
-  const toggle = () => select(selected ? '' : path);
-  const keydown = (event: React.KeyboardEvent<HTMLTableRowElement>) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    toggle();
-  };
   return (
-    <tr
-      aria-selected={selected}
-      className={className}
-      onClick={toggle}
-      onKeyDown={keydown}
-      tabIndex={0}
-    >
-      <Notebook {...{ commands, trans, workbook }} />
+    <Line {...{ className, path, walk }}>
+      <Notebook {...{ active, commands, trans, workbook }} />
       <Assignee {...{ workbook }} />
-      <Breakdown {...{ commands, failed, trans, workbook }} />
+      <Breakdown {...{ active, commands, failed, trans, workbook }} />
       <Kernel {...{ spec }} />
       <Status {...{ grade, graded, phase, title, trans }} />
-    </tr>
+    </Line>
   );
 });
 
 const Breakdown: React.FC<{
+  active: boolean;
   commands: CommandRegistry;
   failed: boolean;
   trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = ({ commands, failed, trans, workbook }) => {
+}> = ({ active, commands, failed, trans, workbook }) => {
   if (failed) return <td className="correxit-corrector-breakdown" />;
 
   const rubric = open(workbook);
   if (!rubric) return <td className="correxit-corrector-breakdown" />;
+
   const { cells } = rubric;
   const { report } = rubric.assignment;
   const breakdown = workbook.context.model.sharedModel.cells
@@ -430,6 +554,7 @@ const Breakdown: React.FC<{
               aria-label={trans.__('Review %1', label(id))}
               className={className}
               key={id}
+              onKeyDown={retreat}
               onClick={event => {
                 event.stopPropagation();
                 void commands.execute(review, {
@@ -437,6 +562,7 @@ const Breakdown: React.FC<{
                   cell: id
                 });
               }}
+              tabIndex={active ? 0 : -1}
               title={label(id)}
               type="button"
             />
@@ -458,20 +584,33 @@ const Assignee: React.FC<{ workbook: Workbook.Headless }> = ({ workbook }) => {
 };
 
 const Notebook: React.FC<{
+  active: boolean;
   commands: CommandRegistry;
   trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = ({ commands, trans, workbook }) => {
-  const id = 'docmanager:open';
-  const args = { path: workbook.context.path };
+}> = ({ active, commands, trans, workbook }) => {
+  const open = 'docmanager:open';
+  const file = { path: workbook.context.path };
   const caption = trans.__('Open workbook');
   return (
-    <td className="correxit-corrector-open">
+    <td
+      className="correxit-corrector-open"
+      onClick={event => event.stopPropagation()}
+      onKeyDown={retreat}
+    >
       <div className="correxit-corrector-icon">
-        <CommandToolbarButtonComponent
-          {...{ args, caption, commands, icon: notebookIcon, id, label: '' }}
-          noFocusOnClick
-        />
+        <Button
+          aria-label={caption}
+          className="jp-ToolbarButtonComponent"
+          data-command={open}
+          minimal
+          onClick={() => void commands.execute(open, file)}
+          tabIndex={active ? 0 : -1}
+          title={caption}
+          type="button"
+        >
+          <notebookIcon.react tag={null} />
+        </Button>
       </div>
     </td>
   );
@@ -513,6 +652,7 @@ const Kernel: React.FC<{
   spec: Workbook.Grade['spec'];
 }> = ({ spec }) => {
   if (!spec) return <td className="correxit-corrector-kernel" />;
+
   const src = logo(spec);
   return (
     <td className="correxit-corrector-kernel">

@@ -4,7 +4,10 @@ let serial = 0;
 
 function spawn(
   overrides: Partial<{
+    clone: () => any;
+    hasPendingInput: boolean;
     isDisposed: boolean;
+    info: Promise<any>;
     name: string;
     restart: () => Promise<void>;
     shutdown: () => Promise<void>;
@@ -12,7 +15,12 @@ function spawn(
   }> = {}
 ) {
   return {
+    clone: jest.fn(function () {
+      return this;
+    }),
     dispose: jest.fn(),
+    hasPendingInput: false,
+    info: Promise.resolve({}),
     isDisposed: false,
     name: overrides.name || 'python3',
     restart: jest.fn(() => Promise.resolve()),
@@ -29,14 +37,15 @@ function create(
   }> = {}
 ) {
   const name = overrides.name ?? `python3-${serial++}`;
-  const manager =
+  const kernelManager =
     'kernelManager' in overrides
       ? overrides.kernelManager
       : { startNew: jest.fn(async () => spawn({ name })) };
   return {
     context: {
       model: { defaultKernelName: name },
-      sessionContext: { kernelManager: manager }
+      ready: Promise.resolve(),
+      sessionContext: { kernelManager }
     }
   } as any;
 }
@@ -49,10 +58,12 @@ describe('kernels', () => {
     warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     drain();
   });
+
   afterEach(() => {
     warn.mockRestore();
     jest.useRealTimers();
   });
+
   const named = () => `python3-${serial++}`;
 
   describe('lease', () => {
@@ -78,13 +89,14 @@ describe('kernels', () => {
     });
 
     it('returns null when kernel name is empty', async () => {
-      const wb = {
+      const workbook = {
         context: {
           model: { defaultKernelName: '' },
+          ready: Promise.resolve(),
           sessionContext: { kernelManager: { startNew: jest.fn() } }
         }
       } as any;
-      const result = await lease(wb);
+      const result = await lease(workbook);
       expect(result).toBeNull();
     });
 
@@ -179,6 +191,36 @@ describe('kernels', () => {
       expect(failing.shutdown).toHaveBeenCalled();
     });
 
+    it('reuses kernel when restart reports 201 created', async () => {
+      const name = named();
+      const response = { status: 201 };
+      const fresh = spawn({ hasPendingInput: true, name });
+      const mock = spawn({
+        clone: jest.fn(() => fresh),
+        name,
+        restart: () => Promise.reject({ response })
+      });
+      const workbook = create({
+        name,
+        kernelManager: { startNew: jest.fn(async () => mock) }
+      });
+
+      const first = await lease(workbook);
+      expect(first).not.toBeNull();
+      await first![1]();
+
+      const second = await lease(workbook);
+      expect(second).not.toBeNull();
+      expect(second![0]).toBe(fresh);
+      expect(mock.clone).toHaveBeenCalledTimes(1);
+      expect(mock.dispose).toHaveBeenCalledTimes(1);
+      expect(mock.shutdown).not.toHaveBeenCalled();
+      expect(fresh.hasPendingInput).toBe(false);
+      expect(
+        workbook.context.sessionContext.kernelManager.startNew
+      ).toHaveBeenCalledTimes(1);
+    });
+
     it('evicts kernel after TTL expires', async () => {
       const name = named();
       const mock = spawn({ name });
@@ -199,19 +241,18 @@ describe('kernels', () => {
         name,
         kernelManager: { startNew: jest.fn(async () => mock) }
       });
-      const first = await lease(workbook);
-      await first![1]();
-      jest.advanceTimersByTime(5000);
+
+      const leased = await lease(workbook);
+      expect(leased).not.toBeNull();
+      await leased![1]();
       expect(mock.shutdown).not.toHaveBeenCalled();
     });
 
     it('limits outstanding leases to workers', async () => {
       const name = named();
       const workbook = create({ name });
-      // workers = 3 (drain default); acquire all three slots
       const first3 = [lease(workbook), lease(workbook), lease(workbook)];
 
-      // 4th lease must wait
       const fourth = lease(workbook);
       let resolved = false;
       void fourth.then(() => {
@@ -221,10 +262,48 @@ describe('kernels', () => {
       await Promise.all(first3);
       expect(resolved).toBe(false);
 
-      // Release one slot; fourth should now unblock
       await (await first3[0])![1]();
       await fourth;
       expect(resolved).toBe(true);
+    });
+
+    it('holds the slot while restart is in flight', async () => {
+      const name = named();
+      let resolve: (() => void) | null = null;
+      const workbook = create({
+        name,
+        kernelManager: {
+          startNew: jest.fn(async () =>
+            spawn({
+              name,
+              restart: () =>
+                new Promise<void>(done => {
+                  resolve = done;
+                })
+            })
+          )
+        }
+      });
+
+      const first = await lease(workbook);
+      expect(first).not.toBeNull();
+
+      const release = first![1]();
+      const second = lease(workbook);
+      let freed = false;
+      void second.then(() => {
+        freed = true;
+      });
+
+      await Promise.resolve();
+      expect(freed).toBe(false);
+
+      expect(resolve).not.toBeNull();
+      const done: () => void = resolve || (() => undefined);
+      done();
+      await release;
+      await second;
+      expect(freed).toBe(true);
     });
   });
 });

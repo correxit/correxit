@@ -1,4 +1,4 @@
-import { expect } from '@jupyterlab/galata';
+import { expect } from './fixtures';
 
 export interface Cell {
   id: string;
@@ -18,12 +18,22 @@ export interface Fixture {
  * "Directory not found" dialog that blocks subsequent UI interactions.
  */
 export async function cd(page: any, path = '.'): Promise<void> {
-  await page.evaluate(async (path: string) => {
+  await page.locator('body').evaluate(async (_: Element, path: string) => {
     const app = (window as any).jupyterapp;
     if (app.commands.hasCommand('filebrowser:go-to-path')) {
       await app.commands.execute('filebrowser:go-to-path', { path });
     }
   }, path);
+}
+
+export async function shutdown(page: any): Promise<void> {
+  await page
+    .locator('body')
+    .evaluate(async () => {
+      const app = (window as any).jupyterapp;
+      await app.serviceManager.sessions.shutdownAll();
+    })
+    .catch(() => {});
 }
 
 /**
@@ -35,8 +45,12 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
 
   const name = await page.notebook.createNew();
   expect(name).toBeTruthy();
-  await page.evaluate(
-    ({ cells }: { cells: Cell[] }) => {
+  await page.waitForFunction((name: string) => {
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    return panel?.context?.path === name && !panel.context.isDisposed;
+  }, name);
+  await page.locator('body').evaluate(
+    (_: Element, { cells }: { cells: Cell[] }) => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
       const notebook = panel.context.model.sharedModel;
       while (notebook.cells.length) {
@@ -56,10 +70,14 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
 
   return {
     async dispose() {
-      await cd(page, '.');
-      await page.notebook.close(true);
-      if (name) {
-        await page.contents.deleteFile(name);
+      try {
+        await cd(page, '.').catch(() => {});
+        await page.notebook.close(true).catch(() => {});
+        if (name) {
+          await page.contents.deleteFile(name).catch(() => {});
+        }
+      } finally {
+        await shutdown(page);
       }
     }
   };
@@ -71,5 +89,99 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
 export async function reviewer(page: any): Promise<void> {
   await expect(page.locator('.correxit-reviewer')).toBeVisible();
   await expect(page.locator('.correxit-reviewer-idle')).toHaveCount(0);
-  await expect(page.getByLabel('Current cell')).toBeVisible();
+  await expect(
+    page.locator(
+      '.correxit-reviewer .correxit-reviewer-source[aria-label="Current cell"]'
+    )
+  ).toBeVisible();
 }
+
+/**
+ * Wait until corrector is interactive and has a focusable row.
+ */
+export async function corrector(page: any): Promise<void> {
+  await expect(page.locator('.correxit-corrector')).toBeVisible();
+  await expect(
+    page.locator('.correxit-corrector tbody tr[tabindex="0"]').first()
+  ).toBeVisible();
+}
+
+/**
+ * Deletes propagated workbook files and their parent directory.
+ */
+export async function cleanup(
+  page: any,
+  { directory, paths }: { directory: string; paths: string[] }
+): Promise<void> {
+  await cd(page, '.');
+  await page.evaluate(
+    async ({ directory, paths }: { directory: string; paths: string[] }) => {
+      const contents = (window as any).jupyterapp.serviceManager.contents;
+      for (const path of paths) {
+        await contents.delete(path).catch(() => {});
+      }
+      await contents.delete(directory).catch(() => {});
+    },
+    { directory, paths }
+  );
+}
+
+/**
+ * Disposes corrector and reviewer widgets, then shuts down all sessions.
+ */
+export async function close(page: any): Promise<void> {
+  await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    const widgets = Array.from(app.shell.widgets('main')) as Array<{
+      dispose: () => void;
+      id: string;
+    }>;
+    for (const widget of widgets) {
+      if (widget.id === 'correxit-corrector-widget') widget.dispose();
+      if (widget.id === 'correxit-reviewer-widget') widget.dispose();
+    }
+  });
+  await shutdown(page);
+}
+
+/** PGP key pair for test workbooks. */
+export const keys = {
+  private: {
+    assignee: null,
+    author: `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+xUkEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6EgDjg6P4
+JzjqjCIqEGS8Fljrm2FRMpbWiOpUK0TnIETO1g+6zQ1jb3JyZXhpdC10ZXN0
+wsAPBBMbCgCFBYJpwc62AwsJBwkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBu
+b3RhdGlvbnMub3BlbnBncGpzLm9yZ7aeKcxlxXAmARYftBEDMKuRQYKOg+mi
+UNWWvS5pYKcDBRUKCA4MBBYAAgECGQECmwMCHgEWIQRwUHQWg+0lDFYSIKj/
+5WnPG54aeAAAwjLPzmdRtiPAQG4qh7YcqTxABlF/i6mcuUNsQvG79Vkcbgud
+48ZND/OAA3qRMBHeYvEI2EO0zcY4TvGjusPeGNQFx0kEacHOthmr6un0sKA9
+X4aGqEOxqYXCkcUuYSxJoSj3QI47TNOWYwAIuAZB5UGbE5vjq7JFdu682Hnl
+jhYm3Vce+dJFbxnudxBqwroEGBsKAHAFgmnBzrYJEP/lac8bnhp4RRQAAAAA
+ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmeDvNANjX21V+sInrrh
+T7QjHE6/sBEVbi2IVTWRo3ft/wKbDBYhBHBQdBaD7SUMVhIgqP/lac8bnhp4
+AADxaOwzJYh0FXQdc4Y5Vj8oSkixYJTh1YKqdnzbdcL9bjoEpwFbocEVhiil
+wuHeBt2QJmRrZohWA1uC36BzzqaMqQk=
+=3rAl
+-----END PGP PRIVATE KEY BLOCK-----`
+  },
+  public: {
+    assignee: null,
+    author: `-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+xiYEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6Es0NY29y
+cmV4aXQtdGVzdMLADwQTGwoAhQWCacHOtgMLCQcJEP/lac8bnhp4RRQAAAAA
+ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcme2ninMZcVwJgEWH7QR
+AzCrkUGCjoPpolDVlr0uaWCnAwUVCggODAQWAAIBAhkBApsDAh4BFiEEcFB0
+FoPtJQxWEiCo/+VpzxueGngAAMIyz85nUbYjwEBuKoe2HKk8QAZRf4upnLlD
+bELxu/VZHG4LnePGTQ/zgAN6kTAR3mLxCNhDtM3GOE7xo7rD3hjUBc4mBGnB
+zrYZq+rp9LCgPV+GhqhDsamFwpHFLmEsSaEo90COO0zTlmPCugQYGwoAcAWC
+acHOtgkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBn
+cGpzLm9yZ4O80A2NfbVX6wieuuFPtCMcTr+wERVuLYhVNZGjd+3/ApsMFiEE
+cFB0FoPtJQxWEiCo/+VpzxueGngAAPFo7DMliHQVdB1zhjlWPyhKSLFglOHV
+gqp2fNt1wv1uOgSnAVuhwRWGKKXC4d4G3ZAmZGtmiFYDW4LfoHPOpoypCQ==
+=3+uO
+-----END PGP PUBLIC KEY BLOCK-----`
+  }
+} as const;

@@ -5,7 +5,17 @@ import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { Assignment } from './assignment';
 
+type Tone =
+  | 'active'
+  | 'certified'
+  | 'collected'
+  | 'issued'
+  | 'locked'
+  | 'plain'
+  | 'submitted'
+  | 'template';
 type TranslationBundle = IRenderMime.TranslationBundle;
+type Phase = { kind: string; note: string; tone: Tone };
 
 const {
   certify,
@@ -18,6 +28,203 @@ const {
   submit,
   unlock
 } = Correxit.CommandIDs;
+
+const trail = (
+  assignment: Rubric.Assignment,
+  trans: TranslationBundle,
+  unstarted: boolean
+) => {
+  const { certification, collected, distribution, submission, submitted } =
+    assignment;
+  const lines: string[] = [];
+  if (distribution !== null)
+    lines.push(trans.__('Distribution %1', Rubric.timestamp(distribution)));
+  if (submission !== null)
+    lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
+  if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
+  if (certification !== null)
+    lines.push(trans.__('Certification %1', Rubric.timestamp(certification)));
+  if (collected !== null) lines.push(trans.__('Collected: %1', collected));
+  if (unstarted) lines.push(trans.__('Unstarted'));
+  return lines;
+};
+
+const phase = (
+  rubric: Rubric | null,
+  trans: TranslationBundle,
+  unstarted: boolean
+): Phase => {
+  if (!rubric) {
+    return {
+      kind: trans.__('Notebook'),
+      note: trans.__('Convert this notebook to begin authoring.'),
+      tone: 'plain'
+    };
+  }
+
+  const { assignment, locked } = rubric;
+  if (!assignment.assignee) {
+    return locked
+      ? {
+          kind: trans.__('Locked template'),
+          note: trans.__('Unlock to continue authoring.'),
+          tone: 'locked'
+        }
+      : {
+          kind: trans.__('Template'),
+          note: trans.__('Configure cells, roster, and deadline below.'),
+          tone: 'template'
+        };
+  }
+  if (assignment.collected !== null) {
+    return {
+      kind: trans.__('Collected'),
+      note: trans.__('Grade receipt recorded.'),
+      tone: 'collected'
+    };
+  }
+  if (assignment.certification !== null) {
+    return locked
+      ? {
+          kind: trans.__('Certified'),
+          note: trans.__('Unlock to inspect or collect.'),
+          tone: 'certified'
+        }
+      : {
+          kind: trans.__('Ready to collect'),
+          note: trans.__('Record the collection receipt.'),
+          tone: 'certified'
+        };
+  }
+  if (assignment.submission !== null) {
+    if (assignment.seal !== null) {
+      return {
+        kind: trans.__('Sealed submission'),
+        note: trans.__('Revision needs the submission passphrase.'),
+        tone: 'submitted'
+      };
+    }
+    return locked
+      ? {
+          kind: trans.__('Submitted'),
+          note: trans.__('Keep it locked unless revision is needed.'),
+          tone: 'submitted'
+        }
+      : {
+          kind: trans.__('Open submission'),
+          note: trans.__('Revert to draft or continue grading.'),
+          tone: 'active'
+        };
+  }
+  if (unstarted) {
+    return assignment.distribution === null
+      ? {
+          kind: trans.__('Issued'),
+          note: trans.__('Deliver this workbook next.'),
+          tone: 'issued'
+        }
+      : {
+          kind: trans.__('Distributed'),
+          note: trans.__('The assignee can begin work.'),
+          tone: 'issued'
+        };
+  }
+  if (assignment.distribution !== null) {
+    return {
+      kind: trans.__('Distributed'),
+      note: trans.__('Await submission.'),
+      tone: 'issued'
+    };
+  }
+  return locked
+    ? {
+        kind: trans.__('Locked'),
+        note: trans.__('Unlock to inspect or continue.'),
+        tone: 'locked'
+      }
+    : {
+        kind: trans.__('Open workbook'),
+        note: trans.__('Certify when grading is complete.'),
+        tone: 'active'
+      };
+};
+
+const step = (
+  rubric: Rubric | null,
+  trans: TranslationBundle,
+  distributable: boolean
+) => {
+  if (!rubric) {
+    return {
+      body: trans.__('Convert this notebook to create a workbook.'),
+      command: convert
+    };
+  }
+
+  const { assignment, locked } = rubric;
+  if (!assignment.assignee) {
+    return locked
+      ? {
+          body: trans.__('Unlock to continue authoring.'),
+          command: null
+        }
+      : {
+          body: trans.__('Finish cell setup, roster, and deadline first.'),
+          command: null
+        };
+  }
+  if (distributable) {
+    return {
+      body: trans.__('Record delivery before treating this as student work.'),
+      command: distribute
+    };
+  }
+  if (!locked && assignment.certification !== null && !assignment.collected) {
+    return {
+      body: trans.__('Record the certified grade.'),
+      command: collect
+    };
+  }
+  if (!locked && assignment.certification === null) {
+    return {
+      body: trans.__('Certify when every graded cell is resolved.'),
+      command: certify
+    };
+  }
+  if (assignment.submission !== null && assignment.seal !== null) {
+    return {
+      body: trans.__('Use the submission passphrase to revise.'),
+      command: revise
+    };
+  }
+  if (assignment.submission !== null) {
+    return {
+      body: trans.__('Revert to draft only if editing must resume.'),
+      command: draft
+    };
+  }
+  if (
+    locked &&
+    assignment.assignee &&
+    assignment.distribution !== null &&
+    assignment.certification === null
+  ) {
+    return {
+      body: trans.__('Submit when the assignee is finished.'),
+      command: submit
+    };
+  }
+  if (assignment.certification !== null) {
+    return {
+      body: trans.__('Unlock to inspect or collect.'),
+      command: null
+    };
+  }
+  return {
+    body: trans.__('Continue working.'),
+    command: null
+  };
+};
 
 export const Header: React.FC<{
   commands: CommandRegistry;
@@ -33,6 +240,7 @@ export const Header: React.FC<{
         <div className="correxit-sidebar-inner-header">
           <h4>{trans.__('Correxit: idle')}</h4>
         </div>
+        <p>{trans.__('Open a notebook to inspect its state.')}</p>
       </section>
     );
   }
@@ -51,11 +259,6 @@ export const Header: React.FC<{
   const titled = scored
     ? trans.__('%1 (%2 of %3)', heading, score.points, score.possible)
     : heading;
-  const submitted = assignment?.submission !== null;
-  const sealed = assignment?.seal !== null;
-  const unlocked = !!rubric && !rubric.locked;
-  const certified = assignment?.certification !== null;
-  const collected = assignment?.collected !== null;
   const unstarted = useUnstarted(workbook, rubric);
   const distributable =
     assignment !== null &&
@@ -63,15 +266,11 @@ export const Header: React.FC<{
     assignment.issue !== null &&
     assignment.issuer !== null &&
     assignment.distribution === null;
-  const action = unlocked
-    ? certified && !collected
-      ? collect
-      : certify
-    : submitted && sealed
-      ? revise
-      : submitted
-        ? draft
-        : submit;
+  const view = phase(rubric, trans, unstarted);
+  const next = step(rubric, trans, distributable);
+  const lines = assignment ? trail(assignment, trans, unstarted) : [];
+  const line = lines.at(-1) || '';
+  const title = lines.join('\n');
   return (
     <section
       aria-label={trans.__('Workbook summary')}
@@ -84,14 +283,39 @@ export const Header: React.FC<{
           <CommandToolbarButtonComponent commands={commands} id={unlock} />
         </div>
       </div>
-      {!!rubric && <Assignment {...{ commands, trans, workbook }} />}
-      <CommandToolbarButtonComponent commands={commands} id={convert} />
-      <div className="correxit-sidebar-submission-actions">
-        <Lifecycle {...{ rubric, trans, unstarted }} />
-        {distributable && (
-          <CommandToolbarButtonComponent commands={commands} id={distribute} />
+      <div className={`correxit-sidebar-phase cxt-mod-${view.tone}`}>
+        <div className="correxit-sidebar-phase-bar">
+          <span className="correxit-sidebar-phase-label">
+            {trans.__('Phase')}
+          </span>
+          <span className="correxit-sidebar-phase-chip">{view.kind}</span>
+        </div>
+        <div className="correxit-sidebar-phase-copy">{view.note}</div>
+        {!!line && (
+          <div
+            className="correxit-sidebar-phase-tail"
+            title={title || undefined}
+          >
+            {line}
+          </div>
         )}
-        <CommandToolbarButtonComponent commands={commands} id={action} />
+      </div>
+      {!!rubric && <Assignment {...{ commands, trans, workbook }} />}
+      <div className="correxit-sidebar-next">
+        <div className="correxit-sidebar-next-copy">
+          <span className="correxit-sidebar-next-label">
+            {trans.__('Next')}
+          </span>
+          <span className="correxit-sidebar-next-body">{next.body}</span>
+        </div>
+        {next.command && (
+          <div className="correxit-sidebar-next-actions">
+            <CommandToolbarButtonComponent
+              commands={commands}
+              id={next.command}
+            />
+          </div>
+        )}
       </div>
     </section>
   );
@@ -124,60 +348,3 @@ function useUnstarted(workbook: Workbook, rubric: Rubric | null): boolean {
 
   return unstarted;
 }
-
-const Lifecycle: React.FC<{
-  rubric: Rubric | null;
-  trans: TranslationBundle;
-  unstarted: boolean;
-}> = ({ rubric, trans, unstarted }) => {
-  if (!rubric) return <></>;
-
-  const {
-    assignment: {
-      assignee,
-      certification,
-      collected,
-      distribution,
-      submission,
-      submitted
-    }
-  } = rubric;
-  const blank_slate =
-    unstarted &&
-    certification === null &&
-    collected === null &&
-    distribution === null &&
-    submission === null &&
-    submitted === null;
-  const lines: string[] = [];
-  if (distribution !== null)
-    lines.push(trans.__('Distribution %1', Rubric.timestamp(distribution)));
-  if (submission !== null)
-    lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
-  if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
-  if (certification !== null)
-    lines.push(trans.__('Certification %1', Rubric.timestamp(certification)));
-  if (collected !== null) lines.push(trans.__('Collected: %1', collected));
-  if (blank_slate) lines.push(trans.__('Unstarted'));
-
-  const label = lines.length
-    ? lines[lines.length - 1]
-    : assignee
-      ? trans.__('Started')
-      : trans.__('Unsubmitted');
-  const title = lines.length
-    ? lines.join('\n')
-    : assignee
-      ? trans.__('Started')
-      : trans.__('Unsubmitted');
-  return (
-    <div
-      aria-label={title}
-      className="correxit-sidebar-submission-chip"
-      role="status"
-      title={title}
-    >
-      {label}
-    </div>
-  );
-};

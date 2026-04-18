@@ -49,10 +49,12 @@ export function drain(): void {
   for (const entries of pool.values()) {
     for (const { timer, kernel } of entries) {
       clearTimeout(timer);
-      dispose(kernel);
+      void dispose(kernel);
     }
   }
   pool.clear();
+  attempts = 1;
+  lifespan = 60;
   live = 0;
   recycling = 0;
   workers = 3;
@@ -69,7 +71,7 @@ export function drain(): void {
 export async function lease(workbook: Workbook): Promise<Leased | null> {
   await acquire();
 
-  const name = workbook.context.model.defaultKernelName;
+  const name = await settle(workbook);
   const kernel = revive(take(name)) ?? await start(workbook);
   if (!kernel) {
     relinquish();
@@ -81,19 +83,16 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
     if (released) return;
     released = true;
     kernel.interrupt().catch(() => {});
-    dispose(kernel);
+    void dispose(kernel);
     relinquish();
   };
-
   const deadline = lifespan > 0 ? setTimeout(expire, lifespan * 1000) : null;
-
   const reclaim = async () => {
     if (released) return;
     released = true;
     if (deadline) clearTimeout(deadline);
     await recycle(kernel);
   };
-
   return [kernel, reclaim];
 }
 
@@ -115,16 +114,16 @@ async function acquire(): Promise<void> {
 }
 
 /** Shuts down and disposes a kernel. Idempotent. */
-function dispose(kernel: Kernel.IKernelConnection): void {
-  if (kernel.isDisposed) return;
-  kernel.shutdown().catch(() => {}).finally(() => kernel.dispose());
+async function dispose(kernel: Kernel.IKernelConnection): Promise<void> {
+  if (!kernel.isDisposed)
+    return kernel.shutdown().catch(() => {}).finally(() => kernel.dispose());
 }
 
 /** Removes a kernel from the pool and disposes it (TTL callback). */
 function evict(kernel: Kernel.IKernelConnection): void {
   const name = kernel.name;
   pool.set(name, shelf(name).filter(idle => idle.kernel !== kernel));
-  dispose(kernel);
+  void dispose(kernel);
 }
 
 /** Caches an idle kernel with TTL eviction. Evicts oldest on overflow. */
@@ -134,9 +133,37 @@ function keep(kernel: Kernel.IKernelConnection): void {
   if (entries.length >= workers) {
     const oldest = entries.shift()!;
     clearTimeout(oldest.timer);
-    dispose(oldest.kernel);
+    void dispose(oldest.kernel);
   }
   entries.push(idle);
+}
+
+/** Restarts a kernel, tolerating servers that return `201 Created`. */
+async function restart(
+  kernel: Kernel.IKernelConnection
+): Promise<Kernel.IKernelConnection> {
+  try {
+    await kernel.restart();
+    return kernel;
+  } catch (error) {
+    const response =
+      error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { status?: number } }).response
+        : null;
+    if (response?.status !== 201) throw error;
+
+    const fresh = kernel.clone();
+    // Dispose only the stale client connection. The restarted kernel lives on.
+    kernel.dispose();
+    try {
+      await fresh.info;
+      fresh.hasPendingInput = false;
+      return fresh;
+    } catch (error) {
+      fresh.dispose();
+      throw error;
+    }
+  }
 }
 
 /** Restarts a kernel and returns it to the pool, or disposes on failure. */
@@ -147,10 +174,10 @@ async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('restart timeout')), 10_000)
     );
-    await Promise.race([kernel.restart(), timeout]);
-    keep(kernel);
+    const fresh = await Promise.race([restart(kernel), timeout]);
+    keep(fresh);
   } catch {
-    dispose(kernel);
+    await dispose(kernel);
   } finally {
     recycling--;
     waiters.shift()?.();
@@ -168,6 +195,13 @@ function revive(idle: Idle | null): Kernel.IKernelConnection | null {
   return idle && !idle.kernel.isDisposed ? idle.kernel : null;
 }
 
+/** @returns the default kernel name after waiting for the document model. */
+async function settle(workbook: Workbook): Promise<string> {
+  const { context } = workbook;
+  await context.ready.catch(() => {});
+  return context.model.defaultKernelName;
+}
+
 /** @returns the idle-kernel list for `name`, creating it on first access. */
 function shelf(name: string): Idle[] {
   let entries = pool.get(name);
@@ -180,7 +214,7 @@ async function start(
   workbook: Workbook
 ): Promise<Kernel.IKernelConnection | null> {
   const { kernelManager } = workbook.context.sessionContext;
-  const name = workbook.context.model.defaultKernelName;
+  const name = await settle(workbook);
   if (!kernelManager || !name) {
     console.warn('kernels: missing kernel manager or name');
     return null;

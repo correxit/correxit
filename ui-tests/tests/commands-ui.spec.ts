@@ -1,10 +1,37 @@
-import { expect, test } from '@jupyterlab/galata';
-import { setup } from './utils';
+import { expect, test } from './fixtures';
+import { Cell, Fixture, setup } from './utils';
 
 test.use({ autoGoto: false });
 
+const ready = async (page: any) => {
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const app = (window as any).jupyterapp;
+          return {
+            bridge: !!(window as any).__correxit__,
+            convert:
+              !!app?.commands?.hasCommand &&
+              app.commands.hasCommand('correxit:convert'),
+            launch:
+              !!app?.commands?.hasCommand &&
+              app.commands.hasCommand('correxit:launch')
+          };
+        }),
+      { timeout: 30000 }
+    )
+    .toEqual({ bridge: true, convert: true, launch: true });
+};
+
+const prepare = async (page: any, cells: Cell[]): Promise<Fixture> => {
+  const fixture = await setup(page, cells);
+  await ready(page);
+  return fixture;
+};
+
 test('commands are disabled without a workbook rubric', async ({ page }) => {
-  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
 
   const result = await page.evaluate(() => {
     const app = (window as any).jupyterapp;
@@ -15,6 +42,7 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
       }),
       assign: app.commands.isEnabled('correxit:assign'),
       convert: app.commands.isEnabled('correxit:convert'),
+      launch: app.commands.isEnabled('correxit:launch'),
       lock: app.commands.isEnabled('correxit:lock'),
       propagate: app.commands.isEnabled('correxit:propagate'),
       remove: app.commands.isEnabled('correxit:remove', { id: 'cell' }),
@@ -25,6 +53,7 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
   expect(result.add).toBe(false);
   expect(result.assign).toBe(false);
   expect(result.convert).toBe(true);
+  expect(result.launch).toBe(true);
   expect(result.lock).toBe(false);
   expect(result.propagate).toBe(false);
   expect(result.remove).toBe(false);
@@ -32,8 +61,32 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
   await dispose();
 });
 
+test('launch expands the Correxit sidebar', async ({ page }) => {
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const app = (window as any).jupyterapp;
+    const shell = app.shell as any;
+    shell.collapseRight();
+    const before = shell.rightCollapsed;
+    await app.commands.execute('correxit:launch');
+    return {
+      before,
+      after: shell.rightCollapsed
+    };
+  });
+
+  expect(result.before).toBe(true);
+  expect(result.after).toBe(false);
+  await expect(page.locator('.correxit-sidebar')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Correxit' })).toContainText(
+    'Correxit'
+  );
+  await dispose();
+});
+
 test('adds a comparable cell to the rubric', async ({ page }) => {
-  const { dispose } = await setup(page, [
+  const { dispose } = await prepare(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
@@ -85,7 +138,7 @@ test('adds a comparable cell to the rubric', async ({ page }) => {
 });
 
 test('adds a correctable cell to the rubric', async ({ page }) => {
-  const { dispose } = await setup(page, [
+  const { dispose } = await prepare(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'attempt' }
   ]);
@@ -133,7 +186,7 @@ test('adds a correctable cell to the rubric', async ({ page }) => {
 });
 
 test('removes a cell from the rubric', async ({ page }) => {
-  const { dispose } = await setup(page, [
+  const { dispose } = await prepare(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
@@ -179,7 +232,7 @@ test('removes a cell from the rubric', async ({ page }) => {
 });
 
 test('toggles secret flag on a rubric cell', async ({ page }) => {
-  const { dispose } = await setup(page, [
+  const { dispose } = await prepare(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
@@ -225,7 +278,7 @@ test('toggles secret flag on a rubric cell', async ({ page }) => {
 });
 
 test('sets a comment on a rubric cell', async ({ page }) => {
-  const { dispose } = await setup(page, [
+  const { dispose } = await prepare(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
@@ -273,7 +326,7 @@ test('sets a comment on a rubric cell', async ({ page }) => {
 });
 
 test('reweights cell points via command', async ({ page }) => {
-  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
 
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
@@ -314,7 +367,7 @@ test('reweights cell points via command', async ({ page }) => {
 });
 
 test('sets and clears intervention via command', async ({ page }) => {
-  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
 
   const result = await page.evaluate(async () => {
     const { Workbook, Rubric } = (window as any).__correxit__;
@@ -371,7 +424,7 @@ test('sets and clears intervention via command', async ({ page }) => {
 });
 
 test('locks workbook and encrypts reference cells', async ({ page }) => {
-  const { dispose } = await setup(page, [
+  const { dispose } = await prepare(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
@@ -424,7 +477,7 @@ test('locks workbook and encrypts reference cells', async ({ page }) => {
 });
 
 test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
-  const { dispose } = await setup(page, [
+  const { dispose } = await prepare(page, [
     { id: 'ref', source: 'answer' },
     { id: 'cell', source: 'compare' }
   ]);
@@ -496,7 +549,7 @@ test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
 });
 
 test('assigns workbook and updates assignment metadata', async ({ page }) => {
-  const { dispose } = await setup(page, []);
+  const { dispose } = await prepare(page, []);
 
   const result = await page.evaluate(async () => {
     const { Rubric, Workbook } = (window as any).__correxit__;

@@ -58,12 +58,13 @@
 
 .correxit-reviewer-minimap {
   align-content: start;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--jp-border-color1);
   gap: 1px 0;
   display: grid;
   min-height: 48px;
-  overflow: auto;
-  padding: 8px 0;
+  overflow: hidden auto;
+  padding: 8px 4px;
 }
 
 .correxit-reviewer-minimap-cell {

@@ -1,48 +1,7 @@
-import { expect, test } from '@jupyterlab/galata';
-import { cd, reviewer, setup } from './utils';
+import { expect, test } from './fixtures';
+import { cd, cleanup, close, corrector, keys, reviewer, setup } from './utils';
 
 test.use({ autoGoto: false });
-
-const keys = {
-  private: {
-    assignee: null,
-    author: `-----BEGIN PGP PRIVATE KEY BLOCK-----
-
-xUkEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6EgDjg6P4
-JzjqjCIqEGS8Fljrm2FRMpbWiOpUK0TnIETO1g+6zQ1jb3JyZXhpdC10ZXN0
-wsAPBBMbCgCFBYJpwc62AwsJBwkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBu
-b3RhdGlvbnMub3BlbnBncGpzLm9yZ7aeKcxlxXAmARYftBEDMKuRQYKOg+mi
-UNWWvS5pYKcDBRUKCA4MBBYAAgECGQECmwMCHgEWIQRwUHQWg+0lDFYSIKj/
-5WnPG54aeAAAwjLPzmdRtiPAQG4qh7YcqTxABlF/i6mcuUNsQvG79Vkcbgud
-48ZND/OAA3qRMBHeYvEI2EO0zcY4TvGjusPeGNQFx0kEacHOthmr6un0sKA9
-X4aGqEOxqYXCkcUuYSxJoSj3QI47TNOWYwAIuAZB5UGbE5vjq7JFdu682Hnl
-jhYm3Vce+dJFbxnudxBqwroEGBsKAHAFgmnBzrYJEP/lac8bnhp4RRQAAAAA
-ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmeDvNANjX21V+sInrrh
-T7QjHE6/sBEVbi2IVTWRo3ft/wKbDBYhBHBQdBaD7SUMVhIgqP/lac8bnhp4
-AADxaOwzJYh0FXQdc4Y5Vj8oSkixYJTh1YKqdnzbdcL9bjoEpwFbocEVhiil
-wuHeBt2QJmRrZohWA1uC36BzzqaMqQk=
-=3rAl
------END PGP PRIVATE KEY BLOCK-----`
-  },
-  public: {
-    assignee: null,
-    author: `-----BEGIN PGP PUBLIC KEY BLOCK-----
-
-xiYEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6Es0NY29y
-cmV4aXQtdGVzdMLADwQTGwoAhQWCacHOtgMLCQcJEP/lac8bnhp4RRQAAAAA
-ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcme2ninMZcVwJgEWH7QR
-AzCrkUGCjoPpolDVlr0uaWCnAwUVCggODAQWAAIBAhkBApsDAh4BFiEEcFB0
-FoPtJQxWEiCo/+VpzxueGngAAMIyz85nUbYjwEBuKoe2HKk8QAZRf4upnLlD
-bELxu/VZHG4LnePGTQ/zgAN6kTAR3mLxCNhDtM3GOE7xo7rD3hjUBc4mBGnB
-zrYZq+rp9LCgPV+GhqhDsamFwpHFLmEsSaEo90COO0zTlmPCugQYGwoAcAWC
-acHOtgkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBn
-cGpzLm9yZ4O80A2NfbVX6wieuuFPtCMcTr+wERVuLYhVNZGjd+3/ApsMFiEE
-cFB0FoPtJQxWEiCo/+VpzxueGngAAPFo7DMliHQVdB1zhjlWPyhKSLFglOHV
-gqp2fNt1wv1uOgSnAVuhwRWGKKXC4d4G3ZAmZGtmiFYDW4LfoHPOpoypCQ==
-=3+uO
------END PGP PUBLIC KEY BLOCK-----`
-  }
-} as const;
 
 /**
  * Creates a propagated workbook directory and returns cleanup metadata.
@@ -106,29 +65,59 @@ async function propagate(
         .filter(({ type }) => type === 'saved')
         .map(({ slots }) => slots[0] as string);
 
+      const contents = app.serviceManager.contents;
+      for (const path of paths) {
+        const file = await contents.get(path, {
+          content: true,
+          type: 'notebook'
+        });
+        const notebook = file.content;
+        notebook.metadata = { ...notebook.metadata, ...metadata };
+        await contents.save(path, { ...file, content: notebook });
+      }
+
       return { directory, paths };
     },
     { keys, metadata, roster }
   );
 }
 
-/**
- * Deletes the propagated directory and all workbook files.
- */
-async function cleanup(
-  page: any,
-  { directory, paths }: { directory: string; paths: string[] }
-) {
-  await page.evaluate(
-    async ({ directory, paths }: { directory: string; paths: string[] }) => {
-      const contents = (window as any).jupyterapp.serviceManager.contents;
-      for (const path of paths) {
-        await contents.delete(path).catch(() => {});
-      }
-      await contents.delete(directory).catch(() => {});
-    },
-    { directory, paths }
-  );
+async function focus(page: any) {
+  const row = page
+    .locator('.correxit-corrector tbody tr[tabindex="0"]')
+    .first();
+  await expect(row).toBeVisible();
+  await row.locator('.correxit-corrector-assignee').click();
+  await expect.poll(async () => row.getAttribute('aria-selected')).toBe('true');
+  await expect.poll(() => aligned(page)).toBe(true);
+  return row;
+}
+
+async function launch(page: any, path: string) {
+  await page.evaluate(async (path: string) => {
+    const app = (window as any).jupyterapp;
+    await app.commands.execute('correxit-corrector:launch', { path });
+  }, path);
+  await corrector(page);
+}
+
+const selected = (page: any) =>
+  page.locator('.correxit-corrector tbody tr[aria-selected="true"]');
+
+const active = (page: any) =>
+  page.locator('.correxit-corrector tbody tr[tabindex="0"]').first();
+
+const open = (page: any) =>
+  active(page).locator('.correxit-corrector-open button').first();
+
+async function aligned(page: any) {
+  return page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    const row = document.querySelector(
+      '.correxit-corrector tbody tr[aria-selected="true"]'
+    ) as HTMLElement | null;
+    return active?.getAttribute('data-path') === row?.getAttribute('data-path');
+  });
 }
 
 test('scans a directory and yields headless workbooks', async ({ page }) => {
@@ -295,36 +284,133 @@ test('reviewer uses notebook mimetype for code cells', async ({ page }) => {
   });
   await cd(page, '.');
 
-  await page.evaluate(async (directory: string) => {
-    const app = (window as any).jupyterapp;
-    await app.commands.execute('correxit-corrector:launch', {
-      path: directory
-    });
-  }, propagated.directory);
+  await launch(page, propagated.directory);
 
   const review = page.getByRole('button', { name: /^Review comparable:/ });
   await expect(review).toBeVisible();
   await review.click();
 
   await reviewer(page);
+  const current = page.locator(
+    '.correxit-reviewer .correxit-reviewer-source[aria-label="Current cell"]'
+  );
   await expect
-    .poll(async () =>
-      page.getByLabel('Current cell').getAttribute('data-mimetype')
-    )
+    .poll(async () => current.getAttribute('data-mimetype'))
     .toBe('application/sql');
 
-  await page.evaluate(() => {
-    const app = (window as any).jupyterapp;
-    const widgets = Array.from(app.shell.widgets('main')) as Array<{
-      dispose: () => void;
-      id: string;
-    }>;
-    for (const widget of widgets) {
-      if (widget.id === 'correxit-corrector-widget') widget.dispose();
-      if (widget.id === 'correxit-reviewer-widget') widget.dispose();
-    }
-  });
+  await close(page);
 
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('corrector navigates rows with keyboard', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+  await focus(page);
+
+  await expect(selected(page)).toContainText('alice@example.com');
+
+  await page.keyboard.press('ArrowDown');
+  await expect(selected(page)).toContainText('bob@example.com');
+  await expect.poll(() => aligned(page)).toBe(true);
+
+  await page.keyboard.press('ArrowUp');
+  await expect(selected(page)).toContainText('alice@example.com');
+  await expect.poll(() => aligned(page)).toBe(true);
+
+  await close(page);
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('corrector clears row selection with escape', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+  await focus(page);
+
+  await page.keyboard.press('Escape');
+  await expect(selected(page)).toHaveCount(0);
+  await expect(active(page)).toContainText('alice@example.com');
+  await expect(active(page)).toBeFocused();
+
+  await page.keyboard.press('ArrowDown');
+  await expect(selected(page)).toContainText('bob@example.com');
+  await expect.poll(() => aligned(page)).toBe(true);
+
+  await close(page);
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('corrector tabs to open button and escape returns to row', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, ['alice@example.com']);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+  await focus(page);
+
+  await page.keyboard.press('Tab');
+  await expect(open(page)).toBeFocused();
+  await expect(selected(page)).toContainText('alice@example.com');
+
+  await page.keyboard.press('Escape');
+  await expect(active(page)).toBeFocused();
+  await expect(selected(page)).toContainText('alice@example.com');
+  await expect.poll(() => aligned(page)).toBe(true);
+
+  await close(page);
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('corrector tabs into breakdown buttons and opens reviewer', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, ['alice@example.com']);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+  await focus(page);
+
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+
+  const review = page.getByRole('button', { name: /^Review comparable:/ });
+  await expect(review).toBeFocused();
+
+  await page.keyboard.press('Enter');
+  await reviewer(page);
+
+  await close(page);
   await cleanup(page, propagated);
   await dispose();
 });
@@ -369,6 +455,93 @@ test('batch grades and certifies workbooks', async ({ page }) => {
     expect(grade.status).not.toBe('unscored');
     expect(grade.possible).toBeGreaterThan(0);
   }
+
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('batch should bound live kernels across a larger roster', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const cap = 3;
+  const total = cap * 4;
+  const roster = Array.from(
+    { length: total },
+    (_, i) => `student${i}@example.com`
+  );
+  const propagated = await propagate(page, roster);
+  await cd(page, '.');
+
+  const result = await page.evaluate(async (directory: string) => {
+    const { Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const manager = app.serviceManager.kernels;
+    const start = manager.startNew.bind(manager);
+    await manager.refreshRunning();
+    const count = () =>
+      typeof manager.runningCount === 'number'
+        ? manager.runningCount
+        : Array.from(manager.running()).length;
+    const baseline = count();
+    let peak = 0;
+    const starts: string[] = [];
+    const sample = (models?: ArrayLike<unknown>) => {
+      const current = Array.isArray(models) ? models.length : count();
+      peak = Math.max(peak, Math.max(0, current - baseline));
+    };
+    const changed = (_: unknown, models: ArrayLike<unknown>) => sample(models);
+    manager.runningChanged.connect(changed);
+    manager.startNew = async (options: { name?: string }) => {
+      starts.push(options?.name ?? '');
+      const kernel = await start(options);
+      sample();
+      return kernel;
+    };
+    try {
+      const stream: AsyncGenerator<any> = await app.commands.execute(
+        'correxit-corrector:batch',
+        { key: 'secret', path: directory }
+      );
+      const grades: any[] = [];
+      for await (const [path, { grade, workbook }] of stream) {
+        const rubric = Workbook.open(workbook, true);
+        grades.push({
+          assignee: rubric?.assignment?.assignee ?? null,
+          certification: rubric?.assignment?.certification !== null,
+          path,
+          possible: grade.score.possible,
+          status: grade.score.status
+        });
+        sample();
+        workbook.context.dispose();
+      }
+      await manager.refreshRunning();
+      sample();
+      return {
+        grades: grades.sort((a, b) => a.path.localeCompare(b.path)),
+        peak,
+        starts
+      };
+    } finally {
+      manager.runningChanged.disconnect(changed);
+      manager.startNew = start;
+    }
+  }, propagated.directory);
+
+  expect(result.grades).toHaveLength(total);
+  for (const grade of result.grades) {
+    expect(roster).toContain(grade.assignee);
+    expect(grade.certification).toBe(true);
+    expect(grade.possible).toBeGreaterThan(0);
+    expect(grade.status).not.toBe('unscored');
+  }
+
+  expect(result.peak).toBeLessThanOrEqual(cap);
+  expect(result.starts.length).toBeLessThan(total);
 
   await cleanup(page, propagated);
   await dispose();

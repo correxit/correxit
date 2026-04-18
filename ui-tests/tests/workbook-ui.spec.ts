@@ -1,5 +1,5 @@
-import { expect, test } from '@jupyterlab/galata';
-import { setup } from './utils';
+import { expect, test } from './fixtures';
+import { setup, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -218,6 +218,80 @@ test('unlock keeps the manual roster plaintext in the sidebar', async ({
   await dispose();
 });
 
+test('manual roster editing updates assignee choices live', async ({
+  page
+}) => {
+  const read = () =>
+    page.evaluate(() => {
+      const { Workbook } = (window as any).__correxit__;
+      const app = (window as any).jupyterapp;
+      const panel = app.shell.currentWidget as any;
+      const rubric = Workbook.open(panel, true);
+      return rubric
+        ? {
+            assignee: rubric.assignment.assignee,
+            roster: rubric.assignment.roster
+          }
+        : null;
+    });
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget as any;
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create());
+    await Workbook.update(panel, rubric);
+  });
+
+  await page.getByRole('tab', { name: 'Correxit' }).click();
+
+  const area = page.locator('textarea[name="correxit-assignment-roster"]');
+  await expect(area).toBeVisible();
+  await area.fill(
+    ' alice@example.com \n bob@example.com \n alice@example.com '
+  );
+
+  await expect.poll(read).toEqual({
+    assignee: '',
+    roster: ['alice@example.com', 'bob@example.com']
+  });
+
+  await page.selectOption(
+    'select[name="correxit-assignment-assignee"]',
+    'bob@example.com'
+  );
+
+  await expect.poll(read).toEqual({
+    assignee: 'bob@example.com',
+    roster: ['alice@example.com', 'bob@example.com']
+  });
+
+  await area.fill('alice@example.com');
+
+  await expect.poll(read).toEqual({
+    assignee: '',
+    roster: ['alice@example.com']
+  });
+  await expect
+    .poll(async () =>
+      page.locator('select[name="correxit-assignment-assignee"]').inputValue()
+    )
+    .toBe('');
+
+  await dispose();
+});
+
 test('dropping registrar keeps assigned roster details', async ({ page }) => {
   const assignee = 'student@example.com';
   const id = 'course:assignment';
@@ -355,9 +429,11 @@ test('dropping registrar keeps assigned roster details', async ({ page }) => {
         delete context.__correxit_now;
       })
       .catch(() => {});
-    if (!file) return;
-    await page.notebook.close(true).catch(() => {});
-    await page.contents.deleteFile(file).catch(() => {});
+    if (file) {
+      await page.notebook.close(true).catch(() => {});
+      await page.contents.deleteFile(file).catch(() => {});
+    }
+    await shutdown(page);
   }
 });
 
