@@ -18,7 +18,7 @@ export interface Fixture {
  * "Directory not found" dialog that blocks subsequent UI interactions.
  */
 export async function cd(page: any, path = '.'): Promise<void> {
-  await page.evaluate(async (path: string) => {
+  await page.locator('body').evaluate(async (_: Element, path: string) => {
     const app = (window as any).jupyterapp;
     if (app.commands.hasCommand('filebrowser:go-to-path')) {
       await app.commands.execute('filebrowser:go-to-path', { path });
@@ -28,6 +28,7 @@ export async function cd(page: any, path = '.'): Promise<void> {
 
 export async function shutdown(page: any): Promise<void> {
   await page
+    .locator('body')
     .evaluate(async () => {
       const app = (window as any).jupyterapp;
       await app.serviceManager.sessions.shutdownAll();
@@ -48,8 +49,8 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     return panel?.context?.path === name && !panel.context.isDisposed;
   }, name);
-  await page.evaluate(
-    ({ cells }: { cells: Cell[] }) => {
+  await page.locator('body').evaluate(
+    (_: Element, { cells }: { cells: Cell[] }) => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
       const notebook = panel.context.model.sharedModel;
       while (notebook.cells.length) {

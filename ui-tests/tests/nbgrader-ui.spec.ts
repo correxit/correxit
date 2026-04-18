@@ -1023,44 +1023,21 @@ test.describe('nbgrader conversion (fixtures)', () => {
  * Runs `Workbook.correct()` which executes all cells in kernel
  * order and evaluates test references.
  */
-async function score(
-  page: any,
-  retries = 3
-): Promise<{
+async function score(page: any): Promise<{
   points: number;
   possible: number;
   status: string;
 }> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const result = await page.evaluate(async () => {
-        const { Workbook } = (window as any).__correxit__;
-        const panel = (window as any).jupyterapp.shell.currentWidget;
-        const { score } = await Workbook.correct(panel);
-        return {
-          points: score.points,
-          possible: score.possible,
-          status: score.status
-        };
-      });
-      const retry =
-        result.status === 'unscored' ||
-        (result.status === 'incorrect' && result.points === 0);
-      if (!retry || attempt === retries) return result;
-    } catch (e) {
-      if (attempt === retries) throw e;
-    }
-    // Restart the kernel before retrying so a corrupted session is replaced.
-    await page
-      .evaluate(async () => {
-        const panel = (window as any).jupyterapp.shell.currentWidget;
-        const kernel = panel?.context?.sessionContext?.session?.kernel;
-        if (kernel) await kernel.restart();
-      })
-      .catch(() => {});
-    await page.waitForTimeout(2000);
-  }
-  throw new Error('score: unreachable');
+  return page.evaluate(async () => {
+    const { Workbook } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const { score } = await Workbook.correct(panel);
+    return {
+      points: score.points,
+      possible: score.possible,
+      status: score.status
+    };
+  });
 }
 
 /**
@@ -1118,7 +1095,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
     // Student replaces the answer with something wrong.
     await rewrite(page, 0, 'x = "not a number"');
 
-    const result = await score(page, 0);
+    const result = await score(page);
     expect(result.status).toBe('incorrect');
     expect(result.points).toBe(0);
     expect(result.possible).toBe(2);
@@ -1355,7 +1332,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await load(page, 'autotest-simple-unchanged.ipynb');
     await convert(page);
 
-    const result = await score(page, 0);
+    const result = await score(page);
     expect(result.possible).toBe(1);
     expect(result.points).toBe(0);
   });
@@ -1397,7 +1374,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await load(page, 'autotest-hidden-unchanged.ipynb');
     await convert(page);
 
-    const result = await score(page, 0);
+    const result = await score(page);
     expect(result.possible).toBe(1);
     expect(result.points).toBe(0);
   });
@@ -1423,7 +1400,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await load(page, 'autotest-hashed-unchanged.ipynb');
     await convert(page);
 
-    const result = await score(page, 0);
+    const result = await score(page);
     expect(result.possible).toBe(1);
     expect(result.points).toBe(0);
   });
@@ -1451,7 +1428,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await load(page, 'autotest-multi-unchanged.ipynb');
     await convert(page);
 
-    const result = await score(page, 0);
+    const result = await score(page);
     expect(result.possible).toBe(4);
     expect(result.points).toBe(0);
   });
