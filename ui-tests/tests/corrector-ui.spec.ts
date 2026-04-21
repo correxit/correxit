@@ -227,7 +227,7 @@ test('scan does not silence next fetch after first fetch failure', async ({
   ]);
   await cd(page, '.');
 
-  const silentCalls = await page.evaluate(async (directory: string) => {
+  const silenced = await page.evaluate(async (directory: string) => {
     const app = (window as any).jupyterapp;
     const execute = app.commands.execute.bind(app.commands);
     const calls: boolean[] = [];
@@ -260,7 +260,7 @@ test('scan does not silence next fetch after first fetch failure', async ({
     }
   }, propagated.directory);
 
-  expect(silentCalls).toEqual([false, false]);
+  expect(silenced).toEqual([false, false]);
 
   await cleanup(page, propagated);
   await dispose();

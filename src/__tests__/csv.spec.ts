@@ -42,22 +42,8 @@ const report = (): Rubric.Assignment.Report => ({
 const assignment = (
   overrides: Partial<Rubric.Assignment> = {}
 ): Rubric.Assignment => ({
-  assignee: '',
-  certification: null,
-  collected: null,
-  distribution: null,
-  expiration: null,
-  id: null,
-  issue: '',
-  issuer: '',
-  keys: Rubric.Assignment.Keys.empty(),
-  mac: '',
-  name: '',
+  ...Rubric.Assignment.empty(),
   report: report(),
-  roster: [],
-  seal: null,
-  submission: null,
-  submitted: null,
   ...overrides
 });
 

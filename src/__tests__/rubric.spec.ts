@@ -367,6 +367,12 @@ describe('Rubric', () => {
       await expect(validate(tampered)).rejects.toThrow('match');
     });
 
+    it('requires a penalty for dock policy', async () => {
+      await expect(
+        Rubric.assign(create(), { overdue: 'dock', penalty: null })
+      ).rejects.toThrow('dock policy requires late penalty');
+    });
+
     it('computes and verifies an issued blank slate', async () => {
       const rubric = await Rubric.assign(create(), {
         assignee: 'student@example.com',
@@ -503,6 +509,19 @@ describe('Rubric', () => {
       const submitted = Rubric.submit(locked);
       expect(submitted.assignment.submission).toBeGreaterThan(0);
       expect(submitted.assignment.submitted).toBeNull();
+    });
+
+    it('records an explicit submission timestamp', async () => {
+      const unlocked = await Rubric.assign(create(), {
+        assignee: 'student@example.com',
+        roster: ['student@example.com'],
+        expiration: null
+      });
+      const locked = await Rubric.lock(unlocked);
+      const stamp = 123;
+      const submitted = Rubric.submit(locked, stamp);
+      expect(submitted.assignment.submission).toBe(stamp);
+      expect(submitted.revised).toBe(stamp);
     });
 
     it('drafts a submitted rubric', async () => {
@@ -1015,6 +1034,25 @@ describe('Rubric', () => {
       expect(summary.points).toBe(5);
       expect(summary.possible).toBe(15);
       expect(summary.status).toBe('summary');
+    });
+
+    it('docks a late summary by possible points', () => {
+      const report: Rubric.Assignment.Report = {
+        interventions: {},
+        kernel: null,
+        scores: {
+          c1: { ...Rubric.Score.CORRECT, points: 10, possible: 10 }
+        }
+      };
+      const summary = Rubric.Assignment.summary(report, {
+        expiration: 1,
+        overdue: 'dock',
+        penalty: 25,
+        submission: 2
+      });
+      expect(summary.points).toBe(7);
+      expect(summary.possible).toBe(10);
+      expect(summary.status).toBe('correct');
     });
   });
 

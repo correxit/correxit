@@ -265,6 +265,8 @@ export namespace Workbook {
       issuer = assignment.issuer,
       mac = assignment.mac,
       name = assignment.name,
+      overdue = assignment.overdue,
+      penalty = assignment.penalty,
       submission = assignment.submission,
       submitted = assignment.submitted,
       roster = assignment.roster,
@@ -277,6 +279,8 @@ export namespace Workbook {
     issuer !== assignment.issuer ||
     mac !== assignment.mac ||
     name !== assignment.name ||
+    overdue !== assignment.overdue ||
+    penalty !== assignment.penalty ||
     submission !== assignment.submission ||
     submitted !== assignment.submitted ||
     (roster !== assignment.roster &&
@@ -545,7 +549,7 @@ export namespace Workbook {
     let grade: Grade;
     if (bypass) {
       const { report } = rubric.assignment;
-      const score = Rubric.Assignment.summary(report);
+      const score = Rubric.Assignment.summary(report, rubric.assignment);
       const cells = Object.values(rubric.cells);
       const ungraded = cells.some(cell =>
         cell.is !== 'reviewable' &&
@@ -675,7 +679,7 @@ export namespace Workbook {
     const scored = Object.entries(report.scores);
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
-    const final = id ? report.scores[id] : summary(report);
+    const final = id ? report.scores[id] : summary(report, rubric.assignment);
     const missing = ({ id, is, references }: Rubric.Cell) => {
       if (is === 'reviewable') return false;
       return !outputs.has(id) ||
@@ -1101,11 +1105,19 @@ export namespace Workbook {
     if (!rubric?.locked) throw new Error.Submit('submit error');
     if (!recipients.length)
       throw new Error.Submit('submit error: missing seal recipients');
+    const submission = Date.now();
+    if (
+      rubric.assignment.overdue === 'reject' &&
+      Rubric.Assignment.late({
+        expiration: rubric.assignment.expiration,
+        submission
+      })
+    ) throw new Error.Submit('submit error: overdue rejected');
 
     const hash = await seal(workbook, rubric, recipients);
     const sealed = Rubric.seal(rubric, hash);
     freeze(workbook);
-    return update(workbook, Rubric.submit(sealed));
+    return update(workbook, Rubric.submit(sealed, submission));
   }
 
   /** Toggle a workbook reference's `secret` flag. */

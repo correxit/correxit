@@ -27,6 +27,8 @@ const blank = (assignment: Assignment): Assignment => ({
   expiration: null,
   id: null,
   name: '',
+  overdue: null,
+  penalty: null,
   roster: []
 });
 const equal = Equal.assignment;
@@ -35,7 +37,9 @@ const freeze = (assignment: Assignment, active: Registration): Assignment => ({
   ...active,
   assignee: active.roster.includes(assignment.assignee)
     ? assignment.assignee
-    : ''
+    : '',
+  overdue: null,
+  penalty: null
 });
 const courses = (registered: Registered): Course[] | null =>
   registered === null
@@ -62,6 +66,12 @@ const count = ({ roster }: Assignment, trans: TranslationBundle) =>
 
 const due = ({ expiration }: Assignment, trans: TranslationBundle) =>
   Rubric.timestamp(expiration, trans.__('No deadline'));
+
+const policy = ({ overdue, penalty }: Assignment, trans: TranslationBundle) => {
+  if (overdue === 'dock') return trans.__('Dock %1%', penalty ?? 0);
+  if (overdue === 'reject') return trans.__('Reject submission');
+  return trans.__('Accept late');
+};
 
 const headline = (
   { name }: Assignment,
@@ -235,6 +245,7 @@ export const Assignment: React.FC<{
           />
         )}
         {manual && <Expiration {...{ assignment, edit, locked, trans }} />}
+        {manual && <Overdue {...{ assignment, edit, locked, trans }} />}
       </div>
       {!locked && (
         <div className="correxit-assignment-propagate">
@@ -268,6 +279,12 @@ const Facts: React.FC<{
       value: due(assignment, trans)
     }
   ];
+  if (manual && assignment.expiration !== null) {
+    facts.push({
+      label: trans.__('Overdue'),
+      value: policy(assignment, trans)
+    });
+  }
   return (
     <div className="correxit-assignment-facts">
       {facts.map(({ label, value }) => (
@@ -365,7 +382,12 @@ const Expiration: React.FC<{
   };
   const update = (value: string) => {
     const expiration = value ? new Date(value).getTime() : null;
-    edit({ ...assignment, expiration });
+    edit({
+      ...assignment,
+      expiration,
+      overdue: expiration === null ? null : assignment.overdue,
+      penalty: expiration === null ? null : assignment.penalty
+    });
   };
   return (
     <div className={className}>
@@ -380,6 +402,88 @@ const Expiration: React.FC<{
           type="datetime-local"
           value={expiration ? format(expiration) : ''}
         />
+      </div>
+    </div>
+  );
+};
+
+const Overdue: React.FC<{
+  assignment: Assignment;
+  edit: (assignment: Assignment) => void;
+  locked: boolean;
+  trans: TranslationBundle;
+}> = ({ assignment, edit, locked, trans }) => {
+  const current = assignment.overdue ?? 'accept';
+  const initial = current === 'dock' ? String(assignment.penalty ?? 10) : '';
+  const [text, setText] = useState(initial);
+  useEffect(() => {
+    const next = current === 'dock' ? String(assignment.penalty ?? 10) : '';
+    setText(current => (current === next ? current : next));
+  }, [assignment.penalty, current]);
+  if (assignment.expiration === null) return null;
+  if (locked) {
+    return (
+      <div className="correxit-assignment-overdue">
+        <div>
+          <label>{trans.__('Overdue')}</label>
+          <div className="correxit-monospace">{policy(assignment, trans)}</div>
+        </div>
+      </div>
+    );
+  }
+
+  const update = (overdue: Exclude<Assignment['overdue'], null>) => {
+    edit({
+      ...assignment,
+      overdue,
+      penalty: overdue === 'dock' ? (assignment.penalty ?? 10) : null
+    });
+  };
+  const penalty = (value: string) => {
+    setText(value);
+    if (!value.trim()) return;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed)) return;
+    const penalty = Math.max(0, Math.min(100, parsed));
+    edit({ ...assignment, overdue: 'dock', penalty });
+  };
+  const reset = () => setText(String(assignment.penalty ?? 10));
+  return (
+    <div className="correxit-assignment-overdue">
+      <div>
+        <label htmlFor="correxit-assignment-overdue">
+          {trans.__('Overdue')}
+        </label>
+        <select
+          id="correxit-assignment-overdue"
+          name="correxit-assignment-overdue"
+          onChange={({ target: { value } }) =>
+            update(value as Exclude<Assignment['overdue'], null>)
+          }
+          value={current}
+        >
+          <option value="accept">{trans.__('Accept late')}</option>
+          <option value="dock">{trans.__('Dock score')}</option>
+          <option value="reject">{trans.__('Reject submission')}</option>
+        </select>
+        {current === 'dock' && (
+          <>
+            <div className="correxit-assignment-hint">
+              {trans.__('Percentage of possible points to deduct.')}
+            </div>
+            <input
+              id="correxit-assignment-penalty"
+              max={100}
+              min={0}
+              name="correxit-assignment-penalty"
+              onBlur={reset}
+              onChange={({ target: { value } }) => penalty(value)}
+              step={1}
+              type="number"
+              value={text}
+            />
+          </>
+        )}
       </div>
     </div>
   );

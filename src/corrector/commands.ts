@@ -389,7 +389,7 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const path = workbook.context.path;
   const { assignment } = rubric;
   const { report } = assignment;
-  const summary = Rubric.Assignment.summary(report);
+  const summary = Rubric.Assignment.summary(report, assignment);
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
 
@@ -429,7 +429,7 @@ function precertified(workbook: Headless): Certified | null {
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
   const uncertified = !assignment.certification;
-  const summary = Rubric.Assignment.summary(assignment.report);
+  const summary = Rubric.Assignment.summary(assignment.report, assignment);
   const unscored = summary.status === 'unscored';
   if (incomplete || partial || pending || uncertified || unscored) return null;
 

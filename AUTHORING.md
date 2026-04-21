@@ -220,6 +220,14 @@ per line) and an **assignment name** in the sidebar. If a Registrar
 plugin is configured (e.g., Moodle), roster and assignment metadata are
 fetched automatically.
 
+In manual mode, the sidebar deadline belongs to Correxit. You may choose
+an overdue policy: accept late work, dock the final score by a percentage
+of possible points, or reject submission after the deadline.
+
+If a Registrar plugin supplies the assignment metadata, Correxit treats
+that deadline as provider-owned registration data. It is displayed, but
+Correxit does not layer its own overdue policy on top of it.
+
 ### Propagating
 
 Click **Create _N_ assigned workbooks…** to distribute. Correxit creates

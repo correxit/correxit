@@ -17,6 +17,13 @@ import { manual } from '../correxit/collectors';
 import { Rubric } from '../correxit/rubric';
 import { Workbook } from '../correxit/workbook';
 
+const seed = (
+  overrides: Partial<Rubric.Assignment> = {}
+): Rubric.Assignment => ({
+  ...Rubric.Assignment.empty(),
+  ...overrides
+});
+
 const certified = (
   overrides: {
     assignee?: string;
@@ -36,24 +43,12 @@ const certified = (
     rubric = 'rubric-1'
   } = overrides;
 
-  const assignment: Rubric.Assignment = {
+  const assignment = seed({
     assignee,
     certification,
-    collected: null,
-    distribution: null,
-    expiration: null,
     id: '',
-    issue: '',
-    issuer: '',
-    keys: Rubric.Assignment.Keys.empty(),
-    mac: '',
-    name: '',
-    report: Rubric.Assignment.Report.empty(),
-    roster: [],
-    seal: null,
-    submission: null,
-    submitted: null
-  };
+    name: ''
+  });
 
   (Workbook.open as jest.Mock).mockReturnValue({
     ...Rubric.create(),

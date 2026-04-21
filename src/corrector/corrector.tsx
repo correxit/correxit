@@ -271,7 +271,10 @@ const resolve = (
 
   const rubric = open(workbook);
   const report = rubric?.assignment.report;
-  const summary = report && Rubric.Assignment.summary(report);
+  const summary =
+    report && rubric
+      ? Rubric.Assignment.summary(report, rubric.assignment)
+      : null;
   const score = summary || Rubric.Score.UNSCORED;
   return { path, resolved: true, score, spec: report?.kernel ?? null };
 };
