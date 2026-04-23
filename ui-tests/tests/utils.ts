@@ -31,9 +31,65 @@ export async function shutdown(page: any): Promise<void> {
     .locator('body')
     .evaluate(async () => {
       const app = (window as any).jupyterapp;
-      await app.serviceManager.sessions.shutdownAll();
+      const bridge = (window as any).__correxit__;
+      const { kernels, sessions } = app.serviceManager;
+      await sessions.shutdownAll();
+      await kernels.refreshRunning().catch(() => {});
+      const running = Array.from(kernels.running()) as Array<{ id: string }>;
+      await Promise.all(
+        running.map(({ id }) => kernels.shutdown(id).catch(() => {}))
+      );
+      bridge?.kernels?.drain?.();
     })
     .catch(() => {});
+}
+
+export async function createNotebook(page: any): Promise<string> {
+  const body = page.locator('body');
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const app = (window as any).jupyterapp;
+          return {
+            bridge: !!(window as any).__correxit__,
+            open:
+              !!app?.commands?.hasCommand &&
+              app.commands.hasCommand('docmanager:open')
+          };
+        }),
+      { timeout: 30000 }
+    )
+    .toEqual({ bridge: true, open: true });
+
+  const name = await body.evaluate(async () => {
+    const app = (window as any).jupyterapp;
+    const { contents } = app.serviceManager;
+    const file = await contents.newUntitled({ path: '.', type: 'notebook' });
+    await app.commands.execute('docmanager:open', { path: file.path });
+    return file.path;
+  });
+  const kernel = page
+    .locator('.jp-Dialog')
+    .filter({ hasText: 'Select Kernel' });
+  try {
+    await kernel.waitFor({ state: 'visible', timeout: 1000 });
+    await kernel.getByRole('button', { name: 'Select Kernel' }).click();
+  } catch {
+    /* no kernel picker */
+  }
+  await page.waitForFunction((name: string) => {
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    return panel?.context?.path === name && !panel.context.isDisposed;
+  }, name);
+  await body.evaluate(async (_: Element, name: string) => {
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    if (!panel || panel.context.path !== name) return;
+    await panel.context.ready.catch(() => {});
+    await panel.sessionContext?.ready?.catch(() => {});
+    await panel.sessionContext?.session?.kernel?.info?.catch(() => {});
+  }, name);
+  return name;
 }
 
 /**
@@ -43,7 +99,7 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
   await page.goto();
   await cd(page, '.');
 
-  const name = await page.notebook.createNew();
+  const name = await createNotebook(page);
   expect(name).toBeTruthy();
   await page.waitForFunction((name: string) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;

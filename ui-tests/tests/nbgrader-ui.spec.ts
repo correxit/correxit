@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
-import { cd, shutdown } from './utils';
+import { cd, createNotebook, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -16,19 +16,18 @@ const FIXTURES = path.resolve(
 );
 
 async function close(page: any): Promise<void> {
-  const file = await page
+  const body = page.locator('body');
+  const file = await body
     .evaluate(() => {
+      const app = (window as any).jupyterapp;
       const panel = (window as any).jupyterapp.shell.currentWidget;
       const path = panel?.context?.path ?? null;
+      panel?.dispose?.();
+      void app?.shell?.activateById?.('launcher');
       return typeof path === 'string' && path.endsWith('.ipynb') ? path : null;
     })
     .catch(() => null);
   await cd(page, '.').catch(() => {});
-  try {
-    await page.notebook.close(true);
-  } catch {
-    /* ok */
-  }
   if (file) {
     try {
       await page.contents.deleteFile(file);
@@ -39,7 +38,7 @@ async function close(page: any): Promise<void> {
   await cd(page, '.').catch(() => {});
   await shutdown(page);
   try {
-    await page.evaluate(() => {
+    await body.evaluate(() => {
       const original = (window as any).__warns_original__;
       if (original) console.warn = original;
       delete (window as any).__warns__;
@@ -63,7 +62,7 @@ async function populate(
     nbgrader?: Record<string, any>;
   }[]
 ): Promise<void> {
-  await page.evaluate((cells: any[]) => {
+  await page.locator('body').evaluate((_: Element, cells: any[]) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const notebook = panel.context.model.sharedModel;
     while (notebook.cells.length) notebook.deleteCell(0);
@@ -84,10 +83,29 @@ async function populate(
 async function load(page: any, name: string): Promise<void> {
   const raw = fs.readFileSync(path.join(FIXTURES, name), 'utf-8');
   const notebook = JSON.parse(raw);
-  await page.evaluate((notebook: any) => {
+  await page.locator('body').evaluate((_: Element, notebook: any) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     panel.context.model.fromJSON(notebook);
   }, notebook);
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const panel = (window as any).jupyterapp.shell.currentWidget;
+          const notebook = panel?.context?.model?.toJSON?.();
+          return notebook
+            ? {
+                cells: notebook.cells.length,
+                kernel: notebook.metadata?.kernelspec?.name ?? null
+              }
+            : null;
+        }),
+      { timeout: 10000 }
+    )
+    .toEqual({
+      cells: notebook.cells.length,
+      kernel: notebook.metadata?.kernelspec?.name ?? null
+    });
 }
 
 /**
@@ -98,18 +116,29 @@ async function load(page: any, name: string): Promise<void> {
  * This helper steps through that sequence and dismisses the summary.
  */
 async function convert(page: any): Promise<string[]> {
-  const done = page.evaluate(async () => {
+  const done = page.locator('body').evaluate(async () => {
     const app = (window as any).jupyterapp;
     await app.commands.execute('correxit:convert');
   });
   const dialog = page.locator('.jp-Dialog');
-  await dialog.waitFor({ state: 'visible', timeout: 5000 });
-  if ((await dialog.locator('input').count()) === 0) {
-    await dialog.locator('.jp-mod-accept').click();
+  const password = () =>
+    dialog.locator(
+      'input[type="password"], input[type="text"], input:not([type])'
+    );
+  while (true) {
     await dialog.waitFor({ state: 'visible', timeout: 5000 });
+    const text = (await dialog.textContent()) || '';
+    if (text.includes('Select Kernel')) {
+      await dialog.getByRole('button', { name: 'Select Kernel' }).click();
+      continue;
+    }
+    if (await password().count()) {
+      await password().first().fill('test-passphrase');
+      await dialog.locator('.jp-mod-accept').click();
+      break;
+    }
+    await dialog.locator('.jp-mod-accept').click();
   }
-  await dialog.locator('input').fill('test-passphrase');
-  await dialog.locator('.jp-mod-accept').click();
   await done;
 
   // Dismiss the post-conversion summary dialog if it appears.
@@ -136,7 +165,7 @@ async function shape(page: any): Promise<{
   cells: [string, number, number][];
   points: number;
 }> {
-  return page.evaluate(() => {
+  return page.locator('body').evaluate(() => {
     const { Workbook } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const notebook = panel.context.model.sharedModel;
@@ -163,7 +192,7 @@ async function clean(page: any): Promise<{
   metadata: boolean;
   sources: boolean;
 }> {
-  return page.evaluate(() => {
+  return page.locator('body').evaluate(() => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const notebook = panel.context.model.sharedModel;
     let metadata = true;
@@ -186,7 +215,8 @@ async function clean(page: any): Promise<{
  * retrieve captured warnings matching a prefix.
  */
 async function warnings(page: any): Promise<() => Promise<string[]>> {
-  await page.evaluate(() => {
+  const body = page.locator('body');
+  await body.evaluate(() => {
     const original = (window as any).__warns_original__ || console.warn;
     (window as any).__warns_original__ = original;
     (window as any).__warns__ = [];
@@ -196,10 +226,10 @@ async function warnings(page: any): Promise<() => Promise<string[]>> {
     };
   });
   return async () => {
-    const captured = await page.evaluate(
+    const captured = await body.evaluate(
       () => (window as any).__warns__ as string[]
     );
-    await page.evaluate(() => {
+    await body.evaluate(() => {
       const original = (window as any).__warns_original__;
       if (original) console.warn = original;
       delete (window as any).__warns__;
@@ -314,7 +344,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('converts answer + tests to correctable', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer(
         'q1',
@@ -337,7 +367,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('summary dialog reports cell counts and points', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'x = 1'),
       autotest('t1', 1, 'assert x == 1'),
@@ -359,7 +389,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('conversion can be canceled before rewrite', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [answer('q1', 'x = 1')]);
 
     const done = page.evaluate(async () => {
@@ -383,7 +413,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('summary dialog surfaces warnings', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [answer('lonely', 'x = 1')]);
     const summary = await convert(page);
 
@@ -392,7 +422,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('strips solution markers from cell source', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer(
         'q1',
@@ -414,7 +444,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('maps manually graded code to reviewable', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [manual('m1', 5, '# show your work')]);
     await convert(page);
 
@@ -424,7 +454,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('maps manually graded markdown to reviewable', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [essay('e1', 3, 'Explain your reasoning.')]);
     await convert(page);
 
@@ -434,7 +464,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('maps task + unmarked cell to reviewable', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [task('task1', 4), plain('code', '# student work')]);
     await convert(page);
 
@@ -444,7 +474,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('recalibrates fractional test points to integers', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'x = 1'),
       autotest('t1', 0.5, 'assert x == 1'),
@@ -458,7 +488,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('mixed: answer+tests, manual, task', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       readonly('intro', '# Assignment 1'),
       answer('q1', 'def f(): return 1'),
@@ -482,7 +512,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('orphan answer becomes reviewable with warning', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     const captured = await warnings(page);
     await populate(page, [answer('lonely', 'x = 1')]);
     await convert(page);
@@ -497,7 +527,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('orphaned test cell is skipped with warning', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     const captured = await warnings(page);
     await populate(page, [autotest('orphan', 3, 'assert True')]);
     await convert(page);
@@ -512,7 +542,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('consecutive answers: first flushed as reviewable', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     const captured = await warnings(page);
     await populate(page, [
       answer('q1', 'x = 1'),
@@ -535,7 +565,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     const captured = await warnings(page);
     await populate(page, [task('task1', 3), manual('m1', 5, '# show work')]);
     await convert(page);
@@ -552,7 +582,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'def f(): return 1'),
       plain('markdown', 'Check your answer below:'),
@@ -567,7 +597,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('test cell sources are preserved after conversion', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     const test = 'assert squares(2) == [1, 4]';
     await populate(page, [
       answer(
@@ -598,7 +628,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('plain notebook converts with no rubric cells', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       plain('code', 'print("hello")'),
       plain('markdown', '# notes')
@@ -611,7 +641,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('mark scheme regions are stripped', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       manual(
         'm1',
@@ -634,7 +664,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'def f(x): return x * 2'),
       autotest('t1', 1, '### AUTOTEST f(1)\n### AUTOTEST f(2)')
@@ -654,7 +684,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('expanded autotests score correctly', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer(
         'q1',
@@ -680,7 +710,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'x = 42'),
       autotest('t1', 1, '### AUTOTEST x; x + 1')
@@ -699,7 +729,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'x = 10'),
       autotest('t1', 1, '"""verify x"""\n### AUTOTEST x\nassert x > 0')
@@ -720,7 +750,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
   test('HASHED AUTOTEST directives are expanded', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'def f(n): return n ** 2'),
       autotest('t1', 1, '### HASHED AUTOTEST f(5)')
@@ -762,7 +792,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
   ]) {
     test(`${name}: canonical shape`, async ({ page }) => {
       await page.goto();
-      await page.notebook.createNew();
+      await createNotebook(page);
       const captured = await warnings(page);
       await load(page, name);
       await convert(page);
@@ -787,7 +817,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
   test('test-hidden-tests.ipynb: auto-graded only', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     const captured = await warnings(page);
     await load(page, 'test-hidden-tests.ipynb');
     await convert(page);
@@ -807,7 +837,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
   test('ps1-problem1.ipynb: trailing task discarded', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     const captured = await warnings(page);
     await load(page, 'ps1-problem1.ipynb');
     await convert(page);
@@ -834,7 +864,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
   test('ps1-autotest-problem1.ipynb: task + autotest', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     const captured = await warnings(page);
     await load(page, 'ps1-autotest-problem1.ipynb');
     await convert(page);
@@ -879,7 +909,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
   for (const name of ['ps1-problem2.ipynb', 'ps1-autotest-problem2.ipynb']) {
     test(`${name}: manual only`, async ({ page }) => {
       await page.goto();
-      await page.notebook.createNew();
+      await createNotebook(page);
       await load(page, name);
       await convert(page);
 
@@ -897,7 +927,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
   test('validation-zero-points.ipynb: zero-point test', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'validation-zero-points.ipynb');
     await convert(page);
 
@@ -913,7 +943,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
   test('autotest-simple.ipynb: single autotest expansion', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-simple.ipynb');
     await convert(page);
 
@@ -938,7 +968,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
   test('autotest-hidden.ipynb: hidden split + expansion', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hidden.ipynb');
     await convert(page);
 
@@ -965,7 +995,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
 
   test('autotest-hashed.ipynb: hashed autotest expansion', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hashed.ipynb');
     await convert(page);
 
@@ -992,7 +1022,7 @@ test.describe('nbgrader conversion (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-multi.ipynb');
     await convert(page);
 
@@ -1028,7 +1058,7 @@ async function score(page: any): Promise<{
   possible: number;
   status: string;
 }> {
-  return page.evaluate(async () => {
+  return page.locator('body').evaluate(async () => {
     const { Workbook } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const { score } = await Workbook.correct(panel);
@@ -1048,8 +1078,8 @@ async function rewrite(
   index: number,
   source: string
 ): Promise<void> {
-  await page.evaluate(
-    ({ index, source }: { index: number; source: string }) => {
+  await page.locator('body').evaluate(
+    (_: Element, { index, source }: { index: number; source: string }) => {
       const panel = (window as any).jupyterapp.shell.currentWidget;
       const notebook = panel.context.model.sharedModel;
       const cell = notebook.cells[index];
@@ -1068,7 +1098,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
 
   test('correct answer scores full marks', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'x = 42'),
       autotest('t1', 1, 'assert x == 42'),
@@ -1084,7 +1114,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
 
   test('wrong answer scores zero', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'x = 42'),
       autotest('t1', 1, 'assert x == 42'),
@@ -1103,7 +1133,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
 
   test('partial credit: one test passes, one fails', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'x = 42'),
       autotest('t1', 1, 'assert x > 0'),
@@ -1119,7 +1149,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
 
   test('student modifies answer after conversion', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer(
         'q1',
@@ -1150,7 +1180,7 @@ test.describe('nbgrader scoring (synthetic)', () => {
 
   test('mixed: auto-graded correct + reviewable unscored', async ({ page }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await populate(page, [
       answer('q1', 'x = 42'),
       autotest('t1', 2, 'assert x == 42'),
@@ -1192,7 +1222,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
       page
     }) => {
       await page.goto();
-      await page.notebook.createNew();
+      await createNotebook(page);
       await load(page, name);
       await convert(page);
 
@@ -1206,7 +1236,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'submitted-changed.ipynb');
     await convert(page);
 
@@ -1221,7 +1251,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'submitted-unchanged.ipynb');
     await convert(page);
 
@@ -1237,7 +1267,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'test-hidden-tests.ipynb');
     await convert(page);
 
@@ -1257,7 +1287,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-simple.ipynb');
     await convert(page);
 
@@ -1271,7 +1301,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hidden.ipynb');
     await convert(page);
 
@@ -1285,7 +1315,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hashed.ipynb');
     await convert(page);
 
@@ -1299,7 +1329,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-multi.ipynb');
     await convert(page);
 
@@ -1315,7 +1345,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-simple-changed.ipynb');
     await convert(page);
 
@@ -1328,7 +1358,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-simple-unchanged.ipynb');
     await convert(page);
 
@@ -1341,7 +1371,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hidden-changed-right.ipynb');
     await convert(page);
 
@@ -1355,7 +1385,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hidden-changed-wrong.ipynb');
     await convert(page);
 
@@ -1370,7 +1400,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hidden-unchanged.ipynb');
     await convert(page);
 
@@ -1383,7 +1413,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hashed-changed.ipynb');
     await convert(page);
 
@@ -1396,7 +1426,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-hashed-unchanged.ipynb');
     await convert(page);
 
@@ -1409,7 +1439,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-multi-changed.ipynb');
     await convert(page);
 
@@ -1424,7 +1454,7 @@ test.describe('nbgrader scoring (fixtures)', () => {
     page
   }) => {
     await page.goto();
-    await page.notebook.createNew();
+    await createNotebook(page);
     await load(page, 'autotest-multi-unchanged.ipynb');
     await convert(page);
 
