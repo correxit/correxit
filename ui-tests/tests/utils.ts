@@ -85,9 +85,16 @@ export async function createNotebook(page: any): Promise<string> {
   await body.evaluate(async (_: Element, name: string) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
     if (!panel || panel.context.path !== name) return;
+    const settle = (work: Promise<unknown> | null | undefined, ms = 3000) =>
+      work
+        ? Promise.race([
+            work.catch(() => {}),
+            new Promise(resolve => window.setTimeout(resolve, ms))
+          ])
+        : Promise.resolve();
     await panel.context.ready.catch(() => {});
-    await panel.sessionContext?.ready?.catch(() => {});
-    await panel.sessionContext?.session?.kernel?.info?.catch(() => {});
+    await settle(panel.sessionContext?.ready);
+    await settle(panel.sessionContext?.session?.kernel?.info);
   }, name);
   return name;
 }
