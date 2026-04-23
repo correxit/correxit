@@ -58,8 +58,8 @@ re-injects them into composite settings on later loads.
 
 Authenticates the mutable author-controlled assignment state:
 `assignee`, `expiration`, `id`, `issue`, `issuer`, `keys`
-(author components only), `name`, `report` (interventions +
-scores, sorted), and `roster`.
+(author components only), `name`, `overdue`, `penalty`, `report`
+(interventions + scores, sorted), and `roster`.
 
 The `mac` function extracts `Keys.author(keys)` to include only
 `{ private, public }` for the author. Student key fields
@@ -79,11 +79,41 @@ key. The MAC proves that the broader authored assignment state still matches
 the secret key held by the author side of Correxit.
 
 **Authenticated:** `assignee`, `expiration`, `id`, `issue`,
-`issuer`, `keys` (author only), `name`, `report`, `roster`.
+`issuer`, `keys` (author only), `name`, `overdue`, `penalty`,
+`report`, `roster`.
 
 **Not authenticated:** `certification`, `collected`, `distribution`, `seal`,
 `submission`, `submitted`. These change after signing or are set by the
 student (who does not have the symmetric key).
+
+### Submission Time and Late Policy
+
+Correxit can record two different kinds of submission evidence:
+
+- `submission`: a local timestamp written into the workbook when the student
+  clicks submit
+- `submitted`: an optional external receipt returned by a `Submitter` plugin
+
+Only the second can come from an authority outside the document.
+
+The local `submission` field is intentionally **not authenticated**. In a
+frontend-only system there is no trusted Correxit clock, and there is no
+backend authority that can witness when the student clicked submit. This means
+the local timestamp is useful workflow state, but not cryptographic proof of
+when delivery happened.
+
+That distinction matters for overdue handling:
+
+- In backendless workflows, Correxit may still apply a local overdue policy to
+  the document being graded. This is a convenience policy for manual exchange
+  workflows such as git, email, or shared storage. Corrector may also choose
+  to accept only workbooks with a non-null local `submission` timestamp.
+- In backend-backed workflows, the upstream system's deadline rules and receipt
+  should be treated as authoritative. Correxit should not be described as the
+  authority on timeliness in that mode.
+
+Put differently: Correxit can protect workbook contents and preserve local
+submission state, but it cannot by itself prove that a submission was on time.
 
 ### Blank-Slate Authenticity
 
@@ -231,6 +261,10 @@ re-encrypting and comparing.
 - `keys`: `Keys`, partially signed. Author keys are MACed, student keys
   are not.
 - `name`: `string`, signed, assignment display name.
+- `overdue`: `'accept' | 'dock' | 'reject' | null`, signed, local
+  backendless overdue policy.
+- `penalty`: `number | null`, signed, percentage deduction used by the
+  local `dock` policy.
 - `report`: `Report`, signed, scores and interventions.
 - `issue`: `string`, signed, deterministic blank-slate digest.
 - `issuer`: `string`, signed, author PGP signature over `issue`.
@@ -239,8 +273,9 @@ re-encrypting and comparing.
 - `mac`: `string`, mutable assignment authenticity MAC.
 - `certification`: `number | null`, unsigned, final grade timestamp.
 - `submission`: `number | null`, unsigned, student submission
-  timestamp.
-- `submitted`: `string | null`, unsigned, external submission receipt.
+  timestamp written into the workbook.
+- `submitted`: `string | null`, unsigned, external submission receipt from a
+  submitter authority.
 - `distribution`: `number | null`, unsigned, local distribution
   timestamp.
 - `collected`: `string | null`, unsigned, external collection receipt.

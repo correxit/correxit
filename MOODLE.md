@@ -96,6 +96,11 @@ have Correxit, they can still save the notebook in cleartext and upload it.
 Correxit accepts both cases. The pure Moodle path does not depend on student
 adoption of the extension.
 
+For timing and late-policy purposes, Moodle is the authority in this flow.
+Correxit may record a local submission timestamp inside the workbook, but that
+timestamp is not a Moodle receipt and should not be treated as authoritative
+over Moodle's own deadline enforcement.
+
 ### 7. The teacher downloads submissions
 
 When ready, the teacher uses Moodle to download the submitted notebooks

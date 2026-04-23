@@ -84,7 +84,7 @@ export function commands(
     commands.addCommand(CommandIDs.batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
-        args: Partial<Credentials & { overwrite: boolean }>
+        args: Partial<Credentials & { overwrite: boolean; submitted: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
         const actions: Actions = {
@@ -100,7 +100,13 @@ export function commands(
 
         const cap = kernels.cap();
         const retries = kernels.retries();
-        const source = scanner({ commands }, handle);
+        const source = scanner(
+          { commands },
+          {
+            ...handle,
+            submitted: !!args.submitted
+          }
+        );
         return (async function* (results: AsyncGenerator<Result>) {
           for await (const result of results) {
             const { grade, workbook } = result.ok ? result.certified : result;
@@ -209,8 +215,10 @@ export function commands(
   disposables.push(
     commands.addCommand(CommandIDs.scan, {
       label: trans.__('Scan a directory for Correxit workbooks'),
-      execute: (handle: Partial<Credentials>): AsyncGenerator<Scanned> =>
-        (async function* scanner(handle) {
+      execute: (
+        handle: Partial<Credentials & { submitted: boolean }>
+      ): AsyncGenerator<Scanned> =>
+        (async function* scanner(handle, submitted) {
           const directory = handle && handle.path;
           if (!directory) return;
 
@@ -221,8 +229,10 @@ export function commands(
             console.warn(CommandIDs.scan, directory, error);
             return;
           }
-          for (const { path } of notebooks)
-            yield { hollow: true, context: { path } };
+          if (!submitted) {
+            for (const { path } of notebooks)
+              yield { hollow: true, context: { path } };
+          }
 
           let prompted = false;
           for (const { path } of notebooks) {
@@ -231,10 +241,17 @@ export function commands(
               const locked = open(fetched)?.locked;
               const unauthenticated = !handle.key && !handle.passphrase;
               prompted ||= !locked || !handle.unlock || !unauthenticated;
+              if (submitted && !submittedLocally(fetched as Headless)) {
+                fetched.context.dispose();
+                continue;
+              }
               yield fetched as Headless;
             }
           }
-        })(normalize({ ...handle, path: handle.path || '.' }))
+        })(
+          normalize({ ...handle, path: handle.path || '.' }),
+          !!handle.submitted
+        )
     })
   );
   disposables.push(
@@ -455,11 +472,15 @@ async function save(workbook: Headless | null) {
 
 async function* scanner(
   { commands }: Pick<JupyterFrontEnd, 'commands'>,
-  credentials: Partial<Credentials>
+  credentials: Partial<Credentials & { submitted: boolean }>
 ): AsyncGenerator<Headless> {
   const stream = await commands.execute(CommandIDs.scan, credentials);
   for await (const workbook of stream as AsyncIterable<Scanned>)
     if (!workbook.hollow) yield workbook;
+}
+
+function submittedLocally(workbook: Headless): boolean {
+  return open(workbook)?.assignment.submission !== null;
 }
 
 function unexecuted({ code }: Rubric.Score): boolean {

@@ -224,9 +224,25 @@ In manual mode, the sidebar deadline belongs to Correxit. You may choose
 an overdue policy: accept late work, dock the final score by a percentage
 of possible points, or reject submission after the deadline.
 
+This policy is local to the workbook. Correxit applies it from the submission
+timestamp written into the document when the student clicks **Submit**. That is
+useful for backendless workflows such as exchanging notebooks over git, email,
+or shared storage, but it is not an authority-backed receipt.
+
 If a Registrar plugin supplies the assignment metadata, Correxit treats
 that deadline as provider-owned registration data. It is displayed, but
 Correxit does not layer its own overdue policy on top of it.
+
+If your submit path already has its own trusted clock and deadline rules
+(for example Moodle, a gradebook service, or a server-side git workflow),
+that external system should remain authoritative. Correxit's local overdue
+policy is for the cases where there is no backend to do that job.
+
+If you use the local `reject` policy, the corresponding grading-side control
+is in **Correxit Corrector**: enable **Submitted** to scan and grade only
+workbooks that carry a local submission timestamp. That gives backendless
+workflows a coherent intake rule without pretending the workbook has an
+external authority behind it.
 
 ### Propagating
 
@@ -332,6 +348,8 @@ A workbook moves through these stages:
 
 - **Submitted**: the student clicked submit. A timestamp is stored. If a
   Submitter plugin records the submission externally, its receipt is stored too.
+  The local timestamp is useful workflow state, but only the external receipt
+  comes from a separate authority.
 - **Certified**: the grade has been computed and frozen. Certification
   is the grader's seal; it requires all cells to be scored.
 - **Collected**: a Collector plugin acknowledged receipt of the grade and

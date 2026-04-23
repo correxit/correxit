@@ -33,8 +33,8 @@ into a gradable workbook.
   document itself, which is a Jupyter notebook (`.ipynb`) file with a `correxit`
   field in its metadata. There is no other data store.
 - The author converts a Jupyter notebook into a workbook by configuring which
-  cells to grade, optionally setting a manual late policy, and encrypting the
-  grading logic with a passphrase.
+  cells to grade, optionally setting a local late policy for backendless
+  workflows, and encrypting the grading logic with a passphrase.
 - A grader uses the Correxit Corrector panel to scan a directory of submitted
   workbooks, optionally unlock them, and batch-grade them, with configurable
   concurrency and a per-workbook timeout to handle hung kernels.

@@ -312,12 +312,20 @@ const status = (
 };
 
 export function Corrector(props: Corrector.Props) {
-  const { commands, mode, notify, overwrite, path, trans } = props;
+  const { commands, mode, notify, overwrite, path, submitted, trans } = props;
   const grading = mode !== 'scan';
-  const [workbooks, scanned] = useCommand<Scanned>(commands, scan, { path });
+  const [workbooks, scanned] = useCommand<Scanned>(commands, scan, {
+    path,
+    submitted
+  });
   const command = mode === 'grade' ? batch : mode === 'collect' ? collect : '';
   const auth = mode === 'grade';
-  const config = { overwrite, path, ...(auth ? { unlock: true } : {}) };
+  const config = {
+    overwrite,
+    path,
+    submitted,
+    ...(auth ? { unlock: true } : {})
+  };
   const [batched, graded] = useCommand<Batched>(commands, command, config);
   const loaded = useMemo(() => workbooks.filter(reified).length, [workbooks]);
   const grades = useMemo(() => new Map(batched) as Collated, [batched]);
@@ -369,6 +377,7 @@ export namespace Corrector {
     notify: (updates: Notification) => void;
     overwrite: boolean;
     path: string;
+    submitted: boolean;
     trans: TranslationBundle;
   };
 
