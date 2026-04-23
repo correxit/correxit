@@ -102,10 +102,7 @@ export function commands(
         const retries = kernels.retries();
         const source = scanner(
           { commands },
-          {
-            ...handle,
-            submitted: !!args.submitted
-          }
+          { ...handle, submitted: !!args.submitted }
         );
         return (async function* (results: AsyncGenerator<Result>) {
           for await (const result of results) {
