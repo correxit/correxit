@@ -305,5 +305,44 @@ describe('kernels', () => {
       await second;
       expect(freed).toBe(true);
     });
+
+    it('does not re-pool a recycled kernel after drain', async () => {
+      const name = named();
+      let resolve: (() => void) | null = null;
+      const stale = spawn({
+        name,
+        restart: () =>
+          new Promise<void>(done => {
+            resolve = done;
+          })
+      });
+      const fresh = spawn({ name });
+      let calls = 0;
+      const workbook = create({
+        name,
+        kernelManager: {
+          startNew: jest.fn(async () => (calls++ === 0 ? stale : fresh))
+        }
+      });
+
+      const first = await lease(workbook);
+      expect(first).not.toBeNull();
+
+      const release = first![1]();
+      drain();
+
+      expect(resolve).not.toBeNull();
+      const done: () => void = resolve || (() => undefined);
+      done();
+      await release;
+
+      const second = await lease(workbook);
+      expect(second).not.toBeNull();
+      expect(second![0]).toBe(fresh);
+      expect(
+        workbook.context.sessionContext.kernelManager.startNew
+      ).toHaveBeenCalledTimes(2);
+      expect(stale.shutdown).toHaveBeenCalled();
+    });
   });
 });

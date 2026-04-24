@@ -1057,14 +1057,47 @@ async function score(page: any): Promise<{
   points: number;
   possible: number;
   status: string;
+  code: string;
+  comment: string;
+  resolved: boolean;
+  scores: Record<
+    string,
+    {
+      code: string;
+      comment: string;
+      points: number;
+      possible: number;
+      status: string;
+    }
+  >;
 }> {
   return page.locator('body').evaluate(async () => {
     const { Workbook } = (window as any).__correxit__;
     const panel = (window as any).jupyterapp.shell.currentWidget;
-    const { score } = await Workbook.correct(panel);
+    const grade = await Workbook.correct(panel);
+    const rubric = Workbook.open(panel, true);
+    const scores = Object.fromEntries(
+      Object.entries(rubric?.assignment?.report?.scores ?? {}).map(
+        ([id, score]: [string, any]) => [
+          id,
+          {
+            code: score?.code ?? '',
+            comment: score?.comment ?? '',
+            points: score?.points ?? 0,
+            possible: score?.possible ?? 0,
+            status: score?.status ?? 'unscored'
+          }
+        ]
+      )
+    );
+    const { score } = grade;
     return {
+      code: score.code ?? '',
+      comment: score.comment ?? '',
       points: score.points,
       possible: score.possible,
+      resolved: grade.resolved,
+      scores,
       status: score.status
     };
   });
@@ -1306,9 +1339,10 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await convert(page);
 
     const result = await score(page);
-    expect(result.possible).toBe(2);
-    expect(result.points).toBe(2);
-    expect(result.status).toBe('correct');
+    const debug = JSON.stringify(result, null, 2);
+    expect(result.possible, debug).toBe(2);
+    expect(result.points, debug).toBe(2);
+    expect(result.status, debug).toBe('correct');
   });
 
   test('autotest-hashed.ipynb: correct solution scores full marks', async ({
@@ -1377,8 +1411,9 @@ test.describe('nbgrader scoring (fixtures)', () => {
 
     // Submission has only visible type-check assertions (no hidden).
     const result = await score(page);
-    expect(result.possible).toBe(1);
-    expect(result.points).toBe(1);
+    const debug = JSON.stringify(result, null, 2);
+    expect(result.possible, debug).toBe(1);
+    expect(result.points, debug).toBe(1);
   });
 
   test('autotest-hidden-changed-wrong.ipynb: correct types but wrong values still scores', async ({
@@ -1392,8 +1427,9 @@ test.describe('nbgrader scoring (fixtures)', () => {
     // Wrong values but correct types. Submission only has visible
     // type-check assertions, so all pass.
     const result = await score(page);
-    expect(result.possible).toBe(1);
-    expect(result.points).toBe(1);
+    const debug = JSON.stringify(result, null, 2);
+    expect(result.possible, debug).toBe(1);
+    expect(result.points, debug).toBe(1);
   });
 
   test('autotest-hidden-unchanged.ipynb: placeholder scores zero', async ({
@@ -1405,8 +1441,9 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await convert(page);
 
     const result = await score(page);
-    expect(result.possible).toBe(1);
-    expect(result.points).toBe(0);
+    const debug = JSON.stringify(result, null, 2);
+    expect(result.possible, debug).toBe(1);
+    expect(result.points, debug).toBe(0);
   });
 
   test('autotest-hashed-changed.ipynb: correct answer scores full marks', async ({
