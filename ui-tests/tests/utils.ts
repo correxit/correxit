@@ -44,7 +44,7 @@ export async function shutdown(page: any): Promise<void> {
     .catch(() => {});
 }
 
-export async function createNotebook(page: any): Promise<string> {
+export async function notebook(page: any): Promise<string> {
   const body = page.locator('body');
   await expect
     .poll(
@@ -106,7 +106,7 @@ export async function setup(page: any, cells: Cell[]): Promise<Fixture> {
   await page.goto();
   await cd(page, '.');
 
-  const name = await createNotebook(page);
+  const name = await notebook(page);
   expect(name).toBeTruthy();
   await page.waitForFunction((name: string) => {
     const panel = (window as any).jupyterapp.shell.currentWidget;
