@@ -414,6 +414,8 @@ const Overdue: React.FC<{
   trans: TranslationBundle;
 }> = ({ assignment, edit, locked, trans }) => {
   const current = assignment.overdue ?? 'accept';
+  const id = 'correxit-assignment-penalty';
+  const hint = `${id}-hint`;
   const initial = current === 'dock' ? String(assignment.penalty ?? 10) : '';
   const [text, setText] = useState(initial);
   useEffect(() => {
@@ -468,11 +470,13 @@ const Overdue: React.FC<{
         </select>
         {current === 'dock' && (
           <>
-            <div className="correxit-assignment-hint">
+            <label htmlFor={id}>{trans.__('Penalty')}</label>
+            <div className="correxit-assignment-hint" id={hint}>
               {trans.__('Percentage of possible points to deduct.')}
             </div>
             <input
-              id="correxit-assignment-penalty"
+              aria-describedby={hint}
+              id={id}
               max={100}
               min={0}
               name="correxit-assignment-penalty"

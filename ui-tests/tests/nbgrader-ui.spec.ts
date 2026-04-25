@@ -116,6 +116,9 @@ async function load(page: any, name: string): Promise<void> {
  * This helper steps through that sequence and dismisses the summary.
  */
 async function convert(page: any): Promise<string[]> {
+  const max = 8;
+  const seen: string[] = [];
+  let ready = false;
   const done = page.locator('body').evaluate(async () => {
     const app = (window as any).jupyterapp;
     await app.commands.execute('correxit:convert');
@@ -125,9 +128,16 @@ async function convert(page: any): Promise<string[]> {
     dialog.locator(
       'input[type="password"], input[type="text"], input:not([type])'
     );
-  while (true) {
-    await dialog.waitFor({ state: 'visible', timeout: 5000 });
-    const text = (await dialog.textContent()) || '';
+  for (let step = 0; step < max; step += 1) {
+    try {
+      await dialog.waitFor({ state: 'visible', timeout: 5000 });
+    } catch {
+      throw new Error(
+        `correxit:convert dialog sequence stalled after ${step} dialogs: ${seen.join(' -> ') || '<none>'}`
+      );
+    }
+    const text = ((await dialog.textContent()) || '').trim();
+    seen.push(text || '<empty>');
     if (text.includes('Select Kernel')) {
       await dialog.getByRole('button', { name: 'Select Kernel' }).click();
       continue;
@@ -135,10 +145,15 @@ async function convert(page: any): Promise<string[]> {
     if (await password().count()) {
       await password().first().fill('test-passphrase');
       await dialog.locator('.jp-mod-accept').click();
+      ready = true;
       break;
     }
     await dialog.locator('.jp-mod-accept').click();
   }
+  if (!ready)
+    throw new Error(
+      `correxit:convert did not reach the passphrase dialog after ${max} dialogs: ${seen.join(' -> ')}`
+    );
   await done;
 
   // Dismiss the post-conversion summary dialog if it appears.
