@@ -432,16 +432,17 @@ tests can increase the converted total.
 nbgrader's `### AUTOTEST` and `### HASHED AUTOTEST` directives are
 expanded at conversion time. Correxit leases a kernel, executes the
 answer cell to define its variables, then evaluates each autotest
-expression and replaces the directive with generated Python test code
-when the workbook kernel is Python and the observed value can be
-translated safely.
+expression and replaces the directive with generated Python test code.
+This Python requirement applies only to AUTOTEST expansion; the rest of
+nbgrader conversion remains kernel-agnostic.
 
 When Correxit cannot safely reify an autotest, it leaves a commented
 placeholder in the reference cell, inserts a failing
 `NotImplementedError`, and reports the cell in the conversion summary so
 you can rewrite that test manually.
 If no kernel is available, the directives are left in place and a
-warning is added to the report.
+warning is added to the report, but the rest of conversion still
+continues.
 
 ### Points and slippage
 

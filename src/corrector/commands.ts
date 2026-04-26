@@ -39,6 +39,7 @@ export namespace CommandIDs {
   export const pass = 'correxit-reviewer:pass';
   export const review = 'correxit-reviewer:review';
   export const right = 'correxit-reviewer:right';
+  export const run = 'correxit-reviewer:run';
   export const scan = 'correxit-corrector:scan';
   export const up = 'correxit-reviewer:up';
 }
@@ -320,6 +321,29 @@ export function commands(
           }
         } catch (error) {
           void showErrorMessage(...Error.interpret(error, trans));
+        }
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.run, {
+      caption: trans.__('Run reviewer cell'),
+      label: trans.__('Run'),
+      execute: async (
+        args: Partial<{ id: string }>
+      ): Promise<Rubric.Cell.Output[] | null> => {
+        const workbook = reviewer?.workbook ?? null;
+        const id = args.id ?? bridge.peek().cursor?.cell ?? null;
+        if (!workbook || !id) return null;
+        try {
+          const rubric = open(workbook);
+          if (!rubric) return null;
+          const result = await Workbook.execute(workbook, rubric, id);
+          if (!result) throw new globalThis.Error('run error: execute failed');
+          return result.outputs.get(id) ?? [];
+        } catch (error) {
+          void showErrorMessage(...Error.interpret(error, trans));
+          return null;
         }
       }
     })

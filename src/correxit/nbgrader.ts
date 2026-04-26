@@ -680,7 +680,9 @@ export async function expand(
     const { defaultKernelName: name } = workbook.context.model;
     const warnings = [
       ...classification.warnings,
-      `Autotest cells could not be expanded, (no ${name} kernel available)`
+      `AUTOTEST and HASHED AUTOTEST cells could not be expanded (no ${
+        name ?? 'kernel'
+      } available); the rest of conversion continued unchanged`
     ];
     return { ...classification, warnings };
   }
@@ -695,9 +697,9 @@ export async function expand(
         async expr => ({ safe: false, value: await execute(expr) });
       const warnings = [
         ...classification.warnings,
-        `Autotest conversion requires a Python kernel; found "${
+        `Only AUTOTEST and HASHED AUTOTEST expansion requires a Python kernel; found "${
           name ?? fallback ?? 'unknown'
-        }"`
+        }". The rest of conversion continued unchanged`
       ];
       return await spread(
         cells, { ...classification, warnings }, execute, resolve

@@ -1,5 +1,6 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
+import { INotebookContent } from '@jupyterlab/nbformat';
 import { NotebookModelFactory, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ITranslator } from '@jupyterlab/translation';
@@ -60,7 +61,7 @@ const { get, has } = Rubric;
 const {
   acknowledge, add, assign, certify, collect, comment, convert, correct,
   dereference, distribute, draft, headed, headless, intervene, lock, recover,
-  refer, remove, reset, revise, reweight, submit, toggle
+  refer, remove, reset, restore, revise, reweight, submit, toggle
 } = Workbook;
 const { normalize } = Workbook.Credentials;
 
@@ -447,7 +448,8 @@ export function commands(
         const { button } = await showDialog({
           title: trans.__('Convert nbgrader notebook?'),
           body: trans.__(
-            'This rewrites the current notebook as a Correxit workbook.'
+`This rewrites the current notebook in place as a Correxit workbook.
+If conversion fails, Correxit restores the original notebook.`
           ),
           buttons: [
             Dialog.cancelButton({ label: trans.__('Cancel') }),
@@ -463,9 +465,10 @@ export function commands(
       });
       if (!passphrase) return;
 
+      const snapshot = workbook.context.model.toJSON() as INotebookContent;
       const overlay = document.createElement('div');
-      overlay.classList.add('correxit-overlay', 'cxt-mod-loading');
       const converting = trans.__('Converting...');
+      overlay.classList.add('correxit-overlay', 'cxt-mod-loading');
       overlay.dataset.label = converting;
       overlay.setAttribute('role', 'status');
       overlay.setAttribute('aria-live', 'polite');
@@ -476,6 +479,15 @@ export function commands(
       try {
         await convert(workbook, passphrase, unlocker);
         report = await nbgrader.convert(workbook, trans);
+      } catch (error) {
+        restore(workbook, snapshot);
+        const restored = trans.__('The original notebook was restored.');
+        const detail = Error.reason(error);
+        void showErrorMessage(
+          trans.__('Conversion failed; original notebook restored'),
+          new globalThis.Error(`${restored}\n\n${detail}`)
+        );
+        return;
       } finally {
         overlay.remove();
       }

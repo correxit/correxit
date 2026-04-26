@@ -334,7 +334,7 @@
   }
 }
 
-.correxit-reviewer-btn-correct {
+.correxit-reviewer-btn-run {
   background-color: color-mix(in oklch, var(--jp-brand-color1), black 20%);
   color: #fff;
 

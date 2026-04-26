@@ -1033,6 +1033,23 @@ export namespace Workbook {
     update(workbook, Rubric.remove(rubric, id));
   }
 
+  /**
+   * Restore a workbook snapshot, invalidating cached rubric state first.
+   *
+   * Returns the restored rubric when the snapshot contains valid Correxit
+   * metadata, otherwise `null`.
+   */
+  export function restore(
+    workbook: Workbook,
+    snapshot: INotebookContent
+  ): Rubric | null {
+    set(workbook, null);
+    const model = workbook.context.model;
+    model.fromJSON(snapshot);
+    model.sharedModel.clearUndoHistory();
+    return open(workbook, quiet);
+  }
+
   /** Reset a workbook back to a plain Jupyter notebook. */
   export async function reset(workbook: Workbook) {
     update(workbook, null);

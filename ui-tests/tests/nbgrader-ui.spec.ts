@@ -170,6 +170,21 @@ async function convert(page: any): Promise<string[]> {
   return lines;
 }
 
+async function snapshot(page: any): Promise<any> {
+  return page.locator('body').evaluate(() => {
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    return panel.context.model.toJSON();
+  });
+}
+
+async function converted(page: any): Promise<boolean> {
+  return page.locator('body').evaluate(() => {
+    const { Workbook } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    return Workbook.open(panel, true) !== null;
+  });
+}
+
 /**
  * Returns the rubric shape: cells in notebook order, total points,
  * and a count of console.warn emissions from the convert command.
@@ -424,6 +439,72 @@ test.describe('nbgrader conversion (synthetic)', () => {
 
     const c = await clean(page);
     expect(c.metadata).toBe(false);
+  });
+
+  test('failed conversion restores the original notebook', async ({ page }) => {
+    await page.goto();
+    await notebook(page);
+    await populate(page, [
+      answer('q1', 'def f(): return 1'),
+      autotest(
+        't1',
+        1,
+        [
+          'assert True',
+          '### BEGIN HIDDEN TESTS',
+          '### AUTOTEST f()',
+          '### END HIDDEN TESTS'
+        ].join('\n')
+      )
+    ]);
+    const before = await snapshot(page);
+
+    const done = page.locator('body').evaluate(async () => {
+      const app = (window as any).jupyterapp;
+      const { Workbook } = (window as any).__correxit__;
+      const original = Workbook.add;
+      let calls = 0;
+      Workbook.add = async (...args: any[]) => {
+        calls += 1;
+        if (calls === 1) throw new Error('injected convert failure');
+        return original(...args);
+      };
+      try {
+        await app.commands.execute('correxit:convert');
+      } finally {
+        Workbook.add = original;
+      }
+    });
+    const dialog = page.locator('.jp-Dialog');
+    const password = () =>
+      dialog.locator(
+        'input[type="password"], input[type="text"], input:not([type])'
+      );
+    for (let step = 0; step < 8; step += 1) {
+      await dialog.waitFor({ state: 'visible', timeout: 5000 });
+      const text = ((await dialog.textContent()) || '').trim();
+      if (text.includes('Select Kernel')) {
+        await dialog.getByRole('button', { name: 'Select Kernel' }).click();
+        continue;
+      }
+      if (await password().count()) {
+        await password().first().fill('test-passphrase');
+        await dialog.locator('.jp-mod-accept').click();
+        break;
+      }
+      await dialog.locator('.jp-mod-accept').click();
+    }
+    await done;
+
+    await dialog.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(dialog).toContainText(
+      'Conversion failed; original notebook restored'
+    );
+    await expect(dialog).toContainText('The original notebook was restored.');
+    await dialog.getByRole('button', { name: 'Close' }).click();
+
+    await expect.poll(() => snapshot(page)).toEqual(before);
+    await expect.poll(() => converted(page)).toBe(false);
   });
 
   test('summary dialog surfaces warnings', async ({ page }) => {
