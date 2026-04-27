@@ -795,16 +795,16 @@ export async function convert(
   notebook.transact(() => {
     for (const cell of [...notebook.cells]) {
       const json = cell.toJSON();
-      const cleaned = clean(json.metadata);
       const source = cached.get(cell.id);
-      if (source !== undefined) {
-        const replacement = { ...json, metadata: cleaned, source };
-        const index = notebook.cells.indexOf(cell);
-        notebook.deleteCell(index);
-        notebook.insertCell(index, replacement);
-      } else if ('nbgrader' in (json.metadata as any || {})) {
-        cell.transact(() => cell.deleteMetadata('nbgrader'));
-      }
+      const metadata = json.metadata as Record<string, any> | undefined;
+      const marked = !!metadata && 'nbgrader' in metadata;
+      if (source === undefined && !marked) continue;
+
+      // Rewrite in place so rubric cell IDs stay aligned with notebook cells.
+      cell.transact(() => {
+        if (source !== undefined) cell.setSource(source);
+        if (marked) cell.deleteMetadata('nbgrader');
+      });
     }
   }, false);
   return report(raw, classification, trans);
