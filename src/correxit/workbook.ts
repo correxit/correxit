@@ -1,5 +1,6 @@
 import { SharedCell } from '@jupyter/ydoc';
 import { ICodeCellModel } from '@jupyterlab/cells';
+import { PathExt } from '@jupyterlab/coreutils';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import {
@@ -95,6 +96,7 @@ export namespace Workbook {
   export type Identifier = {
     assignee: string | null;
     assignment: string | null;
+    file: string | null;
     issue: string | null;
     rubric: string;
   };
@@ -108,7 +110,7 @@ export namespace Workbook {
 
     /** Type guard for assigned identifiers. */
     export function assigned(id: Identifier): id is Assigned {
-      return id.assignee !== null;
+      return id.assignee !== null && id.file !== null;
     }
   }
 
@@ -817,8 +819,9 @@ export namespace Workbook {
     if (!rubric) throw new Error.Invalid('identifier error');
     const assignee = rubric.assignment.assignee || null;
     const assignment = rubric.assignment.id;
+    const file = PathExt.basename(workbook.context.path) || null;
     const issue = rubric.assignment.issue || null;
-    return { assignee, assignment, issue, rubric: rubric.id };
+    return { assignee, assignment, file, issue, rubric: rubric.id };
   }
 
   export async function unstarted(workbook: Workbook): Promise<boolean> {
