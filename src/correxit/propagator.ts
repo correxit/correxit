@@ -52,7 +52,8 @@ export async function* propagate({
       const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
       const file = await io.assigned(base, assignee);
       const path = PathExt.join(directory.path, file);
-      const assigned = await reassign({ assignee, key, notebook, roster });
+      const individual = { assignee, file, key, notebook, roster };
+      const assigned = await reassign(individual);
       const issue = await Rubric.Assignment.issue({
         assignment: { assignee, expiration, id: assigned.assignment, name },
         notebook,
@@ -144,8 +145,9 @@ function lifecycle(expiration: Rubric.Timestamp) {
  * This function explicitly mutates the serialized rubric in the given workbook
  * to overwrite its assignee and mac.
  */
-async function reassign({ assignee, key, notebook, roster }: {
+async function reassign({ assignee, file, key, notebook, roster }: {
   assignee: string;
+  file: string;
   key: string;
   notebook: INotebookContent;
   roster: string[];
@@ -163,6 +165,7 @@ async function reassign({ assignee, key, notebook, roster }: {
   return {
     assignee,
     assignment: metadata.assignment.id,
+    file,
     issue: null,
     rubric: metadata.id
   };

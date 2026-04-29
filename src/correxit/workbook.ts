@@ -103,6 +103,7 @@ export namespace Workbook {
     /** An identifier with a guaranteed assignee. */
     export type Assigned = Identifier & {
       assignee: string;
+      file: string;
     };
 
     /** Type guard for assigned identifiers. */

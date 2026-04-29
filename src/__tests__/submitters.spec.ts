@@ -23,6 +23,7 @@ const identifier = (
 ): Workbook.Identifier.Assigned => ({
   assignee: 'alice@example.com',
   assignment: '',
+  file: 'assignment-alice.ipynb',
   issue: 'issue-abc',
   rubric: 'rubric-1',
   ...overrides
