@@ -1032,7 +1032,7 @@ test('submit reuses the checked timestamp when reject is active', async ({
       }),
       {
         assignee: 'student@example.com',
-        expiration: Date.now() + 60000,
+        expiration: 2000,
         overdue: 'reject',
         roster: ['student@example.com']
       }
@@ -1042,45 +1042,36 @@ test('submit reuses the checked timestamp when reject is active', async ({
     const locked = Workbook.open(workbook);
     const author = locked.assignment.keys.public.author;
 
-    let checked: number | null = null;
-    let written: number | null = null;
-    const late = Rubric.Assignment.late;
-    const submit = Rubric.submit;
-    (Rubric.Assignment as any).late = (terms: any) => {
-      checked = terms.submission;
-      return late(terms);
-    };
-    (Rubric as any).submit = (rubric: any, submission?: number) => {
-      written = submission ?? null;
-      return submit(rubric, submission);
-    };
+    const checked = 1000;
+    const late = 3000;
+    let calls = 0;
+    const now = Date.now;
+    Date.now = () => (calls++ ? late : checked);
     try {
       const submitted = await Workbook.submit(workbook, [author]);
       const opened = Workbook.open(workbook, true);
       return {
+        calls,
         checked,
         error: null,
         stored: opened?.assignment.submission ?? null,
-        submission: submitted.assignment.submission,
-        written
+        submission: submitted.assignment.submission
       };
     } catch (error) {
       return {
+        calls,
         checked,
         error: String(error),
         stored: null,
-        submission: null,
-        written
+        submission: null
       };
     } finally {
-      (Rubric.Assignment as any).late = late;
-      (Rubric as any).submit = submit;
+      Date.now = now;
     }
   });
 
   expect(result.error).toBeNull();
-  expect(result.checked).toBeGreaterThan(0);
-  expect(result.written).toBe(result.checked);
+  expect(result.calls).toBeGreaterThan(1);
   expect(result.submission).toBe(result.checked);
   expect(result.stored).toBe(result.checked);
   await dispose();
