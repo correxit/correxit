@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/QuantStack/correxit/compare/v1.19.0...v1.20.0) (2026-04-30)
+
+
+### Features
+
+* Add `file` to assigned workbook identifier ([#73](https://github.com/QuantStack/correxit/issues/73)) ([58d06c9](https://github.com/QuantStack/correxit/commit/58d06c97f9f03032f09ab1bdb7caf8244afb7c70))
+
 # [1.19.0](https://github.com/QuantStack/correxit/compare/v1.18.3...v1.19.0) (2026-04-18)
 
 
