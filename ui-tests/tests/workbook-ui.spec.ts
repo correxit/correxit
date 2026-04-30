@@ -1161,6 +1161,80 @@ test('certify docks a late workbook by penalty percentage', async ({
   await dispose();
 });
 
+test('certify rejects an overdue rejected workbook', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const base = await Rubric.assign(
+      Rubric.add(
+        (r => ({
+          ...r,
+          key: 'secret',
+          assignment: {
+            ...r.assignment,
+            keys: {
+              private: { assignee: null, author: 'priv' },
+              public: { assignee: null, author: 'pub' }
+            }
+          }
+        }))(Rubric.create()),
+        {
+          id: 'cell',
+          is: 'reviewable',
+          payload: null,
+          points: 10,
+          references: null
+        }
+      ),
+      {
+        assignee: 'student@example.com',
+        expiration: 1,
+        overdue: 'reject',
+        roster: ['student@example.com']
+      }
+    );
+    const report = {
+      interventions: {
+        cell: Rubric.Score.intervene('cell', {
+          comment: '',
+          points: 10,
+          possible: 10
+        })
+      },
+      kernel: null,
+      scores: {}
+    };
+    const signed = await Rubric.sign(base, report);
+    const submitted = {
+      ...signed,
+      assignment: { ...signed.assignment, submission: 2 }
+    };
+    await Workbook.update(workbook, submitted);
+
+    const trans = { __: (message: string) => message } as any;
+    try {
+      await Workbook.certify(workbook, trans, true);
+      return { error: null };
+    } catch (error) {
+      const opened = Workbook.open(workbook, true);
+      return {
+        certification: opened?.assignment.certification ?? null,
+        error: String(error),
+        locked: opened?.locked ?? null
+      };
+    }
+  });
+
+  expect(result.error).toContain('overdue rejected');
+  expect(result.locked).toBe(false);
+  expect(result.certification).toBeNull();
+  await dispose();
+});
+
 test('revises a submitted workbook, restores editability', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'a', source: 'x = 1' },

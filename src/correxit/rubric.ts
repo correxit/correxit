@@ -621,6 +621,13 @@ export namespace Rubric {
         submission > expiration;
     }
 
+    export function rejected(assignment: Pick<
+      Assignment,
+      'expiration' | 'overdue' | 'submission'
+    >): boolean {
+      return assignment.overdue === 'reject' && late(assignment);
+    }
+
     export function summary(
       report: Report,
       assignment: Pick<

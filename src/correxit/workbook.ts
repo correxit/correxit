@@ -545,6 +545,8 @@ export namespace Workbook {
     const identifier = Workbook.identifier(workbook);
     if (!Identifier.assigned(identifier))
       throw new Error.Certify('certify error: unassigned');
+    if (Rubric.Assignment.rejected(rubric.assignment))
+      throw new Error.Certify('certify error: overdue rejected');
 
     let grade: Grade;
     if (bypass) {
@@ -1123,13 +1125,9 @@ export namespace Workbook {
     if (!recipients.length)
       throw new Error.Submit('submit error: missing seal recipients');
     const submission = Date.now();
-    if (
-      rubric.assignment.overdue === 'reject' &&
-      Rubric.Assignment.late({
-        expiration: rubric.assignment.expiration,
-        submission
-      })
-    ) throw new Error.Submit('submit error: overdue rejected');
+    const assignment = { ...rubric.assignment, submission };
+    if (Rubric.Assignment.rejected(assignment))
+      throw new Error.Submit('submit error: overdue rejected');
 
     const hash = await seal(workbook, rubric, recipients);
     const sealed = Rubric.seal(rubric, hash);

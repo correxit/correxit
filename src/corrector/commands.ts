@@ -400,6 +400,8 @@ async function correct(
   const rubric = open(workbook);
   if (!rubric || rubric.locked)
     throw new Correxit.Error.Certify('correct error: invalid rubric');
+  if (Rubric.Assignment.rejected(rubric.assignment))
+    throw new Correxit.Error.Certify('correct error: overdue rejected');
 
   const { interventions } = rubric.assignment.report;
   const pending = Object.values(rubric.cells)
@@ -427,6 +429,8 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const path = workbook.context.path;
   const { assignment } = rubric;
   const { report } = assignment;
+  if (Rubric.Assignment.rejected(assignment)) return null;
+
   const summary = Rubric.Assignment.summary(report, assignment);
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
@@ -460,6 +464,8 @@ function precertified(workbook: Headless): Certified | null {
 
   const { assignment, cells } = rubric;
   const { interventions, kernel, scores } = assignment.report;
+  if (Rubric.Assignment.rejected(assignment)) return null;
+
   const path = workbook.context.path;
   const incomplete = Object.keys(cells).some(id => !scores[id]);
   const partial = Object.values(scores).some(unexecuted);
