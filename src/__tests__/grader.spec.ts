@@ -28,6 +28,7 @@ const grade = (workbook: Headless): Certified =>
     identifier: {
       assignee: 'a',
       assignment: 'x',
+      file: workbook.context.path,
       issue: 'i',
       rubric: 'r'
     },

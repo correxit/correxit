@@ -67,7 +67,13 @@ const certified = (
       score: { ...Rubric.Score.CORRECT, points, possible },
       spec: null
     },
-    identifier: { assignee, assignment: '', issue, rubric },
+    identifier: {
+      assignee,
+      assignment: '',
+      file: 'test.ipynb',
+      issue,
+      rubric
+    },
     workbook: {} as Workbook
   };
 };
