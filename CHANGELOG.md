@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/QuantStack/correxit/compare/v1.20.0...v1.21.0) (2026-05-05)
+
+
+### Features
+
+* Add overdue handling ([#72](https://github.com/QuantStack/correxit/issues/72)) ([7bb7cb6](https://github.com/QuantStack/correxit/commit/7bb7cb6880ba163da6694e9fbee49f939b534a6f))
+
 # [1.20.0](https://github.com/QuantStack/correxit/compare/v1.19.0...v1.20.0) (2026-04-30)
 
 
