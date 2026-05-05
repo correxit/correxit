@@ -402,7 +402,8 @@ export namespace Rubric {
         return x.assignee === y.assignee &&
           x.overdue === y.overdue &&
           x.penalty === y.penalty &&
-          registration(x, y);
+          registration(x, y) &&
+          resources(x, y);
       }
 
       export function registered(
@@ -415,6 +416,13 @@ export namespace Rubric {
         const a = normalize(x), b = normalize(y);
         return a.length === b.length &&
           a.every((c, i) => course(c, b[i]));
+      }
+
+      export function resources(
+        { resources: x }: Pick<Assignment, 'resources'>,
+        { resources: y }: Pick<Assignment, 'resources'>
+      ): boolean {
+        return (x?.join('\x1F') ?? null) === (y?.join('\x1F') ?? null);
       }
     }
 
@@ -900,7 +908,7 @@ export namespace Rubric {
       name !== rubric.assignment.name ||
       overdue !== rubric.assignment.overdue ||
       penalty !== rubric.assignment.penalty ||
-      JSON.stringify(resources) !== JSON.stringify(rubric.assignment.resources) ||
+      !Assignment.Equal.resources({ resources }, rubric.assignment) ||
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster);
     const certification = stale ? null : rubric.assignment.certification;
     const collected = stale ? null : rubric.assignment.collected;
