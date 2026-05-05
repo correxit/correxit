@@ -31,6 +31,7 @@ export namespace Rubric {
     overdue: Assignment.Overdue;
     penalty: number | null;
     report: Assignment.Report;
+    resources: string[] | null;
     roster: string[];
     seal: string | null;
     submission: Timestamp;
@@ -480,6 +481,7 @@ export namespace Rubric {
         overdue: null,
         penalty: null,
         report: Report.empty(),
+        resources: null,
         roster: [],
         seal: null,
         submission: null,
@@ -885,6 +887,7 @@ export namespace Rubric {
       name = rubric.assignment.name,
       overdue = rubric.assignment.overdue,
       penalty = rubric.assignment.penalty,
+      resources = rubric.assignment.resources,
       roster = rubric.assignment.roster
     }: Partial<Assignment> = {}
   ): Promise<Unlocked> {
@@ -897,6 +900,7 @@ export namespace Rubric {
       name !== rubric.assignment.name ||
       overdue !== rubric.assignment.overdue ||
       penalty !== rubric.assignment.penalty ||
+      JSON.stringify(resources) !== JSON.stringify(rubric.assignment.resources) ||
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster);
     const certification = stale ? null : rubric.assignment.certification;
     const collected = stale ? null : rubric.assignment.collected;
@@ -919,6 +923,7 @@ export namespace Rubric {
       overdue,
       penalty,
       report,
+      resources,
       roster
     };
     const lifecycle = {

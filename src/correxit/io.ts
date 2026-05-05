@@ -86,6 +86,20 @@ export async function create(options: {
   }
 }
 
+/** @returns the raw bytes of a co-located resource file. */
+export async function load(
+  { contents }: Pick<ServiceManager.IManager, 'contents'>,
+  dir: string,
+  name: string
+): Promise<Uint8Array> {
+  if (PathExt.basename(name) !== name)
+    throw new Correxit.Error.Fetch(`Invalid resource name: ${name}`);
+  const path = PathExt.join(dir, name);
+  const file = await contents.get(path, { format: 'base64', content: true });
+  const binary = atob(file.content as string);
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
 /** Creates a directory at path inside pwd. */
 export async function mkdir(
   { contents }: ServiceManager.IManager,

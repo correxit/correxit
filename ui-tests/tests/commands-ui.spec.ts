@@ -585,3 +585,99 @@ test('assigns workbook and updates assignment metadata', async ({ page }) => {
   expect(result.mac).toBe(true);
   await dispose();
 });
+
+test('sets and clears resources via command', async ({ page }) => {
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    await Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create())
+    );
+
+    const enabled = app.commands.isEnabled('correxit:resource');
+    await app.commands.execute('correxit:resource', {
+      resources: ['chinook.db', 'data.csv']
+    });
+    const afterSet = panel.context.model.sharedModel.getMetadata('correxit');
+
+    await app.commands.execute('correxit:resource', { resources: null });
+    const afterClear = panel.context.model.sharedModel.getMetadata('correxit');
+
+    return {
+      enabled,
+      resources: afterSet?.assignment?.resources ?? null,
+      mac: !!afterSet?.assignment?.mac,
+      cleared:
+        'resources' in (afterClear?.assignment ?? {})
+          ? afterClear.assignment.resources
+          : 'absent'
+    };
+  });
+
+  expect(result.enabled).toBe(true);
+  expect(result.resources).toEqual(['chinook.db', 'data.csv']);
+  expect(result.mac).toBe(true);
+  expect(result.cleared).toBeNull();
+  await dispose();
+});
+
+test('resource command is disabled when workbook is locked', async ({
+  page
+}) => {
+  const { dispose } = await prepare(page, [
+    { id: 'ref', source: 'answer' },
+    { id: 'cell', source: 'compare' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    const rubric = Rubric.add(
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create()),
+      {
+        id: 'cell',
+        is: 'comparable',
+        points: 1,
+        references: ['ref'],
+        payload: null
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
+    );
+    await Workbook.update(panel, rubric);
+    await Workbook.lock(panel, rubric.key);
+
+    return {
+      enabled: app.commands.isEnabled('correxit:resource')
+    };
+  });
+
+  expect(result.enabled).toBe(false);
+  await dispose();
+});

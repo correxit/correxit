@@ -1,5 +1,7 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
+import { IDocumentManager } from '@jupyterlab/docmanager';
+import { FileDialog } from '@jupyterlab/filebrowser';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { NotebookModelFactory, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
@@ -43,6 +45,7 @@ export namespace CommandIDs {
   export const share = 'correxit:share';
   export const submit = 'correxit:submit';
   export const track = 'correxit:track';
+  export const resource = 'correxit:resource';
   export const unassign = 'correxit:unassign';
   export const unlock = 'correxit:unlock';
 }
@@ -70,6 +73,7 @@ export function commands(
   utilities: {
     collector: Correxit.Collector;
     distributor: Correxit.Distributor;
+    documents: IDocumentManager;
     injector: Correxit.Injector;
     registrar: Correxit.Registrar;
     submitter: Correxit.Submitter;
@@ -80,7 +84,7 @@ export function commands(
   const { commands, serviceManager: manager, shell } = app;
   const { Error, Icons } = Correxit;
   const {
-    collector, distributor, injector, registrar, submitter, unlocker
+    collector, distributor, documents, injector, registrar, submitter, unlocker
   } = utilities;
   const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
@@ -161,7 +165,7 @@ export function commands(
         return { assignee, error: null, ok: true, path };
 
       const notebook = workbook.context.model.sharedModel.toJSON();
-      await distributor({ identifier, notebook, path });
+      await distributor({ identifier, notebook, path, resources: null });
       await distribute(workbook);
       await workbook.context.save();
       return { assignee, error: null, ok: true, path };
@@ -250,6 +254,39 @@ export function commands(
       const { button } = await showDialog({ body, title });
       if (!button.accept) return;
       await assign(workbook, { assignee: '' });
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.resource, {
+    icon: Icons.assignment,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!rubric && !rubric.locked && !rubric.assignment.assignee;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.resource),
+    label: trans.__('Set resources...'),
+    execute: async (args: Partial<Credentials & { resources: string[] | null }>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || rubric.locked || rubric.assignment.assignee) return;
+      let resources: string[] | null;
+      if ('resources' in args) {
+        resources = args.resources ?? null;
+      } else {
+        const { PathExt } = await import('@jupyterlab/coreutils');
+        const dir = PathExt.dirname(workbook.context.path);
+        const { button, value } = await FileDialog.getOpenFiles({
+          defaultPath: dir,
+          manager: documents,
+          title: trans.__('Select resource files'),
+          label: trans.__('Select files to distribute alongside this assignment.'),
+          translator: utilities.translator
+        });
+        if (!button.accept) return;
+        const files = value ?? [];
+        resources = files.length
+          ? files.map(f => PathExt.basename(f.path))
+          : null;
+      }
+      await assign(workbook, { resources });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.certify, {

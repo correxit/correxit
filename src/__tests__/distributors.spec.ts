@@ -30,7 +30,8 @@ const propagated = (
     cells: cells.map(cell => ({ ...cell }) as any),
     metadata: {}
   } as any,
-  path: 'assigned.ipynb'
+  path: 'assigned.ipynb',
+  resources: null
 });
 
 describe('manual distributor', () => {

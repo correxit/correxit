@@ -200,6 +200,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
   requires: [
     Correxit.Collector,
     Correxit.Distributor,
+    IDocumentManager,
     Correxit.Registrar,
     Correxit.Submitter,
     Correxit.Unlocker,
@@ -212,6 +213,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       app,
       collector: Correxit.Collector,
       distributor: Correxit.Distributor,
+      documents: IDocumentManager,
       registrar: Correxit.Registrar,
       submitter: Correxit.Submitter,
       unlocker: Correxit.Unlocker,
@@ -271,6 +273,7 @@ const monitor: JupyterFrontEndPlugin<Correxit.Monitor> = {
       const added = Correxit.commands(app, {
         collector,
         distributor,
+        documents,
         injector,
         registrar,
         submitter,

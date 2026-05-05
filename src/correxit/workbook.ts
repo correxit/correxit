@@ -267,6 +267,7 @@ export namespace Workbook {
       name = assignment.name,
       overdue = assignment.overdue,
       penalty = assignment.penalty,
+      resources = assignment.resources,
       submission = assignment.submission,
       submitted = assignment.submitted,
       roster = assignment.roster,
@@ -281,6 +282,7 @@ export namespace Workbook {
     name !== assignment.name ||
     overdue !== assignment.overdue ||
     penalty !== assignment.penalty ||
+    JSON.stringify(resources) !== JSON.stringify(assignment.resources) ||
     submission !== assignment.submission ||
     submitted !== assignment.submitted ||
     (roster !== assignment.roster &&
