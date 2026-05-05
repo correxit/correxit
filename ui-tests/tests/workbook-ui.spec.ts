@@ -292,6 +292,96 @@ test('manual roster editing updates assignee choices live', async ({
   await dispose();
 });
 
+test('manual overdue policy editing updates assignment metadata', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget as any;
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create());
+    await Workbook.update(panel, rubric);
+  });
+
+  await page.getByRole('tab', { name: 'Correxit' }).click();
+  const deadline = page.locator('input[name="correxit-assignment-expiration"]');
+  await expect(deadline).toBeVisible();
+  await deadline.fill('2026-04-21T12:00');
+
+  const overdue = page.locator('select[name="correxit-assignment-overdue"]');
+  await expect(overdue).toBeVisible();
+  await overdue.selectOption('dock');
+
+  const penalty = page.locator('input[name="correxit-assignment-penalty"]');
+  await expect(penalty).toBeVisible();
+
+  await penalty.fill('1.9');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget as any;
+        const rubric = Workbook.open(panel, true);
+        return rubric?.assignment.penalty ?? null;
+      })
+    )
+    .toBe(10);
+
+  await penalty.fill('25');
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget as any;
+        const rubric = Workbook.open(panel, true);
+        return rubric
+          ? {
+              expiration: rubric.assignment.expiration !== null,
+              overdue: rubric.assignment.overdue,
+              penalty: rubric.assignment.penalty
+            }
+          : null;
+      })
+    )
+    .toEqual({ expiration: true, overdue: 'dock', penalty: 25 });
+
+  await deadline.fill('');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget as any;
+        const rubric = Workbook.open(panel, true);
+        return rubric
+          ? {
+              expiration: rubric.assignment.expiration,
+              overdue: rubric.assignment.overdue,
+              penalty: rubric.assignment.penalty
+            }
+          : null;
+      })
+    )
+    .toEqual({ expiration: null, overdue: null, penalty: null });
+
+  await dispose();
+});
+
 test('dropping registrar keeps assigned roster details', async ({ page }) => {
   const assignee = 'student@example.com';
   const id = 'course:assignment';
@@ -856,6 +946,283 @@ test('submits a workbook and sets cells to read-only', async ({ page }) => {
   expect(result.submitted).toBe('receipt-123');
   expect(result.stored).toBeGreaterThan(0);
   expect(result.editable).toEqual([false, false]);
+  await dispose();
+});
+
+test('rejects an overdue submission before sealing', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    const converted = await Workbook.convert(workbook, 'secret', unlocker);
+
+    const rubric = await Rubric.assign(
+      Rubric.add(converted, {
+        id: 'cell',
+        is: 'reviewable',
+        payload: null,
+        points: 1,
+        references: null
+      }),
+      {
+        assignee: 'student@example.com',
+        expiration: 1,
+        overdue: 'reject',
+        roster: ['student@example.com']
+      }
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+
+    const now = Date.now;
+    Date.now = () => 2;
+    try {
+      await Workbook.submit(workbook, ['pub']);
+      return { error: null };
+    } catch (error) {
+      const opened = Workbook.open(workbook, true);
+      return {
+        error: String(error),
+        frozen: panel.context.model.sharedModel.cells.map((cell: any) =>
+          cell.getMetadata('editable')
+        ),
+        submission: opened?.assignment.submission ?? null
+      };
+    } finally {
+      Date.now = now;
+    }
+  });
+
+  expect(result.error).toContain('overdue rejected');
+  expect(result.submission).toBeNull();
+  expect(result.frozen).toEqual([undefined]);
+  await dispose();
+});
+
+test('submit reuses the checked timestamp when reject is active', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    const converted = await Workbook.convert(workbook, 'secret', unlocker);
+
+    const rubric = await Rubric.assign(
+      Rubric.add(converted, {
+        id: 'cell',
+        is: 'reviewable',
+        payload: null,
+        points: 1,
+        references: null
+      }),
+      {
+        assignee: 'student@example.com',
+        expiration: 2000,
+        overdue: 'reject',
+        roster: ['student@example.com']
+      }
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.lock(workbook);
+    const locked = Workbook.open(workbook);
+    const author = locked.assignment.keys.public.author;
+
+    const checked = 1000;
+    const late = 3000;
+    let calls = 0;
+    const now = Date.now;
+    Date.now = () => (calls++ ? late : checked);
+    try {
+      const submitted = await Workbook.submit(workbook, [author]);
+      const opened = Workbook.open(workbook, true);
+      return {
+        calls,
+        checked,
+        error: null,
+        stored: opened?.assignment.submission ?? null,
+        submission: submitted.assignment.submission
+      };
+    } catch (error) {
+      return {
+        calls,
+        checked,
+        error: String(error),
+        stored: null,
+        submission: null
+      };
+    } finally {
+      Date.now = now;
+    }
+  });
+
+  expect(result.error).toBeNull();
+  expect(result.calls).toBeGreaterThan(1);
+  expect(result.submission).toBe(result.checked);
+  expect(result.stored).toBe(result.checked);
+  await dispose();
+});
+
+test('certify docks a late workbook by penalty percentage', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const base = await Rubric.assign(
+      Rubric.add(
+        (r => ({
+          ...r,
+          key: 'secret',
+          assignment: {
+            ...r.assignment,
+            keys: {
+              private: { assignee: null, author: 'priv' },
+              public: { assignee: null, author: 'pub' }
+            }
+          }
+        }))(Rubric.create()),
+        {
+          id: 'cell',
+          is: 'reviewable',
+          payload: null,
+          points: 10,
+          references: null
+        }
+      ),
+      {
+        assignee: 'student@example.com',
+        expiration: 1,
+        overdue: 'dock',
+        penalty: 25,
+        roster: ['student@example.com']
+      }
+    );
+    const report = {
+      interventions: {
+        cell: Rubric.Score.intervene('cell', {
+          comment: '',
+          points: 10,
+          possible: 10
+        })
+      },
+      kernel: null,
+      scores: {}
+    };
+    const signed = await Rubric.sign(base, report);
+    const submitted = {
+      ...signed,
+      assignment: { ...signed.assignment, submission: 2 }
+    };
+    await Workbook.update(workbook, submitted);
+
+    const trans = { __: (message: string) => message } as any;
+    const certified = await Workbook.certify(workbook, trans, true);
+    const opened = Workbook.open(workbook, true);
+    return {
+      certification: opened?.assignment.certification !== null,
+      locked: opened?.locked ?? null,
+      points: certified.grade.score.points,
+      possible: certified.grade.score.possible
+    };
+  });
+
+  expect(result.locked).toBe(true);
+  expect(result.certification).toBe(true);
+  expect(result.points).toBe(7);
+  expect(result.possible).toBe(10);
+  await dispose();
+});
+
+test('certify rejects an overdue rejected workbook', async ({ page }) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const base = await Rubric.assign(
+      Rubric.add(
+        (r => ({
+          ...r,
+          key: 'secret',
+          assignment: {
+            ...r.assignment,
+            keys: {
+              private: { assignee: null, author: 'priv' },
+              public: { assignee: null, author: 'pub' }
+            }
+          }
+        }))(Rubric.create()),
+        {
+          id: 'cell',
+          is: 'reviewable',
+          payload: null,
+          points: 10,
+          references: null
+        }
+      ),
+      {
+        assignee: 'student@example.com',
+        expiration: 1,
+        overdue: 'reject',
+        roster: ['student@example.com']
+      }
+    );
+    const report = {
+      interventions: {
+        cell: Rubric.Score.intervene('cell', {
+          comment: '',
+          points: 10,
+          possible: 10
+        })
+      },
+      kernel: null,
+      scores: {}
+    };
+    const signed = await Rubric.sign(base, report);
+    const submitted = {
+      ...signed,
+      assignment: { ...signed.assignment, submission: 2 }
+    };
+    await Workbook.update(workbook, submitted);
+
+    const trans = { __: (message: string) => message } as any;
+    try {
+      await Workbook.certify(workbook, trans, true);
+      return { error: null };
+    } catch (error) {
+      const opened = Workbook.open(workbook, true);
+      return {
+        certification: opened?.assignment.certification ?? null,
+        error: String(error),
+        locked: opened?.locked ?? null
+      };
+    }
+  });
+
+  expect(result.error).toContain('overdue rejected');
+  expect(result.locked).toBe(false);
+  expect(result.certification).toBeNull();
   await dispose();
 });
 

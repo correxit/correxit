@@ -340,6 +340,7 @@
 }
 
 .correxit-assignment-assignee,
+.correxit-assignment-overdue,
 .correxit-assignment-roster {
   display: flex;
 
@@ -414,6 +415,27 @@
     font-size: var(--correxit-sidebar-font-size);
     height: 28px;
     width: var(--correxit-sidebar-control-width);
+  }
+}
+
+.correxit-assignment-overdue {
+  padding: 2px 0;
+
+  label {
+    display: inline-block;
+    font-size: var(--jp-ui-font-size0);
+    padding: 4px 0 2px;
+  }
+
+  input[type='number'],
+  select {
+    font-size: var(--correxit-sidebar-font-size);
+    height: 28px;
+    width: var(--correxit-sidebar-control-width);
+  }
+
+  input[type='number'] {
+    margin-top: 3px;
   }
 }
 

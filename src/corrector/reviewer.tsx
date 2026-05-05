@@ -316,8 +316,9 @@ export function Reviewer(props: Reviewer.Props) {
     if (!cursor || !workbook || type !== 'code' || busy) return;
     setBusy(true);
     try {
-      const result = await Workbook.correct(workbook, cursor.cell, true);
-      setCorrected(result.outputs.get(cursor.cell) ?? []);
+      const args = { id: cursor.cell };
+      const result = await commands.execute(CommandIDs.run, args);
+      if (result !== null) setCorrected(result);
     } finally {
       setBusy(false);
     }
@@ -471,12 +472,12 @@ export function Reviewer(props: Reviewer.Props) {
               </div>
               {type === 'code' && (
                 <button
-                  className="correxit-reviewer-btn correxit-reviewer-btn-correct"
+                  className="correxit-reviewer-btn correxit-reviewer-btn-run"
                   disabled={busy}
                   onClick={rerun}
-                  title={trans.__('Execute and correct cell')}
+                  title={trans.__('Run cell for output preview')}
                 >
-                  {busy ? trans.__('Correcting…') : trans.__('Correct')}
+                  {busy ? trans.__('Running…') : trans.__('Run')}
                 </button>
               )}
             </div>

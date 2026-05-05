@@ -247,7 +247,7 @@ export const Header: React.FC<{
 
   const rubric = Workbook.open(workbook, true);
   const score = rubric
-    ? Rubric.Assignment.summary(rubric.assignment.report)
+    ? Rubric.Assignment.summary(rubric.assignment.report, rubric.assignment)
     : null;
   const assignment = rubric?.assignment || null;
   const heading = rubric ? trans.__('Workbook') : trans.__('Notebook');

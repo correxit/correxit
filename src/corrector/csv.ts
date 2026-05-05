@@ -29,10 +29,11 @@ export function generate(
     const assignment = rubric?.assignment.id || '';
     const title = rubric?.assignment.name || '';
     const issue = rubric?.assignment.issue || '';
+    const total = rubric
+      ? summary(rubric.assignment.report, rubric.assignment)
+      : null;
     const { points, possible, status } =
-      grade?.score ??
-      (rubric ? summary(rubric.assignment.report) : null) ??
-      Rubric.Score.UNSCORED;
+      grade?.score ?? total ?? Rubric.Score.UNSCORED;
     const expiration = rubric?.assignment.expiration ?? null;
     const distribution = rubric?.assignment.distribution ?? null;
     const submission = rubric?.assignment.submission ?? null;

@@ -220,6 +220,30 @@ per line) and an **assignment name** in the sidebar. If a Registrar
 plugin is configured (e.g., Moodle), roster and assignment metadata are
 fetched automatically.
 
+In manual mode, the sidebar deadline belongs to Correxit. You may choose
+an overdue policy: accept late work, dock the final score by a percentage
+of possible points, or reject submission after the deadline.
+
+This policy is local to the workbook. Correxit applies it from the submission
+timestamp written into the document when the student clicks **Submit**. That is
+useful for backendless workflows such as exchanging notebooks over git, email,
+or shared storage, but it is not an authority-backed receipt.
+
+If a Registrar plugin supplies the assignment metadata, Correxit treats
+that deadline as provider-owned registration data. It is displayed, but
+Correxit does not layer its own overdue policy on top of it.
+
+If your submit path already has its own trusted clock and deadline rules
+(for example Moodle, a gradebook service, or a server-side git workflow),
+that external system should remain authoritative. Correxit's local overdue
+policy is for the cases where there is no backend to do that job.
+
+If you use the local `reject` policy, the corresponding grading-side control
+is in **Correxit Corrector**: enable **Submitted** to scan and grade only
+workbooks that carry a local submission timestamp. That gives backendless
+workflows a coherent intake rule without pretending the workbook has an
+external authority behind it.
+
 ### Propagating
 
 Click **Create _N_ assigned workbooks…** to distribute. Correxit creates
@@ -324,6 +348,8 @@ A workbook moves through these stages:
 
 - **Submitted**: the student clicked submit. A timestamp is stored. If a
   Submitter plugin records the submission externally, its receipt is stored too.
+  The local timestamp is useful workflow state, but only the external receipt
+  comes from a separate authority.
 - **Certified**: the grade has been computed and frozen. Certification
   is the grader's seal; it requires all cells to be scored.
 - **Collected**: a Collector plugin acknowledged receipt of the grade and
@@ -406,16 +432,17 @@ tests can increase the converted total.
 nbgrader's `### AUTOTEST` and `### HASHED AUTOTEST` directives are
 expanded at conversion time. Correxit leases a kernel, executes the
 answer cell to define its variables, then evaluates each autotest
-expression and replaces the directive with generated Python test code
-when the workbook kernel is Python and the observed value can be
-translated safely.
+expression and replaces the directive with generated Python test code.
+This Python requirement applies only to AUTOTEST expansion; the rest of
+nbgrader conversion remains kernel-agnostic.
 
 When Correxit cannot safely reify an autotest, it leaves a commented
 placeholder in the reference cell, inserts a failing
 `NotImplementedError`, and reports the cell in the conversion summary so
 you can rewrite that test manually.
 If no kernel is available, the directives are left in place and a
-warning is added to the report.
+warning is added to the report, but the rest of conversion still
+continues.
 
 ### Points and slippage
 

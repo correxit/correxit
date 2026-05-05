@@ -327,7 +327,8 @@ table.correxit-corrector {
 }
 
 .correxit-corrector-mode-options label,
-.correxit-corrector-overwrite {
+.correxit-corrector-overwrite,
+.correxit-corrector-submitted {
   align-items: center;
   color: var(--jp-ui-font-color1);
   display: flex;
@@ -336,17 +337,24 @@ table.correxit-corrector {
   gap: 4px;
 }
 
-.correxit-corrector-overwrite {
+.correxit-corrector-overwrite,
+.correxit-corrector-submitted {
   margin-right: 4px;
 }
 
 .correxit-corrector-mode-options input,
-.correxit-corrector-overwrite input {
+.correxit-corrector-overwrite input,
+.correxit-corrector-submitted input {
   margin: 0;
   vertical-align: middle;
 }
 
 .correxit-corrector-mode.cxt-mod-scan .correxit-corrector-overwrite {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.correxit-corrector-mode.cxt-mod-collect .correxit-corrector-submitted {
   opacity: 0.4;
   pointer-events: none;
 }

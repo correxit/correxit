@@ -39,6 +39,7 @@ export namespace CommandIDs {
   export const pass = 'correxit-reviewer:pass';
   export const review = 'correxit-reviewer:review';
   export const right = 'correxit-reviewer:right';
+  export const run = 'correxit-reviewer:run';
   export const scan = 'correxit-corrector:scan';
   export const up = 'correxit-reviewer:up';
 }
@@ -84,7 +85,7 @@ export function commands(
     commands.addCommand(CommandIDs.batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
       execute: (
-        args: Partial<Credentials & { overwrite: boolean }>
+        args: Partial<Credentials & { overwrite: boolean; submitted: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
         const actions: Actions = {
@@ -100,7 +101,10 @@ export function commands(
 
         const cap = kernels.cap();
         const retries = kernels.retries();
-        const source = scanner({ commands }, handle);
+        const source = scanner(
+          { commands },
+          { ...handle, submitted: !!args.submitted }
+        );
         return (async function* (results: AsyncGenerator<Result>) {
           for await (const result of results) {
             const { grade, workbook } = result.ok ? result.certified : result;
@@ -209,8 +213,10 @@ export function commands(
   disposables.push(
     commands.addCommand(CommandIDs.scan, {
       label: trans.__('Scan a directory for Correxit workbooks'),
-      execute: (handle: Partial<Credentials>): AsyncGenerator<Scanned> =>
-        (async function* scanner(handle) {
+      execute: (
+        handle: Partial<Credentials & { submitted: boolean }>
+      ): AsyncGenerator<Scanned> =>
+        (async function* scanner(handle, submitted) {
           const directory = handle && handle.path;
           if (!directory) return;
 
@@ -221,8 +227,10 @@ export function commands(
             console.warn(CommandIDs.scan, directory, error);
             return;
           }
-          for (const { path } of notebooks)
-            yield { hollow: true, context: { path } };
+          if (!submitted) {
+            for (const { path } of notebooks)
+              yield { hollow: true, context: { path } };
+          }
 
           let prompted = false;
           for (const { path } of notebooks) {
@@ -231,10 +239,17 @@ export function commands(
               const locked = open(fetched)?.locked;
               const unauthenticated = !handle.key && !handle.passphrase;
               prompted ||= !locked || !handle.unlock || !unauthenticated;
+              if (submitted && !submittedLocally(fetched as Headless)) {
+                fetched.context.dispose();
+                continue;
+              }
               yield fetched as Headless;
             }
           }
-        })(normalize({ ...handle, path: handle.path || '.' }))
+        })(
+          normalize({ ...handle, path: handle.path || '.' }),
+          !!handle.submitted
+        )
     })
   );
   disposables.push(
@@ -311,6 +326,29 @@ export function commands(
     })
   );
   disposables.push(
+    commands.addCommand(CommandIDs.run, {
+      caption: trans.__('Run reviewer cell'),
+      label: trans.__('Run'),
+      execute: async (
+        args: Partial<{ id: string }>
+      ): Promise<Rubric.Cell.Output[] | null> => {
+        const workbook = reviewer?.workbook ?? null;
+        const id = args.id ?? bridge.peek().cursor?.cell ?? null;
+        if (!workbook || !id) return null;
+        try {
+          const rubric = open(workbook);
+          if (!rubric) return null;
+          const result = await Workbook.execute(workbook, rubric, id);
+          if (!result) throw new globalThis.Error('run error: execute failed');
+          return result.outputs.get(id) ?? [];
+        } catch (error) {
+          void showErrorMessage(...Error.interpret(error, trans));
+          return null;
+        }
+      }
+    })
+  );
+  disposables.push(
     commands.addCommand(CommandIDs.up, {
       caption: trans.__('Previous cell'),
       label: '↑',
@@ -362,6 +400,8 @@ async function correct(
   const rubric = open(workbook);
   if (!rubric || rubric.locked)
     throw new Correxit.Error.Certify('correct error: invalid rubric');
+  if (Rubric.Assignment.rejected(rubric.assignment))
+    throw new Correxit.Error.Certify('correct error: overdue rejected');
 
   const { interventions } = rubric.assignment.report;
   const pending = Object.values(rubric.cells)
@@ -389,7 +429,9 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const path = workbook.context.path;
   const { assignment } = rubric;
   const { report } = assignment;
-  const summary = Rubric.Assignment.summary(report);
+  if (Rubric.Assignment.rejected(assignment)) return null;
+
+  const summary = Rubric.Assignment.summary(report, assignment);
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
 
@@ -422,6 +464,8 @@ function precertified(workbook: Headless): Certified | null {
 
   const { assignment, cells } = rubric;
   const { interventions, kernel, scores } = assignment.report;
+  if (Rubric.Assignment.rejected(assignment)) return null;
+
   const path = workbook.context.path;
   const incomplete = Object.keys(cells).some(id => !scores[id]);
   const partial = Object.values(scores).some(unexecuted);
@@ -429,7 +473,7 @@ function precertified(workbook: Headless): Certified | null {
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
   const uncertified = !assignment.certification;
-  const summary = Rubric.Assignment.summary(assignment.report);
+  const summary = Rubric.Assignment.summary(assignment.report, assignment);
   const unscored = summary.status === 'unscored';
   if (incomplete || partial || pending || uncertified || unscored) return null;
 
@@ -455,11 +499,15 @@ async function save(workbook: Headless | null) {
 
 async function* scanner(
   { commands }: Pick<JupyterFrontEnd, 'commands'>,
-  credentials: Partial<Credentials>
+  credentials: Partial<Credentials & { submitted: boolean }>
 ): AsyncGenerator<Headless> {
   const stream = await commands.execute(CommandIDs.scan, credentials);
   for await (const workbook of stream as AsyncIterable<Scanned>)
     if (!workbook.hollow) yield workbook;
+}
+
+function submittedLocally(workbook: Headless): boolean {
+  return open(workbook)?.assignment.submission !== null;
 }
 
 function unexecuted({ code }: Rubric.Score): boolean {

@@ -50,6 +50,22 @@ will be opened in your browser at the end of the tests execution; see
 [Playwright documentation](https://playwright.dev/docs/test-reporters#html-reporter)
 for configuring that behavior.
 
+## Generate screenshots
+
+If you want stable UI captures for a PR comment or documentation draft, run:
+
+```sh
+cd ./ui-tests
+jlpm screenshots
+```
+
+The images are written to `ui-tests/screenshots/`. The dedicated screenshot
+suite lives under `ui-tests/scenes/` and runs through
+`playwright.screenshots.config.js`, so it is separate from the enforced
+integration tests in `ui-tests/tests/`.
+Each run also writes `ui-tests/screenshots/manifest.json` with the scene titles,
+filenames, and captions so the assets are easier to reuse in PR comments or docs.
+
 ## Update the tests snapshots
 
 > All commands are assumed to be executed from the root directory
@@ -91,7 +107,24 @@ jlpm playwright test -u
 
 > All commands are assumed to be executed from the root directory
 
-To create tests, the easiest way is to use the code generator tool of playwright:
+Most new UI coverage in this repository starts from an existing file:
+
+- `ui-tests/tests/` for enforced integration tests
+- `ui-tests/scenes/` for screenshot scenes
+
+In practice, the lowest-friction workflow is usually:
+
+1. Find the closest existing spec and copy its shape.
+2. Reuse helpers from `ui-tests/tests/utils.ts` when possible.
+3. Run only the one file you are editing while you iterate.
+4. Use Playwright codegen only if you need help finding a selector or
+   discovering the order of a UI interaction.
+
+Codegen is a drafting tool, not the final style we keep in the repo. After using
+it, move the useful parts into your spec and then simplify them to match the
+rest of the codebase.
+
+If you do want to use the Playwright code generator, the flow is:
 
 1. Compile the extension:
 
@@ -122,8 +155,20 @@ jlpm start
 
 ```sh
 cd ./ui-tests
-jlpm playwright codegen localhost:8888
+jlpm playwright codegen localhost:8888/lab
 ```
+
+Then click through the workflow you care about in the browser window that
+opens. Playwright will generate code for those interactions.
+
+The useful pattern is:
+
+- keep the locators or steps that helped you
+- throw away the extra noise
+- replace raw recorded clicks with existing helpers or command-driven setup
+- finish by running the smallest relevant command:
+  - `jlpm playwright test tests/my-spec.ts`
+  - `jlpm screenshots`
 
 ## Debug tests
 

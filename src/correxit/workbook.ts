@@ -265,6 +265,8 @@ export namespace Workbook {
       issuer = assignment.issuer,
       mac = assignment.mac,
       name = assignment.name,
+      overdue = assignment.overdue,
+      penalty = assignment.penalty,
       submission = assignment.submission,
       submitted = assignment.submitted,
       roster = assignment.roster,
@@ -277,6 +279,8 @@ export namespace Workbook {
     issuer !== assignment.issuer ||
     mac !== assignment.mac ||
     name !== assignment.name ||
+    overdue !== assignment.overdue ||
+    penalty !== assignment.penalty ||
     submission !== assignment.submission ||
     submitted !== assignment.submitted ||
     (roster !== assignment.roster &&
@@ -541,11 +545,13 @@ export namespace Workbook {
     const identifier = Workbook.identifier(workbook);
     if (!Identifier.assigned(identifier))
       throw new Error.Certify('certify error: unassigned');
+    if (Rubric.Assignment.rejected(rubric.assignment))
+      throw new Error.Certify('certify error: overdue rejected');
 
     let grade: Grade;
     if (bypass) {
       const { report } = rubric.assignment;
-      const score = Rubric.Assignment.summary(report);
+      const score = Rubric.Assignment.summary(report, rubric.assignment);
       const cells = Object.values(rubric.cells);
       const ungraded = cells.some(cell =>
         cell.is !== 'reviewable' &&
@@ -675,7 +681,7 @@ export namespace Workbook {
     const scored = Object.entries(report.scores);
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
-    const final = id ? report.scores[id] : summary(report);
+    const final = id ? report.scores[id] : summary(report, rubric.assignment);
     const missing = ({ id, is, references }: Rubric.Cell) => {
       if (is === 'reviewable') return false;
       return !outputs.has(id) ||
@@ -1029,6 +1035,23 @@ export namespace Workbook {
     update(workbook, Rubric.remove(rubric, id));
   }
 
+  /**
+   * Restore a workbook snapshot, invalidating cached rubric state first.
+   *
+   * Returns the restored rubric when the snapshot contains valid Correxit
+   * metadata, otherwise `null`.
+   */
+  export function restore(
+    workbook: Workbook,
+    snapshot: INotebookContent
+  ): Rubric | null {
+    set(workbook, null);
+    const model = workbook.context.model;
+    model.fromJSON(snapshot);
+    model.sharedModel.clearUndoHistory();
+    return open(workbook, quiet);
+  }
+
   /** Reset a workbook back to a plain Jupyter notebook. */
   export async function reset(workbook: Workbook) {
     update(workbook, null);
@@ -1101,11 +1124,15 @@ export namespace Workbook {
     if (!rubric?.locked) throw new Error.Submit('submit error');
     if (!recipients.length)
       throw new Error.Submit('submit error: missing seal recipients');
+    const submission = Date.now();
+    const assignment = { ...rubric.assignment, submission };
+    if (Rubric.Assignment.rejected(assignment))
+      throw new Error.Submit('submit error: overdue rejected');
 
     const hash = await seal(workbook, rubric, recipients);
     const sealed = Rubric.seal(rubric, hash);
     freeze(workbook);
-    return update(workbook, Rubric.submit(sealed));
+    return update(workbook, Rubric.submit(sealed, submission));
   }
 
   /** Toggle a workbook reference's `secret` flag. */

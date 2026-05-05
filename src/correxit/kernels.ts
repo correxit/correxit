@@ -23,6 +23,7 @@ const pool = new Map<string, Idle[]>();
 const waiters: Array<() => void> = [];
 
 let attempts = 1;
+let epoch = 0;
 let lifespan = 60;
 let live = 0;
 let recycling = 0;
@@ -46,6 +47,7 @@ export function configure({ concurrency, retries, timeout }: Config): void {
 
 /** @internal Resets all module state for tests. */
 export function drain(): void {
+  epoch++;
   for (const entries of pool.values()) {
     for (const { timer, kernel } of entries) {
       clearTimeout(timer);
@@ -69,6 +71,7 @@ export function drain(): void {
  * interrupting the kernel and freeing the semaphore slot.
  */
 export async function lease(workbook: Workbook): Promise<Leased | null> {
+  const mark = epoch;
   await acquire();
 
   const name = await settle(workbook);
@@ -84,14 +87,14 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
     released = true;
     kernel.interrupt().catch(() => {});
     void dispose(kernel);
-    relinquish();
+    if (mark === epoch) relinquish();
   };
   const deadline = lifespan > 0 ? setTimeout(expire, lifespan * 1000) : null;
   const reclaim = async () => {
     if (released) return;
     released = true;
     if (deadline) clearTimeout(deadline);
-    await recycle(kernel);
+    await recycle(kernel, mark);
   };
   return [kernel, reclaim];
 }
@@ -167,7 +170,11 @@ async function restart(
 }
 
 /** Restarts a kernel and returns it to the pool, or disposes on failure. */
-async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
+async function recycle(
+  kernel: Kernel.IKernelConnection,
+  mark: number
+): Promise<void> {
+  if (mark !== epoch) return dispose(kernel);
   live--;
   recycling++;
   try {
@@ -175,12 +182,15 @@ async function recycle(kernel: Kernel.IKernelConnection): Promise<void> {
       setTimeout(() => reject(new Error('restart timeout')), 10_000)
     );
     const fresh = await Promise.race([restart(kernel), timeout]);
-    keep(fresh);
+    if (mark === epoch) keep(fresh);
+    else await dispose(fresh);
   } catch {
     await dispose(kernel);
   } finally {
-    recycling--;
-    waiters.shift()?.();
+    if (mark === epoch) {
+      recycling--;
+      waiters.shift()?.();
+    }
   }
 }
 

@@ -17,6 +17,12 @@ import { Workbook } from '../correxit/workbook';
 import { manual } from '../correxit/submitters';
 
 const mock = Workbook.open as unknown as jest.Mock;
+const seed = (
+  overrides: Partial<Rubric.Assignment> = {}
+): Rubric.Assignment => ({
+  ...Rubric.Assignment.empty(),
+  ...overrides
+});
 
 const identifier = (
   overrides: Partial<Workbook.Identifier.Assigned> = {}
@@ -50,24 +56,12 @@ const workbook = (
   submission: Rubric.Timestamp = 1704067200000,
   cells?: { id: string; source: string }[]
 ) => {
-  const assignment: Rubric.Assignment = {
+  const assignment = seed({
     assignee: 'alice@example.com',
-    certification: null,
-    collected: null,
-    distribution: null,
-    expiration: null,
     id: '',
     issue: '',
-    issuer: '',
-    keys: Rubric.Assignment.Keys.empty(),
-    mac: '',
-    name: '',
-    report: Rubric.Assignment.Report.empty(),
-    roster: [],
-    seal: null,
-    submission,
-    submitted: null
-  };
+    submission
+  });
   mock.mockReturnValue({ ...Rubric.create(), assignment });
   return notebook(cells) as unknown as Workbook;
 };

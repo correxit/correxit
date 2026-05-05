@@ -9,5 +9,5 @@
     "target": "ES2018",
     "types": ["node"]
   },
-  "include": ["tests/**/*"]
+  "include": ["tests/**/*", "scenes/**/*"]
 }

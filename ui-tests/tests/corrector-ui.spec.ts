@@ -82,6 +82,30 @@ async function propagate(
   );
 }
 
+async function markSubmitted(page: any, path: string, submission = 1) {
+  await page.evaluate(
+    async ({ path, submission }: { path: string; submission: number }) => {
+      const contents = (window as any).jupyterapp.serviceManager.contents;
+      const file = await contents.get(path, {
+        content: true,
+        type: 'notebook'
+      });
+      const notebook = file.content;
+      const rubric = notebook.metadata.correxit;
+      notebook.metadata = {
+        ...notebook.metadata,
+        correxit: {
+          ...rubric,
+          assignment: { ...rubric.assignment, submission },
+          revised: submission
+        }
+      };
+      await contents.save(path, { ...file, content: notebook });
+    },
+    { path, submission }
+  );
+}
+
 async function focus(page: any) {
   const row = page
     .locator('.correxit-corrector tbody tr[tabindex="0"]')
@@ -214,6 +238,40 @@ test('scan yields nothing for a missing directory', async ({ page }) => {
   await dispose();
 });
 
+test('corrector can filter scan results to locally submitted workbooks', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  await markSubmitted(page, propagated.paths[0]);
+  await cd(page, '.');
+
+  await launch(page, propagated.directory);
+
+  const rows = page.locator('.correxit-corrector tbody tr[data-path]');
+  await expect(rows).toHaveCount(2);
+
+  await page
+    .getByRole('checkbox', {
+      name: 'Only include locally submitted workbooks'
+    })
+    .check();
+  await page.getByRole('button', { name: 'Execute selected mode' }).click();
+
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('alice@example.com');
+
+  await close(page);
+  await cleanup(page, propagated);
+  await dispose();
+});
+
 test('scan does not silence next fetch after first fetch failure', async ({
   page
 }) => {
@@ -227,7 +285,7 @@ test('scan does not silence next fetch after first fetch failure', async ({
   ]);
   await cd(page, '.');
 
-  const silentCalls = await page.evaluate(async (directory: string) => {
+  const silenced = await page.evaluate(async (directory: string) => {
     const app = (window as any).jupyterapp;
     const execute = app.commands.execute.bind(app.commands);
     const calls: boolean[] = [];
@@ -260,7 +318,7 @@ test('scan does not silence next fetch after first fetch failure', async ({
     }
   }, propagated.directory);
 
-  expect(silentCalls).toEqual([false, false]);
+  expect(silenced).toEqual([false, false]);
 
   await cleanup(page, propagated);
   await dispose();
@@ -455,6 +513,51 @@ test('batch grades and certifies workbooks', async ({ page }) => {
     expect(grade.status).not.toBe('unscored');
     expect(grade.possible).toBeGreaterThan(0);
   }
+
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('batch can require locally submitted workbooks', async ({ page }) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'answer = 42\nprint(answer)' }
+  ]);
+  const propagated = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  await markSubmitted(page, propagated.paths[0]);
+  await cd(page, '.');
+
+  const result = await page.evaluate(async (directory: string) => {
+    const { Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const stream: AsyncGenerator<any> = await app.commands.execute(
+      'correxit-corrector:batch',
+      { key: 'secret', path: directory, submitted: true }
+    );
+    const grades: any[] = [];
+    for await (const [path, { grade, workbook }] of stream) {
+      const rubric = Workbook.open(workbook, true);
+      grades.push({
+        assignee: rubric?.assignment?.assignee ?? null,
+        certification: rubric?.assignment?.certification !== null,
+        path,
+        points: grade.score.points,
+        possible: grade.score.possible,
+        status: grade.score.status
+      });
+      workbook.context.dispose();
+    }
+    return grades;
+  }, propagated.directory);
+
+  expect(result).toHaveLength(1);
+  expect(result[0].assignee).toBe('alice@example.com');
+  expect(result[0].certification).toBe(true);
+  expect(result[0].status).not.toBe('unscored');
+  expect(result[0].possible).toBeGreaterThan(0);
 
   await cleanup(page, propagated);
   await dispose();

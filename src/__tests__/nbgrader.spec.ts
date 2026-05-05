@@ -4,6 +4,7 @@ import * as path from 'path';
 
 jest.mock('../correxit/workbook', () => ({ Workbook: {} }));
 
+import * as kernels from '../correxit/kernels';
 import * as nbgrader from '../correxit/nbgrader';
 
 type Cellular = nbgrader.Cellular;
@@ -872,6 +873,73 @@ describe('nbgrader', () => {
       const result = await expand(cells, classification, executor);
       const source = result.sources.find(s => s.id === 't1');
       expect(source!.source).toBe(script(['f(3)', '9']));
+    });
+
+    it('limits non-python degradation to autotest expansion only', async () => {
+      const release = jest.fn(async () => {});
+      const requestExecute = jest.fn((content: { code: string }) => {
+        let onIOPub: ((msg: any) => void) | null = null;
+        const code = content.code.trim();
+        queueMicrotask(() => {
+          if (code === 'x') {
+            onIOPub?.({
+              header: { msg_type: 'execute_result' },
+              content: { data: { 'text/plain': '1' } }
+            });
+          }
+        });
+        return {
+          get onIOPub() {
+            return onIOPub;
+          },
+          set onIOPub(handler: ((msg: any) => void) | null) {
+            onIOPub = handler;
+          },
+          done: Promise.resolve({ content: { status: 'ok' } })
+        };
+      });
+      const kernel = {
+        info: Promise.resolve({ language_info: { name: 'C++' } }),
+        name: 'xeus-cling',
+        requestExecute,
+        spec: Promise.resolve({ language: 'C++' })
+      } as any;
+      const lease = jest
+        .spyOn(kernels, 'lease')
+        .mockResolvedValue([kernel, release]);
+      try {
+        const cells: Cellular[] = [
+          answer('a1', 'int x = 1;'),
+          check('t1', 1, '### AUTOTEST x'),
+          check('t2', 1, 'assert(x == 1);')
+        ];
+        const classification = classify(cells);
+        const workbook = {
+          context: { model: { defaultKernelName: 'xeus-cling' } }
+        } as any;
+
+        const result = await nbgrader.expand(workbook, cells, classification);
+        const source = result.sources.find(({ id }) => id === 't1');
+        expect(source).toBeDefined();
+        expect(source!.source).toContain(
+          '# Correxit could not safely convert this AUTOTEST.'
+        );
+        expect(
+          result.warnings.some(warning =>
+            warning.includes(
+              'Only AUTOTEST and HASHED AUTOTEST expansion requires a Python kernel'
+            )
+          )
+        ).toBe(true);
+        expect(result.cells).toEqual(classification.cells);
+        expect(result.references).toEqual(classification.references);
+        expect(result.sources.filter(({ id }) => id !== 't1')).toEqual(
+          classification.sources.filter(({ id }) => id !== 't1')
+        );
+        expect(release).toHaveBeenCalledTimes(1);
+      } finally {
+        lease.mockRestore();
+      }
     });
 
     it('executes non-autotest test cells for side effects', async () => {

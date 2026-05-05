@@ -31,7 +31,10 @@ export async function* propagate({
     return;
   }
   try {
-    const { assignment: { expiration, name, roster }, key } = rubric;
+    const {
+      assignment: { expiration, name, overdue, penalty, roster },
+      key
+    } = rubric;
     const path = workbook.context.path;
     const parent = PathExt.dirname(path);
     const base = PathExt.basename(path, '.ipynb');
@@ -55,7 +58,14 @@ export async function* propagate({
       const individual = { assignee, file, key, notebook, roster };
       const assigned = await reassign(individual);
       const issue = await Rubric.Assignment.issue({
-        assignment: { assignee, expiration, id: assigned.assignment, name },
+        assignment: {
+          assignee,
+          expiration,
+          id: assigned.assignment,
+          name,
+          overdue,
+          penalty
+        },
         notebook,
         rubric
       });
@@ -154,10 +164,28 @@ async function reassign({ assignee, file, key, notebook, roster }: {
 }): Promise<Workbook.Identifier.Assigned> {
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
     { assignment: Rubric.Assignment, revised: number };
-  const { expiration, id, keys, name, roster: encrypted } = metadata.assignment;
+  const {
+    expiration,
+    id,
+    keys,
+    name,
+    overdue,
+    penalty,
+    roster: encrypted
+  } = metadata.assignment;
   const report = Rubric.Assignment.Report.empty();
   const fresh = lifecycle(expiration);
-  const unsigned = { assignee, ...fresh, id, keys, name, report, roster };
+  const unsigned = {
+    assignee,
+    ...fresh,
+    id,
+    keys,
+    name,
+    overdue,
+    penalty,
+    report,
+    roster
+  };
   const mac = await Rubric.Assignment.mac(unsigned, key);
   const seal = null;
   metadata.assignment = { ...unsigned, mac, roster: encrypted, seal };
@@ -180,7 +208,7 @@ async function reissue({ issuer, issue, key, notebook, roster }: {
 }): Promise<void> {
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
     { assignment: Rubric.Assignment, revised: number };
-  const { assignee, expiration, id, keys, name, report } =
+  const { assignee, expiration, id, keys, name, overdue, penalty, report } =
     metadata.assignment;
   const unsigned = {
     assignee,
@@ -190,6 +218,8 @@ async function reissue({ issuer, issue, key, notebook, roster }: {
     issuer,
     keys,
     name,
+    overdue,
+    penalty,
     report,
     roster
   };

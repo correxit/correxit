@@ -28,6 +28,8 @@ export namespace Rubric {
     keys: Assignment.Keys;
     mac: string;
     name: string;
+    overdue: Assignment.Overdue;
+    penalty: number | null;
     report: Assignment.Report;
     roster: string[];
     seal: string | null;
@@ -362,6 +364,8 @@ export namespace Rubric {
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
   export namespace Assignment {
+    export type Overdue = 'accept' | 'dock' | 'reject' | null;
+
     export type Registration = Pick<
       Assignment,
       'expiration' | 'id' | 'name' | 'roster'
@@ -394,7 +398,10 @@ export namespace Rubric {
         x.every((record, i) => record === y[i]);
 
       export function assignment(x: Assignment, y: Assignment): boolean {
-        return x.assignee === y.assignee && registration(x, y);
+        return x.assignee === y.assignee &&
+          x.overdue === y.overdue &&
+          x.penalty === y.penalty &&
+          registration(x, y);
       }
 
       export function registered(
@@ -470,6 +477,8 @@ export namespace Rubric {
         keys: Keys.empty(),
         mac: '',
         name: '',
+        overdue: null,
+        penalty: null,
         report: Report.empty(),
         roster: [],
         seal: null,
@@ -509,20 +518,33 @@ export namespace Rubric {
     }
 
     export async function mac(terms: Terms, key: string): Promise<string> {
-      const { assignee, expiration, id, issue, issuer, keys, name, roster } =
-        terms;
+      const {
+        assignee,
+        expiration,
+        id,
+        issue,
+        issuer,
+        keys,
+        name,
+        overdue,
+        penalty,
+        roster
+      } = terms;
       const { interventions: manual, scores: auto } = terms.report;
       const author = Keys.author(keys);
       const report = { interventions: sort(manual), scores: sort(auto) };
       const unsigned = {
         assignee, author, expiration, id, issue, issuer,
-        name, report, roster
+        name, overdue, penalty, report, roster
       };
       return security.hmac(JSON.stringify(unsigned), key);
     }
 
     export async function issue({ assignment, notebook, rubric }: {
-      assignment: Pick<Assignment, 'assignee' | 'expiration' | 'id' | 'name'>;
+      assignment: Pick<
+        Assignment,
+        'assignee' | 'expiration' | 'id' | 'name' | 'overdue' | 'penalty'
+      >;
       notebook: INotebookContent;
       rubric: Pick<Base, 'cells' | 'id' | 'references'>;
     }): Promise<string> {
@@ -545,6 +567,8 @@ export namespace Rubric {
         cells,
         expiration: assignment.expiration,
         name: assignment.name,
+        overdue: assignment.overdue,
+        penalty: assignment.penalty,
         references,
         rubric: rubric.id,
         sources
@@ -565,7 +589,15 @@ export namespace Rubric {
     }: {
       assignment: Pick<
         Assignment,
-        'assignee' | 'expiration' | 'id' | 'issue' | 'issuer' | 'keys' | 'name'
+        | 'assignee'
+        | 'expiration'
+        | 'id'
+        | 'issue'
+        | 'issuer'
+        | 'keys'
+        | 'name'
+        | 'overdue'
+        | 'penalty'
       >;
       notebook: INotebookContent;
       rubric: Pick<Base, 'cells' | 'id' | 'references'>;
@@ -580,7 +612,29 @@ export namespace Rubric {
       return current === assignment.issue;
     }
 
-    export function summary(report: Report): Score {
+    export function late({ expiration, submission }: Pick<
+      Assignment,
+      'expiration' | 'submission'
+    >): boolean {
+      return expiration !== null &&
+        submission !== null &&
+        submission > expiration;
+    }
+
+    export function rejected(assignment: Pick<
+      Assignment,
+      'expiration' | 'overdue' | 'submission'
+    >): boolean {
+      return assignment.overdue === 'reject' && late(assignment);
+    }
+
+    export function summary(
+      report: Report,
+      assignment: Pick<
+        Assignment,
+        'expiration' | 'overdue' | 'penalty' | 'submission'
+      > | null = null
+    ): Score {
       const { interventions, scores } = { ...Report.empty(), ...report };
       const ids = new Set([
         ...Object.keys(interventions),
@@ -589,27 +643,43 @@ export namespace Rubric {
 
       const sentinel = ({ possible, status }: Score) =>
         status === 'unscored' && possible === Score.UNSCORED.possible;
-      const points = ({ points, status }: Score) =>
+      const value = ({ points, status }: Score) =>
         status === 'unscored' ? 0 : points;
       const sum = (a: Score, b: Score): Score => {
         if (sentinel(a)) return b;
         if (sentinel(b)) return a;
         return {
           code: '', comment: '', id: '',
-          points: points(a) + points(b),
+          points: value(a) + value(b),
           possible: a.possible + b.possible,
           status: 'summary'
         };
       };
-      return Array.from(ids)
+      const summary = Array.from(ids)
         .map(id => Score.resolve(report, id) ?? Score.UNSCORED)
         .reduce(sum, Score.UNSCORED);
+      if (
+        !assignment ||
+        assignment.overdue !== 'dock' ||
+        assignment.penalty === null ||
+        assignment.penalty <= 0 ||
+        summary.status === 'unscored' ||
+        !late(assignment)
+      ) return summary;
+
+      const deduction =
+        Math.ceil(summary.possible * assignment.penalty / 100);
+      const docked = Math.max(0, summary.points - deduction);
+      return { ...summary, points: docked };
     }
 
     export async function validate(
       { assignment, key }: Pick<Unlocked, 'assignment' | 'key'>
     ) {
-      const { assignee, issue, issuer, keys, mac, roster, seal } = assignment;
+      const {
+        assignee, issue, issuer, keys, mac, overdue, penalty, roster, seal
+      } = assignment;
+      const valid = ['accept', 'dock', 'reject'];
       if (!keys.private.author)
         throw new Error.Mismatch('missing author private key');
       if (!keys.public.author)
@@ -622,6 +692,16 @@ export namespace Rubric {
         throw new Error.Mismatch('assignee does not exist in roster');
       if (!!issue !== !!issuer)
         throw new Error.Mismatch('issue and issuer must appear together');
+      if (overdue !== null && !valid.includes(overdue))
+        throw new Error.Mismatch('invalid overdue policy');
+      if (overdue === 'dock' && penalty === null)
+        throw new Error.Mismatch('dock policy requires late penalty');
+      if (penalty !== null && !Number.isInteger(penalty))
+        throw new Error.Mismatch('invalid late penalty');
+      if (penalty !== null && (penalty < 0 || penalty > 100))
+        throw new Error.Mismatch('late penalty out of range');
+      if (overdue !== 'dock' && penalty !== null)
+        throw new Error.Mismatch('late penalty requires dock policy');
       if (issue) {
         const verified = await security.verify(issuer, keys.public.author);
         if (verified !== issue)
@@ -803,6 +883,8 @@ export namespace Rubric {
       expiration = rubric.assignment.expiration,
       id = rubric.assignment.id,
       name = rubric.assignment.name,
+      overdue = rubric.assignment.overdue,
+      penalty = rubric.assignment.penalty,
       roster = rubric.assignment.roster
     }: Partial<Assignment> = {}
   ): Promise<Unlocked> {
@@ -813,6 +895,8 @@ export namespace Rubric {
       expiration !== rubric.assignment.expiration ||
       id !== rubric.assignment.id ||
       name !== rubric.assignment.name ||
+      overdue !== rubric.assignment.overdue ||
+      penalty !== rubric.assignment.penalty ||
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster);
     const certification = stale ? null : rubric.assignment.certification;
     const collected = stale ? null : rubric.assignment.collected;
@@ -832,6 +916,8 @@ export namespace Rubric {
       issuer,
       keys,
       name,
+      overdue,
+      penalty,
       report,
       roster
     };
@@ -1056,8 +1142,10 @@ export namespace Rubric {
   }
 
   /** Record the submission timestamp for a locked workbook. */
-  export function submit(rubric: Locked): Locked {
-    const submission = Date.now();
+  export function submit(
+    rubric: Locked,
+    submission: number = Date.now()
+  ): Locked {
     const assignment = { ...rubric.assignment, submission };
     return { ...rubric, assignment, revised: submission };
   }

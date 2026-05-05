@@ -7,8 +7,16 @@ type Page = any;
 type Output = Record<string, unknown>;
 type Cellular = {
   id: string;
+  is?: 'correctable' | 'reviewable';
   outputs?: Output[];
   points?: number;
+  references?:
+    | {
+        points: number;
+        referent: string;
+        secret?: boolean;
+      }[]
+    | null;
 };
 type Keys = typeof keys;
 type Prepared = { directory: string; paths: string[] };
@@ -78,14 +86,27 @@ async function prepare(
       }
 
       const rubric = cells.reduce(
-        (rubric: any, { id, points = 5 }) =>
-          Rubric.add(rubric, {
-            id,
-            is: 'reviewable',
-            payload: null,
-            points,
-            references: null
-          }),
+        (
+          rubric: any,
+          { id, is = 'reviewable', points = 5, references = null }
+        ) =>
+          Rubric.add(
+            rubric,
+            {
+              id,
+              is,
+              payload: null,
+              points,
+              references:
+                references?.map(({ referent }: any) => referent) ?? null
+            },
+            references?.map(({ points, referent, secret = false }: any) => ({
+              cell: id,
+              points,
+              referent,
+              secret
+            })) ?? []
+          ),
         (base => ({
           ...base,
           key: 'secret',
@@ -139,34 +160,52 @@ function score(page: Page) {
   return page.getByRole('spinbutton', { name: 'Score' });
 }
 
-async function saved(page: any, path: string) {
-  return page.evaluate(async (path: string) => {
-    const { Rubric } = (window as any).__correxit__;
-    const app = (window as any).jupyterapp;
-    let file: any = null;
-    try {
-      file = await app.serviceManager.contents.get(path, { content: true });
-    } catch {
-      return null;
-    }
-    const notebook = file.type === 'notebook' ? file.content : null;
-    const rubric =
-      notebook && typeof notebook === 'object'
-        ? ((notebook as { metadata?: { correxit?: any } }).metadata?.correxit ??
-          null)
+async function saved(page: any, path: string, id = 'manual') {
+  return page.evaluate(
+    async ({ id, path }: { id: string; path: string }) => {
+      const { Rubric } = (window as any).__correxit__;
+      const app = (window as any).jupyterapp;
+      let file: any = null;
+      try {
+        file = await app.serviceManager.contents.get(path, { content: true });
+      } catch {
+        return null;
+      }
+      const notebook = file.type === 'notebook' ? file.content : null;
+      const rubric =
+        notebook && typeof notebook === 'object'
+          ? ((notebook as { metadata?: { correxit?: any } }).metadata
+              ?.correxit ?? null)
+          : null;
+      const score = rubric
+        ? Rubric.Score.resolve(rubric.assignment.report, id)
         : null;
-    const score = rubric
-      ? Rubric.Score.resolve(rubric.assignment.report, 'manual')
+      const result = {
+        certification: rubric?.assignment.certification !== null,
+        comment: score?.comment ?? null,
+        locked: rubric?.locked ?? null,
+        points: score?.points ?? null,
+        status: score?.status ?? null
+      };
+      return result;
+    },
+    { id, path }
+  );
+}
+
+async function status(page: Page, id: string) {
+  return page.evaluate((id: string) => {
+    const { Rubric, Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const reviewer = Array.from(app.shell.widgets('main')).find(
+      (widget: any) => widget.id === 'correxit-reviewer-widget'
+    ) as { workbook?: any } | undefined;
+    const workbook = reviewer?.workbook ?? null;
+    const rubric = Workbook.open(workbook, true);
+    return rubric
+      ? (Rubric.Score.resolve(rubric.assignment.report, id)?.status ?? null)
       : null;
-    const result = {
-      certification: rubric?.assignment.certification !== null,
-      comment: score?.comment ?? null,
-      locked: rubric?.locked ?? null,
-      points: score?.points ?? null,
-      status: score?.status ?? null
-    };
-    return result;
-  }, path);
+  }, id);
 }
 
 test('reviewer saves intervention and auto-certifies via UI', async ({
@@ -197,7 +236,7 @@ test('reviewer saves intervention and auto-certifies via UI', async ({
   await dispose();
 });
 
-test('reviewer clears stored outputs when rerun result is empty', async ({
+test('reviewer clears stored outputs when run result is empty', async ({
   page
 }) => {
   const { dispose } = await setup(page, [{ id: 'manual', source: 'pass' }]);
@@ -222,8 +261,88 @@ test('reviewer clears stored outputs when rerun result is empty', async ({
   const outputs = page.getByLabel('Cell outputs');
   await expect(outputs).toContainText('stale output');
 
-  await page.locator('.correxit-reviewer-btn-correct').click();
+  await page.locator('.correxit-reviewer-btn-run').click();
   await expect(page.getByLabel('Cell outputs')).toHaveCount(0);
+
+  await close(page);
+  await cleanup(page, propagated);
+  await dispose();
+});
+
+test('reviewer run previews outputs without regrading correctable cells', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'target', source: 'print("fresh output")' },
+    { id: 'ref', source: 'print("fresh output")' },
+    { id: 'manual-a', source: 'pass' },
+    { id: 'manual-b', source: 'pass' }
+  ]);
+  const propagated = await prepare(page, {
+    cells: [
+      {
+        id: 'target',
+        is: 'correctable',
+        points: 5,
+        references: [{ points: 5, referent: 'ref', secret: true }]
+      },
+      { id: 'manual-a' },
+      { id: 'manual-b' }
+    ]
+  });
+  await cd(page, '.');
+  await batch(page, propagated.directory);
+  await launch(page, propagated.directory);
+
+  await page.evaluate(async () => {
+    const app = (window as any).jupyterapp;
+    await app.commands.execute('correxit-reviewer:pass');
+  });
+  await expect.poll(() => status(page, 'manual-a')).toBe('correct');
+
+  await page.evaluate(async () => {
+    const { Rubric, Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const reviewer = Array.from(app.shell.widgets('main')).find(
+      (widget: any) => widget.id === 'correxit-reviewer-widget'
+    ) as { workbook?: any } | undefined;
+    const workbook = reviewer?.workbook ?? null;
+    const rubric = Workbook.open(workbook, true);
+    if (!workbook || !rubric) return;
+
+    const report = {
+      ...rubric.assignment.report,
+      scores: {
+        ...rubric.assignment.report.scores,
+        target: { ...Rubric.Score.UNSCORED }
+      }
+    };
+    const updated = await Rubric.sign(rubric, report);
+    await Workbook.update(workbook, updated);
+
+    const target = workbook.context.model.sharedModel.cells.find(
+      (cell: any) => cell.id === 'target'
+    );
+    target?.setOutputs?.([
+      {
+        output_type: 'stream',
+        name: 'stdout',
+        text: 'stale output\n'
+      }
+    ]);
+  });
+
+  await focus(page);
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByLabel('Cell outputs')).toContainText('stale output');
+  await expect.poll(() => status(page, 'target')).toBe('unscored');
+
+  await page.locator('.correxit-reviewer-btn-run').click();
+  await expect(page.getByLabel('Cell outputs')).toContainText('fresh output');
+  await expect(page.getByLabel('Cell outputs')).not.toContainText(
+    'stale output'
+  );
+  await expect.poll(() => status(page, 'target')).toBe('unscored');
 
   await close(page);
   await cleanup(page, propagated);

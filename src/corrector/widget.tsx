@@ -45,8 +45,8 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
 
   protected async initialize() {
     const { commands, content, indicator, toolbar, trans } = this;
-    const go = (mode: Corrector.Mode, overwrite: boolean) =>
-      content.set({ key: `${Date.now()}`, mode, overwrite });
+    const go = (mode: Corrector.Mode, overwrite: boolean, submitted: boolean) =>
+      content.set({ key: `${Date.now()}`, mode, overwrite, submitted });
     const selector = new ModeSelector({ go, trans });
     const notify = (updates: Corrector.Notification) => {
       indicator?.set(updates);
@@ -102,7 +102,8 @@ class CorrectorContent extends ReactWidget {
       ...props,
       mode: 'scan',
       notify: () => {},
-      overwrite: false
+      overwrite: false,
+      submitted: false
     };
     this.addClass('correxit-corrector-widget-content');
   }
@@ -165,7 +166,7 @@ export class CorrectorStatus extends ReactWidget {
 
 class ModeSelector extends ReactWidget {
   constructor(options: {
-    go: (mode: Corrector.Mode, overwrite: boolean) => void;
+    go: (mode: Corrector.Mode, overwrite: boolean, submitted: boolean) => void;
     trans: IRenderMime.TranslationBundle;
   }) {
     super();
@@ -191,7 +192,7 @@ class ModeSelector extends ReactWidget {
   }
 
   render() {
-    const { busy, mode, overwrite, trans } = this;
+    const { busy, mode, overwrite, submitted, trans } = this;
     const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
       {
         value: 'scan',
@@ -209,7 +210,7 @@ class ModeSelector extends ReactWidget {
         tooltip: trans.__('Collect certified workbook grades')
       }
     ];
-    const action = () => this.go(mode, overwrite);
+    const action = () => this.go(mode, overwrite, submitted);
     const label = busy ? trans.__('Interrupt') : trans.__('Go');
     const className = `correxit-corrector-mode-go ${
       busy ? 'jp-mod-warn' : 'jp-mod-accept'
@@ -253,6 +254,19 @@ class ModeSelector extends ReactWidget {
           />
           <span>{trans.__('Overwrite')}</span>
         </label>
+        <label
+          className="correxit-corrector-submitted"
+          title={trans.__('Only include workbooks that were locally submitted')}
+        >
+          <input
+            type="checkbox"
+            checked={submitted}
+            disabled={mode === 'collect'}
+            onChange={({ target }) => this.set({ submitted: target.checked })}
+            aria-label={trans.__('Only include locally submitted workbooks')}
+          />
+          <span>{trans.__('Submitted')}</span>
+        </label>
         <button className={className} onClick={action} aria-label={description}>
           {label}
         </button>
@@ -264,19 +278,36 @@ class ModeSelector extends ReactWidget {
     this.select('scan');
     this.busy = false;
     this.overwrite = false;
+    this.submitted = false;
     this.update();
   }
 
-  set(updates: Corrector.Notification | { overwrite: boolean }) {
-    if ('overwrite' in updates) this.overwrite = updates.overwrite;
-    else this.busy = !(updates.graded && updates.scanned);
+  set(
+    updates:
+      | Corrector.Notification
+      | { overwrite?: boolean; submitted?: boolean }
+  ) {
+    const fields = 'overwrite' in updates || 'submitted' in updates;
+    if ('overwrite' in updates && updates.overwrite !== undefined)
+      this.overwrite = updates.overwrite;
+    if ('submitted' in updates && updates.submitted !== undefined)
+      this.submitted = updates.submitted;
+    if (!fields) {
+      const { graded, scanned } = updates as Corrector.Notification;
+      this.busy = !(graded && scanned);
+    }
     this.update();
   }
 
   protected busy = false;
-  protected go: (mode: Corrector.Mode, overwrite: boolean) => void;
+  protected go: (
+    mode: Corrector.Mode,
+    overwrite: boolean,
+    submitted: boolean
+  ) => void;
   protected overwrite = false;
   protected mode: Corrector.Mode = 'scan';
+  protected submitted = false;
   protected trans: IRenderMime.TranslationBundle;
 
   protected select(mode: Corrector.Mode) {

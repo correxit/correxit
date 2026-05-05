@@ -134,6 +134,10 @@ server-backed submitter would POST the submission to an LMS, validate the
 assignee against the roster, enforce the deadline, and return the server's
 receipt.
 
+This is the authority boundary: a submitter receipt can carry the upstream
+system's clock, rules, and acceptance decision. Correxit's own local
+`submission` timestamp cannot do that by itself.
+
 ---
 
 ## `Correxit.Collector`
@@ -231,6 +235,10 @@ browser using the teacher's API token, it cannot safely authenticate as a
 student to submit work on their behalf. Students submit their assignments by
 uploading their downloaded `.ipynb` files through the standard Moodle
 assignment interface.
+
+This also means Moodle, not Correxit, is the authority on late policy in that
+integration. Correxit may preserve local submission state inside the notebook,
+but Moodle's receipt and deadline rules are the ones that count.
 
 The integration needs two things:
 
