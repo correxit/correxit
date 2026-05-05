@@ -1,3 +1,10 @@
+## [1.21.1](https://github.com/QuantStack/correxit/compare/v1.21.0...v1.21.1) (2026-05-05)
+
+
+### Bug Fixes
+
+* Update example notebook ([#74](https://github.com/QuantStack/correxit/issues/74)) ([5dd21ff](https://github.com/QuantStack/correxit/commit/5dd21ff7228910bc54cbf53f7a36a17a0241f0b5))
+
 # [1.21.0](https://github.com/QuantStack/correxit/compare/v1.20.0...v1.21.0) (2026-05-05)
 
 
