@@ -259,6 +259,26 @@ one copy per roster entry:
 Correxit always writes local copies. An optional Distributor plugin may also
 deliver each notebook elsewhere (Moodle, object storage, etc.).
 
+### Sidecar resources
+
+If the assignment requires data files alongside the notebook (a database file,
+a CSV, an image), click **Set resources...** in the sidebar before propagating.
+Select one or more files from the current directory. Their basenames are stored
+in the rubric and loaded at propagation time.
+
+Correxit reads each file from disk when it propagates and passes the raw bytes
+to the Distributor plugin. The files are not embedded in the notebook; they are
+passed as a separate `resources` payload. What the Distributor does with them
+is up to the integration: a Moodle distributor uploads them as feedback
+attachments alongside the notebook; a manual distributor receives `null` (no-op).
+
+Local students who open the distributed notebook are expected to have the same
+files in their working directory already (e.g., via a shared drive or git repo).
+Resources are for distributors that need to push files to a remote location.
+
+To clear the resource list, click **Clear** next to the listed files in the
+sidebar.
+
 ### Cell outputs and propagation
 
 When Correxit creates assigned copies, it serializes the notebook as-is.
@@ -378,7 +398,9 @@ A workbook moves through these stages:
   defensively design around pathological submissions.
 - **Keep the notebook self-contained.** Everything the student needs
   (data files, imports, context) should be in the notebook or its
-  working directory. There is no server-side setup step.
+  working directory. There is no server-side setup step. If you use a
+  Distributor plugin that can push files, declare sidecar data files via
+  **Set resources...** so the distributor receives them alongside the notebook.
 - **Clear outputs before propagating.** Unless you intentionally want
   students to see a cell's output, clear all outputs before distributing.
   Outputs are not encrypted, even on secret reference cells.
