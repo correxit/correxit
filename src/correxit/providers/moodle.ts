@@ -211,12 +211,14 @@ export namespace Moodle {
     const file = await io.assigned(base, assignee);
     const content = JSON.stringify(notebook);
     let draft = await upload(url, token, content, file);
-    if (resources)
-      {for (const resource of resources)
-        {draft = await upload(
+    if (resources) {
+      for (const resource of resources) {
+        draft = await upload(
           url, token, resource.data.buffer as ArrayBuffer,
           resource.name, draft
-        );}}
+        );
+      }
+    }
     await request(
       'mod_assign_save_grade',
       [

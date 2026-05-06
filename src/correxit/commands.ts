@@ -1,5 +1,6 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
+import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog } from '@jupyterlab/filebrowser';
 import { INotebookContent } from '@jupyterlab/nbformat';
@@ -43,9 +44,9 @@ export namespace CommandIDs {
   export const reweight = 'correxit:reweight';
   export const save = 'correxit:save';
   export const share = 'correxit:share';
+  export const resource = 'correxit:resource';
   export const submit = 'correxit:submit';
   export const track = 'correxit:track';
-  export const resource = 'correxit:resource';
   export const unassign = 'correxit:unassign';
   export const unlock = 'correxit:unlock';
 }
@@ -165,7 +166,12 @@ export function commands(
         return { assignee, error: null, ok: true, path };
 
       const notebook = workbook.context.model.sharedModel.toJSON();
-      await distributor({ identifier, notebook, path, resources: null });
+      const directory = PathExt.dirname(path);
+      const load = async (name: string) =>
+        ({ name, data: await io.load(manager, directory, name) });
+      const names = rubric.assignment.resources;
+      const resources = names ? await Promise.all(names.map(load)) : null;
+      await distributor({ identifier, notebook, path, resources });
       await distribute(workbook);
       await workbook.context.save();
       return { assignee, error: null, ok: true, path };
@@ -271,7 +277,6 @@ export function commands(
       if ('resources' in args) {
         resources = args.resources ?? null;
       } else {
-        const { PathExt } = await import('@jupyterlab/coreutils');
         const dir = PathExt.dirname(workbook.context.path);
         const { button, value } = await FileDialog.getOpenFiles({
           defaultPath: dir,

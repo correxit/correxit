@@ -246,7 +246,7 @@ export const Assignment: React.FC<{
         )}
         {manual && <Expiration {...{ assignment, edit, locked, trans }} />}
         {manual && <Overdue {...{ assignment, edit, locked, trans }} />}
-        {manual && <Resources {...{ assignment, commands, locked, trans }} />}
+        <Resources {...{ assignment, commands, locked, trans }} />
       </div>
       {!locked && (
         <div className="correxit-assignment-propagate">
