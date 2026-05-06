@@ -95,9 +95,29 @@ export async function load(
   if (PathExt.basename(name) !== name)
     throw new Correxit.Error.Fetch(`Invalid resource name: ${name}`);
   const path = PathExt.join(dir, name);
-  const file = await contents.get(path, { format: 'base64', content: true });
+  const file = await contents
+    .get(path, { format: 'base64', content: true })
+    .catch(() => {
+      throw new Correxit.Error.Fetch(`Could not load resource file: ${path}`);
+    }) as Contents.IModel;
   const binary = atob(file.content as string);
   return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+const encode = (data: Uint8Array): string =>
+  btoa(Array.from(data, byte => String.fromCharCode(byte)).join(''));
+
+/** Writes raw bytes to a file path. */
+export async function write(
+  { contents }: Pick<ServiceManager.IManager, 'contents'>,
+  path: string,
+  data: Uint8Array
+): Promise<void> {
+  await contents.save(path, {
+    content: encode(data),
+    format: 'base64',
+    type: 'file'
+  });
 }
 
 /** Creates a directory at path inside pwd. */

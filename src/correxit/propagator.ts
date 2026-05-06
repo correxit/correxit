@@ -57,6 +57,9 @@ export async function* propagate({
     if (rubric.assignment.resources) {
       try {
         resources = await Promise.all(rubric.assignment.resources.map(load));
+        await Promise.all(resources.map(({ data, name }) =>
+          io.write(manager, PathExt.join(directory.path, name), data)
+        ));
       } catch (error) {
         yield { type: 'error', slots: [`${error}`] };
         return;

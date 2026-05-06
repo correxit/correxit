@@ -113,11 +113,10 @@ type Propagated = {
 ```
 
 `resources` is `null` when no sidecar files were declared on the assignment.
-When non-null, each entry carries the file's basename and its raw bytes.
-The distributor is responsible for delivering both the notebook and any
-resources (LMS upload, object store, etc.). Local file creation for the
-notebook stays in the core propagator. After successful delivery, Correxit
-records the local `assignment.distribution` timestamp.
+Otherwise each entry carries the file name and raw bytes. The distributor is
+responsible for any external delivery of the notebook and resources. The core
+propagator creates the local notebook and sidecar files, then records
+`assignment.distribution` after successful delivery.
 
 > The default distributor is the manual distributor, which is a no-op.
 

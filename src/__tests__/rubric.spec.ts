@@ -552,6 +552,23 @@ describe('Rubric', () => {
       expect(first.assignment.mac).toBe(second.assignment.mac);
     });
 
+    it('includes resources in mac', async () => {
+      const rubric = create();
+      const first = await Rubric.assign(rubric, {
+        assignee: 'student@example.com',
+        expiration: null,
+        resources: ['a.csv'],
+        roster: ['student@example.com']
+      });
+      const second = await Rubric.assign(rubric, {
+        assignee: 'student@example.com',
+        expiration: null,
+        resources: ['b.csv'],
+        roster: ['student@example.com']
+      });
+      expect(first.assignment.mac).not.toBe(second.assignment.mac);
+    });
+
     it('collects a certified rubric with receipt', async () => {
       const unlocked = await Rubric.assign(create(), {
         assignee: 'student@example.com',

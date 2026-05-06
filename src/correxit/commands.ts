@@ -120,6 +120,31 @@ export function commands(
     if (workbook?.context.isDisposed) state.workbook(null);
     return current();
   };
+  const names = (paths: string[], dir: string): string[] | null => {
+    const here = dir || '.';
+    const root = PathExt.resolve(dir);
+    const names = Array.from(new Set(paths.map(path => {
+      const full = PathExt.resolve(path);
+      if (full === root) {
+        throw new Error.Invalid(
+          trans.__('Select one or more files in "%1".', here)
+        );
+      }
+
+      const name = PathExt.basename(path);
+      if (PathExt.resolve(dir, name) !== full) {
+        throw new Error.Invalid(
+          trans.__(
+            'Files must be in "%1". Move or copy them there, then ' +
+              'select them again.',
+            here
+          )
+        );
+      }
+      return name;
+    })));
+    return names.length ? names : null;
+  };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
     const workbook = handle
@@ -273,25 +298,49 @@ export function commands(
     execute: async (args: Partial<Credentials & { resources: string[] | null }>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || rubric.assignment.assignee) return;
-      let resources: string[] | null;
-      if ('resources' in args) {
-        resources = args.resources ?? null;
-      } else {
-        const dir = PathExt.dirname(workbook.context.path);
-        const { button, value } = await FileDialog.getOpenFiles({
-          defaultPath: dir,
-          manager: documents,
-          title: trans.__('Select resource files'),
-          label: trans.__('Select files to distribute alongside this assignment.'),
-          translator: utilities.translator
-        });
-        if (!button.accept) return;
-        const files = value ?? [];
-        resources = files.length
-          ? files.map(f => PathExt.basename(f.path))
-          : null;
+      const dir = PathExt.dirname(workbook.context.path);
+      const here = dir || '.';
+      try {
+        let resources: string[] | null;
+        if ('resources' in args) {
+          resources = args.resources
+            ? names(args.resources, dir)
+            : null;
+        } else {
+          const same = ({ name, path, type }: {
+            name: string;
+            path: string;
+            type: string;
+          }) => type === 'file' &&
+            PathExt.resolve(path) === PathExt.resolve(dir, name)
+            ? {}
+            : null;
+          const { button, value } = await FileDialog.getOpenFiles({
+            defaultPath: dir,
+            filter: same,
+            manager: documents,
+            title: trans.__('Select resource files'),
+            label: trans.__(
+              'Select files in "%1" to distribute with this assignment.',
+              here
+            ),
+            translator: utilities.translator
+          });
+          if (!button.accept) return;
+          const files = (value ?? []).map(({ path, type }) => {
+            if (type !== 'file') {
+              throw new Error.Invalid(
+                trans.__('Select one or more files in "%1".', here)
+              );
+            }
+            return path;
+          });
+          resources = names(files, dir);
+        }
+        await assign(workbook, { resources });
+      } catch (error) {
+        showErrorMessage(...Error.interpret(error, trans));
       }
-      await assign(workbook, { resources });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.certify, {

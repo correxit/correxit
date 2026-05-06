@@ -538,6 +538,7 @@ export namespace Rubric {
         name,
         overdue,
         penalty,
+        resources,
         roster
       } = terms;
       const { interventions: manual, scores: auto } = terms.report;
@@ -545,7 +546,7 @@ export namespace Rubric {
       const report = { interventions: sort(manual), scores: sort(auto) };
       const unsigned = {
         assignee, author, expiration, id, issue, issuer,
-        name, overdue, penalty, report, roster
+        name, overdue, penalty, report, resources, roster
       };
       return security.hmac(JSON.stringify(unsigned), key);
     }

@@ -681,3 +681,51 @@ test('resource command is disabled when workbook is locked', async ({
   expect(result.enabled).toBe(false);
   await dispose();
 });
+
+test('resource command rejects files outside the workbook directory', async ({
+  page
+}) => {
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    await Workbook.update(
+      panel,
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create())
+    );
+
+    await app.commands.execute('correxit:resource', {
+      resources: ['subdir/data.csv']
+    });
+  });
+
+  const dialog = page.locator('.jp-Dialog');
+  await expect(dialog).toContainText('Invalid workbook');
+  await expect(dialog).toContainText(
+    'Files must be in ".". Move or copy them there, then select them again.'
+  );
+  await dialog.locator('button').last().click();
+
+  const result = await page.evaluate(() => {
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+    const metadata = panel.context.model.sharedModel.getMetadata('correxit');
+    return metadata?.assignment?.resources ?? null;
+  });
+
+  expect(result).toBeNull();
+  await dispose();
+});

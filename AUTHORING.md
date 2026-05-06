@@ -263,18 +263,14 @@ deliver each notebook elsewhere (Moodle, object storage, etc.).
 
 If the assignment requires data files alongside the notebook (a database file,
 a CSV, an image), click **Set resources...** in the sidebar before propagating.
-Select one or more files from the current directory. Their basenames are stored
-in the rubric and loaded at propagation time.
+Select one or more files in the current directory. Their names are stored in
+the rubric and loaded during propagation.
 
-Correxit reads each file from disk when it propagates and passes the raw bytes
-to the Distributor plugin. The files are not embedded in the notebook; they are
-passed as a separate `resources` payload. What the Distributor does with them
-is up to the integration: a Moodle distributor uploads them as feedback
-attachments alongside the notebook; a manual distributor receives `null` (no-op).
-
-Local students who open the distributed notebook are expected to have the same
-files in their working directory already (e.g., via a shared drive or git repo).
-Resources are for distributors that need to push files to a remote location.
+Correxit reads each file during propagation, copies it into the propagated
+directory, and passes its raw bytes to the Distributor plugin. The files are
+not embedded in the notebook. A Moodle distributor uploads them as feedback
+attachments alongside the notebook; a manual distributor leaves them in the
+local propagated directory.
 
 To clear the resource list, click **Clear** next to the listed files in the
 sidebar.
