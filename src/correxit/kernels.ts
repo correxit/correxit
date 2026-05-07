@@ -147,6 +147,7 @@ async function restart(
 ): Promise<Kernel.IKernelConnection> {
   try {
     await kernel.restart();
+    await kernel.info;
     return kernel;
   } catch (error) {
     const response =

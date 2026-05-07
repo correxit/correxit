@@ -715,7 +715,7 @@ test('resource command rejects files outside the workbook directory', async ({
   const dialog = page.locator('.jp-Dialog');
   await expect(dialog).toContainText('Invalid workbook');
   await expect(dialog).toContainText(
-    'Files must be in ".". Move or copy them there, then select them again.'
+    'Files must be in (.). Move or copy them there to select them.'
   );
   await dialog.locator('button').last().click();
 

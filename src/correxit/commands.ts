@@ -40,11 +40,11 @@ export namespace CommandIDs {
   export const refer = 'correxit:refer';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
+  export const resource = 'correxit:resource';
   export const revise = 'correxit:revise';
   export const reweight = 'correxit:reweight';
   export const save = 'correxit:save';
   export const share = 'correxit:share';
-  export const resource = 'correxit:resource';
   export const submit = 'correxit:submit';
   export const track = 'correxit:track';
   export const unassign = 'correxit:unassign';
@@ -120,24 +120,23 @@ export function commands(
     if (workbook?.context.isDisposed) state.workbook(null);
     return current();
   };
-  const names = (paths: string[], dir: string): string[] | null => {
-    const here = dir || '.';
-    const root = PathExt.resolve(dir);
+  const names = (paths: string[], parent: string): string[] | null => {
+    const folder = parent || '.';
+    const root = PathExt.resolve(folder || '.');
     const names = Array.from(new Set(paths.map(path => {
       const full = PathExt.resolve(path);
       if (full === root) {
         throw new Error.Invalid(
-          trans.__('Select one or more files in "%1".', here)
+          trans.__('Select one or more files in "%1".', folder)
         );
       }
 
       const name = PathExt.basename(path);
-      if (PathExt.resolve(dir, name) !== full) {
+      if (PathExt.resolve(folder, name) !== full) {
         throw new Error.Invalid(
           trans.__(
-            'Files must be in "%1". Move or copy them there, then ' +
-              'select them again.',
-            here
+            'Files must be in (%1). Move or copy them there to select them.',
+            folder
           )
         );
       }
