@@ -262,7 +262,7 @@ deliver each notebook elsewhere (Moodle, object storage, etc.).
 ### Sidecar resources
 
 If the assignment requires data files alongside the notebook (a database file,
-a CSV, an image), click **Set resources...** in the sidebar before propagating.
+a CSV, an image), click **Pick files...** in the sidebar before propagating.
 Select one or more files in the current directory. Their names are stored in
 the rubric and loaded during propagation.
 

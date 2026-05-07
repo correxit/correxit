@@ -104,8 +104,12 @@ export async function load(
   return Uint8Array.from(binary, char => char.charCodeAt(0));
 }
 
-const encode = (data: Uint8Array): string =>
-  btoa(Array.from(data, byte => String.fromCharCode(byte)).join(''));
+const encode = (data: Uint8Array): string => {
+  let binary = '';
+  for (let i = 0; i < data.length; i += 8192)
+    binary += String.fromCharCode(...data.subarray(i, i + 8192));
+  return btoa(binary);
+};
 
 /** Writes raw bytes to a file path. */
 export async function write(

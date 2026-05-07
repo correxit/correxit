@@ -603,17 +603,18 @@ const Resources: React.FC<{
           <div className="correxit-assignment-list cxt-mod-empty">{empty}</div>
         )}
         <div className="correxit-assignment-resource-actions">
-          <button onClick={() => void commands.execute(resource)}>
-            {trans.__('Pick files...')}
-          </button>
+          <CommandToolbarButtonComponent
+            commands={commands}
+            id={resource}
+            label={trans.__('Pick files...')}
+          />
           {resources && (
-            <button
-              onClick={() =>
-                void commands.execute(resource, { resources: null })
-              }
-            >
-              {trans.__('Clear')}
-            </button>
+            <CommandToolbarButtonComponent
+              commands={commands}
+              id={resource}
+              args={{ resources: null }}
+              label={trans.__('Clear')}
+            />
           )}
         </div>
       </div>
