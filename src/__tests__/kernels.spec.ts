@@ -23,6 +23,7 @@ function spawn(
     info: Promise.resolve({}),
     isDisposed: false,
     name: overrides.name || 'python3',
+    requestKernelInfo: jest.fn(() => Promise.resolve()),
     restart: jest.fn(() => Promise.resolve()),
     shutdown: jest.fn(() => Promise.resolve()),
     spec: Promise.resolve({ display_name: 'Python 3' }),
