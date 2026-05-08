@@ -297,45 +297,38 @@ export function commands(
     execute: async (args: Partial<Credentials & { resources: string[] | null }>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || rubric.assignment.assignee) return;
-      const dir = PathExt.dirname(workbook.context.path);
-      const here = dir || '.';
+
+      const directory = PathExt.dirname(workbook.context.path) || '.';
       try {
-        let resources: string[] | null;
         if ('resources' in args) {
-          resources = args.resources
-            ? names(args.resources, dir)
-            : null;
-        } else {
-          const same = ({ name, path, type }: {
-            name: string;
-            path: string;
-            type: string;
-          }) => type === 'file' &&
-            PathExt.resolve(path) === PathExt.resolve(dir, name)
-            ? {}
-            : null;
-          const { button, value } = await FileDialog.getOpenFiles({
-            defaultPath: dir,
-            filter: same,
-            manager: documents,
-            title: trans.__('Select resource files'),
-            label: trans.__(
-              'Select files in "%1" to distribute with this assignment.',
-              here
-            ),
-            translator: utilities.translator
-          });
-          if (!button.accept) return;
-          const files = (value ?? []).map(({ path, type }) => {
-            if (type !== 'file') {
-              throw new Error.Invalid(
-                trans.__('Select one or more files in "%1".', here)
-              );
-            }
-            return path;
-          });
-          resources = names(files, dir);
+          const resources = args.resources && names(args.resources, directory);
+          await assign(workbook, { resources });
+          return;
         }
+
+        const filter = (item: { name: string; path: string; type: string }) =>
+          item.type === 'file' &&
+          PathExt.resolve(item.path) === PathExt.resolve(directory, item.name)
+            ? {} : null;
+        const { button, value } = await FileDialog.getOpenFiles({
+          defaultPath: directory,
+          filter,
+          label: trans.__('Select files in "%1" to distribute.', directory),
+          manager: documents,
+          title: trans.__('Select resource files'),
+          translator: utilities.translator
+        });
+        if (!button.accept) return;
+
+        const paths = (value || []).map(item => {
+          if (item.type !== 'file') {
+            const message =
+              trans.__('Select one or more files in "%1".', directory);
+            throw new Error.Invalid(message);
+          }
+          return item.path;
+        });
+        const resources = names(paths, directory);
         await assign(workbook, { resources });
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
