@@ -147,6 +147,7 @@ async function restart(
 ): Promise<Kernel.IKernelConnection> {
   try {
     await kernel.restart();
+    await kernel.requestKernelInfo();
     return kernel;
   } catch (error) {
     const response =
@@ -159,7 +160,7 @@ async function restart(
     // Dispose only the stale client connection. The restarted kernel lives on.
     kernel.dispose();
     try {
-      await fresh.info;
+      await fresh.requestKernelInfo();
       fresh.hasPendingInput = false;
       return fresh;
     } catch (error) {

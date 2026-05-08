@@ -88,10 +88,13 @@ Integrators use the `identifier` to fetch roster and assignment metadata.
 ## `Correxit.Distributor`
 
 ```typescript
+type Resource = { name: string; data: Uint8Array };
+
 type Distributor = (propagated: {
   identifier: Workbook.Identifier.Assigned;
   notebook: INotebookContent;
   path: string;
+  resources: Resource[] | null;
 }) => Promise<void>;
 ```
 
@@ -105,12 +108,15 @@ type Propagated = {
   identifier: Workbook.Identifier.Assigned;
   notebook: INotebookContent; // nbformat notebook, ready to save
   path: string; // intended destination path
+  resources: Resource[] | null; // sidecar files, loaded by the propagator
 };
 ```
 
-The distributor is responsible only for delivery (LMS upload, object store,
-etc.). Local file creation stays in the core propagator. After successful
-delivery, Correxit records the local `assignment.distribution` timestamp.
+`resources` is `null` when no sidecar files were declared on the assignment.
+Otherwise each entry carries the file name and raw bytes. The distributor is
+responsible for any external delivery of the notebook and resources. The core
+propagator creates the local notebook and sidecar files, then records
+`assignment.distribution` after successful delivery.
 
 > The default distributor is the manual distributor, which is a no-op.
 

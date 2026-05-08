@@ -267,6 +267,7 @@ export namespace Workbook {
       name = assignment.name,
       overdue = assignment.overdue,
       penalty = assignment.penalty,
+      resources = assignment.resources,
       submission = assignment.submission,
       submitted = assignment.submitted,
       roster = assignment.roster,
@@ -281,6 +282,7 @@ export namespace Workbook {
     name !== assignment.name ||
     overdue !== assignment.overdue ||
     penalty !== assignment.penalty ||
+    !Rubric.Assignment.Equal.resources({ resources }, assignment) ||
     submission !== assignment.submission ||
     submitted !== assignment.submitted ||
     (roster !== assignment.roster &&

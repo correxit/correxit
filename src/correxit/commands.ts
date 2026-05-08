@@ -1,5 +1,8 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
+import { PathExt } from '@jupyterlab/coreutils';
+import { IDocumentManager } from '@jupyterlab/docmanager';
+import { FileDialog } from '@jupyterlab/filebrowser';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { NotebookModelFactory, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMime } from '@jupyterlab/rendermime';
@@ -37,6 +40,7 @@ export namespace CommandIDs {
   export const refer = 'correxit:refer';
   export const remove = 'correxit:remove';
   export const reset = 'correxit:reset';
+  export const resource = 'correxit:resource';
   export const revise = 'correxit:revise';
   export const reweight = 'correxit:reweight';
   export const save = 'correxit:save';
@@ -70,6 +74,7 @@ export function commands(
   utilities: {
     collector: Correxit.Collector;
     distributor: Correxit.Distributor;
+    documents: IDocumentManager;
     injector: Correxit.Injector;
     registrar: Correxit.Registrar;
     submitter: Correxit.Submitter;
@@ -80,7 +85,7 @@ export function commands(
   const { commands, serviceManager: manager, shell } = app;
   const { Error, Icons } = Correxit;
   const {
-    collector, distributor, injector, registrar, submitter, unlocker
+    collector, distributor, documents, injector, registrar, submitter, unlocker
   } = utilities;
   const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
@@ -114,6 +119,30 @@ export function commands(
       return workbook;
     if (workbook?.context.isDisposed) state.workbook(null);
     return current();
+  };
+  const names = (paths: string[], parent: string): string[] | null => {
+    const folder = parent || '.';
+    const root = PathExt.resolve(folder || '.');
+    const names = Array.from(new Set(paths.map(path => {
+      const full = PathExt.resolve(path);
+      if (full === root) {
+        throw new Error.Invalid(
+          trans.__('Select one or more files in "%1".', folder)
+        );
+      }
+
+      const name = PathExt.basename(path);
+      if (PathExt.resolve(folder, name) !== full) {
+        throw new Error.Invalid(
+          trans.__(
+            'Files must be in (%1). Move or copy them there to select them.',
+            folder
+          )
+        );
+      }
+      return name;
+    })));
+    return names.length ? names : null;
   };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
@@ -161,7 +190,12 @@ export function commands(
         return { assignee, error: null, ok: true, path };
 
       const notebook = workbook.context.model.sharedModel.toJSON();
-      await distributor({ identifier, notebook, path });
+      const directory = PathExt.dirname(path);
+      const load = async (name: string) =>
+        ({ name, data: await io.load(manager, directory, name) });
+      const names = rubric.assignment.resources;
+      const resources = names ? await Promise.all(names.map(load)) : null;
+      await distributor({ identifier, notebook, path, resources });
       await distribute(workbook);
       await workbook.context.save();
       return { assignee, error: null, ok: true, path };
@@ -250,6 +284,55 @@ export function commands(
       const { button } = await showDialog({ body, title });
       if (!button.accept) return;
       await assign(workbook, { assignee: '' });
+    }
+  }));
+  disposables.push(commands.addCommand(CommandIDs.resource, {
+    icon: Icons.assignment,
+    isEnabled: () => {
+      const rubric = open(state.workbook());
+      return !!rubric && !rubric.locked && !rubric.assignment.assignee;
+    },
+    isVisible: () => commands.isEnabled(CommandIDs.resource),
+    label: trans.__('Set resources...'),
+    execute: async (args: Partial<Credentials & { resources: string[] | null }>) => {
+      const { rubric, workbook } = await reify(args);
+      if (!rubric || rubric.locked || rubric.assignment.assignee) return;
+
+      const directory = PathExt.dirname(workbook.context.path) || '.';
+      try {
+        if ('resources' in args) {
+          const resources = args.resources && names(args.resources, directory);
+          await assign(workbook, { resources });
+          return;
+        }
+
+        const filter = (item: { name: string; path: string; type: string }) =>
+          item.type === 'file' &&
+          PathExt.resolve(item.path) === PathExt.resolve(directory, item.name)
+            ? {} : null;
+        const { button, value } = await FileDialog.getOpenFiles({
+          defaultPath: directory,
+          filter,
+          label: trans.__('Select files in "%1" to distribute.', directory),
+          manager: documents,
+          title: trans.__('Select resource files'),
+          translator: utilities.translator
+        });
+        if (!button.accept) return;
+
+        const paths = (value || []).map(item => {
+          if (item.type !== 'file') {
+            const message =
+              trans.__('Select one or more files in "%1".', directory);
+            throw new Error.Invalid(message);
+          }
+          return item.path;
+        });
+        const resources = names(paths, directory);
+        await assign(workbook, { resources });
+      } catch (error) {
+        showErrorMessage(...Error.interpret(error, trans));
+      }
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.certify, {

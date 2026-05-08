@@ -17,7 +17,7 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 
 const DELAY = 150;
 const TTL = 10_000;
-const { assign, enroll, track } = Correxit.CommandIDs;
+const { assign, enroll, resource, track } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
 const enrolled = new WeakMap<Workbook, Enrolled>();
 const identify = ({ id, name }: Registration) => id || name;
@@ -246,6 +246,7 @@ export const Assignment: React.FC<{
         )}
         {manual && <Expiration {...{ assignment, edit, locked, trans }} />}
         {manual && <Overdue {...{ assignment, edit, locked, trans }} />}
+        <Resources {...{ assignment, commands, locked, trans }} />
       </div>
       {!locked && (
         <div className="correxit-assignment-propagate">
@@ -557,6 +558,65 @@ const Roster: React.FC<{
           spellCheck={false}
           value={value}
         />
+      </div>
+    </div>
+  );
+};
+
+const Resources: React.FC<{
+  assignment: Assignment;
+  commands: CommandRegistry;
+  locked: boolean;
+  trans: TranslationBundle;
+}> = ({ assignment, commands, locked, trans }) => {
+  const { resources } = assignment;
+  const list = resources?.join('\n') ?? '';
+  const empty = trans.__('No resource files');
+  if (locked) {
+    return (
+      <div className="correxit-assignment-resources">
+        <div>
+          <label>{trans.__('Resources')}</label>
+          <div
+            className={
+              resources
+                ? 'correxit-assignment-list'
+                : 'correxit-assignment-list cxt-mod-empty'
+            }
+            title={list || undefined}
+          >
+            {list || empty}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="correxit-assignment-resources">
+      <div>
+        <label>{trans.__('Resources')}</label>
+        {resources ? (
+          <div className="correxit-assignment-list" title={list}>
+            {list}
+          </div>
+        ) : (
+          <div className="correxit-assignment-list cxt-mod-empty">{empty}</div>
+        )}
+        <div className="correxit-assignment-resource-actions">
+          <CommandToolbarButtonComponent
+            commands={commands}
+            id={resource}
+            label={trans.__('Pick files...')}
+          />
+          {resources && (
+            <CommandToolbarButtonComponent
+              commands={commands}
+              id={resource}
+              args={{ resources: null }}
+              label={trans.__('Clear')}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

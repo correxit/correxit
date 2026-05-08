@@ -57,14 +57,18 @@ export namespace Moodle {
   const upload = async (
     url: string,
     token: string,
-    content: string,
-    filename: string
+    content: string | ArrayBuffer,
+    filename: string,
+    itemid = 0
   ): Promise<number> => {
     const form = new FormData();
-    const blob = new Blob([content], { type: 'application/json' });
+    const type = typeof content === 'string'
+      ? 'application/json'
+      : 'application/octet-stream';
+    const blob = new Blob([content], { type });
     form.append('token', token);
     form.append('filearea', 'draft');
-    form.append('itemid', '0');
+    form.append('itemid', String(itemid));
     form.append('file_1', blob, filename);
 
     const response = await fetch(`${url}/webservice/upload.php`, {
@@ -180,7 +184,7 @@ export namespace Moodle {
   }
 
   export async function distributor(
-    { identifier, notebook }: Parameters<Correxit.Distributor>[0],
+    { identifier, notebook, resources }: Parameters<Correxit.Distributor>[0],
     settings: Settings
   ): ReturnType<Correxit.Distributor> {
     const { token, url: raw } = settings;
@@ -202,10 +206,19 @@ export namespace Moodle {
 
     const metadata = notebook.metadata['correxit'] as Partial<Rubric.Locked>;
     const { name } = metadata.assignment as Partial<Rubric.Assignment>;
-    const base = (name || `moodle-${course}-${assignment}`).toLocaleLowerCase();
+    const base =
+      (name || `moodle-${course}-${assignment}`).toLocaleLowerCase();
     const file = await io.assigned(base, assignee);
     const content = JSON.stringify(notebook);
-    const uploaded = await upload(url, token, content, file);
+    let draft = await upload(url, token, content, file);
+    if (resources) {
+      for (const resource of resources) {
+        draft = await upload(
+          url, token, resource.data.buffer as ArrayBuffer,
+          resource.name, draft
+        );
+      }
+    }
     await request(
       'mod_assign_save_grade',
       [
@@ -216,7 +229,7 @@ export namespace Moodle {
         'addattempt=0',
         'workflowstate=',
         'applytoall=0',
-        `plugindata[files_filemanager]=${uploaded}`
+        `plugindata[files_filemanager]=${draft}`
       ].join('&')
     );
   }

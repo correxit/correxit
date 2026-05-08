@@ -50,6 +50,21 @@ export async function* propagate({
     yield { type: 'mkdir', slots: [directory.path] };
     for (const reference of encrypted)
       yield { type: 'encrypted', slots: [reference] };
+
+    const load = async (name: string) =>
+      ({ name, data: await io.load(manager, parent, name) });
+    let resources: Correxit.Resource[] | null = null;
+    if (rubric.assignment.resources) {
+      try {
+        resources = await Promise.all(rubric.assignment.resources.map(load));
+        await Promise.all(resources.map(({ data, name }) =>
+          io.write(manager, PathExt.join(directory.path, name), data)
+        ));
+      } catch (error) {
+        yield { type: 'error', slots: [`${error}`] };
+        return;
+      }
+    }
     for (const assignee of roster) {
       yield { type: 'separator', slots: [] };
       const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
@@ -73,7 +88,7 @@ export async function* propagate({
       const issued = { issue, issuer };
       await reissue({ notebook, roster, ...issued, key });
       const identifier = { ...assigned, issue: issued.issue };
-      const propagated = { identifier, notebook, path };
+      const propagated = { identifier, notebook, path, resources };
       stamp(notebook, Date.now());
 
       let distributed = true;
@@ -171,6 +186,7 @@ async function reassign({ assignee, file, key, notebook, roster }: {
     name,
     overdue,
     penalty,
+    resources,
     roster: encrypted
   } = metadata.assignment;
   const report = Rubric.Assignment.Report.empty();
@@ -184,6 +200,7 @@ async function reassign({ assignee, file, key, notebook, roster }: {
     overdue,
     penalty,
     report,
+    resources,
     roster
   };
   const mac = await Rubric.Assignment.mac(unsigned, key);
@@ -208,8 +225,9 @@ async function reissue({ issuer, issue, key, notebook, roster }: {
 }): Promise<void> {
   const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
     { assignment: Rubric.Assignment, revised: number };
-  const { assignee, expiration, id, keys, name, overdue, penalty, report } =
-    metadata.assignment;
+  const {
+    assignee, expiration, id, keys, name, overdue, penalty, report, resources
+  } = metadata.assignment;
   const unsigned = {
     assignee,
     expiration,
@@ -221,6 +239,7 @@ async function reissue({ issuer, issue, key, notebook, roster }: {
     overdue,
     penalty,
     report,
+    resources,
     roster
   };
   const mac = await Rubric.Assignment.mac(unsigned, key);

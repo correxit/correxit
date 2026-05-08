@@ -218,6 +218,92 @@ test('distribute validates issued notebooks before distributing', async ({
   await dispose();
 });
 
+test('propagate copies resources for local retry delivery', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async keys => {
+    const { Rubric, Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const contents = app.serviceManager.contents;
+    const panel = app.shell.currentWidget;
+
+    await contents.save('data.csv', {
+      content: 'a,b\n1,2\n',
+      format: 'text',
+      type: 'file'
+    });
+
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create());
+    rubric.assignment.keys.private.author = keys.private.author;
+    rubric.assignment.keys.public.author = keys.public.author;
+    await Workbook.update(panel, rubric);
+    await app.commands.execute('correxit:assign', {
+      roster: ['alice@example.com']
+    });
+    await app.commands.execute('correxit:resource', {
+      resources: ['data.csv']
+    });
+
+    const stream = await app.commands.execute('correxit:propagate');
+    let directory = '';
+    let path = '';
+    for await (const [, emission] of stream) {
+      if (emission.type === 'mkdir') directory = emission.slots[0] as string;
+      if (emission.type === 'saved') path = emission.slots[0] as string;
+    }
+
+    const resource = await contents.get(`${directory}/data.csv`, {
+      content: true,
+      format: 'text',
+      type: 'file'
+    });
+    const file = await contents.get(path, { content: true, type: 'notebook' });
+    file.content.metadata.correxit.assignment.distribution = null;
+    await contents.save(path, { ...file, content: file.content });
+    const retried = await app.commands.execute('correxit:distribute', {
+      path,
+      quiet: true,
+      silent: true
+    });
+
+    return {
+      directory,
+      path,
+      resource: resource.content,
+      retried
+    };
+  }, keys);
+
+  expect(result.resource).toBe('a,b\n1,2\n');
+  expect(result.retried).toBe(true);
+
+  await page.evaluate(
+    async ({ directory, path }: { directory: string; path: string }) => {
+      const contents = (window as any).jupyterapp.serviceManager.contents;
+      await contents.delete(path).catch(() => {});
+      await contents.delete(`${directory}/data.csv`).catch(() => {});
+      await contents.delete(directory).catch(() => {});
+      await contents.delete('data.csv').catch(() => {});
+    },
+    result
+  );
+
+  await cd(page, '.');
+  await dispose();
+});
+
 test('propagate command is disabled for assigned workbooks', async ({
   page
 }) => {

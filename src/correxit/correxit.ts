@@ -12,10 +12,13 @@ export namespace Correxit {
     certified: Workbook.Certified
   ) => Promise<string | null>;
 
+  export type Resource = { name: string; data: Uint8Array };
+
   export type Distributor = (propagated: {
     identifier: Workbook.Identifier.Assigned;
     notebook: INotebookContent;
     path: string;
+    resources: Resource[] | null;
   }) => Promise<void>;
 
   export type Injector = (workbook: Workbook | null) => void;

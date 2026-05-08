@@ -31,6 +31,7 @@ export namespace Rubric {
     overdue: Assignment.Overdue;
     penalty: number | null;
     report: Assignment.Report;
+    resources: string[] | null;
     roster: string[];
     seal: string | null;
     submission: Timestamp;
@@ -401,7 +402,8 @@ export namespace Rubric {
         return x.assignee === y.assignee &&
           x.overdue === y.overdue &&
           x.penalty === y.penalty &&
-          registration(x, y);
+          registration(x, y) &&
+          resources(x, y);
       }
 
       export function registered(
@@ -414,6 +416,13 @@ export namespace Rubric {
         const a = normalize(x), b = normalize(y);
         return a.length === b.length &&
           a.every((c, i) => course(c, b[i]));
+      }
+
+      export function resources(
+        { resources: x }: Pick<Assignment, 'resources'>,
+        { resources: y }: Pick<Assignment, 'resources'>
+      ): boolean {
+        return (x?.join('\x1F') ?? null) === (y?.join('\x1F') ?? null);
       }
     }
 
@@ -480,6 +489,7 @@ export namespace Rubric {
         overdue: null,
         penalty: null,
         report: Report.empty(),
+        resources: null,
         roster: [],
         seal: null,
         submission: null,
@@ -528,6 +538,7 @@ export namespace Rubric {
         name,
         overdue,
         penalty,
+        resources,
         roster
       } = terms;
       const { interventions: manual, scores: auto } = terms.report;
@@ -535,7 +546,7 @@ export namespace Rubric {
       const report = { interventions: sort(manual), scores: sort(auto) };
       const unsigned = {
         assignee, author, expiration, id, issue, issuer,
-        name, overdue, penalty, report, roster
+        name, overdue, penalty, report, resources, roster
       };
       return security.hmac(JSON.stringify(unsigned), key);
     }
@@ -885,6 +896,7 @@ export namespace Rubric {
       name = rubric.assignment.name,
       overdue = rubric.assignment.overdue,
       penalty = rubric.assignment.penalty,
+      resources = rubric.assignment.resources,
       roster = rubric.assignment.roster
     }: Partial<Assignment> = {}
   ): Promise<Unlocked> {
@@ -897,6 +909,7 @@ export namespace Rubric {
       name !== rubric.assignment.name ||
       overdue !== rubric.assignment.overdue ||
       penalty !== rubric.assignment.penalty ||
+      !Assignment.Equal.resources({ resources }, rubric.assignment) ||
       JSON.stringify(roster) !== JSON.stringify(rubric.assignment.roster);
     const certification = stale ? null : rubric.assignment.certification;
     const collected = stale ? null : rubric.assignment.collected;
@@ -919,6 +932,7 @@ export namespace Rubric {
       overdue,
       penalty,
       report,
+      resources,
       roster
     };
     const lifecycle = {
