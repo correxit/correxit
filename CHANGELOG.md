@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/QuantStack/correxit/compare/v1.21.1...v1.22.0) (2026-05-08)
+
+
+### Features
+
+* Support resource files with a workbook assignment ([#75](https://github.com/QuantStack/correxit/issues/75)) ([569ab8f](https://github.com/QuantStack/correxit/commit/569ab8fb4512a3e53f8f24b9a6842fc865c80780))
+
 ## [1.21.1](https://github.com/QuantStack/correxit/compare/v1.21.0...v1.21.1) (2026-05-05)
 
 
