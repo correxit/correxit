@@ -60,6 +60,7 @@ type Reified =
   { handle: Credentials | null; rubric: null; workbook: null; } |
   { handle: Credentials | null; rubric: null; workbook: Workbook; } |
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
+type Resources = { resources: string[] | null };
 
 const { get, has } = Rubric;
 const {
@@ -120,10 +121,10 @@ export function commands(
     if (workbook?.context.isDisposed) state.workbook(null);
     return current();
   };
-  const names = (paths: string[], parent: string): string[] | null => {
+  const files = (paths: string[], parent: string): string[] | null => {
     const folder = parent || '.';
     const root = PathExt.resolve(folder || '.');
-    const names = Array.from(new Set(paths.map(path => {
+    const files = Array.from(new Set(paths.map(path => {
       const full = PathExt.resolve(path);
       if (full === root) {
         throw new Error.Invalid(
@@ -142,7 +143,7 @@ export function commands(
       }
       return name;
     })));
-    return names.length ? names : null;
+    return files.length ? files : null;
   };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
@@ -294,14 +295,14 @@ export function commands(
     },
     isVisible: () => commands.isEnabled(CommandIDs.resource),
     label: trans.__('Set resources...'),
-    execute: async (args: Partial<Credentials & { resources: string[] | null }>) => {
+    execute: async (args: Partial<Credentials & Resources>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || rubric.assignment.assignee) return;
 
       const directory = PathExt.dirname(workbook.context.path) || '.';
       try {
         if ('resources' in args) {
-          const resources = args.resources && names(args.resources, directory);
+          const resources = args.resources && files(args.resources, directory);
           await assign(workbook, { resources });
           return;
         }
@@ -328,7 +329,7 @@ export function commands(
           }
           return item.path;
         });
-        const resources = names(paths, directory);
+        const resources = files(paths, directory);
         await assign(workbook, { resources });
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
