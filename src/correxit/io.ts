@@ -164,3 +164,60 @@ export async function request(
   }
   return workbook;
 }
+
+/** @returns non-notebook files in a directory sorted lexically by name. */
+export async function resources(
+  { contents }: Pick<ServiceManager.IManager, 'contents'>,
+  path: string
+): Promise<Contents.IModel[]> {
+  const response = await contents.get(path, { content: true });
+  if (response.type !== 'directory')
+    throw new Correxit.Error.Fetch(`Not a directory: ${path}`);
+
+  const resource = ({ type }: Contents.IModel) => type === 'file';
+  const lexical = (a: { name: string }, b: { name: string }) =>
+    a.name.localeCompare(b.name);
+  return (response.content || []).filter(resource).sort(lexical);
+}
+
+/**
+ * Stage a workbook for isolated execution.
+ *
+ * Creates `correxit-corrector/<stem>/` under `dir`, copies the notebook
+ * there, and copies each sidecar file from `dir` into the same slot.
+ *
+ * @returns the path of the staged notebook.
+ */
+export async function stage(
+  manager: ServiceManager.IManager,
+  dir: string,
+  path: string
+): Promise<string> {
+  const { contents } = manager;
+  const stem = PathExt.basename(path, '.ipynb');
+  const slot = PathExt.join(dir, 'correxit-corrector', stem);
+  const root = PathExt.join(dir, 'correxit-corrector');
+  await mkdir(manager, dir, root).catch(() => undefined);
+  await mkdir(manager, root, slot);
+
+  const copy = await contents.copy(path, slot);
+  for (const { path: src, name } of await resources(manager, dir)) {
+    const file = await contents.get(src, { format: 'base64', content: true });
+    await contents.save(PathExt.join(slot, name), {
+      content: file.content,
+      format: 'base64',
+      type: 'file'
+    });
+  }
+  return copy.path;
+}
+
+/** Removes a staging slot created by `stage`. */
+export async function unstage(
+  { contents }: Pick<ServiceManager.IManager, 'contents'>,
+  dir: string,
+  stem: string
+): Promise<void> {
+  const slot = PathExt.join(dir, 'correxit-corrector', stem);
+  await contents.delete(slot).catch(() => undefined);
+}

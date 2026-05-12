@@ -2,6 +2,7 @@ import { INotebookTree } from '@jupyter-notebook/tree';
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { showErrorMessage, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
+import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
@@ -88,16 +89,53 @@ export function commands(
         args: Partial<Credentials & { overwrite: boolean; submitted: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
-        const actions: Actions = {
-          correct: workbook => correct(workbook, trans),
-          exclude: workbook => exclude(workbook, overwrite),
-          recover
-        };
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
         if (!handle)
           throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
+
+        const isolated = async (workbook: Headless): Promise<Certified> => {
+          const path = workbook.context.path;
+          const dir = PathExt.dirname(path) || '.';
+          const stem = PathExt.basename(path, '.ipynb');
+          const staged = (await fetch({
+            ...handle,
+            path: await io.stage(manager, dir, path)
+          })) as Headless | null;
+          if (!staged) {
+            await io.unstage(manager, dir, stem);
+            throw new Correxit.Error.Certify('correct error: staging failed');
+          }
+          try {
+            const certified = await correct(staged, trans);
+            workbook.context.dispose();
+            await manager.contents.save(path, {
+              type: 'notebook',
+              content: staged.context.model.toJSON()
+            });
+            const fresh = (await fetch(
+              { path, key: null, passphrase: null, unlock: false },
+              true
+            )) as Headless | null;
+            if (!fresh)
+              throw new Correxit.Error.Certify('correct error: reopen failed');
+            return {
+              ...certified,
+              grade: { ...certified.grade, path },
+              workbook: fresh
+            };
+          } finally {
+            staged.context.dispose();
+            await io.unstage(manager, dir, stem);
+          }
+        };
+
+        const actions: Actions = {
+          correct: isolated,
+          exclude: workbook => exclude(workbook, overwrite),
+          recover
+        };
 
         const cap = kernels.cap();
         const retries = kernels.retries();

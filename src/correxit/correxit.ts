@@ -12,8 +12,6 @@ export namespace Correxit {
     certified: Workbook.Certified
   ) => Promise<string | null>;
 
-  export type Resource = { name: string; data: Uint8Array };
-
   export type Distributor = (propagated: {
     identifier: Workbook.Identifier.Assigned;
     notebook: INotebookContent;
@@ -41,6 +39,11 @@ export namespace Correxit {
     | { group: string; assignments: Rubric.Assignment.Registration[] }[]
     | null
   >;
+
+  /**
+   * A simple sidecar file utility type to encapsulate required workbook files.
+   */
+  export type Resource = { name: string; data: Uint8Array };
 
   export type Submitter = (
     workbook: Workbook,
