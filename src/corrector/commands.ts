@@ -6,7 +6,7 @@ import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
-import { Contents } from '@jupyterlab/services';
+import { Contents, ServiceManager } from '@jupyterlab/services';
 import { Correxit, Rubric, Workbook } from '..';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
@@ -95,48 +95,11 @@ export function commands(
         if (!handle)
           throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
 
-        const isolated = async (workbook: Headless): Promise<Certified> => {
-          const path = workbook.context.path;
-          const dir = PathExt.dirname(path) || '.';
-          const stem = PathExt.basename(path, '.ipynb');
-          const staged = (await fetch({
-            ...handle,
-            path: await io.stage(manager, dir, path)
-          })) as Headless | null;
-          if (!staged) {
-            await io.unstage(manager, dir, stem);
-            throw new Correxit.Error.Certify('correct error: staging failed');
-          }
-          try {
-            const certified = await correct(staged, trans);
-            workbook.context.dispose();
-            await manager.contents.save(path, {
-              type: 'notebook',
-              content: staged.context.model.toJSON()
-            });
-            const fresh = (await fetch(
-              { path, key: null, passphrase: null, unlock: false },
-              true
-            )) as Headless | null;
-            if (!fresh)
-              throw new Correxit.Error.Certify('correct error: reopen failed');
-            return {
-              ...certified,
-              grade: { ...certified.grade, path },
-              workbook: fresh
-            };
-          } finally {
-            staged.context.dispose();
-            await io.unstage(manager, dir, stem);
-          }
-        };
-
         const actions: Actions = {
-          correct: isolated,
+          correct: workbook => isolate(workbook, handle, fetch, manager, trans),
           exclude: workbook => exclude(workbook, overwrite),
           recover
         };
-
         const cap = kernels.cap();
         const retries = kernels.retries();
         const source = scanner(
@@ -431,35 +394,6 @@ export function commands(
   return disposables;
 }
 
-async function correct(
-  workbook: Headless,
-  trans: IRenderMime.TranslationBundle
-): Promise<Certified> {
-  const rubric = open(workbook);
-  if (!rubric || rubric.locked)
-    throw new Correxit.Error.Certify('correct error: invalid rubric');
-  if (Rubric.Assignment.rejected(rubric.assignment))
-    throw new Correxit.Error.Certify('correct error: overdue rejected');
-
-  const { interventions } = rubric.assignment.report;
-  const pending = Object.values(rubric.cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !interventions[cell.id]);
-  if (!pending) {
-    const result = await Workbook.certify(workbook, trans);
-    await save(workbook);
-    return result;
-  }
-
-  const grade = await Workbook.correct(workbook);
-  const identifier = Workbook.identifier(workbook);
-  if (!Workbook.Identifier.assigned(identifier))
-    throw new Correxit.Error.Certify('correct error: unassigned');
-  await Workbook.lock(workbook);
-  await save(workbook);
-  return { grade, identifier, workbook };
-}
-
 function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const rubric = open(workbook);
   if (!rubric || overwrite) return null;
@@ -490,6 +424,77 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
   return reviewing ? grade(report.kernel) : null;
+}
+
+async function grade(
+  workbook: Headless,
+  trans: IRenderMime.TranslationBundle
+): Promise<Certified> {
+  const rubric = open(workbook);
+  if (!rubric || rubric.locked)
+    throw new Correxit.Error.Certify('correct error: invalid rubric');
+  if (Rubric.Assignment.rejected(rubric.assignment))
+    throw new Correxit.Error.Certify('correct error: overdue rejected');
+
+  const { interventions } = rubric.assignment.report;
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  if (!pending) {
+    const result = await Workbook.certify(workbook, trans);
+    await save(workbook);
+    return result;
+  }
+
+  const grade = await Workbook.correct(workbook);
+  const identifier = Workbook.identifier(workbook);
+  if (!Workbook.Identifier.assigned(identifier))
+    throw new Correxit.Error.Certify('correct error: unassigned');
+  await Workbook.lock(workbook);
+  await save(workbook);
+  return { grade, identifier, workbook };
+}
+
+async function isolate(
+  workbook: Headless,
+  handle: Credentials,
+  fetch: (handle: Credentials, silent?: boolean) => Promise<unknown>,
+  manager: ServiceManager.IManager,
+  trans: IRenderMime.TranslationBundle
+): Promise<Certified> {
+  const path = workbook.context.path;
+  const dir = PathExt.dirname(path) || '.';
+  const stem = PathExt.basename(path, '.ipynb');
+  const staged = (await fetch({
+    ...handle,
+    path: await io.stage(manager, dir, path)
+  })) as Headless | null;
+  if (!staged) {
+    await io.unstage(manager, dir, stem);
+    throw new Correxit.Error.Certify('correct error: staging failed');
+  }
+  try {
+    const certified = await grade(staged, trans);
+    workbook.context.dispose();
+    await manager.contents.save(path, {
+      type: 'notebook',
+      content: staged.context.model.toJSON()
+    });
+    const fresh = (await fetch(
+      { path, key: null, passphrase: null, unlock: false },
+      true
+    )) as Headless | null;
+    if (!fresh)
+      throw new Correxit.Error.Certify('correct error: reopen failed');
+    return {
+      ...certified,
+      grade: { ...certified.grade, path },
+      workbook: fresh
+    };
+  } finally {
+    staged.context.dispose();
+    await io.unstage(manager, dir, stem);
+  }
 }
 
 function open(workbook: Workbook): Rubric | null {
