@@ -465,14 +465,14 @@ async function isolate(
   const path = workbook.context.path;
   const dir = PathExt.dirname(path) || '.';
   const stem = PathExt.basename(path, '.ipynb');
-  const staged = (await fetch({
-    ...handle,
-    path: await io.stage(manager, dir, path)
-  })) as Headless | null;
+  const stage = await io.stage(manager, dir, path);
+  const staged = (await fetch({ ...handle, path: stage })) as Headless | null;
   if (!staged) {
     await io.unstage(manager, dir, stem);
     throw new Correxit.Error.Certify('correct error: staging failed');
   }
+
+  let propagated = false;
   try {
     const certified = await grade(staged, trans);
     workbook.context.dispose();
@@ -480,20 +480,21 @@ async function isolate(
       type: 'notebook',
       content: staged.context.model.toJSON()
     });
-    const fresh = (await fetch(
+    const reopened = (await fetch(
       { path, key: null, passphrase: null, unlock: false },
       true
     )) as Headless | null;
-    if (!fresh)
+    if (!reopened)
       throw new Correxit.Error.Certify('correct error: reopen failed');
+    propagated = true;
     return {
       ...certified,
       grade: { ...certified.grade, path },
-      workbook: fresh
+      workbook: reopened
     };
   } finally {
     staged.context.dispose();
-    await io.unstage(manager, dir, stem);
+    if (propagated) await io.unstage(manager, dir, stem);
   }
 }
 

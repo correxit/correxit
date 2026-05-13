@@ -7,6 +7,33 @@ import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
 import * as security from './security';
 
+const encode = (data: Uint8Array): string => {
+  let binary = '';
+  for (let i = 0; i < data.length; i += 8192)
+    binary += String.fromCharCode(...data.subarray(i, i + 8192));
+  return btoa(binary);
+};
+
+const directory = async(
+  manager: ServiceManager.IManager,
+  pwd: string,
+  path: string
+): Promise<void> => {
+  try {
+    await manager.contents.get(path, { content: false });
+  } catch {
+    await mkdir(manager, pwd, path);
+  }
+};
+
+/** @returns a deterministic filename for an assigned workbook. */
+export async function assigned(assignment: string, assignee: string) {
+  const name = assignment.replace(/[^\w.-]/g, '');
+  const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
+  const hash = (await security.digest(assignee)).slice(0, 4);
+  return `${name}-${local}-${hash}.ipynb`;
+}
+
 /** @returns an available path in pwd for the given seed name. */
 export async function available(
   { contents }: Pick<ServiceManager.IManager, 'contents'>,
@@ -27,33 +54,10 @@ export async function available(
   }
 }
 
-/** @returns a deterministic filename for an assigned workbook. */
-export async function assigned(assignment: string, assignee: string) {
-  const name = assignment.replace(/[^\w.-]/g, '');
-  const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
-  const hash = (await security.digest(assignee)).slice(0, 4);
-  return `${name}-${local}-${hash}.ipynb`;
-}
-
 /** Navigates the file browser to path. */
 export async function cd(commands: CommandRegistry, path: string) {
   const command = 'filebrowser:go-to-path';
   if (commands.hasCommand(command)) commands.execute(command, { path });
-}
-
-/** @returns notebooks in a directory sorted lexically by name. */
-export async function notebooks(
-  { contents }: Pick<ServiceManager.IManager, 'contents'>,
-  path: string
-): Promise<Contents.IModel[]> {
-  const response = await contents.get(path, { content: true });
-  if (response.type !== 'directory')
-    throw new Correxit.Error.Fetch(`Not a directory: ${path}`);
-
-  const notebook = ({ type }: Contents.IModel) => type === 'notebook';
-  const lexical = (a: { name: string }, b: { name: string }) =>
-    a.name.localeCompare(b.name);
-  return (response.content || []).filter(notebook).sort(lexical);
 }
 
 /** @returns a headless workbook or null. */
@@ -104,26 +108,6 @@ export async function load(
   return Uint8Array.from(binary, char => char.charCodeAt(0));
 }
 
-const encode = (data: Uint8Array): string => {
-  let binary = '';
-  for (let i = 0; i < data.length; i += 8192)
-    binary += String.fromCharCode(...data.subarray(i, i + 8192));
-  return btoa(binary);
-};
-
-/** Writes raw bytes to a file path. */
-export async function write(
-  { contents }: Pick<ServiceManager.IManager, 'contents'>,
-  path: string,
-  data: Uint8Array
-): Promise<void> {
-  await contents.save(path, {
-    content: encode(data),
-    format: 'base64',
-    type: 'file'
-  });
-}
-
 /** Creates a directory at path inside pwd. */
 export async function mkdir(
   { contents }: ServiceManager.IManager,
@@ -132,6 +116,21 @@ export async function mkdir(
 ) {
   const untitled = await contents.newUntitled({ path: pwd, type: 'directory' });
   return await contents.rename(untitled.path, path);
+}
+
+/** @returns notebooks in a directory sorted lexically by name. */
+export async function notebooks(
+  { contents }: Pick<ServiceManager.IManager, 'contents'>,
+  path: string
+): Promise<Contents.IModel[]> {
+  const response = await contents.get(path, { content: true });
+  if (response.type !== 'directory')
+    throw new Correxit.Error.Fetch(`Not a directory: ${path}`);
+
+  const notebook = ({ type }: Contents.IModel) => type === 'notebook';
+  const lexical = (a: { name: string }, b: { name: string }) =>
+    a.name.localeCompare(b.name);
+  return (response.content || []).filter(notebook).sort(lexical);
 }
 
 /** @returns a headless workbook, optionally unlocked, or null. */
@@ -195,21 +194,16 @@ export async function stage(
 ): Promise<string> {
   const { contents } = manager;
   const stem = PathExt.basename(path, '.ipynb');
-  const slot = PathExt.join(dir, 'correxit-corrector', stem);
   const root = PathExt.join(dir, 'correxit-corrector');
-  await mkdir(manager, dir, root).catch(() => undefined);
-  await mkdir(manager, root, slot);
+  const subdirectory = PathExt.join(dir, 'correxit-corrector', stem);
+  await directory(manager, dir, root);
+  await contents.delete(subdirectory).catch(() => undefined);
+  await mkdir(manager, root, subdirectory);
 
-  const copy = await contents.copy(path, slot);
-  for (const { path: src, name } of await resources(manager, dir)) {
-    const file = await contents.get(src, { format: 'base64', content: true });
-    await contents.save(PathExt.join(slot, name), {
-      content: file.content,
-      format: 'base64',
-      type: 'file'
-    });
-  }
-  return copy.path;
+  const copied = await contents.copy(path, subdirectory);
+  const files = await resources(manager, dir);
+  await Promise.all(files.map(({ path }) => contents.copy(path, subdirectory)));
+  return copied.path;
 }
 
 /** Removes a staging slot created by `stage`. */
@@ -220,4 +214,17 @@ export async function unstage(
 ): Promise<void> {
   const slot = PathExt.join(dir, 'correxit-corrector', stem);
   await contents.delete(slot).catch(() => undefined);
+}
+
+/** Writes raw bytes to a file path. */
+export async function write(
+  { contents }: Pick<ServiceManager.IManager, 'contents'>,
+  path: string,
+  data: Uint8Array
+): Promise<void> {
+  await contents.save(path, {
+    content: encode(data),
+    format: 'base64',
+    type: 'file'
+  });
 }
