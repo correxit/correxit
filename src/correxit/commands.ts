@@ -565,6 +565,7 @@ If conversion fails, Correxit restores the original notebook.`
         report = await nbgrader.convert(workbook, trans);
       } catch (error) {
         restore(workbook, snapshot);
+
         const restored = trans.__('The original notebook was restored.');
         const detail = Error.reason(error);
         void showErrorMessage(

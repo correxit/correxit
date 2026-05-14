@@ -5,6 +5,7 @@ import { IEditorServices } from '@jupyterlab/codeeditor';
 import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
+import { INotebookContent } from '@jupyterlab/nbformat';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { Correxit, Rubric, Workbook } from '..';
@@ -96,7 +97,7 @@ export function commands(
           throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
 
         const actions: Actions = {
-          correct: workbook => isolate(workbook, handle, fetch, manager, trans),
+          correct: workbook => correct(workbook, handle, fetch, manager, trans),
           exclude: workbook => exclude(workbook, overwrite),
           recover
         };
@@ -240,7 +241,7 @@ export function commands(
               const locked = open(fetched)?.locked;
               const unauthenticated = !handle.key && !handle.passphrase;
               prompted ||= !locked || !handle.unlock || !unauthenticated;
-              if (submitted && !submittedLocally(fetched as Headless)) {
+              if (submitted && !submission(fetched as Headless)) {
                 fetched.context.dispose();
                 continue;
               }
@@ -394,6 +395,39 @@ export function commands(
   return disposables;
 }
 
+async function correct(
+  workbook: Headless,
+  handle: Credentials,
+  fetch: (handle: Credentials, silent?: boolean) => Promise<unknown>,
+  manager: ServiceManager.IManager,
+  trans: IRenderMime.TranslationBundle
+): Promise<Certified> {
+  const { path } = workbook.context;
+  const dir = PathExt.dirname(path) || '.';
+  const stem = PathExt.basename(path, '.ipynb');
+  const local = await io.stage(manager, dir, path);
+  const staged = (await fetch({ ...handle, path: local })) as Headless | null;
+  if (!staged) {
+    await io.unstage(manager, dir, stem);
+    throw new Correxit.Error.Certify('correct error: staging failed');
+  }
+
+  let propagated = false;
+  try {
+    const certified = await grade(staged, trans);
+    const snapshot = staged.context.model.toJSON() as INotebookContent;
+    const restored = Workbook.restore(workbook, snapshot);
+    if (!restored)
+      throw new Correxit.Error.Certify('correct error: restore failed');
+    await workbook.context.save();
+    propagated = true;
+    return { ...certified, grade: { ...certified.grade, path }, workbook };
+  } finally {
+    staged.context.dispose();
+    if (propagated) await io.unstage(manager, dir, stem);
+  }
+}
+
 function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const rubric = open(workbook);
   if (!rubric || overwrite) return null;
@@ -455,49 +489,6 @@ async function grade(
   return { grade, identifier, workbook };
 }
 
-async function isolate(
-  workbook: Headless,
-  handle: Credentials,
-  fetch: (handle: Credentials, silent?: boolean) => Promise<unknown>,
-  manager: ServiceManager.IManager,
-  trans: IRenderMime.TranslationBundle
-): Promise<Certified> {
-  const path = workbook.context.path;
-  const dir = PathExt.dirname(path) || '.';
-  const stem = PathExt.basename(path, '.ipynb');
-  const stage = await io.stage(manager, dir, path);
-  const staged = (await fetch({ ...handle, path: stage })) as Headless | null;
-  if (!staged) {
-    await io.unstage(manager, dir, stem);
-    throw new Correxit.Error.Certify('correct error: staging failed');
-  }
-
-  let propagated = false;
-  try {
-    const certified = await grade(staged, trans);
-    workbook.context.dispose();
-    await manager.contents.save(path, {
-      type: 'notebook',
-      content: staged.context.model.toJSON()
-    });
-    const reopened = (await fetch(
-      { path, key: null, passphrase: null, unlock: false },
-      true
-    )) as Headless | null;
-    if (!reopened)
-      throw new Correxit.Error.Certify('correct error: reopen failed');
-    propagated = true;
-    return {
-      ...certified,
-      grade: { ...certified.grade, path },
-      workbook: reopened
-    };
-  } finally {
-    staged.context.dispose();
-    if (propagated) await io.unstage(manager, dir, stem);
-  }
-}
-
 function open(workbook: Workbook): Rubric | null {
   return Workbook.open(workbook, true);
 }
@@ -550,10 +541,10 @@ async function* scanner(
     if (!workbook.hollow) yield workbook;
 }
 
-function submittedLocally(workbook: Headless): boolean {
+function submission(workbook: Headless): boolean {
   return open(workbook)?.assignment.submission !== null;
 }
 
-function unexecuted({ code }: Rubric.Score): boolean {
+function unexecuted({ code }: Pick<Rubric.Score, 'code'>): boolean {
   return code === 'missing-given' || code === 'missing-reference';
 }
