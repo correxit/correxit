@@ -466,18 +466,18 @@ async function grade(
 ): Promise<Certified> {
   const rubric = open(workbook);
   if (!rubric || rubric.locked)
-    throw new Correxit.Error.Certify('correct error: invalid rubric');
+    throw new Correxit.Error.Certify('grade error: invalid rubric');
   if (Rubric.Assignment.rejected(rubric.assignment))
-    throw new Correxit.Error.Certify('correct error: overdue rejected');
+    throw new Correxit.Error.Certify('grade error: overdue rejected');
 
   const { interventions } = rubric.assignment.report;
   const pending = Object.values(rubric.cells)
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
   if (!pending) {
-    const result = await Workbook.certify(workbook, trans);
+    const certified = await Workbook.certify(workbook, trans);
     await save(workbook);
-    return result;
+    return certified;
   }
 
   const grade = await Workbook.correct(workbook);
