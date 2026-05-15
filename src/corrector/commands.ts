@@ -2,10 +2,12 @@ import { INotebookTree } from '@jupyter-notebook/tree';
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { showErrorMessage, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
+import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
+import { INotebookContent } from '@jupyterlab/nbformat';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
-import { Contents } from '@jupyterlab/services';
+import { Contents, ServiceManager } from '@jupyterlab/services';
 import { Correxit, Rubric, Workbook } from '..';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
@@ -88,17 +90,17 @@ export function commands(
         args: Partial<Credentials & { overwrite: boolean; submitted: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
-        const actions: Actions = {
-          correct: workbook => correct(workbook, trans),
-          exclude: workbook => exclude(workbook, overwrite),
-          recover
-        };
         const auth = !!(args.key || args.passphrase);
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
         if (!handle)
           throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
 
+        const actions: Actions = {
+          correct: workbook => correct(workbook, handle, fetch, manager, trans),
+          exclude: workbook => exclude(workbook, overwrite),
+          recover
+        };
         const cap = kernels.cap();
         const retries = kernels.retries();
         const source = scanner(
@@ -239,7 +241,7 @@ export function commands(
               const locked = open(fetched)?.locked;
               const unauthenticated = !handle.key && !handle.passphrase;
               prompted ||= !locked || !handle.unlock || !unauthenticated;
-              if (submitted && !submittedLocally(fetched as Headless)) {
+              if (submitted && !submission(fetched as Headless)) {
                 fetched.context.dispose();
                 continue;
               }
@@ -395,31 +397,38 @@ export function commands(
 
 async function correct(
   workbook: Headless,
+  handle: Credentials,
+  fetch: (handle: Credentials, silent?: boolean) => Promise<unknown>,
+  manager: ServiceManager.IManager,
   trans: IRenderMime.TranslationBundle
 ): Promise<Certified> {
-  const rubric = open(workbook);
-  if (!rubric || rubric.locked)
-    throw new Correxit.Error.Certify('correct error: invalid rubric');
-  if (Rubric.Assignment.rejected(rubric.assignment))
-    throw new Correxit.Error.Certify('correct error: overdue rejected');
-
-  const { interventions } = rubric.assignment.report;
-  const pending = Object.values(rubric.cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !interventions[cell.id]);
-  if (!pending) {
-    const result = await Workbook.certify(workbook, trans);
-    await save(workbook);
-    return result;
+  const { path } = workbook.context;
+  const dir = PathExt.dirname(path) || '.';
+  const stem = PathExt.basename(path, '.ipynb');
+  const local = await io.stage(manager, dir, path);
+  const staged = (await fetch({ ...handle, path: local })) as Headless | null;
+  if (!staged) {
+    await io.unstage(manager, dir, stem);
+    throw new Correxit.Error.Certify('correct error: staging failed');
   }
 
-  const grade = await Workbook.correct(workbook);
-  const identifier = Workbook.identifier(workbook);
-  if (!Workbook.Identifier.assigned(identifier))
-    throw new Correxit.Error.Certify('correct error: unassigned');
-  await Workbook.lock(workbook);
-  await save(workbook);
-  return { grade, identifier, workbook };
+  let graded = false;
+  let propagated = false;
+  try {
+    const certified = await grade(staged, trans);
+    graded = true;
+
+    const snapshot = staged.context.model.toJSON() as INotebookContent;
+    const restored = Workbook.restore(workbook, snapshot);
+    if (!restored)
+      throw new Correxit.Error.Certify('correct error: restore failed');
+    await workbook.context.save();
+    propagated = true;
+    return { ...certified, grade: { ...certified.grade, path }, workbook };
+  } finally {
+    staged.context.dispose();
+    if (!graded || propagated) await io.unstage(manager, dir, stem);
+  }
 }
 
 function exclude(workbook: Headless, overwrite: boolean): Certified | null {
@@ -452,6 +461,35 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
     .filter(cell => cell.is === 'reviewable')
     .some(cell => !interventions[cell.id]);
   return reviewing ? grade(report.kernel) : null;
+}
+
+async function grade(
+  workbook: Headless,
+  trans: IRenderMime.TranslationBundle
+): Promise<Certified> {
+  const rubric = open(workbook);
+  if (!rubric || rubric.locked)
+    throw new Correxit.Error.Certify('grade error: invalid rubric');
+  if (Rubric.Assignment.rejected(rubric.assignment))
+    throw new Correxit.Error.Certify('grade error: overdue rejected');
+
+  const { interventions } = rubric.assignment.report;
+  const pending = Object.values(rubric.cells)
+    .filter(cell => cell.is === 'reviewable')
+    .some(cell => !interventions[cell.id]);
+  if (!pending) {
+    const certified = await Workbook.certify(workbook, trans);
+    await save(workbook);
+    return certified;
+  }
+
+  const grade = await Workbook.correct(workbook);
+  const identifier = Workbook.identifier(workbook);
+  if (!Workbook.Identifier.assigned(identifier))
+    throw new Correxit.Error.Certify('grade error: unassigned');
+  await Workbook.lock(workbook);
+  await save(workbook);
+  return { grade, identifier, workbook };
 }
 
 function open(workbook: Workbook): Rubric | null {
@@ -506,10 +544,10 @@ async function* scanner(
     if (!workbook.hollow) yield workbook;
 }
 
-function submittedLocally(workbook: Headless): boolean {
+function submission(workbook: Headless): boolean {
   return open(workbook)?.assignment.submission !== null;
 }
 
-function unexecuted({ code }: Rubric.Score): boolean {
+function unexecuted({ code }: Pick<Rubric.Score, 'code'>): boolean {
   return code === 'missing-given' || code === 'missing-reference';
 }

@@ -37,8 +37,8 @@ export async function* propagate({
     } = rubric;
     const path = workbook.context.path;
     const parent = PathExt.dirname(path);
-    const base = PathExt.basename(path, '.ipynb');
-    const potential = await io.available(manager, parent, base);
+    const stem = PathExt.basename(path, '.ipynb');
+    const potential = await io.available(manager, parent, stem);
     const directory = await io.mkdir(manager, parent, potential);
     const total = roster.length;
     const { encrypted, notebook: content } = await template(workbook, rubric);
@@ -68,25 +68,18 @@ export async function* propagate({
     for (const assignee of roster) {
       yield { type: 'separator', slots: [] };
       const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
-      const file = await io.assigned(base, assignee);
+      const file = await io.assigned(stem, assignee);
       const path = PathExt.join(directory.path, file);
       const individual = { assignee, file, key, notebook, roster };
       const assigned = await reassign(individual);
-      const issue = await Rubric.Assignment.issue({
-        assignment: {
-          assignee,
-          expiration,
-          id: assigned.assignment,
-          name,
-          overdue,
-          penalty
-        },
-        notebook,
-        rubric
-      });
+      const id = assigned.assignment;
+      const assignment = { assignee, expiration, id, name, overdue, penalty };
+      const individualized = { assignment, notebook, rubric };
+      const issue = await Rubric.Assignment.issue(individualized);
       const issuer = await Rubric.Assignment.issuer(issue, author);
       const issued = { issue, issuer };
       await reissue({ notebook, roster, ...issued, key });
+
       const identifier = { ...assigned, issue: issued.issue };
       const propagated = { identifier, notebook, path, resources };
       stamp(notebook, Date.now());
