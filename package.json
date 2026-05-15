@@ -1,6 +1,6 @@
 {
     "name": "@quantstack/correxit",
-    "version": "1.22.0",
+    "version": "1.23.0",
     "description": "Correxit is a JupyterLab extension and the third-person singular perfect active indicative conjugation of the Latin verb corrigere",
     "keywords": [
         "jupyter",

@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/QuantStack/correxit/compare/v1.22.0...v1.23.0) (2026-05-15)
+
+
+### Features
+
+* Add support for resource files in corrector ([#76](https://github.com/QuantStack/correxit/issues/76)) ([44f81d2](https://github.com/QuantStack/correxit/commit/44f81d253c7ddeee81b5e16cec200505c4ef71f4))
+
 # [1.22.0](https://github.com/QuantStack/correxit/compare/v1.21.1...v1.22.0) (2026-05-08)
 
 
