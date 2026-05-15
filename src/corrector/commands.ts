@@ -483,7 +483,7 @@ async function grade(
   const grade = await Workbook.correct(workbook);
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier))
-    throw new Correxit.Error.Certify('correct error: unassigned');
+    throw new Correxit.Error.Certify('grade error: unassigned');
   await Workbook.lock(workbook);
   await save(workbook);
   return { grade, identifier, workbook };
