@@ -412,9 +412,12 @@ async function correct(
     throw new Correxit.Error.Certify('correct error: staging failed');
   }
 
+  let graded = false;
   let propagated = false;
   try {
     const certified = await grade(staged, trans);
+    graded = true;
+
     const snapshot = staged.context.model.toJSON() as INotebookContent;
     const restored = Workbook.restore(workbook, snapshot);
     if (!restored)
@@ -424,7 +427,7 @@ async function correct(
     return { ...certified, grade: { ...certified.grade, path }, workbook };
   } finally {
     staged.context.dispose();
-    if (propagated) await io.unstage(manager, dir, stem);
+    if (!graded || propagated) await io.unstage(manager, dir, stem);
   }
 }
 
