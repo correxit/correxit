@@ -42,7 +42,10 @@
         "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
         "clean:lintcache": "rimraf .eslintcache .stylelintcache",
         "clean:labextension": "rimraf correxit/labextension correxit/_version.py",
-        "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache",
+        "clean:coverage": "rimraf coverage junit.xml",
+        "clean:ui-tests": "rimraf ui-tests/test-results ui-tests/playwright-report ui-tests/screenshots ui-tests/demo.webm",
+        "clean:lite": "rimraf lite/_output lite/.jupyterlite.doit.db",
+        "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache && jlpm clean:coverage && jlpm clean:ui-tests && jlpm clean:lite",
         "eslint": "jlpm eslint:check --fix",
         "eslint:check": "eslint . --cache --ext .ts,.tsx",
         "install:extension": "jlpm build",
@@ -57,7 +60,8 @@
         "watch": "run-p watch:src watch:labextension",
         "watch:src": "tsc -w --sourceMap",
         "watch:labextension": "jupyter labextension watch .",
-        "serve": "python -m http.server 8888 --directory lite/_output"
+        "serve": "python -m http.server 8888 --directory lite/_output",
+        "record-readme-video": "cd ui-tests && jlpm playwright test --config playwright.demo.config.js tests/demo.spec.ts && mv $(find test-results -name '*.webm' | sort | tail -1) demo.webm"
     },
     "dependencies": {
         "@jupyter-notebook/tree": "~7.5.4",
