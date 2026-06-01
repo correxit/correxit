@@ -9,6 +9,7 @@ module.exports = {
   // must run sequentially to avoid cross-file interference.
   workers: 1,
   retries: process.env.CI ? 2 : 0,
+  testIgnore: ['**/demo.spec.ts'],
   timeout: 120 * 1000,
   use: {
     ...baseConfig.use,

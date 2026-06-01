@@ -105,6 +105,8 @@ export namespace Correxit {
     export import reason    = error.reason;
   }
 
+  export const GALATA = '@quantstack/correxit:galata';
+
   export const Icons = ICONS;
 
   export const MONITOR = '@quantstack/correxit:monitor';

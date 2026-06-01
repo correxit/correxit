@@ -42,7 +42,8 @@ test('Correxit overview', async ({ page }) => {
     {
       id: 'q1p',
       type: 'markdown',
-      source: '## Exercise 1: Mean\nCalculate the **mean** of `data` and assign it to `result`.'
+      source:
+        '## Exercise 1: Mean\nCalculate the **mean** of `data` and assign it to `result`.'
     },
     {
       id: 'q1',
@@ -62,7 +63,8 @@ test('Correxit overview', async ({ page }) => {
     {
       id: 'q2p',
       type: 'markdown',
-      source: '## Exercise 2: Sorting\nSort `data` in ascending order and print the result.'
+      source:
+        '## Exercise 2: Sorting\nSort `data` in ascending order and print the result.'
     },
     { id: 'q2', type: 'code', source: 'print(sorted(data))' },
     {
@@ -74,7 +76,8 @@ test('Correxit overview', async ({ page }) => {
     {
       id: 'q3p',
       type: 'markdown',
-      source: '## Exercise 3: Reflection\nWhy might the mean be misleading for highly skewed data?'
+      source:
+        '## Exercise 3: Reflection\nWhy might the mean be misleading for highly skewed data?'
     },
     {
       id: 'q3',
@@ -107,20 +110,17 @@ test('Correxit overview', async ({ page }) => {
   // Use locator.evaluate (body.evaluate) instead of page.evaluate to avoid
   // the Galata proxy timeout caused by Workbook.update firing metadataChanged.
   const body = page.locator('body');
-  await body.evaluate(
-    async (_el: Element, k: typeof keys) => {
-      const { Rubric, Workbook } = (window as any).__correxit__;
-      const panel = (window as any).jupyterapp.shell.currentWidget;
-      if (!panel) throw new Error('no panel');
-      const base = Rubric.create();
-      await Workbook.update(panel, {
-        ...base,
-        key: 'secret',
-        assignment: { ...base.assignment, keys: k }
-      });
-    },
-    keys
-  );
+  await body.evaluate(async (_el: Element, k: typeof keys) => {
+    const { Rubric, Workbook } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    if (!panel) throw new Error('no panel');
+    const base = Rubric.create();
+    await Workbook.update(panel, {
+      ...base,
+      key: 'secret',
+      assignment: { ...base.assignment, keys: k }
+    });
+  }, keys);
   await page.waitForTimeout(600);
 
   // ── Phase 3: Open the Correxit sidebar ─────────────────────────────────
@@ -133,15 +133,18 @@ test('Correxit overview', async ({ page }) => {
   // ── Phase 4a: Configure q1 as correctable — overlay → click t1 (index 3) ─
   // The configure command blocks waiting for a cell click, so it must be
   // scheduled via setTimeout and left unawaited (same as input-ui.spec.ts).
-  await body.evaluate((_el: Element, { id, is }: { id: string; is: string }) => {
-    window.setTimeout(
-      () =>
-        (window as any).jupyterapp.commands
-          .execute('correxit:configure', { id, is })
-          .catch((e: Error) => console.error('configure', e)),
-      0
-    );
-  }, { id: 'q1', is: 'correctable' });
+  await body.evaluate(
+    (_el: Element, { id, is }: { id: string; is: string }) => {
+      window.setTimeout(
+        () =>
+          (window as any).jupyterapp.commands
+            .execute('correxit:configure', { id, is })
+            .catch((e: Error) => console.error('configure', e)),
+        0
+      );
+    },
+    { id: 'q1', is: 'correctable' }
+  );
 
   const overlay = page.locator('.correxit-overlay');
   await overlay.waitFor({ state: 'visible' });
@@ -151,25 +154,26 @@ test('Correxit overview', async ({ page }) => {
   const t1Cell = page.locator('.jp-Cell').nth(3);
   const t1Box = await t1Cell.boundingBox();
   if (!t1Box) throw new Error('t1 cell bounding box missing');
-  await page.mouse.move(
-    t1Box.x + t1Box.width / 2,
-    t1Box.y + t1Box.height / 2,
-    { steps: 12 }
-  );
+  await page.mouse.move(t1Box.x + t1Box.width / 2, t1Box.y + t1Box.height / 2, {
+    steps: 12
+  });
   await page.mouse.click(t1Box.x + t1Box.width / 2, t1Box.y + t1Box.height / 2);
   await overlay.waitFor({ state: 'hidden' });
   await page.waitForTimeout(1200);
 
   // ── Phase 4b: Configure q2 as comparable — overlay → click r2 (index 6) ─
-  await body.evaluate((_el: Element, { id, is }: { id: string; is: string }) => {
-    window.setTimeout(
-      () =>
-        (window as any).jupyterapp.commands
-          .execute('correxit:configure', { id, is })
-          .catch((e: Error) => console.error('configure', e)),
-      0
-    );
-  }, { id: 'q2', is: 'comparable' });
+  await body.evaluate(
+    (_el: Element, { id, is }: { id: string; is: string }) => {
+      window.setTimeout(
+        () =>
+          (window as any).jupyterapp.commands
+            .execute('correxit:configure', { id, is })
+            .catch((e: Error) => console.error('configure', e)),
+        0
+      );
+    },
+    { id: 'q2', is: 'comparable' }
+  );
 
   await overlay.waitFor({ state: 'visible' });
   await page.waitForTimeout(800);
@@ -177,11 +181,9 @@ test('Correxit overview', async ({ page }) => {
   const r2Cell = page.locator('.jp-Cell').nth(6);
   const r2Box = await r2Cell.boundingBox();
   if (!r2Box) throw new Error('r2 cell bounding box missing');
-  await page.mouse.move(
-    r2Box.x + r2Box.width / 2,
-    r2Box.y + r2Box.height / 2,
-    { steps: 12 }
-  );
+  await page.mouse.move(r2Box.x + r2Box.width / 2, r2Box.y + r2Box.height / 2, {
+    steps: 12
+  });
   await page.mouse.click(r2Box.x + r2Box.width / 2, r2Box.y + r2Box.height / 2);
   await overlay.waitFor({ state: 'hidden' });
   await page.waitForTimeout(1200);
@@ -199,13 +201,25 @@ test('Correxit overview', async ({ page }) => {
   // ── Phase 5: Assign a roster and propagate assignments ─────────────────
   // body.evaluate avoids the Galata proxy timeout when Workbook.assign fires
   // metadataChanged. The sidebar re-renders with the full roster first.
-  await body.evaluate((_el: Element, roster: string[]) => {
-    return (window as any).jupyterapp.commands.execute('correxit:assign', { roster });
-  }, [
-    'alice@uni.edu', 'bob@uni.edu', 'carol@uni.edu', 'dave@uni.edu',
-    'eve@uni.edu', 'frank@uni.edu', 'grace@uni.edu', 'henry@uni.edu',
-    'iris@uni.edu', 'jake@uni.edu'
-  ]);
+  await body.evaluate(
+    (_el: Element, roster: string[]) => {
+      return (window as any).jupyterapp.commands.execute('correxit:assign', {
+        roster
+      });
+    },
+    [
+      'alice@uni.edu',
+      'bob@uni.edu',
+      'carol@uni.edu',
+      'dave@uni.edu',
+      'eve@uni.edu',
+      'frank@uni.edu',
+      'grace@uni.edu',
+      'henry@uni.edu',
+      'iris@uni.edu',
+      'jake@uni.edu'
+    ]
+  );
   await page.waitForTimeout(1500);
 
   const propagated: { directory: string; paths: string[] } =
@@ -228,7 +242,10 @@ test('Correxit overview', async ({ page }) => {
   await page.evaluate(async (paths: string[]) => {
     const { contents } = (window as any).jupyterapp.serviceManager;
     for (const path of paths) {
-      const file = await contents.get(path, { content: true, type: 'notebook' });
+      const file = await contents.get(path, {
+        content: true,
+        type: 'notebook'
+      });
       const nb = file.content;
       nb.metadata = {
         ...nb.metadata,
@@ -256,13 +273,18 @@ test('Correxit overview', async ({ page }) => {
   await page.waitForTimeout(1500);
 
   // Drain the batch-grade generator; the corrector table updates as it runs.
-  await page.evaluate(async ({ key, path }: { key: string; path: string }) => {
-    const stream = await (window as any).jupyterapp.commands.execute(
-      'correxit-corrector:batch',
-      { key, path }
-    );
-    for await (const _ of stream) { /* drain */ }
-  }, { key: 'secret', path: propagated.directory });
+  await page.evaluate(
+    async ({ key, path }: { key: string; path: string }) => {
+      const stream = await (window as any).jupyterapp.commands.execute(
+        'correxit-corrector:batch',
+        { key, path }
+      );
+      for await (const _ of stream) {
+        /* drain */
+      }
+    },
+    { key: 'secret', path: propagated.directory }
+  );
 
   await page.waitForTimeout(2500);
 

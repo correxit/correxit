@@ -125,6 +125,7 @@ jobs:
     name: Integration tests
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     if: github.event_name == 'pull_request'
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/pw-browsers
@@ -155,13 +156,19 @@ jobs:
 
     - name: Set up browser cache
       uses: actions/cache@v4
+      id: playwright-cache
       with:
-        path: |
-          ${{ github.workspace }}/pw-browsers
-        key: ${{ runner.os }}-${{ hashFiles('ui-tests/yarn.lock') }}
+        path: ${{ github.workspace }}/pw-browsers
+        key: ${{ runner.os }}-playwright-${{ hashFiles('ui-tests/package.json') }}
 
     - name: Install browser
-      run: jlpm playwright install chromium
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: jlpm playwright install --with-deps chromium
+      working-directory: ui-tests
+
+    - name: Install browser system dependencies
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: jlpm playwright install-deps chromium
       working-directory: ui-tests
 
     - name: Execute integration tests
