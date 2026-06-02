@@ -2,6 +2,23 @@
 
 The extension can be published to `PyPI` and `npm` manually or using the [Jupyter Releaser](https://github.com/jupyter-server/jupyter_releaser).
 
+For local release checks in the Correxit development environment, use:
+
+```bash
+mamba run -n correxit jlpm build:lib
+mamba run -n correxit jlpm test --runInBand
+mamba run -n correxit jlpm lint:check
+mamba run -n correxit jlpm build
+```
+
+Run targeted Playwright tests from `ui-tests/` before the full suite when a
+change touches workbook lifecycle, Corrector, Reviewer, or propagation.
+
+Changes to the assignment MAC surface are workbook-format breaks. Before
+releasing a build that expands the authenticated terms, confirm that any
+in-flight assigned workbooks have been re-issued, because older workbooks will
+fail unlock with a MAC mismatch.
+
 ### Python package
 
 This extension can be distributed as Python packages. All of the Python

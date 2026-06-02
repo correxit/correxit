@@ -721,7 +721,8 @@ export namespace Workbook {
     if (!rubric || rubric.locked) return null;
 
     const { report: kept } = rubric.assignment;
-    const scores = { ...kept.scores, [id]: { ...kept.scores[id], comment } };
+    const score = kept.scores[id] ?? { ...Rubric.Score.UNSCORED, id };
+    const scores = { ...kept.scores, [id]: { ...score, comment } };
     const signed = await Rubric.sign(rubric, { ...kept, scores });
     return update(workbook, signed);
   }
@@ -853,6 +854,7 @@ export namespace Workbook {
     const audited = audit(workbook, rubric);
     if (!audited.ok) throw new Error.Invalid(`lock error: ${audited.error}`);
     const valid = audited.rubric as Rubric.Unlocked;
+    const locked = await Rubric.lock(valid);
 
     const { key, references } = valid;
     const secrets = Object.values(references).filter(({ secret }) => secret);
@@ -860,7 +862,7 @@ export namespace Workbook {
       secrets.map(({ referent }) => Cell.encrypt(workbook, referent, key))
     );
     transact(workbook, prepared);
-    update(workbook, await Rubric.lock(valid));
+    update(workbook, locked, { ok: true, rubric: locked });
   }
 
   /**

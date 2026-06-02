@@ -272,7 +272,7 @@ describe('Rubric', () => {
 
   describe('Assignment Flow', () => {
     it('assigns to a student and validates mac', async () => {
-      const { validate } = Rubric.Assignment;
+      const { validate } = Rubric;
       const assignee = 'assignee@example.com';
       const roster = [assignee];
       const rubric = await Rubric.assign(create(), { assignee, roster });
@@ -282,16 +282,99 @@ describe('Rubric', () => {
     });
 
     it('fails validation if mac is invalidated', async () => {
-      const { validate } = Rubric.Assignment;
+      const { validate } = Rubric;
       const assignee = 'assignee@example.com';
-      const hacker = 'hacker@example.com';
       const rubric = await Rubric.assign(create(), {
         assignee,
         roster: [assignee]
       });
-      const assignment = { ...rubric.assignment, assignee: hacker };
+      const assignment = { ...rubric.assignment, name: 'tampered' };
       const tampered = { ...rubric, assignment };
-      await expect(validate(tampered)).rejects.toThrow('match');
+      await expect(validate(tampered)).rejects.toThrow('mac mismatch');
+    });
+
+    it('authenticates rubric cells and references', async () => {
+      const assignee = 'assignee@example.com';
+      const reference: Rubric.Cell.Reference = {
+        cell: 'answer',
+        points: 1,
+        referent: 'test',
+        secret: true
+      };
+      const rubric = await Rubric.assign(
+        Rubric.add(
+          create(),
+          {
+            id: 'answer',
+            is: 'correctable',
+            payload: null,
+            points: 1,
+            references: ['test']
+          },
+          [reference]
+        ),
+        { assignee, roster: [assignee] }
+      );
+      const cell = rubric.cells.answer;
+      const tampered = {
+        ...rubric,
+        cells: {
+          ...rubric.cells,
+          answer: { ...cell, points: cell.points + 1 }
+        }
+      };
+      const exposed = {
+        ...rubric,
+        references: {
+          ...rubric.references,
+          test: { ...rubric.references.test, secret: false }
+        }
+      };
+      await expect(Rubric.validate(tampered)).rejects.toThrow('mac mismatch');
+      await expect(Rubric.validate(exposed)).rejects.toThrow('mac mismatch');
+    });
+
+    it('authenticates rubric id, resources, and scores', async () => {
+      const assignee = 'assignee@example.com';
+      const assigned = await Rubric.assign(
+        Rubric.add(create(), {
+          id: 'answer',
+          is: 'answerable',
+          payload: ['DIGEST<42>'],
+          points: 1,
+          references: null
+        }),
+        {
+          assignee,
+          resources: ['chinook.db'],
+          roster: [assignee]
+        }
+      );
+      const scored = await Rubric.sign(assigned, {
+        interventions: {},
+        kernel: null,
+        scores: { answer: { ...Rubric.Score.CORRECT, id: 'answer' } }
+      });
+      const renamed = { ...scored, id: `${scored.id}-copy` };
+      const resource = {
+        ...scored,
+        assignment: { ...scored.assignment, resources: ['other.db'] }
+      };
+      const score = {
+        ...scored,
+        assignment: {
+          ...scored.assignment,
+          report: {
+            ...scored.assignment.report,
+            scores: {
+              answer: { ...Rubric.Score.INCORRECT, id: 'answer' }
+            }
+          }
+        }
+      };
+      await expect(Rubric.validate(renamed)).rejects.toThrow('mac mismatch');
+      await expect(Rubric.validate(resource)).rejects.toThrow('mac mismatch');
+      await expect(Rubric.validate(score)).rejects.toThrow('mac mismatch');
     });
 
     it('preserves expiration when reassigning', async () => {
@@ -349,7 +432,7 @@ describe('Rubric', () => {
     });
 
     it('includes expiration in mac', async () => {
-      const { validate } = Rubric.Assignment;
+      const { validate } = Rubric;
       const expiration = Date.now() + 86400000;
       const rubric = await Rubric.assign(create(), {
         assignee: 'assignee@example.com',

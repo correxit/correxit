@@ -144,6 +144,10 @@ This is the authority boundary: a submitter receipt can carry the upstream
 system's clock, rules, and acceptance decision. Correxit's own local
 `submission` timestamp cannot do that by itself.
 
+A strong submitter should bind the accepted bytes, assignee, assignment
+identifier, and acceptance time in the external system. The receipt stored in
+the workbook is an opaque pointer to that authority.
+
 ---
 
 ## `Correxit.Collector`
@@ -197,6 +201,11 @@ credentials.
 
 The default implementation uses JupyterLab `SecretsManager`. Institutional
 deployments may replace it with an HSM-backed or vault-backed provider.
+
+Correxit does not store rubric keys in notebook metadata, settings JSON, or
+assignment files. The configured `Unlocker` is the key-custody boundary. The
+bundled secrets-manager connector is in-memory; a persistent connector is a
+deployment choice.
 
 ---
 

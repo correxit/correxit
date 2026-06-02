@@ -15,9 +15,10 @@ An author _can_ save a workbook while it is unlocked. Reference cells will
 remain decrypted and readable, but the rubric itself stays locked and secure.
 It is the author's responsibility to lock a workbook before distributing it.
 
-Cryptographic keys exist only in memory. They enter via user input (passphrase
-prompt or secrets manager) and are never serialized to disk or notebook metadata.
-They die with the browser tab.
+Cryptographic keys are never serialized to notebook metadata or assignment
+files. They enter via user input or the configured `Unlocker`; the shipped
+secrets-manager connector is in-memory, while deployments may intentionally
+provide different key custody.
 
 Correxit uses `openpgp.js` for symmetric encryption/decryption and PGP
 Curve25519 asymmetric encryption (sealed submissions), and native
@@ -299,3 +300,8 @@ Some guiding principles:
   (commands, widget lifecycle, plugin tokens) while adopting functional
   patterns (generators, pure data structs, external stores) for state and
   data flow.
+- **Readable reliability.** Security hardening should not obscure the
+  lifecycle. A future contributor should be able to audit intentional lines in
+  order: terms, MAC, validation; unlock, verify, unseal; scan, authenticate,
+  grade or collect. Brevity and readability are part of Correxit's reliability
+  posture.

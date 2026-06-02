@@ -59,10 +59,12 @@ type has a different grading strategy.
 The student's output is compared to a cryptographic digest (SHA-256)
 of the expected answer. You type the expected output when you configure
 the cell; Correxit hashes it immediately and discards the plaintext.
-The student cannot recover the answer from the hash.
+The student cannot read the answer directly from the hash, but short or
+obvious answers can still be guessed offline.
 
-Best for cells that produce short, deterministic textual output:
-a number, a name, a single line of text.
+Best for cells that produce deterministic textual output that is not drawn
+from a tiny answer space. Prefer comparable or correctable cells for small
+numbers, booleans, names, or other easy-to-guess answers.
 
 **To create one:** select the code cell, click **Answer** in the sidebar,
 and type the expected output in the prompt.

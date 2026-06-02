@@ -360,9 +360,53 @@ export namespace Rubric {
     status: Score.Status;
   }>;
 
+  export type Terms = Readonly<{
+    assignment: Readonly<{
+      assignee: string;
+      author: Assignment.Keys.Author;
+      expiration: Timestamp;
+      id: string | null;
+      issue: string;
+      issuer: string;
+      name: string;
+      overdue: Assignment.Overdue;
+      penalty: number | null;
+      report: Readonly<{
+        interventions: { [id: string]: Score };
+        scores: { [id: string]: Score };
+      }>;
+      resources: string[] | null;
+      roster: string[];
+    }>;
+    cells: Readonly<{ [id: string]: Cell }>;
+    id: string;
+    references: Readonly<{ [referent: string]: Cell.Reference; }>;
+  }>;
+
   export type Timestamp = number | null;
 
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
+
+  export function terms(rubric: Rubric): Terms {
+    return {
+      assignment: authored(rubric.assignment),
+      cells: cells(rubric.cells),
+      id: rubric.id,
+      references: references(rubric.references)
+    };
+  }
+
+  export async function mac(rubric: Rubric, key: string): Promise<string> {
+    return security.hmac(JSON.stringify(terms(rubric)), key);
+  }
+
+  export async function validate(rubric: Unlocked): Promise<void> {
+    const { assignment, key } = rubric;
+    await Assignment.validate(assignment);
+    if (!assignment.mac) return;
+    if (assignment.mac === await mac(rubric, key)) return;
+    throw new Error.Mismatch('mac mismatch');
+  }
 
   export namespace Assignment {
     export type Overdue = 'accept' | 'dock' | 'reject' | null;
@@ -461,18 +505,6 @@ export namespace Rubric {
       }
     }
 
-    /** The terms of the assignment that are verified by its MAC. */
-    export type Terms = Omit<
-      Assignment,
-      | 'certification'
-      | 'collected'
-      | 'distribution'
-      | 'mac'
-      | 'seal'
-      | 'submission'
-      | 'submitted'
-    >;
-
     export function empty(): Assignment {
       return Object.freeze({
         assignee: '',
@@ -525,30 +557,6 @@ export namespace Rubric {
       const done = (await Promise.all(pending)).map(score => [score.id, score]);
       const scores = Object.fromEntries([...current, ...done]);
       return { ...report, scores };
-    }
-
-    export async function mac(terms: Terms, key: string): Promise<string> {
-      const {
-        assignee,
-        expiration,
-        id,
-        issue,
-        issuer,
-        keys,
-        name,
-        overdue,
-        penalty,
-        resources,
-        roster
-      } = terms;
-      const { interventions: manual, scores: auto } = terms.report;
-      const author = Keys.author(keys);
-      const report = { interventions: sort(manual), scores: sort(auto) };
-      const unsigned = {
-        assignee, author, expiration, id, issue, issuer,
-        name, overdue, penalty, report, resources, roster
-      };
-      return security.hmac(JSON.stringify(unsigned), key);
     }
 
     export async function issue({ assignment, notebook, rubric }: {
@@ -684,9 +692,7 @@ export namespace Rubric {
       return { ...summary, points: docked };
     }
 
-    export async function validate(
-      { assignment, key }: Pick<Unlocked, 'assignment' | 'key'>
-    ) {
+    export async function validate(assignment: Assignment) {
       const {
         assignee, issue, issuer, keys, mac, overdue, penalty, roster, seal
       } = assignment;
@@ -697,8 +703,6 @@ export namespace Rubric {
         throw new Error.Mismatch('missing author public key');
       if ((assignee || roster.length) && !mac)
         throw new Error.Mismatch('missing mac');
-      if (mac && mac !== await Assignment.mac(assignment, key))
-        throw new Error.Mismatch('mac mismatch');
       if (assignee && !find(roster, record => record === assignee))
         throw new Error.Mismatch('assignee does not exist in roster');
       if (!!issue !== !!issuer)
@@ -938,10 +942,12 @@ export namespace Rubric {
     const lifecycle = {
       certification, collected, distribution, seal, submission, submitted
     };
-    const mac = await Assignment.mac(unsigned, key);
-    const assignment = { ...unsigned, ...lifecycle, mac };
-    await Assignment.validate({ assignment, key });
-    return { ...rubric, assignment, key, revised: Date.now() };
+    const assignment = { ...unsigned, ...lifecycle, mac: '' };
+    const assigned = { ...rubric, assignment, key, revised: Date.now() };
+    const mac = await Rubric.mac(assigned, key);
+    const signed = { ...assigned, assignment: { ...assignment, mac } };
+    await Rubric.validate(signed);
+    return signed;
   }
 
   /**
@@ -1015,9 +1021,11 @@ export namespace Rubric {
   export async function lock(rubric: Rubric): Promise<Locked> {
     if (rubric.locked) return rubric;
 
-    const mac = await Assignment.mac(rubric.assignment, rubric.key);
-    const signed = { ...rubric, assignment: { ...rubric.assignment, mac } };
-    await Assignment.validate(signed);
+    const blank = { ...rubric.assignment, mac: '' };
+    const unsigned = { ...rubric, assignment: blank };
+    const mac = await Rubric.mac(unsigned, rubric.key);
+    const signed = { ...unsigned, assignment: { ...blank, mac } };
+    await Rubric.validate(signed);
 
     const locked = true;
     const { cells, id, key, references } = signed;
@@ -1149,10 +1157,10 @@ export namespace Rubric {
     rubric: Rubric.Unlocked,
     report: Assignment.Report
   ): Promise<Rubric.Unlocked> {
-    const unsigned = { ...rubric.assignment, report };
-    const mac = await Assignment.mac(unsigned, rubric.key);
-    const assignment = { ...unsigned, mac };
-    return { ...rubric, assignment, revised: Date.now() };
+    const assignment = { ...rubric.assignment, report, mac: '' };
+    const signed = { ...rubric, assignment, revised: Date.now() };
+    const mac = await Rubric.mac(signed, rubric.key);
+    return { ...signed, assignment: { ...assignment, mac } };
   }
 
   /** Record the submission timestamp for a locked workbook. */
@@ -1249,15 +1257,65 @@ export namespace Rubric {
 
   /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
-    const locked = false;
     const { cells, id, references, assignment: { roster: [block] } } = rubric;
     const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
     const assignment = { ...rubric.assignment, roster };
     const revised = Date.now();
-    await Assignment.validate({ assignment, key });
-    return { assignment, cells, id, key, locked, references, revised };
+    const unlocked: Unlocked = {
+      assignment, cells, id, key, locked: false, references, revised
+    };
+    await Rubric.validate(unlocked);
+    return unlocked;
   }
 }
+
+const cell = (cell: Rubric.Cell): Rubric.Cell => {
+  const { id, is, payload, points } = cell;
+  if (is === 'answerable')
+    return { id, is, payload: [...payload], points, references: null };
+  if (is === 'comparable' || is === 'correctable')
+    return { id, is, payload, points, references: [...cell.references] };
+  return { id, is, payload, points, references: null };
+};
+
+const authored = (
+  assignment: Rubric.Assignment
+): Rubric.Terms['assignment'] => ({
+  assignee: assignment.assignee,
+  author: Rubric.Assignment.Keys.author(assignment.keys),
+  expiration: assignment.expiration,
+  id: assignment.id,
+  issue: assignment.issue,
+  issuer: assignment.issuer,
+  name: assignment.name,
+  overdue: assignment.overdue,
+  penalty: assignment.penalty,
+  report: report(assignment.report),
+  resources: assignment.resources,
+  roster: assignment.roster
+});
+
+const cells = (cells: Readonly<{ [id: string]: Rubric.Cell }>) =>
+  Object.fromEntries(
+    Object.keys(cells).sort().map(id => [id, cell(cells[id])])
+  );
+
+const reference = (
+  { cell, points, referent, secret }: Rubric.Cell.Reference
+): Rubric.Cell.Reference => ({ cell, points, referent, secret });
+
+const references = (
+  references: Readonly<{ [referent: string]: Rubric.Cell.Reference }>
+) => Object.fromEntries(
+  Object.keys(references)
+    .sort()
+    .map(id => [id, reference(references[id])])
+);
+
+const report = ({ interventions, scores }: Rubric.Assignment.Report) => ({
+  interventions: sort(interventions),
+  scores: sort(scores)
+});
 
 /** @returns a sorted record of scores for deterministic hashing. */
 const sort = (scores: { [id: string]: Rubric.Score }) => Object.fromEntries(

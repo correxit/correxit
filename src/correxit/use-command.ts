@@ -53,7 +53,8 @@ export function useCommand<T>(
         flush();
       } finally {
         throttler.dispose();
-        setState(({ list }) => ({ idle: true, list }));
+        if (!interrupted)
+          setState(({ list }) => ({ idle: true, list }));
       }
     })(commands.hasCommand(id) ? commands.execute(id, args) : undefined);
     return () => void (interrupted = true);

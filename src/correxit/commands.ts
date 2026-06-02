@@ -145,6 +145,20 @@ export function commands(
     })));
     return files.length ? files : null;
   };
+  const outputs = (workbook: Workbook, rubric: Rubric): string[] => {
+    if (!headed(workbook)) return [];
+    const secrets = new Set(
+      Object.values(rubric.references)
+        .filter(({ secret }) => secret)
+        .map(({ referent }) => referent)
+    );
+    return workbook.content.widgets
+      .filter(({ model }) => secrets.has(model.id))
+      .filter(({ model }) =>
+        !!(model as { outputs?: { length: number } }).outputs?.length
+      )
+      .map(({ model }) => model.id);
+  };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
     const workbook = handle
@@ -793,6 +807,19 @@ If conversion fails, Correxit restores the original notebook.`
     ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked) return (async function* empty() {})();
+      const exposed = outputs(workbook, rubric);
+      if (exposed.length) {
+        const body = trans.__(
+          'Secret reference cells have outputs. Those outputs are not encrypted and will be distributed.'
+        );
+        const title = trans.__('Distribute visible outputs?');
+        const buttons = [
+          Dialog.cancelButton({ label: trans.__('Cancel') }),
+          Dialog.okButton({ label: trans.__('Distribute') })
+        ];
+        const { button } = await showDialog({ body, buttons, title });
+        if (!button.accept) return (async function* empty() {})();
+      }
       try {
         return translate(
           propagator.propagate({

@@ -9,14 +9,16 @@ export type Cursor = { path: string; cell: string };
 
 export type Snapshot = Readonly<{
   cursor: Cursor | null;
-  workbooks: Scanned[];
   grades: Collated;
+  revision: number;
+  workbooks: Scanned[];
 }>;
 
 const empty: Snapshot = Object.freeze({
   cursor: null,
-  workbooks: [],
-  grades: new Map()
+  grades: new Map(),
+  revision: 0,
+  workbooks: []
 });
 const listeners = new Set<() => void>();
 let snapshot: Snapshot = empty;
@@ -50,8 +52,13 @@ export function peek(): Snapshot {
   return snapshot;
 }
 
-export function publish(next: Omit<Snapshot, 'cursor'>) {
-  snapshot = { ...next, cursor: snapshot.cursor };
+export function publish(next: Omit<Snapshot, 'cursor' | 'revision'>) {
+  snapshot = { ...next, cursor: snapshot.cursor, revision: snapshot.revision };
+  emit();
+}
+
+export function touch() {
+  snapshot = { ...snapshot, revision: snapshot.revision + 1 };
   emit();
 }
 

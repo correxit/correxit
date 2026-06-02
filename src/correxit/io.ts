@@ -190,7 +190,8 @@ export async function resources(
 export async function stage(
   manager: ServiceManager.IManager,
   dir: string,
-  path: string
+  path: string,
+  resources: string[] | null
 ): Promise<string> {
   const { contents } = manager;
   const stem = PathExt.basename(path, '.ipynb');
@@ -200,10 +201,18 @@ export async function stage(
   await contents.delete(subdirectory).catch(() => undefined);
   await mkdir(manager, root, subdirectory);
 
-  const copied = await contents.copy(path, subdirectory);
-  const files = await resources(manager, dir);
-  await Promise.all(files.map(({ path }) => contents.copy(path, subdirectory)));
-  return copied.path;
+  try {
+    const copied = await contents.copy(path, subdirectory);
+    await Promise.all(
+      (resources ?? []).map(name =>
+        contents.copy(PathExt.join(dir, name), subdirectory)
+      )
+    );
+    return copied.path;
+  } catch (error) {
+    await unstage(manager, dir, stem);
+    throw error;
+  }
 }
 
 /** Removes a staging slot created by `stage`. */
