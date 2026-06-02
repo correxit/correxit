@@ -1,5 +1,6 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { Dialog, showDialog, showErrorMessage } from '@jupyterlab/apputils';
+import { ICodeCellModel } from '@jupyterlab/cells';
 import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog } from '@jupyterlab/filebrowser';
@@ -147,6 +148,7 @@ export function commands(
   };
   const outputs = (workbook: Workbook, rubric: Rubric): string[] => {
     if (!headed(workbook)) return [];
+
     const secrets = new Set(
       Object.values(rubric.references)
         .filter(({ secret }) => secret)
@@ -154,9 +156,7 @@ export function commands(
     );
     return workbook.content.widgets
       .filter(({ model }) => secrets.has(model.id))
-      .filter(({ model }) =>
-        !!(model as { outputs?: { length: number } }).outputs?.length
-      )
+      .filter(({ model }) => !!(model as ICodeCellModel).outputs?.length)
       .map(({ model }) => model.id);
   };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
