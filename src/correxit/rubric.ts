@@ -387,27 +387,6 @@ export namespace Rubric {
 
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
-  export function terms(rubric: Rubric): Terms {
-    return {
-      assignment: authored(rubric.assignment),
-      cells: cells(rubric.cells),
-      id: rubric.id,
-      references: references(rubric.references)
-    };
-  }
-
-  export async function mac(rubric: Rubric, key: string): Promise<string> {
-    return security.hmac(JSON.stringify(terms(rubric)), key);
-  }
-
-  export async function validate(rubric: Unlocked): Promise<void> {
-    const { assignment, key } = rubric;
-    await Assignment.validate(assignment);
-    if (!assignment.mac) return;
-    if (assignment.mac === await mac(rubric, key)) return;
-    throw new Error.Mismatch('mac mismatch');
-  }
-
   export namespace Assignment {
     export type Overdue = 'accept' | 'dock' | 'reject' | null;
 
@@ -824,6 +803,18 @@ export namespace Rubric {
     }
   }
 
+  /** @returns a locked rubric with a submitted receipt. */
+  export function acknowledge(
+    rubric: Locked,
+    receipt: string | null = null
+  ): Locked {
+    if (!rubric.assignment.submission)
+      throw new Error.Submit('acknowledge error: not submitted');
+
+    const assignment = { ...rubric.assignment, submitted: receipt };
+    return { ...rubric, assignment, revised: Date.now() };
+  }
+
   export function add(
     rubric: Unlocked,
     cell: Cell,
@@ -877,18 +868,6 @@ export namespace Rubric {
       references: { ...rubric.references, ...added },
       revised: Date.now()
     };
-  }
-
-  /** @returns a locked rubric with a submitted receipt. */
-  export function acknowledge(
-    rubric: Locked,
-    receipt: string | null = null
-  ): Locked {
-    if (!rubric.assignment.submission)
-      throw new Error.Submit('acknowledge error: not submitted');
-
-    const assignment = { ...rubric.assignment, submitted: receipt };
-    return { ...rubric, assignment, revised: Date.now() };
   }
 
   export async function assign(
@@ -986,14 +965,6 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: certification };
   }
 
-  export function distribute(rubric: Locked): Locked;
-  export function distribute(rubric: Unlocked): Unlocked;
-  export function distribute(rubric: Rubric): Rubric {
-    const distribution = Date.now();
-    const assignment = { ...rubric.assignment, distribution };
-    return { ...rubric, assignment, revised: distribution };
-  }
-
   /** @returns a locked rubric with a collected receipt. */
   export function collect(
     rubric: Locked,
@@ -1005,6 +976,49 @@ export namespace Rubric {
     const revised = Date.now();
     const assignment = { ...rubric.assignment, collected: receipt };
     return { ...rubric, assignment, revised };
+  }
+
+  /** Remove a single reference; removes the cell if none remain. */
+  export function dereference(
+    rubric: Unlocked,
+    referent: string
+  ): Unlocked {
+    const reference = rubric.references[referent];
+    if (!reference) {
+      throw new Error.Invalid(
+        `dereference error, reference ${referent} not found`
+      );
+    }
+
+    const cell = get(rubric, reference.cell);
+    if (!cell || cell.is === 'answerable' || cell.is === 'reviewable') {
+      throw new Error.Invalid(
+        `dereference error, cell ${reference.cell} invalid`
+      );
+    }
+
+    const remaining = cell.references.filter(id => id !== referent);
+    if (!remaining.length) return remove(rubric, cell.id);
+
+    const blank = Assignment.Report.empty();
+    const assignment = { ...rubric.assignment, report: blank };
+    const { [referent]: _, ...references } = rubric.references;
+    const points = cell.is === 'correctable'
+      ? remaining.reduce((sum, id) => sum + references[id].points, 0)
+      : cell.points;
+    const cells = {
+      ...rubric.cells,
+      [cell.id]: { ...cell, points, references: remaining }
+    };
+    return { ...rubric, assignment, cells, references, revised: Date.now() };
+  }
+
+  export function distribute(rubric: Locked): Locked;
+  export function distribute(rubric: Unlocked): Unlocked;
+  export function distribute(rubric: Rubric): Rubric {
+    const distribution = Date.now();
+    const assignment = { ...rubric.assignment, distribution };
+    return { ...rubric, assignment, revised: distribution };
   }
 
   /** @returns the cell for `id`, or `null`. */
@@ -1034,6 +1048,10 @@ export namespace Rubric {
     const assignment = { ...signed.assignment, roster };
     const revised = Date.now();
     return { assignment, cells, id, key: null, locked, references, revised };
+  }
+
+  export async function mac(rubric: Rubric, key: string): Promise<string> {
+    return security.hmac(JSON.stringify(terms(rubric)), key);
   }
 
   /** @returns a normalized locked rubric or throws. */
@@ -1178,20 +1196,13 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: Date.now() };
   }
 
-  /** Clear seal and student keys (for revise). */
-  export function unseal(rubric: Locked): Locked {
-    const keys: Assignment.Keys = {
-      private: { ...rubric.assignment.keys.private, assignee: null },
-      public: { ...rubric.assignment.keys.public, assignee: null }
+  export function terms(rubric: Rubric): Terms {
+    return {
+      assignment: authored(rubric.assignment),
+      cells: cells(rubric.cells),
+      id: rubric.id,
+      references: references(rubric.references)
     };
-    const assignment = {
-      ...rubric.assignment,
-      keys,
-      seal: null,
-      submission: null,
-      submitted: null
-    };
-    return { ...rubric, assignment, revised: Date.now() };
   }
 
   /** @returns a formatted rendition of a rubric timestamp. */
@@ -1220,41 +1231,6 @@ export namespace Rubric {
     return { ...rubric, assignment, references, revised: Date.now() };
   }
 
-  /** Remove a single reference; removes the cell if none remain. */
-  export function dereference(
-    rubric: Unlocked,
-    referent: string
-  ): Unlocked {
-    const reference = rubric.references[referent];
-    if (!reference) {
-      throw new Error.Invalid(
-        `dereference error, reference ${referent} not found`
-      );
-    }
-
-    const cell = get(rubric, reference.cell);
-    if (!cell || cell.is === 'answerable' || cell.is === 'reviewable') {
-      throw new Error.Invalid(
-        `dereference error, cell ${reference.cell} invalid`
-      );
-    }
-
-    const remaining = cell.references.filter(id => id !== referent);
-    if (!remaining.length) return remove(rubric, cell.id);
-
-    const blank = Assignment.Report.empty();
-    const assignment = { ...rubric.assignment, report: blank };
-    const { [referent]: _, ...references } = rubric.references;
-    const points = cell.is === 'correctable'
-      ? remaining.reduce((sum, id) => sum + references[id].points, 0)
-      : cell.points;
-    const cells = {
-      ...rubric.cells,
-      [cell.id]: { ...cell, points, references: remaining }
-    };
-    return { ...rubric, assignment, cells, references, revised: Date.now() };
-  }
-
   /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
     const { cells, id, references, assignment: { roster: [block] } } = rubric;
@@ -1266,6 +1242,30 @@ export namespace Rubric {
     };
     await Rubric.validate(unlocked);
     return unlocked;
+  }
+
+  /** Clear seal and student keys (for revise). */
+  export function unseal(rubric: Locked): Locked {
+    const keys: Assignment.Keys = {
+      private: { ...rubric.assignment.keys.private, assignee: null },
+      public: { ...rubric.assignment.keys.public, assignee: null }
+    };
+    const assignment = {
+      ...rubric.assignment,
+      keys,
+      seal: null,
+      submission: null,
+      submitted: null
+    };
+    return { ...rubric, assignment, revised: Date.now() };
+  }
+
+  export async function validate(rubric: Unlocked): Promise<void> {
+    const { assignment, key } = rubric;
+    await Assignment.validate(assignment);
+    if (!assignment.mac) return;
+    if (assignment.mac === await mac(rubric, key)) return;
+    throw new Error.Mismatch('mac mismatch');
   }
 }
 
