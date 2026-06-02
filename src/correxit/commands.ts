@@ -809,9 +809,10 @@ If conversion fails, Correxit restores the original notebook.`
       if (!rubric || rubric.locked) return (async function* empty() {})();
       const exposed = outputs(workbook, rubric);
       if (exposed.length) {
-        const body = trans.__(
-          'Secret reference cells have outputs. Those outputs are not encrypted and will be distributed.'
-        );
+        const body = [
+          trans.__('Secret reference cells have outputs.'),
+          trans.__('Those outputs are not encrypted and will be distributed.')
+        ].join(' ');
         const title = trans.__('Distribute visible outputs?');
         const buttons = [
           Dialog.cancelButton({ label: trans.__('Cancel') }),

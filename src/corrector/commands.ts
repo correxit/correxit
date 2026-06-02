@@ -167,11 +167,8 @@ export function commands(
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
         const auth = !!(args.key || args.passphrase);
-        const potential = {
-          ...args,
-          unlock: auth ? !!args.unlock : true
-        } as Partial<Credentials>;
-        const handle = normalize(potential);
+        const credentials = { ...args, unlock: auth ? !!args.unlock : true };
+        const handle = normalize(credentials as Partial<Credentials>);
         if (!handle) throw new Error.Invalid('collect error, bad handle');
         return (async function* () {
           for await (const workbook of scanner({ commands }, handle)) {
