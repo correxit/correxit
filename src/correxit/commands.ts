@@ -807,6 +807,7 @@ If conversion fails, Correxit restores the original notebook.`
     ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked) return (async function* empty() {})();
+
       const exposed = outputs(workbook, rubric);
       if (exposed.length) {
         const body = [
@@ -822,16 +823,8 @@ If conversion fails, Correxit restores the original notebook.`
         if (!button.accept) return (async function* empty() {})();
       }
       try {
-        return translate(
-          propagator.propagate({
-            commands,
-            distributor,
-            factory,
-            manager,
-            workbook
-          }),
-          trans
-        );
+        const options = { commands, distributor, factory, manager, workbook };
+        return translate(propagator.propagate(options), trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
