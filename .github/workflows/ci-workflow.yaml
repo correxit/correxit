@@ -128,7 +128,7 @@ jobs:
     timeout-minutes: 60
     if: github.event_name == 'pull_request'
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/pw-browsers
+      PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
 
     steps:
     - name: Checkout
@@ -154,20 +154,8 @@ jobs:
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
       run: jlpm install
 
-    - name: Set up browser cache
-      uses: actions/cache@v4
-      id: playwright-cache
-      with:
-        path: ${{ github.workspace }}/pw-browsers
-        key: ${{ runner.os }}-playwright-${{ hashFiles('ui-tests/package.json') }}
-
-    - name: Install browser
-      if: steps.playwright-cache.outputs.cache-hit != 'true'
-      run: jlpm playwright install --with-deps chromium
-      working-directory: ui-tests
-
     - name: Install browser system dependencies
-      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      timeout-minutes: 10
       run: jlpm playwright install-deps chromium
       working-directory: ui-tests
 

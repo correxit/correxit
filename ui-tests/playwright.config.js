@@ -3,6 +3,8 @@
  */
 const baseConfig = require('@jupyterlab/galata/lib/playwright-config');
 
+const channel = process.env.PLAYWRIGHT_CHROMIUM_CHANNEL;
+
 module.exports = {
   ...baseConfig,
   // All spec files share one Jupyter server and its file system, so tests
@@ -14,7 +16,9 @@ module.exports = {
   use: {
     ...baseConfig.use,
     actionTimeout: 30 * 1000,
-    navigationTimeout: 30 * 1000
+    navigationTimeout: 30 * 1000,
+    video: process.env.CI ? 'off' : baseConfig.use.video,
+    ...(channel ? { channel } : {})
   },
   reporter: [['list'], ['html', { open: 'never' }]],
   webServer: {
