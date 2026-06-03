@@ -360,6 +360,7 @@ export namespace Rubric {
     status: Score.Status;
   }>;
 
+  /** The signed terms of a rubric/assignment pairing. */
   export type Terms = Readonly<{
     assignment: Readonly<{
       assignee: string;
@@ -400,7 +401,9 @@ export namespace Rubric {
         assignments: Registration[];
         group: string;
       };
+
       type Registered = Registration[] | Course[] | null;
+
       const course = (x: Course, y: Course): boolean =>
         x.group === y.group &&
         registrations(x.assignments, y.assignments);
@@ -815,6 +818,7 @@ export namespace Rubric {
     return { ...rubric, assignment, revised: Date.now() };
   }
 
+  /** @returns an unlocked rubric that includes the added cell. */
   export function add(
     rubric: Unlocked,
     cell: Cell,
@@ -870,6 +874,7 @@ export namespace Rubric {
     };
   }
 
+  /** @returns an unlocked rubric with the given assignment details. */
   export async function assign(
     { key, ...rubric }: Unlocked,
     {
@@ -1050,6 +1055,7 @@ export namespace Rubric {
     return { assignment, cells, id, key: null, locked, references, revised };
   }
 
+  /** @returns returns an HMAC associated with the given rubric. */
   export async function mac(rubric: Rubric, key: string): Promise<string> {
     return security.hmac(JSON.stringify(terms(rubric)), key);
   }
@@ -1155,7 +1161,7 @@ export namespace Rubric {
     return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 
-  /** Remove a cell from a rubric and invalidate report. */
+  /** @returns an unlocked rubric which excludes the given cell. */
   export function remove(rubric: Unlocked, id: string): Unlocked {
     if (!get(rubric, id)) return rubric;
 
@@ -1171,6 +1177,7 @@ export namespace Rubric {
     return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 
+  /** @returns an unloced rubric with a signed assignment report. */
   export async function sign(
     rubric: Rubric.Unlocked,
     report: Assignment.Report
