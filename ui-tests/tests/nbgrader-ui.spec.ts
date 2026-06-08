@@ -108,6 +108,19 @@ async function load(page: any, name: string): Promise<void> {
     });
 }
 
+async function ready(page: any): Promise<void> {
+  await page.waitForFunction(() => {
+    const app = (window as any).jupyterapp;
+    const panel = app?.shell?.currentWidget;
+    return (
+      !!app?.commands?.hasCommand?.('correxit:convert') &&
+      typeof panel?.context?.path === 'string' &&
+      panel.context.path.endsWith('.ipynb') &&
+      !panel.context.isDisposed
+    );
+  });
+}
+
 /**
  * Executes `correxit:convert`.
  *
@@ -118,8 +131,9 @@ async function load(page: any, name: string): Promise<void> {
 async function convert(page: any): Promise<string[]> {
   const max = 8;
   const seen: string[] = [];
-  let ready = false;
-  const done = page.locator('body').evaluate(async () => {
+  let prompted = false;
+  await ready(page);
+  const done = page.evaluate(async () => {
     const app = (window as any).jupyterapp;
     await app.commands.execute('correxit:convert');
   });
@@ -145,12 +159,12 @@ async function convert(page: any): Promise<string[]> {
     if (await password().count()) {
       await password().first().fill('test-passphrase');
       await dialog.locator('.jp-mod-accept').click();
-      ready = true;
+      prompted = true;
       break;
     }
     await dialog.locator('.jp-mod-accept').click();
   }
-  if (!ready)
+  if (!prompted)
     throw new Error(
       `correxit:convert did not reach the passphrase dialog after ${max} dialogs: ${seen.join(' -> ')}`
     );
@@ -422,6 +436,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     await notebook(page);
     await populate(page, [answer('q1', 'x = 1')]);
 
+    await ready(page);
     const done = page.evaluate(async () => {
       const app = (window as any).jupyterapp;
       await app.commands.execute('correxit:convert');
@@ -459,7 +474,8 @@ test.describe('nbgrader conversion (synthetic)', () => {
     ]);
     const before = await snapshot(page);
 
-    const done = page.locator('body').evaluate(async () => {
+    await ready(page);
+    const done = page.evaluate(async () => {
       const app = (window as any).jupyterapp;
       const { Workbook } = (window as any).__correxit__;
       const original = Workbook.add;
