@@ -172,6 +172,7 @@ export function commands(
         if (!handle) throw new Error.Invalid('collect error, bad handle');
         return (async function* () {
           for await (const workbook of scanner({ commands }, handle)) {
+            if (!(await authenticate(workbook, handle, unlocker))) continue;
             await Workbook.lock(workbook);
             const certified = precertified(workbook);
             if (!certified) continue;
@@ -495,6 +496,20 @@ async function grade(
 
 function open(workbook: Workbook): Rubric | null {
   return Workbook.open(workbook, true);
+}
+
+async function authenticate(
+  workbook: Headless,
+  handle: Credentials,
+  unlocker: Correxit.Unlocker
+): Promise<boolean> {
+  try {
+    const credentials = { ...handle, path: workbook.context.path, silent: true };
+    return !!(await unlocker.unlock(workbook, credentials));
+  } catch (error) {
+    console.warn(CommandIDs.collect, workbook.context.path, error);
+    return false;
+  }
 }
 
 function precertified(workbook: Headless): Certified | null {

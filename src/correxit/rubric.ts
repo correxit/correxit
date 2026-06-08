@@ -1055,7 +1055,7 @@ export namespace Rubric {
     return { assignment, cells, id, key: null, locked, references, revised };
   }
 
-  /** @returns returns an HMAC associated with the given rubric. */
+  /** @returns an HMAC associated with the given rubric. */
   export async function mac(rubric: Rubric, key: string): Promise<string> {
     return security.hmac(JSON.stringify(terms(rubric)), key);
   }
@@ -1177,7 +1177,7 @@ export namespace Rubric {
     return { ...rubric, assignment, cells, references, revised: Date.now() };
   }
 
-  /** @returns an unloced rubric with a signed assignment report. */
+  /** @returns an unlocked rubric with a signed assignment report. */
   export async function sign(
     rubric: Rubric.Unlocked,
     report: Assignment.Report
