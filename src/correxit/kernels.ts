@@ -231,7 +231,9 @@ async function start(
     return null;
   }
   try {
-    return await kernelManager.startNew({ name });
+    const kernel = await kernelManager.startNew({ name });
+    await kernel.info;
+    return kernel;
   } catch (error) {
     console.warn('kernels: start failed', error);
   }

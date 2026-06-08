@@ -121,6 +121,63 @@ async function ready(page: any): Promise<void> {
   });
 }
 
+async function scorable(page: any): Promise<void> {
+  await page.waitForFunction(() => {
+    const { Workbook } = (window as any).__correxit__ ?? {};
+    const panel = (window as any).jupyterapp?.shell?.currentWidget;
+    const rubric = Workbook?.open?.(panel, true);
+    const model = panel?.context?.model;
+    if (!rubric || rubric.locked || !model?.defaultKernelName) return false;
+
+    const cells = model.cells;
+    const present = new Set(
+      Array.from({ length: cells.length }, (_, index) => cells.get(index)?.id)
+    );
+    const ids = new Set([
+      ...Object.keys(rubric.cells),
+      ...Object.values(rubric.references).map(
+        (reference: any) => reference.referent
+      )
+    ]);
+    return [...ids].every(id => present.has(id));
+  });
+}
+
+function destroyed(error: unknown): boolean {
+  return `${error}`.includes('Execution context was destroyed');
+}
+
+async function begin(page: any): Promise<void> {
+  let error: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await ready(page);
+      await page.evaluate(() => {
+        const app = (window as any).jupyterapp;
+        (window as any).__correxit_convert__ =
+          app.commands.execute('correxit:convert');
+      });
+      return;
+    } catch (reason) {
+      if (!destroyed(reason)) throw reason;
+      error = reason;
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+    }
+  }
+  throw error;
+}
+
+async function finish(page: any): Promise<void> {
+  await page.evaluate(async () => {
+    const done = (window as any).__correxit_convert__;
+    try {
+      await done;
+    } finally {
+      delete (window as any).__correxit_convert__;
+    }
+  });
+}
+
 /**
  * Executes `correxit:convert`.
  *
@@ -132,46 +189,42 @@ async function convert(page: any): Promise<string[]> {
   const max = 8;
   const seen: string[] = [];
   let prompted = false;
-  await ready(page);
-  const done = page.evaluate(async () => {
-    const app = (window as any).jupyterapp;
-    await app.commands.execute('correxit:convert');
-  });
-  const dialog = page.locator('.jp-Dialog');
+  await begin(page);
+  const dialog = () => page.locator('.jp-Dialog:visible').last();
   const password = () =>
-    dialog.locator(
+    dialog().locator(
       'input[type="password"], input[type="text"], input:not([type])'
     );
   for (let step = 0; step < max; step += 1) {
     try {
-      await dialog.waitFor({ state: 'visible', timeout: 5000 });
+      await dialog().waitFor({ state: 'visible', timeout: 5000 });
     } catch {
       throw new Error(
         `correxit:convert dialog sequence stalled after ${step} dialogs: ${seen.join(' -> ') || '<none>'}`
       );
     }
-    const text = ((await dialog.textContent()) || '').trim();
+    const text = ((await dialog().textContent()) || '').trim();
     seen.push(text || '<empty>');
     if (text.includes('Select Kernel')) {
-      await dialog.getByRole('button', { name: 'Select Kernel' }).click();
+      await dialog().getByRole('button', { name: 'Select Kernel' }).click();
       continue;
     }
     if (await password().count()) {
       await password().first().fill('test-passphrase');
-      await dialog.locator('.jp-mod-accept').click();
+      await dialog().locator('.jp-mod-accept').click();
       prompted = true;
       break;
     }
-    await dialog.locator('.jp-mod-accept').click();
+    await dialog().locator('.jp-mod-accept').click();
   }
   if (!prompted)
     throw new Error(
       `correxit:convert did not reach the passphrase dialog after ${max} dialogs: ${seen.join(' -> ')}`
     );
-  await done;
+  await finish(page);
 
   // Dismiss the post-conversion summary dialog if it appears.
-  const summary = page.locator('.jp-Dialog');
+  const summary = page.locator('.jp-Dialog:visible').last();
   const lines: string[] = [];
   try {
     await summary.waitFor({ state: 'visible', timeout: 2000 });
@@ -436,15 +489,11 @@ test.describe('nbgrader conversion (synthetic)', () => {
     await notebook(page);
     await populate(page, [answer('q1', 'x = 1')]);
 
-    await ready(page);
-    const done = page.evaluate(async () => {
-      const app = (window as any).jupyterapp;
-      await app.commands.execute('correxit:convert');
-    });
-    const dialog = page.locator('.jp-Dialog');
+    await begin(page);
+    const dialog = page.locator('.jp-Dialog:visible').last();
     await dialog.waitFor({ state: 'visible', timeout: 5000 });
     await dialog.locator('.jp-mod-reject').click();
-    await done;
+    await finish(page);
 
     const enabled = await page.evaluate(() => {
       const app = (window as any).jupyterapp;
@@ -475,7 +524,7 @@ test.describe('nbgrader conversion (synthetic)', () => {
     const before = await snapshot(page);
 
     await ready(page);
-    const done = page.evaluate(async () => {
+    await page.evaluate(() => {
       const app = (window as any).jupyterapp;
       const { Workbook } = (window as any).__correxit__;
       const original = Workbook.add;
@@ -485,39 +534,39 @@ test.describe('nbgrader conversion (synthetic)', () => {
         if (calls === 1) throw new Error('injected convert failure');
         return original(...args);
       };
-      try {
-        await app.commands.execute('correxit:convert');
-      } finally {
-        Workbook.add = original;
-      }
+      (window as any).__correxit_convert__ = app.commands
+        .execute('correxit:convert')
+        .finally(() => {
+          Workbook.add = original;
+        });
     });
-    const dialog = page.locator('.jp-Dialog');
+    const dialog = () => page.locator('.jp-Dialog:visible').last();
     const password = () =>
-      dialog.locator(
+      dialog().locator(
         'input[type="password"], input[type="text"], input:not([type])'
       );
     for (let step = 0; step < 8; step += 1) {
-      await dialog.waitFor({ state: 'visible', timeout: 5000 });
-      const text = ((await dialog.textContent()) || '').trim();
+      await dialog().waitFor({ state: 'visible', timeout: 5000 });
+      const text = ((await dialog().textContent()) || '').trim();
       if (text.includes('Select Kernel')) {
-        await dialog.getByRole('button', { name: 'Select Kernel' }).click();
+        await dialog().getByRole('button', { name: 'Select Kernel' }).click();
         continue;
       }
       if (await password().count()) {
         await password().first().fill('test-passphrase');
-        await dialog.locator('.jp-mod-accept').click();
+        await dialog().locator('.jp-mod-accept').click();
         break;
       }
-      await dialog.locator('.jp-mod-accept').click();
+      await dialog().locator('.jp-mod-accept').click();
     }
-    await done;
+    await finish(page);
 
-    await dialog.waitFor({ state: 'visible', timeout: 5000 });
-    await expect(dialog).toContainText(
+    await dialog().waitFor({ state: 'visible', timeout: 5000 });
+    await expect(dialog()).toContainText(
       'Conversion failed; original notebook restored'
     );
-    await expect(dialog).toContainText('The original notebook was restored.');
-    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect(dialog()).toContainText('The original notebook was restored.');
+    await dialog().getByRole('button', { name: 'Close' }).click();
 
     await expect.poll(() => snapshot(page)).toEqual(before);
     await expect.poll(() => converted(page)).toBe(false);
@@ -1183,8 +1232,10 @@ async function score(page: any): Promise<{
     }
   >;
 }> {
-  return page.locator('body').evaluate(async () => {
-    const { Workbook } = (window as any).__correxit__;
+  await scorable(page);
+  return page.evaluate(async () => {
+    const { Workbook, kernels } = (window as any).__correxit__;
+    kernels.drain();
     const panel = (window as any).jupyterapp.shell.currentWidget;
     const grade = await Workbook.correct(panel);
     const rubric = Workbook.open(panel, true);

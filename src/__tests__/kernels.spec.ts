@@ -83,6 +83,48 @@ describe('kernels', () => {
       expect(typeof release).toBe('function');
     });
 
+    it('waits for kernel info before leasing a new kernel', async () => {
+      const name = named();
+      let leased: unknown = null;
+      let resolve: (() => void) | null = null;
+      let requested: (() => void) | null = null;
+      const request = new Promise<void>(done => {
+        requested = done;
+      });
+      const info = new Promise<void>(done => {
+        resolve = done;
+      });
+      const mock = spawn({
+        hasPendingInput: true,
+        name
+      });
+      Object.defineProperty(mock, 'info', {
+        get: () => {
+          requested?.();
+          return info;
+        }
+      });
+      const workbook = create({
+        name,
+        kernelManager: { startNew: jest.fn(async () => mock) }
+      });
+
+      const leasing = lease(workbook);
+      void leasing.then(result => {
+        leased = result;
+      });
+
+      await request;
+      expect(leased).toBeNull();
+
+      expect(resolve).not.toBeNull();
+      const done: () => void = resolve || (() => undefined);
+      done();
+
+      expect((await leasing)?.[0]).toBe(mock);
+      expect(mock.hasPendingInput).toBe(false);
+    });
+
     it('returns null when kernel manager is missing', async () => {
       const workbook = create({ kernelManager: null });
       const result = await lease(workbook);

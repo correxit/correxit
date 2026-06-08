@@ -26,6 +26,12 @@ const directory = async(
   }
 };
 
+const sidecar = (dir: string, name: string): string => {
+  if (!name || name === '.' || name === '..' || PathExt.basename(name) !== name)
+    throw new Correxit.Error.Fetch(`Invalid resource name: ${name}`);
+  return PathExt.join(dir, name);
+};
+
 /** @returns a deterministic filename for an assigned workbook. */
 export async function assigned(assignment: string, assignee: string) {
   const name = assignment.replace(/[^\w.-]/g, '');
@@ -96,16 +102,14 @@ export async function load(
   dir: string,
   name: string
 ): Promise<Uint8Array> {
-  if (PathExt.basename(name) !== name)
-    throw new Correxit.Error.Fetch(`Invalid resource name: ${name}`);
-  const path = PathExt.join(dir, name);
-  const file = await contents
-    .get(path, { format: 'base64', content: true })
-    .catch(() => {
-      throw new Correxit.Error.Fetch(`Could not load resource file: ${path}`);
-    }) as Contents.IModel;
-  const binary = atob(file.content as string);
-  return Uint8Array.from(binary, char => char.charCodeAt(0));
+  const path = sidecar(dir, name);
+  try {
+    const file = await contents.get(path, { format: 'base64', content: true });
+    const binary = atob(file.content as string);
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+  } catch {
+    throw new Correxit.Error.Fetch(`Could not load resource file: ${path}`);
+  }
 }
 
 /** Creates a directory at path inside pwd. */
@@ -205,7 +209,7 @@ export async function stage(
     const copied = await contents.copy(path, subdirectory);
     await Promise.all(
       (resources ?? []).map(name =>
-        contents.copy(PathExt.join(dir, name), subdirectory)
+        contents.copy(sidecar(dir, name), subdirectory)
       )
     );
     return copied.path;

@@ -146,17 +146,17 @@ export function commands(
     return files.length ? files : null;
   };
   const outputs = (workbook: Workbook, rubric: Rubric): string[] => {
-    if (!headed(workbook)) return [];
-
     const secrets = new Set(
       Object.values(rubric.references)
         .filter(({ secret }) => secret)
         .map(({ referent }) => referent)
     );
-    return workbook.content.widgets
-      .filter(({ model }) => secrets.has(model.id))
-      .filter(({ model }) => !!(model as { outputs?: any[] }).outputs?.length)
-      .map(({ model }) => model.id);
+    return workbook.context.model.sharedModel.toJSON().cells.flatMap(cell => {
+      const { id, outputs } = cell as { id?: string; outputs?: unknown[]; };
+      return id && secrets.has(id) && Array.isArray(outputs) && outputs.length
+        ? [id]
+        : [];
+    });
   };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);

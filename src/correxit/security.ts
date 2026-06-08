@@ -6,7 +6,7 @@ export async function decrypt(text: string, password: string): Promise<string> {
   let message;
   try {
     message = await pgp.readMessage({ armoredMessage: text });
-  } catch (_) {
+  } catch {
     return text;
   }
   return (await pgp.decrypt({ message, passwords: [password] })).data;

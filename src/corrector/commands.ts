@@ -410,7 +410,7 @@ async function authenticated(
   try {
     const credentials = { ...handle, path, silent: true };
     return !!(await unlocker.unlock(workbook, credentials));
-  } catch (_) {
+  } catch {
     return false;
   }
 }
