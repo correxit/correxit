@@ -1,3 +1,10 @@
+# [1.24.0](https://github.com/QuantStack/correxit/compare/v1.23.0...v1.24.0) (2026-06-09)
+
+
+### Features
+
+* pre-release security and documentation updates ([#77](https://github.com/QuantStack/correxit/issues/77)) ([b739dd5](https://github.com/QuantStack/correxit/commit/b739dd536a239a9f62f27ed8eb2f1c33ee7d2466))
+
 # [1.23.0](https://github.com/QuantStack/correxit/compare/v1.22.0...v1.23.0) (2026-05-15)
 
 ### Compatibility
