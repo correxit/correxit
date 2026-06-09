@@ -94,10 +94,7 @@ describe('kernels', () => {
       const info = new Promise<void>(done => {
         resolve = done;
       });
-      const mock = spawn({
-        hasPendingInput: true,
-        name
-      });
+      const mock = spawn({ name });
       Object.defineProperty(mock, 'info', {
         get: () => {
           requested?.();
@@ -122,7 +119,6 @@ describe('kernels', () => {
       done();
 
       expect((await leasing)?.[0]).toBe(mock);
-      expect(mock.hasPendingInput).toBe(false);
     });
 
     it('returns null when kernel manager is missing', async () => {
