@@ -34,10 +34,14 @@ secret references, the roster, and sealed submission sources.
 
 ## Key Management
 
-Plaintext keys are **never written to disk**. They exist only in local scope,
-enter via user input, and die with the browser tab. `Rubric.Unlocked` carries
-the PBKDF2 key; `Rubric.Locked` has `key: null`. Notebook metadata stores only
-locked rubrics.
+Plaintext keys are **never written to notebook metadata, settings JSON, or
+assignment files**. They enter via user input or a configured `Unlocker`.
+`Rubric.Unlocked` carries the PBKDF2 key; `Rubric.Locked` has `key: null`.
+Notebook metadata stores only locked rubrics.
+
+The shipped secrets-manager connector is in-memory. Deployments may configure
+a different secrets connector or `Unlocker`; that is an intentional key custody
+choice made by the deployment, not a hidden Correxit write path.
 
 The author's PGP private key is stored in
 `assignment.keys.private.author`, encrypted with the same
@@ -54,22 +58,23 @@ re-injects them into composite settings on later loads.
 
 ## Integrity
 
-### Assignment MAC
+### Rubric MAC
 
-Authenticates the mutable author-controlled assignment state:
+Authenticates the mutable author-controlled grading state:
+`rubric.id`, rubric `cells`, rubric `references`, assignment
 `assignee`, `expiration`, `id`, `issue`, `issuer`, `keys`
-(author components only), `name`, `overdue`, `penalty`, `report`
-(interventions + scores, sorted), and `roster`.
+(author components only), `name`, `overdue`, `penalty`,
+`resources`, `report` (interventions + scores, sorted), and
+`roster`.
 
-The `mac` function extracts `Keys.author(keys)` to include only
+The `Rubric.terms` function extracts `Keys.author(keys)` to include only
 `{ private, public }` for the author. Student key fields
-(`keys.private.assignee`, `keys.public.assignee`) are present in
-`Terms` but absent from the unsigned object, so they do not affect
-the HMAC. A student setting their own keypair at submit time does
-not invalidate the MAC.
+(`keys.private.assignee`, `keys.public.assignee`) are absent from
+`Rubric.Terms`, so they do not affect the HMAC. A student setting
+their own keypair at submit time does not invalidate the MAC.
 
 ```
-mac = HMAC-SHA-256(JSON.stringify(unsigned), key)
+mac = HMAC-SHA-256(JSON.stringify(Rubric.terms(rubric)), key)
 ```
 
 Any modification to authenticated fields invalidates the MAC.
@@ -78,9 +83,9 @@ This is different from `Workbook.Identifier`. `Identifier` is a small routing
 key. The MAC proves that the broader authored assignment state still matches
 the secret key held by the author side of Correxit.
 
-**Authenticated:** `assignee`, `expiration`, `id`, `issue`,
-`issuer`, `keys` (author only), `name`, `overdue`, `penalty`,
-`report`, `roster`.
+**Authenticated:** `rubric.id`, `cells`, `references`, `assignee`,
+`expiration`, `id`, `issue`, `issuer`, `keys` (author only),
+`name`, `overdue`, `penalty`, `resources`, `report`, `roster`.
 
 **Not authenticated:** `certification`, `collected`, `distribution`, `seal`,
 `submission`, `submitted`. These change after signing or are set by the
@@ -210,15 +215,16 @@ external system.
 
 6. **Grading** (`Workbook.unlock`): Validates metadata first so a tampered
    workbook never gets plaintext written. If `assignment.seal` is non-null, it
-   decrypts the author PGP private key in local scope, verifies the seal hash,
-   unseals each cell, and clears `seal` because the cells are now plaintext.
-   Finally, it decrypts reference cells.
+   decrypts the author PGP private key in local scope, verifies the seal hash
+   when all rubric cells are present, unseals each cell, and clears `seal`
+   because the cells are now plaintext. Finally, it decrypts reference cells.
 
-If rubric cells are missing from the notebook, headed workbooks skip seal
-verification and unseal only the remaining cells. Headless workbooks
-hard-fail. This matches `audit()`, which repairs headed workbooks by
-removing orphaned references and dropping invalid or unscorable cell
-configurations, but rejects incomplete notebooks in headless mode.
+If rubric cells are missing from a sealed notebook, headless unlock and revise
+hard-fail. In a live headed notebook, Correxit warns and unseals the cells that
+remain so the secret holder can repair the file. That repair path is not seal
+authentication and must not be used as grading or collection authority.
+`Workbook.recover` remains the explicit forensic escape hatch for damaged
+workbooks.
 
 ### Payload Binding
 
@@ -270,7 +276,7 @@ re-encrypting and comparing.
 - `issuer`: `string`, signed, author PGP signature over `issue`.
 - `seal`: `string | null`, unsigned, SHA-256 of concatenated
   ciphertexts.
-- `mac`: `string`, mutable assignment authenticity MAC.
+- `mac`: `string`, mutable rubric authenticity MAC.
 - `certification`: `number | null`, unsigned, final grade timestamp.
 - `submission`: `number | null`, unsigned, student submission
   timestamp written into the workbook.
@@ -289,15 +295,17 @@ re-encrypting and comparing.
 4. `freeze()` - set cells to non-editable
 
 A workbook cannot be collected without a non-null `certification`.
+Corrector may display locked certified metadata while scanning, but it does not
+trust that metadata for grade skipping or collection until the workbook has
+been unlocked and authenticated with the rubric key.
 
 ### Verification
 
-- `Assignment.validate({ assignment, key })` - structural checks:
+- `Rubric.validate(rubric)` - structural and authenticity checks:
   assignee must appear in roster, MAC must be valid if assignee or
   roster exists, issue and issuer must appear together and verify,
-  author keys must be present, sealed
-  assignments must have an author public key, assignee private key
-  requires a corresponding public key.
+  author keys must be present, sealed assignments must have an author
+  public key, assignee private key requires a corresponding public key.
 
 ## Serialization Invariant
 
@@ -336,3 +344,7 @@ keys therefore cannot leak across assignments.
    student with file access and the cleartext public key could
    forge new ciphertexts and a matching hash. The seal detects
    corruption, not deliberate forgery. See Seal Integrity.
+
+4. **Grading executes student code.** Batch grading runs submitted notebooks in
+   Jupyter kernels. Use an isolated grading Jupyter environment for adversarial
+   submissions.

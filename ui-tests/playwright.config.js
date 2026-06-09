@@ -3,17 +3,22 @@
  */
 const baseConfig = require('@jupyterlab/galata/lib/playwright-config');
 
+const channel = process.env.PLAYWRIGHT_CHROMIUM_CHANNEL;
+
 module.exports = {
   ...baseConfig,
   // All spec files share one Jupyter server and its file system, so tests
   // must run sequentially to avoid cross-file interference.
   workers: 1,
   retries: process.env.CI ? 2 : 0,
+  testIgnore: ['**/demo.spec.ts'],
   timeout: 120 * 1000,
   use: {
     ...baseConfig.use,
     actionTimeout: 30 * 1000,
-    navigationTimeout: 30 * 1000
+    navigationTimeout: 30 * 1000,
+    video: process.env.CI ? 'off' : baseConfig.use.video,
+    ...(channel ? { channel } : {})
   },
   reporter: [['list'], ['html', { open: 'never' }]],
   webServer: {

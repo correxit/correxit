@@ -145,6 +145,19 @@ export function commands(
     })));
     return files.length ? files : null;
   };
+  const outputs = (workbook: Workbook, rubric: Rubric): string[] => {
+    const secrets = new Set(
+      Object.values(rubric.references)
+        .filter(({ secret }) => secret)
+        .map(({ referent }) => referent)
+    );
+    return workbook.context.model.sharedModel.toJSON().cells.flatMap(cell => {
+      const { id, outputs } = cell as { id?: string; outputs?: unknown[]; };
+      return id && secrets.has(id) && Array.isArray(outputs) && outputs.length
+        ? [id]
+        : [];
+    });
+  };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = normalize(args);
     const workbook = handle
@@ -793,17 +806,24 @@ If conversion fails, Correxit restores the original notebook.`
     ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked) return (async function* empty() {})();
+
+      const exposed = outputs(workbook, rubric);
+      if (exposed.length) {
+        const body = [
+          trans.__('Secret reference cells have outputs.'),
+          trans.__('Those outputs are not encrypted and will be distributed.')
+        ].join(' ');
+        const title = trans.__('Distribute visible outputs?');
+        const buttons = [
+          Dialog.cancelButton({ label: trans.__('Cancel') }),
+          Dialog.okButton({ label: trans.__('Distribute') })
+        ];
+        const { button } = await showDialog({ body, buttons, title });
+        if (!button.accept) return (async function* empty() {})();
+      }
       try {
-        return translate(
-          propagator.propagate({
-            commands,
-            distributor,
-            factory,
-            manager,
-            workbook
-          }),
-          trans
-        );
+        const options = { commands, distributor, factory, manager, workbook };
+        return translate(propagator.propagate(options), trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }

@@ -1,5 +1,11 @@
 # [1.23.0](https://github.com/QuantStack/correxit/compare/v1.22.0...v1.23.0) (2026-05-15)
 
+### Compatibility
+
+* Expanding assignment MAC coverage is a workbook-format break. Workbooks
+  issued by older builds must be re-issued before upgrading; otherwise unlock
+  will reject them with a MAC mismatch.
+
 
 ### Features
 

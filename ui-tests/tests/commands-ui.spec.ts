@@ -476,6 +476,94 @@ test('locks workbook and encrypts reference cells', async ({ page }) => {
   await dispose();
 });
 
+test('propagate warns about serialized secret reference outputs', async ({
+  page
+}) => {
+  const { dispose } = await prepare(page, [
+    { id: 'ref', source: 'answer' },
+    { id: 'cell', source: 'compare' }
+  ]);
+
+  await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    const rubric = Rubric.add(
+      (r => ({
+        ...r,
+        key: 'secret',
+        assignment: {
+          ...r.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      }))(Rubric.create()),
+      {
+        id: 'cell',
+        is: 'comparable',
+        points: 1,
+        references: ['ref'],
+        payload: null
+      },
+      [{ cell: 'cell', referent: 'ref', points: 1, secret: true }]
+    );
+    await Workbook.update(panel, rubric);
+    await app.commands.execute('correxit:assign', {
+      roster: ['student@example.com']
+    });
+
+    const notebook = panel.context.model.sharedModel;
+    const original = notebook.toJSON.bind(notebook);
+    notebook.toJSON = () => {
+      const json = original();
+      json.cells = json.cells.map((cell: any) =>
+        cell.id === 'ref'
+          ? {
+              ...cell,
+              cell_type: 'raw',
+              execution_count: 1,
+              outputs: [
+                { name: 'stdout', output_type: 'stream', text: 'answer\n' }
+              ]
+            }
+          : cell
+      );
+      return json;
+    };
+  });
+
+  const kernel = page.locator('.jp-Dialog').filter({
+    hasText: 'Select kernel for:'
+  });
+  try {
+    await kernel.waitFor({ state: 'visible', timeout: 1000 });
+    await page.keyboard.press('Escape');
+    await kernel.waitFor({ state: 'hidden', timeout: 1000 }).catch(() => {});
+  } catch {
+    /* no kernel dialog */
+  }
+
+  const done = page.evaluate(async () => {
+    const app = (window as any).jupyterapp;
+    const stream = await app.commands.execute('correxit:propagate');
+    const log: any[] = [];
+    for await (const emission of stream) log.push(emission);
+    return log;
+  });
+
+  const dialog = page.locator('.jp-Dialog');
+  await expect(dialog).toContainText('Secret reference cells have outputs.');
+  await expect(dialog).toContainText(
+    'Those outputs are not encrypted and will be distributed.'
+  );
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  expect(await done).toEqual([]);
+  await dispose();
+});
+
 test('enabled states reflect locked and unlocked rubric', async ({ page }) => {
   const { dispose } = await prepare(page, [
     { id: 'ref', source: 'answer' },

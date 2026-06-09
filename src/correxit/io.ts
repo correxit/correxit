@@ -26,6 +26,12 @@ const directory = async(
   }
 };
 
+const sidecar = (dir: string, name: string): string => {
+  if (!name || name === '.' || name === '..' || PathExt.basename(name) !== name)
+    throw new Correxit.Error.Fetch(`Invalid resource name: ${name}`);
+  return PathExt.join(dir, name);
+};
+
 /** @returns a deterministic filename for an assigned workbook. */
 export async function assigned(assignment: string, assignee: string) {
   const name = assignment.replace(/[^\w.-]/g, '');
@@ -96,16 +102,14 @@ export async function load(
   dir: string,
   name: string
 ): Promise<Uint8Array> {
-  if (PathExt.basename(name) !== name)
-    throw new Correxit.Error.Fetch(`Invalid resource name: ${name}`);
-  const path = PathExt.join(dir, name);
-  const file = await contents
-    .get(path, { format: 'base64', content: true })
-    .catch(() => {
-      throw new Correxit.Error.Fetch(`Could not load resource file: ${path}`);
-    }) as Contents.IModel;
-  const binary = atob(file.content as string);
-  return Uint8Array.from(binary, char => char.charCodeAt(0));
+  const path = sidecar(dir, name);
+  try {
+    const file = await contents.get(path, { format: 'base64', content: true });
+    const binary = atob(file.content as string);
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+  } catch {
+    throw new Correxit.Error.Fetch(`Could not load resource file: ${path}`);
+  }
 }
 
 /** Creates a directory at path inside pwd. */
@@ -190,7 +194,8 @@ export async function resources(
 export async function stage(
   manager: ServiceManager.IManager,
   dir: string,
-  path: string
+  path: string,
+  resources: string[] | null
 ): Promise<string> {
   const { contents } = manager;
   const stem = PathExt.basename(path, '.ipynb');
@@ -200,10 +205,18 @@ export async function stage(
   await contents.delete(subdirectory).catch(() => undefined);
   await mkdir(manager, root, subdirectory);
 
-  const copied = await contents.copy(path, subdirectory);
-  const files = await resources(manager, dir);
-  await Promise.all(files.map(({ path }) => contents.copy(path, subdirectory)));
-  return copied.path;
+  try {
+    const copied = await contents.copy(path, subdirectory);
+    await Promise.all(
+      (resources ?? []).map(name =>
+        contents.copy(sidecar(dir, name), subdirectory)
+      )
+    );
+    return copied.path;
+  } catch (error) {
+    await unstage(manager, dir, stem);
+    throw error;
+  }
 }
 
 /** Removes a staging slot created by `stage`. */

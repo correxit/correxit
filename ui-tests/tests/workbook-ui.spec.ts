@@ -1331,6 +1331,75 @@ test('revise rejects tampered sealed cells', async ({ page }) => {
   await dispose();
 });
 
+test('headed unlock repairs a sealed notebook with missing cells', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'a', source: 'x = 1' },
+    { id: 'b', source: 'y = 2' }
+  ]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+
+    const unlocker = {
+      store: async () => {},
+      unlock: async () => null
+    };
+    let rubric = await Workbook.convert(workbook, 'secret', unlocker);
+    rubric = Rubric.add(rubric, {
+      id: 'a',
+      is: 'reviewable',
+      points: 1,
+      references: null,
+      payload: null
+    });
+    rubric = Rubric.add(rubric, {
+      id: 'b',
+      is: 'reviewable',
+      points: 1,
+      references: null,
+      payload: null
+    });
+    await Workbook.update(workbook, rubric);
+    await Workbook.assign(workbook, {
+      assignee: 'student@example.com',
+      roster: ['student@example.com']
+    });
+    await Workbook.lock(workbook);
+
+    const locked = Workbook.open(workbook);
+    const author = locked.assignment.keys.public.author;
+    const key = rubric.key;
+    await Workbook.submit(workbook, [author]);
+
+    const notebook = panel.context.model.sharedModel;
+    notebook.deleteCell(1);
+
+    const unlocked = await Workbook.unlock(workbook, key);
+    const cell = notebook.cells[0].toJSON();
+    const metadata = notebook.getMetadata('correxit');
+    return {
+      count: notebook.cells.length,
+      locked: unlocked.locked,
+      seal: unlocked.assignment.seal,
+      source: cell.source,
+      stored: metadata?.assignment?.seal ?? null,
+      type: cell.cell_type
+    };
+  });
+
+  expect(result.count).toBe(1);
+  expect(result.locked).toBe(false);
+  expect(result.seal).toBeNull();
+  expect(result.stored).toBeNull();
+  expect(result.source).toBe('x = 1');
+  expect(result.type).toBe('code');
+  await dispose();
+});
+
 // ---------------------------------------------------------------------------
 // Recovery tests
 // ---------------------------------------------------------------------------

@@ -115,7 +115,7 @@ export function Reviewer(props: Reviewer.Props) {
     cursor: initial
   } = props;
   const snapshot = bridge.useSnapshot();
-  const { workbooks, grades } = snapshot;
+  const { workbooks, grades, revision } = snapshot;
   const empty = workbooks.length === 0;
 
   const [cursor, setCursor] = useState<Cursor | null>(initial ?? null);
@@ -137,7 +137,7 @@ export function Reviewer(props: Reviewer.Props) {
       null,
     [workbooks, cursor?.path]
   );
-  const rubric = useMemo(() => open(workbook), [workbook]);
+  const rubric = useMemo(() => open(workbook), [workbook, revision]);
   const certified = !!(rubric && rubric.assignment.certification);
   const rows = useMemo(() => {
     if (!workbook || !rubric) return [];
@@ -245,9 +245,8 @@ export function Reviewer(props: Reviewer.Props) {
         : null;
     setScore(resolved && resolved.status !== 'unscored' ? resolved.points : '');
     setComment(resolved?.comment ?? '');
-  }, [cursor?.path, cursor?.cell, rubric?.id]);
+  }, [cursor?.path, cursor?.cell, rubric?.id, revision]);
 
-  const [revision, setRevision] = useState(0);
   const commit = useCallback(
     async (points: number) => {
       if (!cursor || !cell || !workbook || certified) return;
@@ -261,7 +260,6 @@ export function Reviewer(props: Reviewer.Props) {
         intervention,
         ...(comment ? { comment } : {})
       });
-      setRevision(n => n + 1);
     },
     [cursor, cell, comment, commands, workbook]
   );
@@ -315,6 +313,7 @@ export function Reviewer(props: Reviewer.Props) {
   const rerun = async () => {
     if (!cursor || !workbook || type !== 'code' || busy) return;
     setBusy(true);
+    setCorrected([]);
     try {
       const args = { id: cursor.cell };
       const result = await commands.execute(CommandIDs.run, args);

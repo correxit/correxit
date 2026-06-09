@@ -17,7 +17,7 @@ import { DisposableDelegate } from '@lumino/disposable';
 import { Signal, Stream } from '@lumino/signaling';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector, Reviewer } from './corrector';
-import { Correxit, Unlocker, Workbook } from './correxit';
+import { Correxit, Rubric, Unlocker, Workbook } from './correxit';
 import * as collectors from './correxit/collectors';
 import * as dispatcher from './correxit/dispatcher';
 import * as distributors from './correxit/distributors';
@@ -187,6 +187,29 @@ const corrector: JupyterFrontEndPlugin<void> = {
         tracker.corrector.dispose();
         tracker.reviewer.dispose();
       };
+    },
+    deactivate: () => deactivator?.()
+  }))()
+};
+
+/** Galata-only test bridge: exposes Correxit module for the ui tests. */
+const galata: JupyterFrontEndPlugin<void> = {
+  id: Correxit.GALATA,
+  autoStart: true,
+  ...((deactivator?: () => void) => ({
+    activate: () => {
+      if (typeof window === 'undefined' || !(window as any).galata) return;
+      Object.defineProperty(window as any, '__correxit__', {
+        configurable: false,
+        enumerable: false,
+        value: Object.freeze({
+          Correxit,
+          Rubric,
+          Workbook,
+          kernels: Object.freeze({ drain: kernels.drain })
+        }),
+        writable: false
+      });
     },
     deactivate: () => deactivator?.()
   }))()
@@ -442,8 +465,9 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
 
 export const plugins = [
   collector,
-  distributor,
   corrector,
+  distributor,
+  galata,
   monitor,
   registrar,
   submitter,

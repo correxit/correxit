@@ -163,20 +163,25 @@ export function commands(
     commands.addCommand(CommandIDs.collect, {
       label: trans.__('Collect certified workbook grades...'),
       execute: (
-        args: Partial<{ overwrite: boolean; path: string }>
+        args: Partial<Credentials & { overwrite: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
         const overwrite = !!args.overwrite;
-        const handle = normalize(args);
+        const auth = !!(args.key || args.passphrase);
+        const credentials = { ...args, unlock: auth ? !!args.unlock : true };
+        const handle = normalize(credentials as Partial<Credentials>);
         if (!handle) throw new Error.Invalid('collect error, bad handle');
         return (async function* () {
           for await (const workbook of scanner({ commands }, handle)) {
+            if (!(await authenticated(workbook, handle, unlocker))) continue;
+            await Workbook.lock(workbook);
+
             const certified = precertified(workbook);
             if (!certified) continue;
 
             const { collected } = open(workbook)?.assignment || {};
             if (collected && !overwrite) continue;
 
-            const receipt = await collector(certified);
+            const receipt = await collector({ ...certified, workbook });
             await Workbook.collect(workbook, receipt);
             await save(workbook);
             yield [certified.grade.path, { grade: certified.grade, workbook }];
@@ -321,6 +326,7 @@ export function commands(
               }
             }
           }
+          bridge.touch();
         } catch (error) {
           void showErrorMessage(...Error.interpret(error, trans));
         }
@@ -395,6 +401,20 @@ export function commands(
   return disposables;
 }
 
+async function authenticated(
+  workbook: Headless,
+  handle: Credentials,
+  unlocker: Correxit.Unlocker
+): Promise<boolean> {
+  const { path } = workbook.context;
+  try {
+    const credentials = { ...handle, path, silent: true };
+    return !!(await unlocker.unlock(workbook, credentials));
+  } catch {
+    return false;
+  }
+}
+
 async function correct(
   workbook: Headless,
   handle: Credentials,
@@ -405,29 +425,26 @@ async function correct(
   const { path } = workbook.context;
   const dir = PathExt.dirname(path) || '.';
   const stem = PathExt.basename(path, '.ipynb');
-  const local = await io.stage(manager, dir, path);
+  const resources = open(workbook)?.assignment.resources ?? null;
+  const local = await io.stage(manager, dir, path, resources);
   const staged = (await fetch({ ...handle, path: local })) as Headless | null;
   if (!staged) {
     await io.unstage(manager, dir, stem);
     throw new Correxit.Error.Certify('correct error: staging failed');
   }
 
-  let graded = false;
-  let propagated = false;
   try {
     const certified = await grade(staged, trans);
-    graded = true;
 
     const snapshot = staged.context.model.toJSON() as INotebookContent;
     const restored = Workbook.restore(workbook, snapshot);
     if (!restored)
       throw new Correxit.Error.Certify('correct error: restore failed');
     await workbook.context.save();
-    propagated = true;
     return { ...certified, grade: { ...certified.grade, path }, workbook };
   } finally {
     staged.context.dispose();
-    if (!graded || propagated) await io.unstage(manager, dir, stem);
+    await io.unstage(manager, dir, stem);
   }
 }
 

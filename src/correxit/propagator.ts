@@ -196,9 +196,21 @@ async function reassign({ assignee, file, key, notebook, roster }: {
     resources,
     roster
   };
-  const mac = await Rubric.Assignment.mac(unsigned, key);
   const seal = null;
-  metadata.assignment = { ...unsigned, mac, roster: encrypted, seal };
+  const assignment: Rubric.Assignment = {
+    ...metadata.assignment, ...unsigned, mac: '', seal
+  };
+  const rubric: Rubric.Unlocked = {
+    assignment,
+    cells: metadata.cells,
+    id: metadata.id,
+    key,
+    locked: false,
+    references: metadata.references ?? {},
+    revised: Date.now()
+  };
+  const mac = await Rubric.mac(rubric, key);
+  metadata.assignment = { ...assignment, mac, roster: encrypted };
   metadata.revised = Date.now();
   return {
     assignee,
@@ -235,7 +247,19 @@ async function reissue({ issuer, issue, key, notebook, roster }: {
     resources,
     roster
   };
-  const mac = await Rubric.Assignment.mac(unsigned, key);
+  const assignment: Rubric.Assignment = {
+    ...metadata.assignment, ...unsigned, mac: ''
+  };
+  const rubric: Rubric.Unlocked = {
+    assignment,
+    cells: metadata.cells,
+    id: metadata.id,
+    key,
+    locked: false,
+    references: metadata.references ?? {},
+    revised: Date.now()
+  };
+  const mac = await Rubric.mac(rubric, key);
   metadata.assignment = { ...metadata.assignment, issue, issuer, mac };
   metadata.revised = Date.now();
 }
