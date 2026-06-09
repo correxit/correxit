@@ -7,11 +7,49 @@ import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
 import * as security from './security';
 
-const encode = (data: Uint8Array): string => {
-  let binary = '';
-  for (let i = 0; i < data.length; i += 8192)
-    binary += String.fromCharCode(...data.subarray(i, i + 8192));
-  return btoa(binary);
+type Rack = {
+  count: number;
+  free: number[];
+  ready: Map<number, Promise<void>>;
+  root: Promise<void> | null;
+  used: Set<number>;
+  waiters: Array<() => void>;
+};
+
+export type Staged = {
+  path: string;
+  release: () => Promise<void>;
+};
+
+const racks = new Map<string, Rack>();
+const home = '';
+const scratch = 'correxit-corrector';
+
+const claim = async(
+  root: string,
+  capacity: number
+): Promise<{ index: number; release: () => Promise<void> }> => {
+  const kept = rack(root);
+  const limit = Math.max(1, capacity);
+  let position = vacant(kept, limit);
+  while (position < 0 && kept.count >= limit) {
+    await new Promise<void>(resolve => kept.waiters.push(resolve));
+    position = vacant(kept, limit);
+  }
+
+  const index = position >= 0 ? kept.free.splice(position, 1)[0] : kept.count++;
+  kept.used.add(index);
+  let released = false;
+  return {
+    index,
+    release: async () => {
+      if (released) return;
+      released = true;
+      if (!kept.used.delete(index)) return;
+      kept.free.push(index);
+      kept.waiters.shift()?.();
+    }
+  };
 };
 
 const directory = async(
@@ -26,10 +64,64 @@ const directory = async(
   }
 };
 
+const encode = (data: Uint8Array): string => {
+  let binary = '';
+  for (let i = 0; i < data.length; i += 8192)
+    binary += String.fromCharCode(...data.subarray(i, i + 8192));
+  return btoa(binary);
+};
+
+const mount = async(
+  manager: ServiceManager.IManager,
+  dir: string,
+  root: string,
+  index: number
+): Promise<void> => {
+  const kept = rack(root);
+  if (!kept.root) {
+    const rooted = directory(manager, dir, root);
+    kept.root = rooted;
+    void rooted.catch(() => {
+      if (kept.root === rooted) kept.root = null;
+    });
+  }
+
+  let ready = kept.ready.get(index);
+  if (!ready) {
+    const path = PathExt.join(root, `slot-${index + 1}`);
+    ready = kept.root.then(() => directory(manager, root, path));
+    kept.ready.set(index, ready);
+    void ready.catch(() => {
+      if (kept.ready.get(index) === ready) kept.ready.delete(index);
+    });
+  }
+  await ready;
+};
+
+const rack = (root: string): Rack => {
+  if (!racks.has(root)) {
+    racks.set(root, {
+      count: 0,
+      free: [],
+      ready: new Map(),
+      root: null,
+      used: new Set(),
+      waiters: []
+    });
+  }
+  return racks.get(root)!;
+};
+
 const sidecar = (dir: string, name: string): string => {
   if (!name || name === '.' || name === '..' || PathExt.basename(name) !== name)
     throw new Correxit.Error.Fetch(`Invalid resource name: ${name}`);
   return PathExt.join(dir, name);
+};
+
+const vacant = (kept: Rack, limit: number): number => {
+  for (let position = kept.free.length - 1; position >= 0; position--)
+    if (kept.free[position] < limit) return position;
+  return -1;
 };
 
 /** @returns a deterministic filename for an assigned workbook. */
@@ -186,7 +278,7 @@ export async function resources(
 /**
  * Stage a workbook for isolated execution.
  *
- * Creates `correxit-corrector/<stem>/` under `dir`, copies the notebook
+ * Creates or reuses top-level `correxit-corrector/slot-N/`, saves the notebook
  * there, and copies each sidecar file from `dir` into the same slot.
  *
  * @returns the path of the staged notebook.
@@ -194,39 +286,34 @@ export async function resources(
 export async function stage(
   manager: ServiceManager.IManager,
   dir: string,
-  path: string,
-  resources: string[] | null
-): Promise<string> {
+  notebook: INotebookContent,
+  resources: string[] | null,
+  capacity = 1
+): Promise<Staged> {
   const { contents } = manager;
-  const stem = PathExt.basename(path, '.ipynb');
-  const root = PathExt.join(dir, 'correxit-corrector');
-  const subdirectory = PathExt.join(dir, 'correxit-corrector', stem);
-  await directory(manager, dir, root);
-  await contents.delete(subdirectory).catch(() => undefined);
-  await mkdir(manager, root, subdirectory);
+  const root = scratch;
+  const slot = await claim(root, capacity);
+  const subdirectory = PathExt.join(root, `slot-${slot.index + 1}`);
+  const staged = PathExt.join(subdirectory, 'workbook.ipynb');
 
   try {
-    const copied = await contents.copy(path, subdirectory);
-    await Promise.all(
-      (resources ?? []).map(name =>
-        contents.copy(sidecar(dir, name), subdirectory)
-      )
-    );
-    return copied.path;
+    await mount(manager, home, root, slot.index);
+    await Promise.all([
+      contents.save(staged, {
+        type: 'notebook',
+        format: 'json',
+        content: notebook
+      }),
+      ...(resources ?? []).map(async name => {
+        await contents.delete(sidecar(subdirectory, name)).catch(() => {});
+        await contents.copy(sidecar(dir, name), subdirectory);
+      })
+    ]);
+    return { path: staged, release: slot.release };
   } catch (error) {
-    await unstage(manager, dir, stem);
+    await slot.release();
     throw error;
   }
-}
-
-/** Removes a staging slot created by `stage`. */
-export async function unstage(
-  { contents }: Pick<ServiceManager.IManager, 'contents'>,
-  dir: string,
-  stem: string
-): Promise<void> {
-  const slot = PathExt.join(dir, 'correxit-corrector', stem);
-  await contents.delete(slot).catch(() => undefined);
 }
 
 /** Writes raw bytes to a file path. */

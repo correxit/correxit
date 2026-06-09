@@ -17,7 +17,7 @@ type Idle = {
 };
 
 /** Time-to-live for idle kernel caching (ms). */
-const TTL = 2500;
+const TTL = 5000;
 
 const pool = new Map<string, Idle[]>();
 const waiters: Array<() => void> = [];
