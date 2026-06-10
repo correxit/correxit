@@ -35,6 +35,7 @@ function create(
   overrides: Partial<{
     kernelManager: any;
     name: string;
+    path: string;
   }> = {}
 ) {
   const name = overrides.name ?? `python3-${serial++}`;
@@ -45,6 +46,7 @@ function create(
   return {
     context: {
       model: { defaultKernelName: name },
+      path: overrides.path ?? 'workbook.ipynb',
       ready: Promise.resolve(),
       sessionContext: { kernelManager }
     }
@@ -81,6 +83,25 @@ describe('kernels', () => {
       const [leased, release] = result!;
       expect(leased).toBe(mock);
       expect(typeof release).toBe('function');
+    });
+
+    it('starts kernels in the workbook directory', async () => {
+      const name = named();
+      const mock = spawn({ name });
+      const kernelManager = { startNew: jest.fn(async () => mock) };
+      const workbook = create({
+        name,
+        path: 'correxit-corrector/slot-2/workbook.ipynb',
+        kernelManager
+      });
+
+      const result = await lease(workbook);
+
+      expect(result).not.toBeNull();
+      expect(kernelManager.startNew).toHaveBeenCalledWith({
+        name,
+        path: 'correxit-corrector/slot-2'
+      });
     });
 
     it('waits for kernel info before leasing a new kernel', async () => {
@@ -170,6 +191,43 @@ describe('kernels', () => {
       expect(
         workbook.context.sessionContext.kernelManager.startNew
       ).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps cwd as part of the pool identity', async () => {
+      const name = named();
+      const first = spawn({ name });
+      const second = spawn({ name });
+      let calls = 0;
+      const kernelManager = {
+        startNew: jest.fn(async () => (calls++ === 0 ? first : second))
+      };
+      const one = create({
+        name,
+        path: 'correxit-corrector/slot-1/workbook.ipynb',
+        kernelManager
+      });
+      const two = create({
+        name,
+        path: 'correxit-corrector/slot-2/workbook.ipynb',
+        kernelManager
+      });
+
+      const leased = await lease(one);
+      await leased![1]();
+
+      const shifted = await lease(two);
+
+      expect(shifted).not.toBeNull();
+      expect(shifted![0]).toBe(second);
+      expect(kernelManager.startNew).toHaveBeenCalledTimes(2);
+      expect(kernelManager.startNew).toHaveBeenNthCalledWith(1, {
+        name,
+        path: 'correxit-corrector/slot-1'
+      });
+      expect(kernelManager.startNew).toHaveBeenNthCalledWith(2, {
+        name,
+        path: 'correxit-corrector/slot-2'
+      });
     });
 
     it('restarts a kernel before re-pooling it', async () => {

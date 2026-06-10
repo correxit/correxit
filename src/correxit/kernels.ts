@@ -1,3 +1,4 @@
+import { PathExt } from '@jupyterlab/coreutils';
 import { Kernel } from '@jupyterlab/services';
 import { Workbook } from '.';
 
@@ -12,8 +13,17 @@ type Leased = [
 
 /** A cached idle kernel and its eviction timer. */
 type Idle = {
+  identity: Identity;
   kernel: Kernel.IKernelConnection;
+  order: number;
   timer: ReturnType<typeof setTimeout>;
+};
+
+/** The runtime context a leased kernel must satisfy. */
+type Identity = {
+  cwd: string;
+  key: string;
+  name: string;
 };
 
 /** Time-to-live for idle kernel caching (ms). */
@@ -23,9 +33,11 @@ const pool = new Map<string, Idle[]>();
 const waiters: Array<() => void> = [];
 
 let attempts = 1;
+let cached = 0;
 let epoch = 0;
 let lifespan = 60;
 let live = 0;
+let order = 0;
 let recycling = 0;
 let workers = 3;
 
@@ -42,6 +54,7 @@ export function configure({ concurrency, retries, timeout }: Config): void {
   attempts = Math.max(0, retries);
   lifespan = Math.max(0, timeout);
   workers = Math.max(1, concurrency);
+  trim();
   while (live + recycling < workers && waiters.length) waiters.shift()!();
 }
 
@@ -56,8 +69,10 @@ export function drain(): void {
   }
   pool.clear();
   attempts = 1;
+  cached = 0;
   lifespan = 60;
   live = 0;
+  order = 0;
   recycling = 0;
   workers = 3;
   waiters.length = 0;
@@ -74,8 +89,8 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
   const mark = epoch;
   await acquire();
 
-  const name = await settle(workbook);
-  const kernel = revive(take(name)) ?? await start(workbook);
+  const identity = await identify(workbook);
+  const kernel = revive(take(identity)) ?? await start(workbook, identity);
   if (!kernel) {
     relinquish();
     return null;
@@ -94,7 +109,7 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
     if (released) return;
     released = true;
     if (deadline) clearTimeout(deadline);
-    await recycle(kernel, mark);
+    await recycle(identity, kernel, mark);
   };
   return [kernel, reclaim];
 }
@@ -123,22 +138,23 @@ async function dispose(kernel: Kernel.IKernelConnection): Promise<void> {
 }
 
 /** Removes a kernel from the pool and disposes it (TTL callback). */
-function evict(kernel: Kernel.IKernelConnection): void {
-  const name = kernel.name;
-  pool.set(name, shelf(name).filter(idle => idle.kernel !== kernel));
-  void dispose(kernel);
+function evict(idle: Idle): void {
+  remove(idle);
+  void dispose(idle.kernel);
 }
 
 /** Caches an idle kernel with TTL eviction. Evicts oldest on overflow. */
-function keep(kernel: Kernel.IKernelConnection): void {
-  const idle: Idle = { kernel, timer: setTimeout(() => evict(kernel), TTL) };
-  const entries = shelf(kernel.name);
-  if (entries.length >= workers) {
-    const oldest = entries.shift()!;
-    clearTimeout(oldest.timer);
-    void dispose(oldest.kernel);
-  }
+function keep(identity: Identity, kernel: Kernel.IKernelConnection): void {
+  const idle: Idle = {
+    identity,
+    kernel,
+    order: order++,
+    timer: setTimeout(() => evict(idle), TTL)
+  };
+  const entries = shelf(identity);
   entries.push(idle);
+  cached++;
+  trim();
 }
 
 /** Restarts a kernel, tolerating servers that return `201 Created`. */
@@ -172,6 +188,7 @@ async function restart(
 
 /** Restarts a kernel and returns it to the pool, or disposes on failure. */
 async function recycle(
+  identity: Identity,
   kernel: Kernel.IKernelConnection,
   mark: number
 ): Promise<void> {
@@ -183,7 +200,7 @@ async function recycle(
       setTimeout(() => reject(new Error('restart timeout')), 10_000)
     );
     const fresh = await Promise.race([restart(kernel), timeout]);
-    if (mark === epoch) keep(fresh);
+    if (mark === epoch) keep(identity, fresh);
     else await dispose(fresh);
   } catch {
     await dispose(kernel);
@@ -206,32 +223,54 @@ function revive(idle: Idle | null): Kernel.IKernelConnection | null {
   return idle && !idle.kernel.isDisposed ? idle.kernel : null;
 }
 
-/** @returns the default kernel name after waiting for the document model. */
-async function settle(workbook: Workbook): Promise<string> {
+/** @returns the runtime identity after waiting for the document model. */
+async function identify(workbook: Workbook): Promise<Identity> {
   const { context } = workbook;
   await context.ready.catch(() => {});
-  return context.model.defaultKernelName;
+  const name = context.model.defaultKernelName;
+  const dirname = PathExt.dirname(context.path || '');
+  const cwd = dirname === '.' ? '' : dirname;
+  return { cwd, key: `${name}\0${cwd}`, name };
 }
 
-/** @returns the idle-kernel list for `name`, creating it on first access. */
-function shelf(name: string): Idle[] {
-  let entries = pool.get(name);
-  if (!entries) pool.set(name, entries = []);
+/** Removes an idle kernel from its shelf. */
+function remove(idle: Idle): void {
+  const { key } = idle.identity;
+  const entries = pool.get(key);
+  if (!entries) return;
+
+  const remaining = entries.filter(entry => entry !== idle);
+  cached -= entries.length - remaining.length;
+  if (remaining.length) pool.set(key, remaining);
+  else pool.delete(key);
+}
+
+/** @returns the idle-kernel list for `identity`, creating it on first access. */
+function shelf(identity: Identity): Idle[] {
+  let entries = pool.get(identity.key);
+  if (!entries) pool.set(identity.key, entries = []);
   return entries;
 }
 
 /** Starts a new kernel for the workbook. */
 async function start(
-  workbook: Workbook
+  workbook: Workbook,
+  identity: Identity
 ): Promise<Kernel.IKernelConnection | null> {
   const { kernelManager } = workbook.context.sessionContext;
-  const name = await settle(workbook);
+  const { cwd, name } = identity;
   if (!kernelManager || !name) {
     console.warn('kernels: missing kernel manager or name');
     return null;
   }
   try {
-    const kernel = await kernelManager.startNew({ name });
+    // `path` is part of kernel creation even though the public type only
+    // exposes `name`; this keeps cwd selection session- and language-agnostic.
+    const options: Kernel.IKernelOptions & { path: string } = {
+      name,
+      path: cwd
+    };
+    const kernel = await kernelManager.startNew(options);
     await kernel.info;
     return kernel;
   } catch (error) {
@@ -240,9 +279,27 @@ async function start(
   return null;
 }
 
-/** Pops the most recently cached kernel for `name`. */
-function take(name: string): Idle | null {
-  const idle = shelf(name).pop() ?? null;
+/** Pops the most recently cached kernel for `identity`. */
+function take(identity: Identity): Idle | null {
+  const entries = pool.get(identity.key);
+  const idle = entries?.pop() ?? null;
   if (idle) clearTimeout(idle.timer);
+  if (idle) cached--;
+  if (entries && !entries.length) pool.delete(identity.key);
   return idle;
+}
+
+/** Keeps total idle kernels bounded as cwd values change over time. */
+function trim(): void {
+  if (cached <= workers) return;
+
+  const excess = [...pool.values()]
+    .flat()
+    .sort((left, right) => left.order - right.order)
+    .slice(0, cached - workers);
+  for (const idle of excess) {
+    clearTimeout(idle.timer);
+    remove(idle);
+    void dispose(idle.kernel);
+  }
 }
