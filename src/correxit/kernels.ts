@@ -186,10 +186,11 @@ async function start(
     return null;
   }
   try {
-    const path = PathExt.join(cwd, UUID.uuid4());
+    const uuid = UUID.uuid4();
+    const path = PathExt.join(cwd, uuid);
     const session = await sessionManager.startNew({
       kernel: { name },
-      name: PathExt.basename(workbook.context.path) || path,
+      name: uuid,
       path,
       type: 'notebook'
     });

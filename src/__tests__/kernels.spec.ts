@@ -115,10 +115,39 @@ describe('kernels', () => {
       const options = (sessionManager.startNew as jest.Mock).mock.calls[0][0];
       expect(options).toMatchObject({
         kernel: { name },
-        name: 'workbook.ipynb',
         type: 'notebook'
       });
       expect(options.path.startsWith('correxit-corrector/slot-2/')).toBe(true);
+      expect(options.path.endsWith(options.name)).toBe(true);
+      expect(options.name).not.toBe('workbook.ipynb');
+    });
+
+    it('uses unique private session names for concurrent leases', async () => {
+      const name = named();
+      const kernels = [spawn({ name }), spawn({ name }), spawn({ name })];
+      let calls = 0;
+      const sessionManager = {
+        startNew: jest.fn(async () => session(kernels[calls++]))
+      };
+      const workbook = create({
+        name,
+        path: 'correxit-corrector/slot-2/workbook.ipynb',
+        sessionManager
+      });
+
+      const leases = await Promise.all([
+        lease(workbook),
+        lease(workbook),
+        lease(workbook)
+      ]);
+
+      const names = (sessionManager.startNew as jest.Mock).mock.calls.map(
+        ([options]) => options.name
+      );
+      expect(new Set(names).size).toBe(3);
+      expect(names).not.toContain('workbook.ipynb');
+
+      await Promise.all(leases.map(result => result![1]()));
     });
 
     it('waits for kernel info before leasing a new kernel', async () => {
