@@ -8,6 +8,7 @@ function spawn(
     hasPendingInput: boolean;
     isDisposed: boolean;
     info: Promise<any>;
+    interrupt: () => Promise<void>;
     name: string;
     restart: () => Promise<void>;
     shutdown: () => Promise<void>;
@@ -21,6 +22,7 @@ function spawn(
     dispose: jest.fn(),
     hasPendingInput: false,
     info: Promise.resolve({}),
+    interrupt: jest.fn(() => Promise.resolve()),
     isDisposed: false,
     name: overrides.name || 'python3',
     requestKernelInfo: jest.fn(() => Promise.resolve()),
@@ -31,24 +33,36 @@ function spawn(
   };
 }
 
+function session(kernel = spawn(), overrides: Partial<any> = {}) {
+  return {
+    dispose: jest.fn(),
+    isDisposed: false,
+    kernel,
+    shutdown: jest.fn(async () => {
+      await kernel.shutdown();
+    }),
+    ...overrides
+  };
+}
+
 function create(
   overrides: Partial<{
-    kernelManager: any;
     name: string;
     path: string;
+    sessionManager: any;
   }> = {}
 ) {
   const name = overrides.name ?? `python3-${serial++}`;
-  const kernelManager =
-    'kernelManager' in overrides
-      ? overrides.kernelManager
-      : { startNew: jest.fn(async () => spawn({ name })) };
+  const sessionManager =
+    'sessionManager' in overrides
+      ? overrides.sessionManager
+      : { startNew: jest.fn(async () => session(spawn({ name }))) };
   return {
     context: {
       model: { defaultKernelName: name },
       path: overrides.path ?? 'workbook.ipynb',
       ready: Promise.resolve(),
-      sessionContext: { kernelManager }
+      sessionContext: { sessionManager }
     }
   } as any;
 }
@@ -75,7 +89,7 @@ describe('kernels', () => {
       const mock = spawn({ name });
       const workbook = create({
         name,
-        kernelManager: { startNew: jest.fn(async () => mock) }
+        sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
 
       const result = await lease(workbook);
@@ -88,20 +102,23 @@ describe('kernels', () => {
     it('starts kernels in the workbook directory', async () => {
       const name = named();
       const mock = spawn({ name });
-      const kernelManager = { startNew: jest.fn(async () => mock) };
+      const sessionManager = { startNew: jest.fn(async () => session(mock)) };
       const workbook = create({
         name,
         path: 'correxit-corrector/slot-2/workbook.ipynb',
-        kernelManager
+        sessionManager
       });
 
       const result = await lease(workbook);
 
       expect(result).not.toBeNull();
-      expect(kernelManager.startNew).toHaveBeenCalledWith({
-        name,
-        path: 'correxit-corrector/slot-2'
+      const options = (sessionManager.startNew as jest.Mock).mock.calls[0][0];
+      expect(options).toMatchObject({
+        kernel: { name },
+        name: 'workbook.ipynb',
+        type: 'notebook'
       });
+      expect(options.path.startsWith('correxit-corrector/slot-2/')).toBe(true);
     });
 
     it('waits for kernel info before leasing a new kernel', async () => {
@@ -124,7 +141,7 @@ describe('kernels', () => {
       });
       const workbook = create({
         name,
-        kernelManager: { startNew: jest.fn(async () => mock) }
+        sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
 
       const leasing = lease(workbook);
@@ -142,8 +159,8 @@ describe('kernels', () => {
       expect((await leasing)?.[0]).toBe(mock);
     });
 
-    it('returns null when kernel manager is missing', async () => {
-      const workbook = create({ kernelManager: null });
+    it('returns null when session manager is missing', async () => {
+      const workbook = create({ sessionManager: null });
       const result = await lease(workbook);
       expect(result).toBeNull();
     });
@@ -153,7 +170,7 @@ describe('kernels', () => {
         context: {
           model: { defaultKernelName: '' },
           ready: Promise.resolve(),
-          sessionContext: { kernelManager: { startNew: jest.fn() } }
+          sessionContext: { sessionManager: { startNew: jest.fn() } }
         }
       } as any;
       const result = await lease(workbook);
@@ -162,7 +179,7 @@ describe('kernels', () => {
 
     it('returns null when startNew throws', async () => {
       const workbook = create({
-        kernelManager: {
+        sessionManager: {
           startNew: jest.fn(async () => {
             throw new Error('fail');
           })
@@ -177,7 +194,7 @@ describe('kernels', () => {
       const mock = spawn({ name });
       const workbook = create({
         name,
-        kernelManager: { startNew: jest.fn(async () => mock) }
+        sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
 
       const first = await lease(workbook);
@@ -189,27 +206,27 @@ describe('kernels', () => {
       const second = await lease(workbook);
       expect(second).not.toBeNull();
       expect(
-        workbook.context.sessionContext.kernelManager.startNew
+        workbook.context.sessionContext.sessionManager.startNew
       ).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps cwd as part of the pool identity', async () => {
+    it('keeps cwd as part of the runtime key', async () => {
       const name = named();
       const first = spawn({ name });
       const second = spawn({ name });
       let calls = 0;
-      const kernelManager = {
-        startNew: jest.fn(async () => (calls++ === 0 ? first : second))
+      const sessionManager = {
+        startNew: jest.fn(async () => session(calls++ === 0 ? first : second))
       };
       const one = create({
         name,
         path: 'correxit-corrector/slot-1/workbook.ipynb',
-        kernelManager
+        sessionManager
       });
       const two = create({
         name,
         path: 'correxit-corrector/slot-2/workbook.ipynb',
-        kernelManager
+        sessionManager
       });
 
       const leased = await lease(one);
@@ -219,15 +236,18 @@ describe('kernels', () => {
 
       expect(shifted).not.toBeNull();
       expect(shifted![0]).toBe(second);
-      expect(kernelManager.startNew).toHaveBeenCalledTimes(2);
-      expect(kernelManager.startNew).toHaveBeenNthCalledWith(1, {
-        name,
-        path: 'correxit-corrector/slot-1'
-      });
-      expect(kernelManager.startNew).toHaveBeenNthCalledWith(2, {
-        name,
-        path: 'correxit-corrector/slot-2'
-      });
+      expect(sessionManager.startNew).toHaveBeenCalledTimes(2);
+      const [firstCall, secondCall] = (
+        sessionManager.startNew as jest.Mock
+      ).mock.calls.map(([options]) => options);
+      expect(firstCall.kernel).toEqual({ name });
+      expect(secondCall.kernel).toEqual({ name });
+      expect(firstCall.path.startsWith('correxit-corrector/slot-1/')).toBe(
+        true
+      );
+      expect(secondCall.path.startsWith('correxit-corrector/slot-2/')).toBe(
+        true
+      );
     });
 
     it('restarts a kernel before re-pooling it', async () => {
@@ -235,7 +255,7 @@ describe('kernels', () => {
       const mock = spawn({ name });
       const workbook = create({
         name,
-        kernelManager: { startNew: jest.fn(async () => mock) }
+        sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
       const first = await lease(workbook);
       await first![1]();
@@ -255,8 +275,10 @@ describe('kernels', () => {
       let calls = 0;
       const workbook = create({
         name,
-        kernelManager: {
-          startNew: jest.fn(async () => (calls++ === 0 ? failing : fresh))
+        sessionManager: {
+          startNew: jest.fn(async () =>
+            session(calls++ === 0 ? failing : fresh)
+          )
         }
       });
       const first = await lease(workbook);
@@ -278,8 +300,10 @@ describe('kernels', () => {
       let calls = 0;
       const workbook = create({
         name,
-        kernelManager: {
-          startNew: jest.fn(async () => (calls++ === 0 ? failing : fresh))
+        sessionManager: {
+          startNew: jest.fn(async () =>
+            session(calls++ === 0 ? failing : fresh)
+          )
         }
       });
       const first = await lease(workbook);
@@ -299,7 +323,7 @@ describe('kernels', () => {
       });
       const workbook = create({
         name,
-        kernelManager: { startNew: jest.fn(async () => mock) }
+        sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
 
       const first = await lease(workbook);
@@ -314,7 +338,7 @@ describe('kernels', () => {
       expect(mock.shutdown).not.toHaveBeenCalled();
       expect(fresh.hasPendingInput).toBe(false);
       expect(
-        workbook.context.sessionContext.kernelManager.startNew
+        workbook.context.sessionContext.sessionManager.startNew
       ).toHaveBeenCalledTimes(1);
     });
 
@@ -323,7 +347,7 @@ describe('kernels', () => {
       const mock = spawn({ name });
       const workbook = create({
         name,
-        kernelManager: { startNew: jest.fn(async () => mock) }
+        sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
       const first = await lease(workbook);
       await first![1]();
@@ -336,7 +360,7 @@ describe('kernels', () => {
       const mock = spawn({ isDisposed: true, name });
       const workbook = create({
         name,
-        kernelManager: { startNew: jest.fn(async () => mock) }
+        sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
 
       const leased = await lease(workbook);
@@ -369,15 +393,17 @@ describe('kernels', () => {
       let resolve: (() => void) | null = null;
       const workbook = create({
         name,
-        kernelManager: {
+        sessionManager: {
           startNew: jest.fn(async () =>
-            spawn({
-              name,
-              restart: () =>
-                new Promise<void>(done => {
-                  resolve = done;
-                })
-            })
+            session(
+              spawn({
+                name,
+                restart: () =>
+                  new Promise<void>(done => {
+                    resolve = done;
+                  })
+              })
+            )
           )
         }
       });
@@ -417,8 +443,8 @@ describe('kernels', () => {
       let calls = 0;
       const workbook = create({
         name,
-        kernelManager: {
-          startNew: jest.fn(async () => (calls++ === 0 ? stale : fresh))
+        sessionManager: {
+          startNew: jest.fn(async () => session(calls++ === 0 ? stale : fresh))
         }
       });
 
@@ -437,7 +463,7 @@ describe('kernels', () => {
       expect(second).not.toBeNull();
       expect(second![0]).toBe(fresh);
       expect(
-        workbook.context.sessionContext.kernelManager.startNew
+        workbook.context.sessionContext.sessionManager.startNew
       ).toHaveBeenCalledTimes(2);
       expect(stale.shutdown).toHaveBeenCalled();
     });
