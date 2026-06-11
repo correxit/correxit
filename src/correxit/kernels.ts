@@ -130,7 +130,7 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
     if (released) return;
     released = true;
     if (deadline) clearTimeout(deadline);
-    await recycle(started, mark);
+    return recycle(started, mark);
   };
   return [kernel, release];
 }
@@ -324,7 +324,7 @@ function remove(idle: Idle): void {
 /** Shuts down and disposes a session and its kernel. Idempotent. */
 async function dispose(session: Session.ISessionConnection): Promise<void> {
   if (!session.isDisposed)
-    return session.shutdown().catch(() => {}).finally(() => session.dispose());
+    await session.shutdown().catch(() => {}).finally(() => session.dispose());
 }
 
 /** Wakes the next caller blocked on a pool slot. */

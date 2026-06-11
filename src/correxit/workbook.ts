@@ -819,7 +819,7 @@ export namespace Workbook {
       }
       return { outputs, spec };
     } finally {
-      await release();
+      void release();
     }
   }
 
