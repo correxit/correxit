@@ -27,6 +27,24 @@ dependencies = [
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[tool.pixi.dependencies]
+python = ">=3.9,<3.14"
+jupyterlab = ">=4.5,<5"
+nodejs = ">=20,<21"
+hatchling = ">=1.5.0"
+hatch-jupyter-builder = ">=0.5"
+hatch-nodejs-version = ">=0.3.2"
+python-build = "*"
+jupyterlite-core = "*"
+jupyterlite-xeus = "*"
+
+[tool.pixi.pypi-dependencies]
+correxit = { path = ".", editable = true }
+
 [tool.hatch.version]
 source = "nodejs"
 

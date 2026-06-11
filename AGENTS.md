@@ -2,6 +2,18 @@
 
 You are an expert developer working on **Correxit**, a serverless, frontend-only JupyterLab extension. Your goal is to write code that adheres strictly to the project's architectural invariants and functional style.
 
+## 0. Session Start Contract
+
+On the first reply in a session, do not silently skip the alignment check.
+
+- If you have read AGENTS, SECURITY, DESIGN, and README, and can claim readiness
+  honestly, begin with "banana sunday".
+- If you have not earned that phrase yet, say so plainly and explain what is
+  still missing.
+
+This repeats the later alignment check on purpose. Silent omission is not
+acceptable.
+
 ## 1. Core Architecture
 
 - **No Backend**: Logic exists solely in the browser. Correxit is purely client-side.
@@ -75,7 +87,25 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - **Playwright Tests (`ui-tests/`)**: For modules that require a live JupyterLab environment. These serve as the effective unit tests for the following. Do not attempt to Jest-mock them:
   - `workbook.ts`, `commands.ts` (both `correxit/` and `corrector/`), `corrector.tsx`, `reviewer.tsx`, `widget.tsx`
 
-## 7. Key Module Map
+## 7. Development Workflow
+
+- **Pixi Workbench**: Use Pixi as the shared development environment. Keep the JupyterLab extension command vocabulary intact by prefixing existing commands with `pixi run`:
+  - `pixi run jlpm build`
+  - `pixi run jlpm test`
+  - `pixi run jlpm watch`
+  - `pixi run jlpm serve`
+  - from `ui-tests/`: `pixi run jlpm playwright test <spec>`
+- **Interactive Shell**: `pixi shell` is fine for a local loop; once inside it, use the normal commands (`jlpm build`, `jlpm test`, etc.).
+- **No Pixi Command Shadowing**: Do not add Pixi task aliases for existing `jlpm`, `jupyter`, or Playwright commands unless there is a strong reason. New contributors with JupyterLab extension experience should only have to learn to add `pixi run`.
+- **Build Before UI Tests**: After editing frontend `src/` files, rebuild before trusting Playwright failures: `pixi run jlpm build`.
+- **UI Test Isolation**: Run one Playwright module at a time when debugging. The suite is intentionally single-worker and cross-file interference is real.
+- **Sandbox Bind Failures**: In sandboxed agent shells, Jupyter's Playwright web server may fail with a localhost bind error such as `PermissionError: [Errno 1] Operation not permitted`. Treat that as an environment failure and rerun outside the sandbox with approval.
+- **Notebook Test Readiness**: Shared UI-test helpers that create notebooks should shut down Jupyter sessions in teardown, not just close tabs. Tests that create, close, or delete notebooks can inherit a stale file browser path, so reset the browser to `.` first. `page.notebook.createNew()` is not enough by itself; wait until `shell.currentWidget.context.path` matches the created notebook.
+- **Reviewer Test Hooks**: Reviewer code cells should prefer `language_info.mimetype` when present. Reviewer UI tests should target `.correxit-reviewer-source[aria-label="Current cell"]` instead of depending on nested CodeMirror labels.
+- **Command Races in Tests**: `correxit:configure` can race `state.workbook()` during early programmatic execution; fall back to `shell.currentWidget` when it is a `NotebookPanel`. Await `app.commands.execute('correxit:inject')` before invoking the returned injector, but do not await `correxit:configure` because it remains pending for the selection overlay lifecycle. For fire-and-forget configure calls in browser-evaluated test code, schedule with `window.setTimeout(..., 0)` so the evaluate call returns cleanly.
+- **Galata Fixtures**: If batch grading or kernel-restart flows fail with empty restart/session parse errors or disposed-response errors, disable the mocked `kernels` or `sessions` fixtures in the relevant test.
+
+## 8. Key Module Map
 
 - `rubric.ts`: Core immutable data model & scoring logic.
 - `workbook.ts`: Stateful notebook wrapper & metadata I/O. Includes `certify()` for grading + locking + freezing (with `bypass` mode to skip re-execution when all cells are already scored), `correct()` with verbose overloads returning `Grade.Verbose` (including cell outputs), `collect()` for recording a collection receipt, `submit()` for sealing + freezing + submission, `seal()` / `revise()` for sealed submission lifecycle, and `Cell.seal()` / `Cell.unseal()` for per-cell PGP operations.
@@ -95,3 +125,16 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 - `corrector/commands.ts`: Registers Corrector commands (`batch`, `scan`, `collect`, `csv`, `launch`, `cd`) and Reviewer commands (`review`, `intervene`, `up`/`down`/`left`/`right`, `pass`, `fail`). The `intervene` command saves scores, writes comments, and auto-certifies when the last pending reviewable cell is scored.
 - `nbgrader.ts`: Converts nbgrader-format notebooks to Correxit workbooks. Detects nbgrader cell metadata, classifies cells (answerable/correctable/reviewable), splits fenced `### BEGIN/END` hidden test regions, and builds an equivalent rubric. Falls back to static output analysis when no kernel is available.
 - `ui/boundary.tsx`: React class error boundary wrapping the sidebar, corrector, and reviewer mount points. Catches synchronous render throws and shows a fallback with error message and collapsible stack trace.
+
+## 9. Alignment Check
+
+Before an agent claims readiness, preparedness, or alignment with this repo, it
+should first read AGENTS, SECURITY, DESIGN, and README.
+
+If all is well, and if the agent you are interacting with can honestly say it is
+ready, prepared, and familiar with this repo's aspirations, rules, philosophy,
+design, conventions, constraints, prior art, and motivating conversations, it
+should greet you with `banana sunday` (sic). That phrase only reminds you that
+the agent believes it is aligned with the work. If it cannot say that honestly,
+it should not use the phrase. It should explain why in a spirit of openness and
+curiosity with the mutual assumption of good faith.

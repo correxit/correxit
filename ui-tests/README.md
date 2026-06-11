@@ -17,14 +17,15 @@ The default configuration will produce video for failing tests and an HTML repor
 ## Run the tests
 
 > All commands are assumed to be executed from the root directory
+> and run through the Pixi development environment.
 
 To run the tests, you need to:
 
 1. Compile the extension:
 
 ```sh
-jlpm install
-jlpm build:prod
+pixi run jlpm install
+pixi run jlpm build:prod
 ```
 
 > Check the extension is installed in JupyterLab.
@@ -33,8 +34,8 @@ jlpm build:prod
 
 ```sh
 cd ./ui-tests
-jlpm install
-jlpm playwright install
+pixi run jlpm install
+pixi run jlpm playwright install
 cd ..
 ```
 
@@ -42,7 +43,7 @@ cd ..
 
 ```sh
 cd ./ui-tests
-jlpm playwright test
+pixi run jlpm playwright test
 ```
 
 Test results will be shown in the terminal. In case of any test failures, the test report
@@ -56,7 +57,7 @@ If you want stable UI captures for a PR comment or documentation draft, run:
 
 ```sh
 cd ./ui-tests
-jlpm screenshots
+pixi run jlpm screenshots
 ```
 
 The images are written to `ui-tests/screenshots/`. The dedicated screenshot
@@ -76,8 +77,8 @@ the reference snapshots stored in the repository. To do that, you need to:
 1. Compile the extension:
 
 ```sh
-jlpm install
-jlpm build:prod
+pixi run jlpm install
+pixi run jlpm build:prod
 ```
 
 > Check the extension is installed in JupyterLab.
@@ -86,8 +87,8 @@ jlpm build:prod
 
 ```sh
 cd ./ui-tests
-jlpm install
-jlpm playwright install
+pixi run jlpm install
+pixi run jlpm playwright install
 cd ..
 ```
 
@@ -95,7 +96,7 @@ cd ..
 
 ```sh
 cd ./ui-tests
-jlpm playwright test -u
+pixi run jlpm playwright test -u
 ```
 
 > Some discrepancy may occurs between the snapshots generated on your computer and
@@ -129,8 +130,8 @@ If you do want to use the Playwright code generator, the flow is:
 1. Compile the extension:
 
 ```sh
-jlpm install
-jlpm build:prod
+pixi run jlpm install
+pixi run jlpm build:prod
 ```
 
 > Check the extension is installed in JupyterLab.
@@ -139,8 +140,8 @@ jlpm build:prod
 
 ```sh
 cd ./ui-tests
-jlpm install
-jlpm playwright install
+pixi run jlpm install
+pixi run jlpm playwright install
 cd ..
 ```
 
@@ -148,14 +149,14 @@ cd ..
 
 ```sh
 cd ./ui-tests
-jlpm start
+pixi run jlpm start
 ```
 
 4. Execute the [Playwright code generator](https://playwright.dev/docs/codegen) in **another terminal**:
 
 ```sh
 cd ./ui-tests
-jlpm playwright codegen localhost:8888/lab
+pixi run jlpm playwright codegen localhost:8888/lab
 ```
 
 Then click through the workflow you care about in the browser window that
@@ -167,8 +168,8 @@ The useful pattern is:
 - throw away the extra noise
 - replace raw recorded clicks with existing helpers or command-driven setup
 - finish by running the smallest relevant command:
-  - `jlpm playwright test tests/my-spec.ts`
-  - `jlpm screenshots`
+  - `pixi run jlpm playwright test tests/my-spec.ts`
+  - `pixi run jlpm screenshots`
 
 ## Debug tests
 
@@ -179,8 +180,8 @@ To debug tests, a good way is to use the inspector tool of playwright:
 1. Compile the extension:
 
 ```sh
-jlpm install
-jlpm build:prod
+pixi run jlpm install
+pixi run jlpm build:prod
 ```
 
 > Check the extension is installed in JupyterLab.
@@ -189,8 +190,8 @@ jlpm build:prod
 
 ```sh
 cd ./ui-tests
-jlpm install
-jlpm playwright install
+pixi run jlpm install
+pixi run jlpm playwright install
 cd ..
 ```
 
@@ -198,7 +199,7 @@ cd ..
 
 ```sh
 cd ./ui-tests
-jlpm playwright test --debug
+pixi run jlpm playwright test --debug
 ```
 
 ## Upgrade Playwright and the browsers
@@ -207,6 +208,6 @@ To update the web browser versions, you must update the package `@playwright/tes
 
 ```sh
 cd ./ui-tests
-jlpm up "@playwright/test"
-jlpm playwright install
+pixi run jlpm up "@playwright/test"
+pixi run jlpm playwright install
 ```
