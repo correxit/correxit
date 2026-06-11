@@ -108,10 +108,9 @@ describe('kernels', () => {
         path: 'correxit-corrector/slot-2/workbook.ipynb',
         sessionManager
       });
-
       const result = await lease(workbook);
-
       expect(result).not.toBeNull();
+
       const options = (sessionManager.startNew as jest.Mock).mock.calls[0][0];
       expect(options).toMatchObject({
         kernel: { name },
@@ -134,19 +133,16 @@ describe('kernels', () => {
         path: 'correxit-corrector/slot-2/workbook.ipynb',
         sessionManager
       });
-
       const leases = await Promise.all([
         lease(workbook),
         lease(workbook),
         lease(workbook)
       ]);
-
       const names = (sessionManager.startNew as jest.Mock).mock.calls.map(
         ([options]) => options.name
       );
       expect(new Set(names).size).toBe(3);
       expect(names).not.toContain('workbook.ipynb');
-
       await Promise.all(leases.map(result => result![1]()));
     });
 
@@ -172,19 +168,16 @@ describe('kernels', () => {
         name,
         sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
-
       const leasing = lease(workbook);
       void leasing.then(result => {
         leased = result;
       });
-
       await request;
       expect(leased).toBeNull();
-
       expect(resolve).not.toBeNull();
+
       const done: () => void = resolve || (() => undefined);
       done();
-
       expect((await leasing)?.[0]).toBe(mock);
     });
 
@@ -225,7 +218,6 @@ describe('kernels', () => {
         name,
         sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
-
       const first = await lease(workbook);
       expect(first).not.toBeNull();
 
@@ -262,10 +254,10 @@ describe('kernels', () => {
       await leased![1]();
 
       const shifted = await lease(two);
-
       expect(shifted).not.toBeNull();
       expect(shifted![0]).toBe(second);
       expect(sessionManager.startNew).toHaveBeenCalledTimes(2);
+
       const [firstCall, secondCall] = (
         sessionManager.startNew as jest.Mock
       ).mock.calls.map(([options]) => options);
@@ -354,7 +346,6 @@ describe('kernels', () => {
         name,
         sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
-
       const first = await lease(workbook);
       expect(first).not.toBeNull();
       await first![1]();
@@ -391,7 +382,6 @@ describe('kernels', () => {
         name,
         sessionManager: { startNew: jest.fn(async () => session(mock)) }
       });
-
       const leased = await lease(workbook);
       expect(leased).not.toBeNull();
       await leased![1]();
@@ -402,16 +392,13 @@ describe('kernels', () => {
       const name = named();
       const workbook = create({ name });
       const first3 = [lease(workbook), lease(workbook), lease(workbook)];
-
       const fourth = lease(workbook);
       let resolved = false;
       void fourth.then(() => {
         resolved = true;
       });
-
       await Promise.all(first3);
       expect(resolved).toBe(false);
-
       await (await first3[0])![1]();
       await fourth;
       expect(resolved).toBe(true);
@@ -436,7 +423,6 @@ describe('kernels', () => {
           )
         }
       });
-
       const first = await lease(workbook);
       expect(first).not.toBeNull();
 
@@ -446,11 +432,10 @@ describe('kernels', () => {
       void second.then(() => {
         freed = true;
       });
-
       await Promise.resolve();
       expect(freed).toBe(false);
-
       expect(resolve).not.toBeNull();
+
       const done: () => void = resolve || (() => undefined);
       done();
       await release;
@@ -476,14 +461,13 @@ describe('kernels', () => {
           startNew: jest.fn(async () => session(calls++ === 0 ? stale : fresh))
         }
       });
-
       const first = await lease(workbook);
       expect(first).not.toBeNull();
 
       const release = first![1]();
       drain();
-
       expect(resolve).not.toBeNull();
+
       const done: () => void = resolve || (() => undefined);
       done();
       await release;
