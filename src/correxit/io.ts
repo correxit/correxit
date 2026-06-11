@@ -52,6 +52,15 @@ const claim = async(
   };
 };
 
+const clear = async(
+  { contents }: ServiceManager.IManager,
+  path: string
+): Promise<void> => {
+  const slot = await contents.get(path, { content: true });
+  const entries = (slot.content as Contents.IModel[]) || [];
+  await Promise.all(entries.map(({ path }) => contents.delete(path)));
+};
+
 const directory = async(
   manager: ServiceManager.IManager,
   pwd: string,
@@ -278,8 +287,9 @@ export async function resources(
 /**
  * Stage a workbook for isolated execution.
  *
- * Creates or reuses top-level `correxit-corrector/slot-N/`, saves the notebook
- * there, and copies each sidecar file from `dir` into the same slot.
+ * Creates or reuses top-level `correxit-corrector/slot-N/`, clears any files
+ * left by a prior occupant, saves the notebook there, and copies each sidecar
+ * file from `dir` into the same slot.
  *
  * @returns the path of the staged notebook.
  */
@@ -298,16 +308,16 @@ export async function stage(
 
   try {
     await mount(manager, home, root, slot.index);
+    await clear(manager, subdirectory);
     await Promise.all([
       contents.save(staged, {
         type: 'notebook',
         format: 'json',
         content: notebook
       }),
-      ...(resources ?? []).map(async name => {
-        await contents.delete(sidecar(subdirectory, name)).catch(() => {});
-        await contents.copy(sidecar(dir, name), subdirectory);
-      })
+      ...(resources ?? []).map(name =>
+        contents.copy(sidecar(dir, name), subdirectory)
+      )
     ]);
     return { path: staged, release: slot.release };
   } catch (error) {
