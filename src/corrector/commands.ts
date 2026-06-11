@@ -428,13 +428,8 @@ async function correct(
   const dir = PathExt.dirname(path) || '.';
   const notebook = workbook.context.model.toJSON() as INotebookContent;
   const resources = open(workbook)?.assignment.resources ?? null;
-  const local = await io.stage(
-    manager,
-    dir,
-    notebook,
-    resources,
-    kernels.cap()
-  );
+  const capacity = kernels.cap();
+  const local = await io.stage({ capacity, dir, manager, notebook, resources });
   const staged = (await fetch({
     ...handle,
     path: local.path
@@ -443,15 +438,14 @@ async function correct(
     await local.release();
     throw new Correxit.Error.Certify('correct error: staging failed');
   }
-
   try {
     const certified = await grade(staged, trans);
-
     const snapshot = staged.context.model.toJSON() as INotebookContent;
     const restored = Workbook.restore(workbook, snapshot);
     if (!restored)
       throw new Correxit.Error.Certify('correct error: restore failed');
     await workbook.context.save();
+
     const identifier = Workbook.identifier(workbook);
     if (!Workbook.Identifier.assigned(identifier))
       throw new Correxit.Error.Certify('correct error: unassigned');

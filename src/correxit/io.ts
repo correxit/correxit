@@ -293,19 +293,18 @@ export async function resources(
  *
  * @returns the path of the staged notebook.
  */
-export async function stage(
-  manager: ServiceManager.IManager,
-  dir: string,
-  notebook: INotebookContent,
-  resources: string[] | null,
-  capacity = 1
-): Promise<Staged> {
+export async function stage({ capacity, dir, manager, notebook, resources } : {
+  capacity: number;
+  dir: string;
+  manager: ServiceManager.IManager;
+  notebook: INotebookContent;
+  resources: string[] | null;
+}): Promise<Staged> {
   const { contents } = manager;
   const root = scratch;
   const slot = await claim(root, capacity);
   const subdirectory = PathExt.join(root, `slot-${slot.index + 1}`);
   const staged = PathExt.join(subdirectory, 'workbook.ipynb');
-
   try {
     await mount(manager, home, root, slot.index);
     await clear(manager, subdirectory);
