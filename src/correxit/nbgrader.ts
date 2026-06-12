@@ -712,7 +712,7 @@ export async function expand(
       resolver(kernel, python)
     );
   } finally {
-    await release();
+    void release();
   }
 }
 

@@ -22,7 +22,6 @@ type Credentials = Workbook.Credentials;
 type Failed = grader.Result.Failed;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
-type Result = grader.Result;
 
 export type Hollow = { hollow: true; context: { path: string } };
 
@@ -89,11 +88,16 @@ export function commands(
       execute: (
         args: Partial<Credentials & { overwrite: boolean; submitted: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const overwrite = !!args.overwrite;
         const auth = !!(args.key || args.passphrase);
+        const overwrite = !!args.overwrite;
+        const submitted = !!args.submitted;
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
         if (!handle)
+          throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
+
+        const scan = normalize({ path: handle.path, unlock: false });
+        if (!scan)
           throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
 
         const actions: Actions = {
@@ -103,16 +107,14 @@ export function commands(
         };
         const cap = kernels.cap();
         const retries = kernels.retries();
-        const source = scanner(
-          { commands },
-          { ...handle, submitted: !!args.submitted }
-        );
-        return (async function* (results: AsyncGenerator<Result>) {
+        return (async function* () {
+          const source = scanner({ commands }, { ...scan, submitted });
+          const results = grader.grade(source, actions, cap, retries);
           for await (const result of results) {
             const { grade, workbook } = result.ok ? result.certified : result;
             yield [grade.path, { grade, workbook: workbook as Headless }];
           }
-        })(grader.grade(source, actions, cap, retries));
+        })();
       }
     })
   );
@@ -424,27 +426,38 @@ async function correct(
 ): Promise<Certified> {
   const { path } = workbook.context;
   const dir = PathExt.dirname(path) || '.';
-  const stem = PathExt.basename(path, '.ipynb');
+  const notebook = workbook.context.model.toJSON() as INotebookContent;
   const resources = open(workbook)?.assignment.resources ?? null;
-  const local = await io.stage(manager, dir, path, resources);
-  const staged = (await fetch({ ...handle, path: local })) as Headless | null;
+  const capacity = kernels.cap();
+  const local = await io.stage({ capacity, dir, manager, notebook, resources });
+  const staged = (await fetch({
+    ...handle,
+    path: local.path
+  })) as Headless | null;
   if (!staged) {
-    await io.unstage(manager, dir, stem);
+    await local.release();
     throw new Correxit.Error.Certify('correct error: staging failed');
   }
-
   try {
     const certified = await grade(staged, trans);
-
     const snapshot = staged.context.model.toJSON() as INotebookContent;
     const restored = Workbook.restore(workbook, snapshot);
     if (!restored)
       throw new Correxit.Error.Certify('correct error: restore failed');
     await workbook.context.save();
-    return { ...certified, grade: { ...certified.grade, path }, workbook };
+
+    const identifier = Workbook.identifier(workbook);
+    if (!Workbook.Identifier.assigned(identifier))
+      throw new Correxit.Error.Certify('correct error: unassigned');
+    return {
+      ...certified,
+      grade: { ...certified.grade, path },
+      identifier,
+      workbook
+    };
   } finally {
     staged.context.dispose();
-    await io.unstage(manager, dir, stem);
+    await local.release();
   }
 }
 

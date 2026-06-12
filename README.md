@@ -79,21 +79,23 @@ jupyter labextension list
 
 ### Development install
 
-Note: You will need NodeJS to build the extension package.
+Install [Pixi](https://pixi.sh) first. Pixi provides the Python, NodeJS,
+JupyterLab, JupyterLite, and build tools used by this checkout.
 
 The `jlpm` command is JupyterLab's pinned version of
-[yarn](https://yarnpkg.com/) that is installed with JupyterLab. You may use
-`yarn` or `npm` in lieu of `jlpm` below.
+[yarn](https://yarnpkg.com/) that is installed with JupyterLab. Correxit keeps
+the normal JupyterLab extension workflow: prefix commands with `pixi run`, or
+enter `pixi shell` and run them directly.
 
 ```bash
 # Clone the repo to your local environment
 # Change directory to the correxit directory
-# Install package in development mode
-pip install -e ".[test]"
+# Create the locked development environment
+pixi install
 # Link your development version of the extension with JupyterLab
-jupyter labextension develop . --overwrite
+pixi run jupyter labextension develop . --overwrite
 # Rebuild extension Typescript source after making changes
-jlpm build
+pixi run jlpm build
 ```
 
 You can watch the source directory and run JupyterLab at the same time in
@@ -102,9 +104,9 @@ automatically rebuild the extension.
 
 ```bash
 # Watch the source directory in one terminal and automatically rebuild
-jlpm watch
+pixi run jlpm watch
 # Run JupyterLab in another terminal
-jupyter lab
+pixi run jupyter lab
 ```
 
 With the watch command running, every saved change will immediately be built
@@ -122,7 +124,7 @@ browser refresh.
 **1. Build the JupyterLite site once:**
 
 ```bash
-jlpm build:lite
+pixi run jlpm build:lite
 ```
 
 This pre-compiles the xeus Wasm kernels, copies example content into the static
@@ -135,16 +137,17 @@ re-running `build:lite`.
 
 ```bash
 # Terminal 1: rebuild on every save
-jlpm watch
+pixi run jlpm watch
 
 # Terminal 2: serve the static site at http://localhost:8888
-jlpm serve
+pixi run jlpm serve
 ```
 
 **3. Open `http://localhost:8888` and refresh after each rebuild.**
 
 If you rebuild the labextension outside of `build:lite` (e.g. after a clean),
-run `jlpm link:lite` to re-establish the symlink and patch the manifest hash.
+run `pixi run jlpm link:lite` to re-establish the symlink and patch the
+manifest hash.
 
 The `lite/` directory contains:
 
@@ -160,19 +163,19 @@ generate source maps for the JupyterLab core extensions, you can run the
 following command:
 
 ```bash
-jupyter lab build --minimize=False
+pixi run jupyter lab build --minimize=False
 ```
 
 ### Development uninstall
 
-```bash
-pip uninstall correxit
-```
+The Pixi development environment lives in `.pixi/` and can be deleted when you
+no longer need the local workbench.
 
 In development mode, you will also need to remove the symlink created by
 `jupyter labextension develop` command. To find its location, you can run
-`jupyter labextension list` to figure out where the `labextensions` folder is
-located. Then you can remove the symlink named `correxit` within that folder.
+`pixi run jupyter labextension list` to figure out where the `labextensions`
+folder is located. Then you can remove the symlink named `correxit` within that
+folder.
 
 ### Testing the extension
 
@@ -183,8 +186,8 @@ This extension is using [Jest](https://jestjs.io/) for JavaScript code testing.
 To execute them, execute:
 
 ```sh
-jlpm
-jlpm test
+pixi run jlpm
+pixi run jlpm test
 ```
 
 #### Integration tests

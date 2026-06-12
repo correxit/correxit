@@ -1,65 +1,110 @@
-import { Kernel } from '@jupyterlab/services';
+import { PathExt } from '@jupyterlab/coreutils';
+import { Kernel, Session } from '@jupyterlab/services';
+import { UUID } from '@lumino/coreutils';
 import { Workbook } from '.';
 
 /**
  * A kernel connection paired with a release function. Call `release` when
  * finished to return the kernel to the pool.
  */
-type Leased = [
-  kernel: Kernel.IKernelConnection,
-  release: () => Promise<void>
-];
+type Leased = [kernel: Kernel.IKernelConnection, release: () => Promise<void>];
+
+/** A started session and the kernel it owns. */
+type Started = {
+  kernel: Kernel.IKernelConnection;
+  runtime: Runtime;
+  session: Session.ISessionConnection;
+};
 
 /** A cached idle kernel and its eviction timer. */
-type Idle = {
-  kernel: Kernel.IKernelConnection;
+type Idle = Started & {
+  order: number;
   timer: ReturnType<typeof setTimeout>;
 };
 
+/** The runtime context a leased kernel must satisfy. */
+type Runtime = {
+  cwd: string;
+  key: string;
+  name: string;
+};
+
 /** Time-to-live for idle kernel caching (ms). */
-const TTL = 2500;
+const TTL = 5000;
 
 const pool = new Map<string, Idle[]>();
 const waiters: Array<() => void> = [];
 
-let attempts = 1;
+const defaults = { attempts: 1, lifespan: 60, workers: 3 };
+let { attempts, lifespan, workers } = defaults;
+let active = 0;
+let cached = 0;
 let epoch = 0;
-let lifespan = 60;
-let live = 0;
+let order = 0;
 let recycling = 0;
-let workers = 3;
 
 /** Kernel pool configuration. */
 export type Config = { concurrency: number; retries: number; timeout: number };
-
-/** @returns the current concurrency cap. */
-export function cap(): number {
-  return workers;
-}
+export type Snapshot = {
+  active: number;
+  cached: number;
+  recycling: number;
+  waiting: number;
+  workers: number;
+};
 
 /** Updates pool configuration and wakes any newly-eligible waiters. */
 export function configure({ concurrency, retries, timeout }: Config): void {
   attempts = Math.max(0, retries);
   lifespan = Math.max(0, timeout);
   workers = Math.max(1, concurrency);
-  while (live + recycling < workers && waiters.length) waiters.shift()!();
+  trim();
+  while (busy() < workers && waiters.length) wake();
+}
+
+/** @returns the current concurrency cap. */
+export function cap(): number {
+  return workers;
+}
+
+/** @returns the configured retry count. */
+export function retries(): number {
+  return attempts;
+}
+
+/** @returns the lease deadline in milliseconds (0 = no deadline). */
+export function timeout(): number {
+  return lifespan * 1000;
+}
+
+/** @internal Returns pool counters for integration tests. */
+export function snapshot(): Snapshot {
+  return {
+    active,
+    cached,
+    recycling,
+    waiting: waiters.length,
+    workers
+  };
 }
 
 /** @internal Resets all module state for tests. */
 export function drain(): void {
   epoch++;
   for (const entries of pool.values()) {
-    for (const { timer, kernel } of entries) {
+    for (const { timer, session } of entries) {
       clearTimeout(timer);
-      void dispose(kernel);
+      void dispose(session);
     }
   }
   pool.clear();
-  attempts = 1;
-  lifespan = 60;
-  live = 0;
+  active = 0;
+  attempts = defaults.attempts;
+  cached = 0;
+  lifespan = defaults.lifespan;
+  order = 0;
   recycling = 0;
-  workers = 3;
+  workers = defaults.workers;
   waiters.length = 0;
 }
 
@@ -74,71 +119,135 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
   const mark = epoch;
   await acquire();
 
-  const name = await settle(workbook);
-  const kernel = revive(take(name)) ?? await start(workbook);
-  if (!kernel) {
+  const runtime = await locate(workbook);
+  const idle = take(runtime);
+  const ready = revive(idle);
+  if (idle && !ready) void dispose(idle.session);
+
+  const started = ready ?? (await start(workbook, runtime));
+  if (!started) {
     relinquish();
     return null;
   }
 
+  const { kernel } = started;
   let released = false;
   const expire = () => {
     if (released) return;
     released = true;
     kernel.interrupt().catch(() => {});
-    void dispose(kernel);
+    void dispose(started.session);
     if (mark === epoch) relinquish();
   };
   const deadline = lifespan > 0 ? setTimeout(expire, lifespan * 1000) : null;
-  const reclaim = async () => {
+  const release = async () => {
     if (released) return;
     released = true;
     if (deadline) clearTimeout(deadline);
-    await recycle(kernel, mark);
+    return recycle(started, mark);
   };
-  return [kernel, reclaim];
-}
-
-/** @returns the configured retry count. */
-export function retries(): number {
-  return attempts;
-}
-
-/** @returns the lease deadline in milliseconds (0 = no deadline). */
-export function timeout(): number {
-  return lifespan * 1000;
+  return [kernel, release];
 }
 
 /** Blocks until a slot opens, then claims it. */
 async function acquire(): Promise<void> {
-  while (live + recycling >= workers)
+  while (busy() >= workers)
     await new Promise<void>(resolve => waiters.push(resolve));
-  live++;
+  active++;
 }
 
-/** Shuts down and disposes a kernel. Idempotent. */
-async function dispose(kernel: Kernel.IKernelConnection): Promise<void> {
-  if (!kernel.isDisposed)
-    return kernel.shutdown().catch(() => {}).finally(() => kernel.dispose());
+/** @returns kernels that currently occupy the concurrency cap. */
+function busy(): number {
+  return active + recycling;
 }
 
-/** Removes a kernel from the pool and disposes it (TTL callback). */
-function evict(kernel: Kernel.IKernelConnection): void {
-  const name = kernel.name;
-  pool.set(name, shelf(name).filter(idle => idle.kernel !== kernel));
-  void dispose(kernel);
+/** @returns the runtime after waiting for the document model. */
+async function locate(workbook: Workbook): Promise<Runtime> {
+  const { context } = workbook;
+  await context.ready.catch(() => {});
+  const name = context.model.defaultKernelName;
+  const dirname = PathExt.dirname(context.path || '');
+  const cwd = dirname === '.' ? '' : dirname;
+  return { cwd, key: `${name}\0${cwd}`, name };
 }
 
-/** Caches an idle kernel with TTL eviction. Evicts oldest on overflow. */
-function keep(kernel: Kernel.IKernelConnection): void {
-  const idle: Idle = { kernel, timer: setTimeout(() => evict(kernel), TTL) };
-  const entries = shelf(kernel.name);
-  if (entries.length >= workers) {
-    const oldest = entries.shift()!;
-    clearTimeout(oldest.timer);
-    void dispose(oldest.kernel);
+/** Pops the most recently cached kernel for `runtime`. */
+function take(runtime: Runtime): Idle | null {
+  const entries = pool.get(runtime.key);
+  const idle = entries?.pop() ?? null;
+  if (idle) clearTimeout(idle.timer);
+  if (idle) cached--;
+  if (entries && !entries.length) pool.delete(runtime.key);
+  return idle;
+}
+
+/** @returns the lease if it is still usable, or `null`. */
+function revive(idle: Idle | null): Started | null {
+  return idle && !idle.kernel.isDisposed && !idle.session.isDisposed
+    ? idle
+    : null;
+}
+
+/** Starts a new kernel for the workbook. */
+async function start(
+  workbook: Workbook,
+  runtime: Runtime
+): Promise<Started | null> {
+  const { sessionManager } = workbook.context.sessionContext;
+  const { cwd, name } = runtime;
+  if (!sessionManager || !name) {
+    console.warn('kernels: missing session manager or kernel name');
+    return null;
   }
-  entries.push(idle);
+  try {
+    const uuid = UUID.uuid4();
+    const path = PathExt.join(cwd, uuid);
+    const session = await sessionManager.startNew({
+      kernel: { name },
+      name: uuid,
+      path,
+      type: 'notebook'
+    });
+    const { kernel } = session;
+    if (!kernel) {
+      await dispose(session);
+      console.warn('kernels: missing kernel after session start');
+      return null;
+    }
+    await kernel.info;
+    return { kernel, runtime, session };
+  } catch (error) {
+    console.warn('kernels: start failed', error);
+  }
+  return null;
+}
+
+/** Frees one slot and wakes the next blocked caller. */
+function relinquish(): void {
+  active--;
+  wake();
+}
+
+/** Restarts a kernel and returns it to the pool, or disposes on failure. */
+async function recycle(started: Started, mark: number): Promise<void> {
+  if (mark !== epoch) return dispose(started.session);
+  active--;
+  recycling++;
+  try {
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('restart timeout')), 10_000)
+    );
+    const kernel = await Promise.race([restart(started.kernel), timeout]);
+    if (mark === epoch) keep({ ...started, kernel });
+    else await dispose(started.session);
+  } catch {
+    await dispose(started.session);
+  } finally {
+    if (mark === epoch) {
+      recycling--;
+      wake();
+    }
+  }
 }
 
 /** Restarts a kernel, tolerating servers that return `201 Created`. */
@@ -150,11 +259,7 @@ async function restart(
     await kernel.requestKernelInfo();
     return kernel;
   } catch (error) {
-    const response =
-      error && typeof error === 'object' && 'response' in error
-        ? (error as { response?: { status?: number } }).response
-        : null;
-    if (response?.status !== 201) throw error;
+    if (status(error) !== 201) throw error;
 
     const fresh = kernel.clone();
     // Dispose only the stale client connection. The restarted kernel lives on.
@@ -170,79 +275,73 @@ async function restart(
   }
 }
 
-/** Restarts a kernel and returns it to the pool, or disposes on failure. */
-async function recycle(
-  kernel: Kernel.IKernelConnection,
-  mark: number
-): Promise<void> {
-  if (mark !== epoch) return dispose(kernel);
-  live--;
-  recycling++;
-  try {
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('restart timeout')), 10_000)
-    );
-    const fresh = await Promise.race([restart(kernel), timeout]);
-    if (mark === epoch) keep(fresh);
-    else await dispose(fresh);
-  } catch {
-    await dispose(kernel);
-  } finally {
-    if (mark === epoch) {
-      recycling--;
-      waiters.shift()?.();
-    }
-  }
+/** @returns an HTTP status carried by a Jupyter services error. */
+function status(error: unknown): number | null {
+  if (!error || typeof error !== 'object' || !('response' in error))
+    return null;
+  return (error as { response?: { status?: number } }).response?.status ?? null;
 }
 
-/** Frees one slot and wakes the next blocked caller. */
-function relinquish(): void {
-  live--;
-  waiters.shift()?.();
+/** Caches an idle kernel with TTL eviction. Evicts oldest on overflow. */
+function keep(started: Started): void {
+  const idle: Idle = {
+    ...started,
+    order: order++,
+    timer: setTimeout(() => evict(idle), TTL)
+  };
+  const entries = shelf(started.runtime);
+  entries.push(idle);
+  cached++;
+  trim();
 }
 
-/** @returns the kernel if it is still usable, or `null`. */
-function revive(idle: Idle | null): Kernel.IKernelConnection | null {
-  return idle && !idle.kernel.isDisposed ? idle.kernel : null;
-}
-
-/** @returns the default kernel name after waiting for the document model. */
-async function settle(workbook: Workbook): Promise<string> {
-  const { context } = workbook;
-  await context.ready.catch(() => {});
-  return context.model.defaultKernelName;
-}
-
-/** @returns the idle-kernel list for `name`, creating it on first access. */
-function shelf(name: string): Idle[] {
-  let entries = pool.get(name);
-  if (!entries) pool.set(name, entries = []);
+/** @returns the idle-kernel list for `runtime`, creating it on first access. */
+function shelf(runtime: Runtime): Idle[] {
+  let entries = pool.get(runtime.key);
+  if (!entries) pool.set(runtime.key, entries = []);
   return entries;
 }
 
-/** Starts a new kernel for the workbook. */
-async function start(
-  workbook: Workbook
-): Promise<Kernel.IKernelConnection | null> {
-  const { kernelManager } = workbook.context.sessionContext;
-  const name = await settle(workbook);
-  if (!kernelManager || !name) {
-    console.warn('kernels: missing kernel manager or name');
-    return null;
+/** Keeps total idle kernels bounded as cwd values change over time. */
+function trim(): void {
+  if (cached <= workers) return;
+
+  const excess = [...pool.values()]
+    .flat()
+    .sort((left, right) => left.order - right.order)
+    .slice(0, cached - workers);
+  for (const idle of excess) {
+    clearTimeout(idle.timer);
+    remove(idle);
+    void dispose(idle.session);
   }
-  try {
-    const kernel = await kernelManager.startNew({ name });
-    await kernel.info;
-    return kernel;
-  } catch (error) {
-    console.warn('kernels: start failed', error);
-  }
-  return null;
 }
 
-/** Pops the most recently cached kernel for `name`. */
-function take(name: string): Idle | null {
-  const idle = shelf(name).pop() ?? null;
-  if (idle) clearTimeout(idle.timer);
-  return idle;
+/** Removes a kernel from the pool and disposes it (TTL callback). */
+function evict(idle: Idle): void {
+  remove(idle);
+  void dispose(idle.session);
+}
+
+/** Removes an idle kernel from its shelf. */
+function remove(idle: Idle): void {
+  const { key } = idle.runtime;
+  const entries = pool.get(key);
+  if (!entries) return;
+
+  const remaining = entries.filter(entry => entry !== idle);
+  cached -= entries.length - remaining.length;
+  if (remaining.length) pool.set(key, remaining);
+  else pool.delete(key);
+}
+
+/** Shuts down and disposes a session and its kernel. Idempotent. */
+async function dispose(session: Session.ISessionConnection): Promise<void> {
+  if (!session.isDisposed)
+    await session.shutdown().catch(() => {}).finally(() => session.dispose());
+}
+
+/** Wakes the next caller blocked on a pool slot. */
+function wake(): void {
+  waiters.shift()?.();
 }

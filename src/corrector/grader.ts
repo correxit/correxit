@@ -105,15 +105,15 @@ export async function* grade(
       yield { ok: true, certified: cached };
       continue;
     }
-    while (queue.length) {
-      const result = await emit();
-      if (result) yield result;
-    }
     while (inflight >= max) {
       const result = await emit();
       if (result) yield result;
     }
     start(workbook);
+    while (queue.length) {
+      const result = await emit();
+      if (result) yield result;
+    }
   }
 
   while (inflight || queue.length) {

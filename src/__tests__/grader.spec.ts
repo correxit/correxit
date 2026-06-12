@@ -196,6 +196,45 @@ describe('grader', () => {
     expect(collected.sort()).toEqual(paths.slice().sort());
   });
 
+  it('starts a prefetched replacement before draining settled backlog', async () => {
+    const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb', 'd.ipynb'];
+    const pending = new PromiseDelegate<void>();
+    const gates: Record<string, PromiseDelegate<void>> = Object.fromEntries(
+      paths.map(path => [path, new PromiseDelegate<void>()])
+    );
+    const scanner = async function* (): AsyncGenerator<Headless> {
+      yield workbook('a.ipynb');
+      yield workbook('b.ipynb');
+      yield workbook('c.ipynb');
+      await pending.promise;
+      yield workbook('d.ipynb');
+    };
+    const correct = jest.fn(async (workbook: Headless) => {
+      await gates[workbook.context.path].promise;
+      return grade(workbook);
+    });
+    const recover = jest.fn((workbook: Headless) => failed(workbook));
+    const stream = grader(scanner(), actions(correct, recover), 3);
+    const next = stream.next();
+
+    await wait();
+    expect(correct).toHaveBeenCalledTimes(3);
+
+    gates['a.ipynb'].resolve();
+    gates['b.ipynb'].resolve();
+    gates['c.ipynb'].resolve();
+    await wait();
+
+    pending.resolve();
+    await next;
+    expect(correct).toHaveBeenCalledWith(
+      expect.objectContaining({ context: { path: 'd.ipynb' } })
+    );
+
+    gates['d.ipynb'].resolve();
+    for await (const _ of stream) void _;
+  });
+
   it('yields recovered grades when all workbooks fail', async () => {
     const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
     const collected: Result[] = [];

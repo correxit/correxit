@@ -819,13 +819,14 @@ export namespace Workbook {
       }
       return { outputs, spec };
     } finally {
-      await release();
+      void release();
     }
   }
 
   export function identifier(workbook: Workbook): Identifier {
     const rubric = open(workbook, quiet);
     if (!rubric) throw new Error.Invalid('identifier error');
+
     const assignee = rubric.assignment.assignee || null;
     const assignment = rubric.assignment.id;
     const file = PathExt.basename(workbook.context.path) || null;
@@ -833,29 +834,16 @@ export namespace Workbook {
     return { assignee, assignment, file, issue, rubric: rubric.id };
   }
 
-  export async function unstarted(workbook: Workbook): Promise<boolean> {
-    const rubric = open(workbook, quiet);
-    if (!rubric) return false;
-    const notebook = workbook.context.model.sharedModel.toJSON();
-    return Rubric.Assignment.unstarted({
-      assignment: rubric.assignment,
-      notebook,
-      rubric
-    });
-  }
-
   /** Lock a workbook if its rubric is unlocked. */
-  export async function lock(
-    workbook: Workbook
-  ): Promise<void> {
+  export async function lock(workbook: Workbook): Promise<void> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) return;
 
     const audited = audit(workbook, rubric);
     if (!audited.ok) throw new Error.Invalid(`lock error: ${audited.error}`);
+
     const valid = audited.rubric as Rubric.Unlocked;
     const locked = await Rubric.lock(valid);
-
     const { key, references } = valid;
     const secrets = Object.values(references).filter(({ secret }) => secret);
     const prepared = await Promise.all(
@@ -1182,8 +1170,17 @@ export namespace Workbook {
         assignment: { ...unlocked.assignment, seal: null }
       };
     }
-
     return decrypt(workbook, unlocked);
+  }
+
+  /** @returns whether a workbook's assignment is started or not. */
+  export async function unstarted(workbook: Workbook): Promise<boolean> {
+    const rubric = open(workbook, quiet);
+    if (!rubric) return false;
+
+    const { unstarted } = Rubric.Assignment;
+    const notebook = workbook.context.model.sharedModel.toJSON();
+    return unstarted({ assignment: rubric.assignment, notebook, rubric });
   }
 
   /**
