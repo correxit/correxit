@@ -45,6 +45,13 @@ let recycling = 0;
 
 /** Kernel pool configuration. */
 export type Config = { concurrency: number; retries: number; timeout: number };
+export type Snapshot = {
+  active: number;
+  cached: number;
+  recycling: number;
+  waiting: number;
+  workers: number;
+};
 
 /** Updates pool configuration and wakes any newly-eligible waiters. */
 export function configure({ concurrency, retries, timeout }: Config): void {
@@ -68,6 +75,17 @@ export function retries(): number {
 /** @returns the lease deadline in milliseconds (0 = no deadline). */
 export function timeout(): number {
   return lifespan * 1000;
+}
+
+/** @internal Returns pool counters for integration tests. */
+export function snapshot(): Snapshot {
+  return {
+    active,
+    cached,
+    recycling,
+    waiting: waiters.length,
+    workers
+  };
 }
 
 /** @internal Resets all module state for tests. */

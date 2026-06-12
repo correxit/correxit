@@ -580,28 +580,39 @@ test('batch should bound live kernels across a larger roster', async ({
   await cd(page, '.');
 
   const result = await page.evaluate(async (directory: string) => {
-    const { Workbook } = (window as any).__correxit__;
+    const { Workbook, kernels } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
     const manager = app.serviceManager.kernels;
     const start = manager.startNew.bind(manager);
+    kernels.drain();
     await manager.refreshRunning();
+
     const count = () =>
       typeof manager.runningCount === 'number'
         ? manager.runningCount
         : Array.from(manager.running()).length;
     const baseline = count();
     let peak = 0;
+    let server = 0;
     const starts: string[] = [];
-    const sample = (models?: ArrayLike<unknown>) => {
-      const current = Array.isArray(models) ? models.length : count();
-      peak = Math.max(peak, Math.max(0, current - baseline));
+    const sample = {
+      peak: () => {
+        const { active, recycling } = kernels.snapshot();
+        peak = Math.max(peak, active + recycling);
+      },
+      server: (models?: ArrayLike<unknown>) => {
+        const current = Array.isArray(models) ? models.length : count();
+        server = Math.max(server, Math.max(0, current - baseline));
+      }
     };
-    const changed = (_: unknown, models: ArrayLike<unknown>) => sample(models);
+    const changed = (_: unknown, models: ArrayLike<unknown>) =>
+      sample.server(models);
     manager.runningChanged.connect(changed);
     manager.startNew = async (options: { name?: string }) => {
       starts.push(options?.name ?? '');
       const kernel = await start(options);
-      sample();
+      sample.peak();
+      sample.server();
       return kernel;
     };
     try {
@@ -619,14 +630,17 @@ test('batch should bound live kernels across a larger roster', async ({
           possible: grade.score.possible,
           status: grade.score.status
         });
-        sample();
+        sample.peak();
+        sample.server();
         workbook.context.dispose();
       }
       await manager.refreshRunning();
-      sample();
+      sample.peak();
+      sample.server();
       return {
         grades: grades.sort((a, b) => a.path.localeCompare(b.path)),
         peak,
+        server,
         starts
       };
     } finally {

@@ -206,7 +206,10 @@ const galata: JupyterFrontEndPlugin<void> = {
           Correxit,
           Rubric,
           Workbook,
-          kernels: Object.freeze({ drain: kernels.drain })
+          kernels: Object.freeze({
+            drain: kernels.drain,
+            snapshot: kernels.snapshot
+          })
         }),
         writable: false
       });
