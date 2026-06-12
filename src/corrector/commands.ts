@@ -88,26 +88,26 @@ export function commands(
       execute: (
         args: Partial<Credentials & { overwrite: boolean; submitted: boolean }>
       ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const overwrite = !!args.overwrite;
         const auth = !!(args.key || args.passphrase);
+        const overwrite = !!args.overwrite;
+        const submitted = !!args.submitted;
         const potential = { ...args, unlock: auth ? !!args.unlock : true };
         const handle = normalize(potential as Partial<Credentials>);
         if (!handle)
           throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
+
         const scan = normalize({ path: handle.path, unlock: false });
         if (!scan)
           throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
 
+        const actions: Actions = {
+          correct: workbook => correct(workbook, handle, fetch, manager, trans),
+          exclude: workbook => exclude(workbook, overwrite),
+          recover
+        };
         const cap = kernels.cap();
         const retries = kernels.retries();
         return (async function* () {
-          const actions: Actions = {
-            correct: workbook =>
-              correct(workbook, handle, fetch, manager, trans),
-            exclude: workbook => exclude(workbook, overwrite),
-            recover
-          };
-          const submitted = !!args.submitted;
           const source = scanner({ commands }, { ...scan, submitted });
           const results = grader.grade(source, actions, cap, retries);
           for await (const result of results) {
