@@ -36,11 +36,7 @@ const pool = new Map<string, Idle[]>();
 const waiters: Array<() => void> = [];
 
 const defaults = { attempts: 1, lifespan: 60, workers: 3 };
-
-let attempts = defaults.attempts;
-let lifespan = defaults.lifespan;
-let workers = defaults.workers;
-
+let { attempts, lifespan, workers } = defaults;
 let active = 0;
 let cached = 0;
 let epoch = 0;
