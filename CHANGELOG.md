@@ -1,3 +1,10 @@
+## [1.24.1](https://github.com/QuantStack/correxit/compare/v1.24.0...v1.24.1) (2026-06-12)
+
+
+### Bug Fixes
+
+* slow and non-concurrent grading in Corrector, switch to Pixi ([#78](https://github.com/QuantStack/correxit/issues/78)) ([daa5aad](https://github.com/QuantStack/correxit/commit/daa5aad71e72978d8a0fe1453c0e235548e530c3))
+
 # [1.24.0](https://github.com/QuantStack/correxit/compare/v1.23.0...v1.24.0) (2026-06-09)
 
 
