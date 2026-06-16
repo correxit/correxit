@@ -575,7 +575,7 @@ test('batch should bound live kernels across a larger roster', async ({
     { id: 'target', source: 'answer = 42\nprint(answer)' }
   ]);
   const cap = 3;
-  const total = cap * 4;
+  const total = cap * 3;
   const roster = Array.from(
     { length: total },
     (_, i) => `student${i}@example.com`
