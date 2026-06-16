@@ -539,9 +539,9 @@ test('propagate warns about serialized secret reference outputs', async ({
     hasText: 'Select kernel for:'
   });
   try {
-    await kernel.waitFor({ state: 'visible', timeout: 1000 });
+    await kernel.waitFor({ state: 'visible', timeout: 4000 });
     await page.keyboard.press('Escape');
-    await kernel.waitFor({ state: 'hidden', timeout: 1000 }).catch(() => {});
+    await kernel.waitFor({ state: 'hidden', timeout: 4000 }).catch(() => {});
   } catch {
     /* no kernel dialog */
   }
