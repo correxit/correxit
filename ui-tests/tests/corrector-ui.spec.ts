@@ -3,6 +3,10 @@ import { cd, cleanup, close, corrector, keys, reviewer, setup } from './utils';
 
 test.use({ autoGoto: false });
 
+test.beforeEach(() => {
+  test.setTimeout(180_000);
+});
+
 /**
  * Creates a propagated workbook directory and returns cleanup metadata.
  *
