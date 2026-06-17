@@ -41,6 +41,7 @@ hatch-nodejs-version = ">=0.3.2"
 python-build = "*"
 jupyterlite-core = "*"
 jupyterlite-xeus = "*"
+pip = ">=26.1.2,<27"
 
 [tool.pixi.pypi-dependencies]
 correxit = { path = ".", editable = true }
