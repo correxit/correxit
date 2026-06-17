@@ -1,3 +1,10 @@
+## [1.24.3](https://github.com/QuantStack/correxit/compare/v1.24.2...v1.24.3) (2026-06-17)
+
+
+### Bug Fixes
+
+* add pip dependency to pixi ([#80](https://github.com/QuantStack/correxit/issues/80)) ([9ac0d05](https://github.com/QuantStack/correxit/commit/9ac0d05bdd5fa480de40339454ead6254aab892f))
+
 ## [1.24.2](https://github.com/QuantStack/correxit/compare/v1.24.1...v1.24.2) (2026-06-17)
 
 
