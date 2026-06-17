@@ -1,3 +1,10 @@
+## [1.24.2](https://github.com/QuantStack/correxit/compare/v1.24.1...v1.24.2) (2026-06-17)
+
+
+### Bug Fixes
+
+* improve ui test reliability ([#79](https://github.com/QuantStack/correxit/issues/79)) ([afddca3](https://github.com/QuantStack/correxit/commit/afddca30766739463689bdb080a8bdb7ea203e62))
+
 ## [1.24.1](https://github.com/QuantStack/correxit/compare/v1.24.0...v1.24.1) (2026-06-12)
 
 
