@@ -1,4 +1,4 @@
-import { drain, lease } from '../correxit/kernels';
+import { configure, drain, lease } from '../correxit/kernels';
 
 let serial = 0;
 
@@ -197,6 +197,37 @@ describe('kernels', () => {
       } as any;
       const result = await lease(workbook);
       expect(result).toBeNull();
+    });
+
+    it('returns null and disposes session when kernel info times out', async () => {
+      const name = named();
+      const mock = spawn({ name });
+      let signal: (() => void) | null = null;
+      const accessed = new Promise<void>(done => {
+        signal = done;
+      });
+      Object.defineProperty(mock, 'info', {
+        get: () => {
+          signal?.();
+          return new Promise(() => {
+            /* never resolves */
+          });
+        }
+      });
+      const sess = session(mock);
+      const workbook = create({
+        name,
+        sessionManager: { startNew: jest.fn(async () => sess) }
+      });
+
+      configure({ concurrency: 3, retries: 1, timeout: 1 });
+      const leasing = lease(workbook);
+      await accessed; // info getter fired: setTimeout is now registered
+      jest.advanceTimersByTime(1000);
+      const result = await leasing;
+
+      expect(result).toBeNull();
+      expect(sess.shutdown).toHaveBeenCalled();
     });
 
     it('returns null when startNew throws', async () => {

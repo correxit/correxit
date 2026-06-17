@@ -130,8 +130,8 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
     return null;
   }
 
-  const { kernel } = started;
   let released = false;
+  const { kernel } = started;
   const expire = () => {
     if (released) return;
     released = true;
@@ -139,11 +139,11 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
     void dispose(started.session);
     if (mark === epoch) relinquish();
   };
-  const deadline = lifespan > 0 ? setTimeout(expire, lifespan * 1000) : null;
+  const timeout = lifespan > 0 ? setTimeout(expire, lifespan * 1000) : null;
   const release = async () => {
     if (released) return;
     released = true;
-    if (deadline) clearTimeout(deadline);
+    if (timeout) clearTimeout(timeout);
     return recycle(started, mark);
   };
   return [kernel, release];
@@ -165,6 +165,7 @@ function busy(): number {
 async function locate(workbook: Workbook): Promise<Runtime> {
   const { context } = workbook;
   await context.ready.catch(() => {});
+
   const name = context.model.defaultKernelName;
   const dirname = PathExt.dirname(context.path || '');
   const cwd = dirname === '.' ? '' : dirname;
@@ -214,7 +215,28 @@ async function start(
       console.warn('kernels: missing kernel after session start');
       return null;
     }
-    await kernel.info;
+
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const deadline = lifespan * 1000;
+    const ready = lifespan > 0
+      ? Promise.race([
+          kernel.info,
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(
+              () => reject(new Error('kernel: info timeout')), deadline
+            );
+          })
+        ])
+      : kernel.info;
+    try {
+      await ready;
+    } catch (error) {
+      await dispose(session);
+      console.warn('kernels: start failed', error);
+      return null;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
     return { kernel, runtime, session };
   } catch (error) {
     console.warn('kernels: start failed', error);

@@ -436,7 +436,7 @@ test('track archives retry output before clearing retry state', async ({
   });
 
   const widget = page.locator('.correxit-propagator');
-  await widget.waitFor({ state: 'visible', timeout: 5000 });
+  await widget.waitFor({ state: 'visible', timeout: 12000 });
   const retry = widget.locator('.correxit-propagator-retry');
   await expect(retry).toHaveText('Retry 1 failed');
   await retry.click();

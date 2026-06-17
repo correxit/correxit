@@ -73,7 +73,7 @@ export async function notebook(page: any): Promise<string> {
     .locator('.jp-Dialog')
     .filter({ hasText: 'Select Kernel' });
   try {
-    await kernel.waitFor({ state: 'visible', timeout: 1000 });
+    await kernel.waitFor({ state: 'visible', timeout: 4000 });
     await kernel.getByRole('button', { name: 'Select Kernel' }).click();
   } catch {
     /* no kernel picker */

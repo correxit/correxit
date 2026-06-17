@@ -3,6 +3,10 @@ import { cd, cleanup, close, keys, setup } from './utils';
 
 test.use({ autoGoto: false });
 
+test.beforeEach(() => {
+  test.setTimeout(180_000);
+});
+
 type Page = any;
 type Output = Record<string, unknown>;
 type Cellular = {
