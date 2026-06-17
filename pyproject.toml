@@ -42,6 +42,8 @@ python-build = "*"
 jupyterlite-core = "*"
 jupyterlite-xeus = "*"
 pip = ">=26.1.2,<27"
+xeus-sqlite = ">=0.10.0,<0.11"
+xeus-sql = ">=0.4.0,<0.5"
 
 [tool.pixi.pypi-dependencies]
 correxit = { path = ".", editable = true }
