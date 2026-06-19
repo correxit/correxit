@@ -839,7 +839,7 @@ If conversion fails, Correxit restores the original notebook.`
     isEnabled: () =>
       !busy && commands.isEnabled(CommandIDs.propagate),
     isVisible: () => commands.isEnabled(CommandIDs.propagate),
-    execute: () => {
+    execute: ({ overwrite = false }: { overwrite?: boolean }) => {
       if (busy) return;
       busy = true;
       commands.notifyCommandChanged(CommandIDs.track);
@@ -856,7 +856,7 @@ If conversion fails, Correxit restores the original notebook.`
         commands.notifyCommandChanged(CommandIDs.track);
       };
       const refocus = () => shell.activateById('correxit-sidebar');
-      const options = { commands, refocus, release, trans };
+      const options = { commands, overwrite, refocus, release, trans };
       const widget = new Propagator.Widget(options);
       widget.id = `correxit-propagator-${++serial}`;
       widget.title.caption = title;

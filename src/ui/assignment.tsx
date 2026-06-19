@@ -137,6 +137,7 @@ export const Assignment: React.FC<{
   const { locked } = rubric;
   const [state, setState] = useState(() => Draft.create(rubric.assignment));
   const [registered, setRegistered] = useState<Registered>(null);
+  const [overwrite, setOverwrite] = useState(false);
   const [pending, setPending] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const { assignment, local } = state;
@@ -250,7 +251,19 @@ export const Assignment: React.FC<{
       </div>
       {!locked && (
         <div className="correxit-assignment-propagate">
-          <CommandToolbarButtonComponent commands={commands} id={track} />
+          <label className="correxit-assignment-overwrite">
+            <input
+              checked={overwrite}
+              onChange={({ target }) => setOverwrite(target.checked)}
+              type="checkbox"
+            />
+            {trans.__('Replace existing')}
+          </label>
+          <CommandToolbarButtonComponent
+            args={{ overwrite }}
+            commands={commands}
+            id={track}
+          />
         </div>
       )}
     </div>
