@@ -822,8 +822,10 @@ If conversion fails, Correxit restores the original notebook.`
         if (!button.accept) return (async function* empty() {})();
       }
       try {
-        const options = { commands, distributor, factory, manager, overwrite: args.overwrite ?? true, workbook };
-        return translate(propagator.propagate(options), trans);
+        const { propagate } = propagator;
+        const configuration = { commands, distributor, factory, manager };
+        const content = { overwrite: args.overwrite ?? true, workbook };
+        return translate(propagate({ ...configuration, ...content }), trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
       }
@@ -836,8 +838,7 @@ If conversion fails, Correxit restores the original notebook.`
   disposables.push(commands.addCommand(CommandIDs.track, {
     icon: Icons.assignment,
     label: () => commands.label(CommandIDs.propagate),
-    isEnabled: () =>
-      !busy && commands.isEnabled(CommandIDs.propagate),
+    isEnabled: () => !busy && commands.isEnabled(CommandIDs.propagate),
     isVisible: () => commands.isEnabled(CommandIDs.propagate),
     execute: ({ overwrite = false }: { overwrite?: boolean }) => {
       if (busy) return;
