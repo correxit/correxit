@@ -209,7 +209,7 @@ export function commands(
         ({ name, data: await io.load(manager, directory, name) });
       const names = rubric.assignment.resources;
       const resources = names ? await Promise.all(names.map(load)) : null;
-      await distributor({ identifier, notebook, path, resources });
+      await distributor({ identifier, notebook, overwrite: true, path, resources });
       await distribute(workbook);
       await workbook.context.save();
       return { assignee, error: null, ok: true, path };
@@ -802,7 +802,7 @@ If conversion fails, Correxit restores the original notebook.`
     },
     isVisible: () => commands.isEnabled(CommandIDs.propagate),
     execute: async (
-      args: Partial<Credentials>
+      args: Partial<Credentials & { overwrite: boolean }>
     ): Promise<AsyncIterable<[string, propagator.Emission]>> => {
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked) return (async function* empty() {})();
@@ -822,7 +822,7 @@ If conversion fails, Correxit restores the original notebook.`
         if (!button.accept) return (async function* empty() {})();
       }
       try {
-        const options = { commands, distributor, factory, manager, workbook };
+        const options = { commands, distributor, factory, manager, overwrite: args.overwrite ?? true, workbook };
         return translate(propagator.propagate(options), trans);
       } catch (error) {
         console.warn(CommandIDs.propagate, error);
@@ -1219,6 +1219,7 @@ async function* translate(
       'retried': trans.__('Finished retrying %1', ...slots),
       'saved': trans.__('Saved %1', ...slots),
       'separator': '------------',
+      'skipped': trans.__('Skipped %1', slots[0]),
       'success': trans.__('Finished! (roster: %1)', ...slots)
     })[type] || '';
   };

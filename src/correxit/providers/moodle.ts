@@ -18,6 +18,10 @@ export namespace Moodle {
     shortname?: string;
   };
 
+  type Grades = {
+    assignments: { grades: { userid: number }[] }[];
+  };
+
   export type Settings = { token: string; url: string };
 
   export type User = {
@@ -184,9 +188,10 @@ export namespace Moodle {
   }
 
   export async function distributor(
-    { identifier, notebook, resources }: Parameters<Correxit.Distributor>[0],
+    parameters: Parameters<Correxit.Distributor>[0],
     settings: Settings
   ): ReturnType<Correxit.Distributor> {
+    const { identifier, notebook, overwrite, resources } = parameters;
     const { token, url: raw } = settings;
     const url = URLExt.normalize(raw);
     if (!token || !url)
@@ -204,6 +209,15 @@ export namespace Moodle {
     if (user === undefined)
       throw new Error.Plugin(`No Moodle user for ${assignee}`);
 
+    if (!overwrite) {
+      const result = await request<Grades>(
+        'mod_assign_get_grades',
+        `assignmentids[0]=${assignment}&userids[0]=${user}`
+      );
+      const assigned = result.assignments[0]?.grades
+        .some(({ userid }) => userid === user);
+      if (assigned) return false;
+    }
     const metadata = notebook.metadata['correxit'] as Partial<Rubric.Locked>;
     const { name } = metadata.assignment as Partial<Rubric.Assignment>;
     const base =
@@ -232,6 +246,7 @@ export namespace Moodle {
         `plugindata[files_filemanager]=${draft}`
       ].join('&')
     );
+    return true;
   }
 
   export async function registrar(

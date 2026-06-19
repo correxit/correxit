@@ -17,12 +17,14 @@ export async function* propagate({
   distributor,
   factory,
   manager,
+  overwrite,
   workbook
 }: {
   commands: CommandRegistry;
   distributor: Correxit.Distributor;
   factory: NotebookModelFactory;
   manager: ServiceManager.IManager;
+  overwrite: boolean;
   workbook: Workbook;
 }): AsyncGenerator<Emission> {
   const rubric = Workbook.open(workbook, true);
@@ -81,12 +83,16 @@ export async function* propagate({
       await reissue({ notebook, roster, ...issued, key });
 
       const identifier = { ...assigned, issue: issued.issue };
-      const propagated = { identifier, notebook, path, resources };
+      const propagated = { identifier, notebook, overwrite, path, resources };
       stamp(notebook, Date.now());
 
       let distributed = true;
       try {
-        await distributor(propagated);
+        if (!await distributor(propagated)) {
+          yield { type: 'skipped', slots: [assignee] };
+          yield { type: 'progress', slots: [++progress, total] };
+          continue;
+        }
       } catch (error) {
         stamp(notebook, null);
         distributed = false;
