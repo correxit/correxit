@@ -18,9 +18,7 @@ export namespace Moodle {
     shortname?: string;
   };
 
-  type Grades = {
-    assignments: { grades: { userid: number }[] }[];
-  };
+  type Grades = { assignments: { grades: { userid: number }[] }[]; };
 
   export type Settings = { token: string; url: string };
 

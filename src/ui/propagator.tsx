@@ -45,10 +45,8 @@ export function Propagator(props: Propagator.Props) {
   const [archived, setArchived] = useState<LogEntry[] | null>(null);
   const command = canceled ? '' : propagate;
   const [timestamp] = useState(Date.now);
-  const [log, done] = useCommand<LogEntry>(commands, command, {
-    overwrite,
-    timestamp
-  });
+  const args = { overwrite, timestamp };
+  const [log, done] = useCommand<LogEntry>(commands, command, args);
   const [attempted, setAttempted] = useState(false);
   const [retry, setRetry] = useState<Propagator.Retry | null>(null);
   const [retries, setRetries] = useState<LogEntry[]>([]);
