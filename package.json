@@ -136,6 +136,7 @@
         "@jupyterlab/codeeditor": "4.6.0",
         "@jupyterlab/codemirror": "4.6.0",
         "@jupyterlab/console": "4.6.0",
+        "@jupyterlab/core-meta": "4.6.0",
         "@jupyterlab/coreutils": "6.6.0",
         "@jupyterlab/debugger": "4.6.0",
         "@jupyterlab/docmanager": "4.6.0",
@@ -180,7 +181,57 @@
         },
         "extension": true,
         "outputDir": "correxit/labextension",
-        "schemaDir": "schema"
+        "schemaDir": "schema",
+        "sharedPackages": {
+            "@jupyterlab/application": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/apputils": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/cells": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/codeeditor": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/coreutils": {
+                "requiredVersion": "^6.5.5"
+            },
+            "@jupyterlab/docmanager": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/docregistry": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/filebrowser": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/nbformat": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/notebook": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/rendermime": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/services": {
+                "requiredVersion": "^7.5.5"
+            },
+            "@jupyterlab/settingregistry": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/statusbar": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/translation": {
+                "requiredVersion": "^4.5.5"
+            },
+            "@jupyterlab/ui-components": {
+                "requiredVersion": "^4.5.5"
+            }
+        }
     },
     "eslintIgnore": [
         "node_modules",
