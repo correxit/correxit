@@ -288,12 +288,14 @@ These steps are performed once by the Moodle administrator.
 Open the Correxit service and add the functions below. This list matches the
 current Correxit code exactly.
 
-- `mod_assign_get_assignments`: registrar lists assignments visible to
-  the teacher.
-- `core_enrol_get_enrolled_users`: registrar and distributor fetch the
-  roster and Moodle user ids.
-- `mod_assign_save_grade`: distributor attaches notebooks. Collector
-  posts the scaled grade and graded notebook.
+- `mod_assign_get_assignments`: registrar lists assignments visible to the
+  teacher.
+- `core_enrol_get_enrolled_users`: registrar and distributor fetch the roster
+  and Moodle user ids.
+- `mod_assign_save_grade`: distributor attaches notebooks. Collector posts the
+  scaled grade and graded notebook.
+- `mod_assign_get_grades`: distributor checks to ensure reassignment only when
+  requested.
 
 The external service must also have **Can upload files** and
 **Can download files** enabled (checkboxes on the service edit page).

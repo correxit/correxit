@@ -134,8 +134,31 @@
   display: none;
 }
 
+.correxit-assignment-propagate {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px var(--correxit-sidebar-content-inset) 0;
+}
+
+.correxit-assignment-overwrite {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.correxit-assignment-overwrite input {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
 .correxit-assignment-propagate .jp-ToolbarButtonComponent {
-  margin: 5px 0;
+  justify-content: flex-start;
+  margin: 0;
+  min-width: 0;
+  text-align: left;
+  width: 100%;
 }
 
 .correxit-sidebar-inner-header {

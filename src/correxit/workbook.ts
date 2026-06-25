@@ -1,8 +1,7 @@
-import { SharedCell } from '@jupyter/ydoc';
 import { ICodeCellModel } from '@jupyterlab/cells';
 import { PathExt } from '@jupyterlab/coreutils';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
-import { INotebookContent } from '@jupyterlab/nbformat';
+import type { INotebookContent } from '@jupyterlab/nbformat';
 import {
   INotebookModel,
   Notebook,
@@ -115,7 +114,10 @@ export namespace Workbook {
   }
 
   export namespace Cell {
-    export type Prepared = { index: number; replacement: SharedCell.Cell; };
+    export type Prepared = {
+      index: number;
+      replacement: INotebookContent['cells'][number];
+    };
 
     /** Returns a prepared decrypted cell replacement. */
     export async function decrypt(

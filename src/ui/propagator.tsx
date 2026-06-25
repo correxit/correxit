@@ -39,13 +39,14 @@ class PropagatorWidget extends ReactWidget {
 }
 
 export function Propagator(props: Propagator.Props) {
-  const { close, commands, release, title, trans } = props;
+  const { close, commands, overwrite, release, title, trans } = props;
   const { propagate, redistribute } = Correxit.CommandIDs;
   const [canceled, setCanceled] = useState(false);
   const [archived, setArchived] = useState<LogEntry[] | null>(null);
   const command = canceled ? '' : propagate;
   const [timestamp] = useState(Date.now);
-  const [log, done] = useCommand<LogEntry>(commands, command, { timestamp });
+  const args = { overwrite, timestamp };
+  const [log, done] = useCommand<LogEntry>(commands, command, args);
   const [attempted, setAttempted] = useState(false);
   const [retry, setRetry] = useState<Propagator.Retry | null>(null);
   const [retries, setRetries] = useState<LogEntry[]>([]);
@@ -181,6 +182,7 @@ export namespace Propagator {
   export type Props = {
     close: () => void;
     commands: CommandRegistry;
+    overwrite: boolean;
     refocus: () => void;
     release: () => void;
     title: string;

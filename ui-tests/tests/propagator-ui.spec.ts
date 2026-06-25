@@ -452,3 +452,58 @@ test('track archives retry output before clearing retry state', async ({
   });
   await dispose();
 });
+
+test('propagate with overwrite false distributes all on first run', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  const result = await page.evaluate(async keys => {
+    const { Rubric, Workbook } = (window as any).__correxit__;
+    const app = (window as any).jupyterapp;
+    const panel = app.shell.currentWidget;
+
+    const rubric = (r => ({
+      ...r,
+      key: 'secret',
+      assignment: {
+        ...r.assignment,
+        keys: {
+          private: { assignee: null, author: 'priv' },
+          public: { assignee: null, author: 'pub' }
+        }
+      }
+    }))(Rubric.create());
+    rubric.assignment.keys.private.author = keys.private.author;
+    rubric.assignment.keys.public.author = keys.public.author;
+    await Workbook.update(panel, rubric);
+    await app.commands.execute('correxit:assign', {
+      roster: ['alice@example.com', 'bob@example.com']
+    });
+
+    const stream = await app.commands.execute('correxit:propagate', {
+      overwrite: false
+    });
+    const types: string[] = [];
+    const saved: string[] = [];
+    let directory: string | null = null;
+    for await (const [, emission] of stream) {
+      types.push(emission.type);
+      if (emission.type === 'saved') saved.push(emission.slots[0] as string);
+      if (emission.type === 'mkdir') directory = emission.slots[0] as string;
+    }
+
+    const contents = app.serviceManager.contents;
+    for (const path of saved) await contents.delete(path).catch(() => {});
+    if (directory) await contents.delete(directory).catch(() => {});
+
+    return { types };
+  }, keys);
+
+  expect(result.types).not.toContain('skipped');
+  expect(result.types.filter(t => t === 'distributed')).toHaveLength(2);
+  expect(result.types).toContain('success');
+
+  await cd(page, '.');
+  await dispose();
+});

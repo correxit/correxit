@@ -18,6 +18,10 @@ export namespace Moodle {
     shortname?: string;
   };
 
+  type Grades = {
+    assignments: { assignmentid: number; grades: { userid: number }[] }[];
+  };
+
   export type Settings = { token: string; url: string };
 
   export type User = {
@@ -126,8 +130,17 @@ export namespace Moodle {
       'core_enrol_get_enrolled_users',
       `courseid=${course}`
     );
+    return remember(course, users);
+  };
+  const remember = (
+    course: number | string,
+    users: User[]
+  ): Map<string, number> => {
     const enrolled = new Map(users.map(user => [identify(user), user.id]));
-    participants.set(course, { expires: Date.now() + TTL, users: enrolled });
+    participants.set(
+      String(course),
+      { expires: Date.now() + TTL, users: enrolled }
+    );
     return enrolled;
   };
 
@@ -184,9 +197,10 @@ export namespace Moodle {
   }
 
   export async function distributor(
-    { identifier, notebook, resources }: Parameters<Correxit.Distributor>[0],
+    parameters: Parameters<Correxit.Distributor>[0],
     settings: Settings
   ): ReturnType<Correxit.Distributor> {
+    const { identifier, notebook, overwrite, resources } = parameters;
     const { token, url: raw } = settings;
     const url = URLExt.normalize(raw);
     if (!token || !url)
@@ -204,6 +218,15 @@ export namespace Moodle {
     if (user === undefined)
       throw new Error.Plugin(`No Moodle user for ${assignee}`);
 
+    if (!overwrite) {
+      const result = await request<Grades>(
+        'mod_assign_get_grades',
+        `assignmentids[0]=${assignment}`
+      );
+      const assigned = result.assignments.flatMap(({ grades }) => grades)
+        .some(({ userid }) => userid === user);
+      if (assigned) return false;
+    }
     const metadata = notebook.metadata['correxit'] as Partial<Rubric.Locked>;
     const { name } = metadata.assignment as Partial<Rubric.Assignment>;
     const base =
@@ -232,6 +255,7 @@ export namespace Moodle {
         `plugindata[files_filemanager]=${draft}`
       ].join('&')
     );
+    return true;
   }
 
   export async function registrar(
@@ -262,6 +286,7 @@ export namespace Moodle {
           'core_enrol_get_enrolled_users',
           `courseid=${course}`
         );
+        remember(course, users);
         return [course, normalize(users)] as const;
       })
     );

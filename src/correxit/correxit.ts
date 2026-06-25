@@ -15,9 +15,10 @@ export namespace Correxit {
   export type Distributor = (propagated: {
     identifier: Workbook.Identifier.Assigned;
     notebook: INotebookContent;
+    overwrite: boolean;
     path: string;
     resources: Resource[] | null;
-  }) => Promise<void>;
+  }) => Promise<boolean>;
 
   export type Injector = (workbook: Workbook | null) => void;
 
