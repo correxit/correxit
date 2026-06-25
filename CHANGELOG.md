@@ -1,3 +1,10 @@
+# [1.25.0](https://github.com/QuantStack/correxit/compare/v1.24.3...v1.25.0) (2026-06-25)
+
+
+### Features
+
+* Support overwrite of distributed assignments ([#81](https://github.com/QuantStack/correxit/issues/81)) ([b1b4b90](https://github.com/QuantStack/correxit/commit/b1b4b90ac5c4a9afa3cf0e8b65e886469bf0f039))
+
 ## [1.24.3](https://github.com/QuantStack/correxit/compare/v1.24.2...v1.24.3) (2026-06-17)
 
 
