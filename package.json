@@ -59,7 +59,7 @@
         "test": "jest --coverage",
         "watch": "run-p watch:src watch:labextension",
         "watch:src": "tsc -w --sourceMap",
-        "watch:labextension": "jupyter labextension watch .",
+        "watch:labextension": "jupyter-builder watch .",
         "serve": "python -m http.server 8888 --directory lite/_output",
         "record-readme-video": "cd ui-tests && jlpm playwright test --config playwright.demo.config.js tests/demo.spec.ts && mv $(find test-results -name '*.webm' | sort | tail -1) demo.webm"
     },

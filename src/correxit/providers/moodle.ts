@@ -18,7 +18,9 @@ export namespace Moodle {
     shortname?: string;
   };
 
-  type Grades = { assignments: { grades: { userid: number }[] }[]; };
+  type Grades = {
+    assignments: { assignmentid: number; grades: { userid: number }[] }[];
+  };
 
   export type Settings = { token: string; url: string };
 
@@ -128,8 +130,17 @@ export namespace Moodle {
       'core_enrol_get_enrolled_users',
       `courseid=${course}`
     );
+    return remember(course, users);
+  };
+  const remember = (
+    course: number | string,
+    users: User[]
+  ): Map<string, number> => {
     const enrolled = new Map(users.map(user => [identify(user), user.id]));
-    participants.set(course, { expires: Date.now() + TTL, users: enrolled });
+    participants.set(
+      String(course),
+      { expires: Date.now() + TTL, users: enrolled }
+    );
     return enrolled;
   };
 
@@ -210,9 +221,9 @@ export namespace Moodle {
     if (!overwrite) {
       const result = await request<Grades>(
         'mod_assign_get_grades',
-        `assignmentids[0]=${assignment}&userids[0]=${user}`
+        `assignmentids[0]=${assignment}`
       );
-      const assigned = result.assignments[0]?.grades
+      const assigned = result.assignments.flatMap(({ grades }) => grades)
         .some(({ userid }) => userid === user);
       if (assigned) return false;
     }
@@ -275,6 +286,7 @@ export namespace Moodle {
           'core_enrol_get_enrolled_users',
           `courseid=${course}`
         );
+        remember(course, users);
         return [course, normalize(users)] as const;
       })
     );
