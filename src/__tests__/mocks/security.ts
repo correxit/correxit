@@ -2,6 +2,8 @@ export const encrypt = jest.fn(
   async (text: string, key: string) => `ENC[${key}]:${text}`
 );
 
+export const encrypted = jest.fn((text: string) => text.startsWith('ENC['));
+
 export const decrypt = jest.fn(async (text: string, key: string) => {
   const prefix = `ENC[${key}]:`;
   if (!text.startsWith(prefix)) {
