@@ -49,6 +49,27 @@ https://github.com/user-attachments/assets/04c5218e-772d-4e94-afca-2af2e15864d1
 ## Requirements
 
 - JupyterLab >= 4.0.0 or Jupyter Notebook >= 7.0.0
+- Node.js >= 20.0.0 for the optional Node runtime assignment entrypoint
+
+## Node Runtime Assignment
+
+Correxit also publishes a narrow Node runtime entrypoint for issuing one
+already-authored workbook without reopening the Jupyter UI:
+
+```js
+import { Assignment } from '@quantstack/correxit/node';
+
+const assigned = await Assignment.assign({
+  notebook,
+  assignee: 'foo@example.com',
+  passphrase: secret
+});
+```
+
+The host application supplies the notebook JSON, passphrase or derived key, and
+final distribution step. Correxit keeps those secrets in memory for this pure
+notebook transformation; it does not add a backend authority or trusted third
+party. See `examples/assign-one.mjs` for a minimal script.
 
 ## Install
 
