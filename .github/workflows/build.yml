@@ -55,6 +55,11 @@ jobs:
           set -eux
           jlpm run test
 
+      - name: Test the Node runtime entrypoint
+        run: |
+          set -eux
+          jlpm run test:node
+
       - name: Build the extension
         run: |
           set -eux
