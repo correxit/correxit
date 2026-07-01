@@ -11,17 +11,16 @@ export type Assigned = {
   encrypted: string[];
   identifier: Workbook.Identifier.Assigned;
   notebook: INotebookContent;
+  resources: string[] | null;
 };
 
 export type Options = {
   assignee: string;
   distribution?: number | null;
   file?: string | null;
-  key?: string | null;
   notebook: INotebookContent;
-  passphrase?: string | null;
   roster?: string[] | null;
-};
+} & ({ key: string; passphrase: null } | { key: null; passphrase: string });
 
 export type Prepared = {
   encrypted: string[];
@@ -71,7 +70,8 @@ export async function assign(options: Options): Promise<Assigned> {
     notebook,
     roster
   });
-  return { encrypted, ...issued };
+  const resources = unlocked.assignment.resources;
+  return { encrypted, resources, ...issued };
 }
 
 /** @returns a deterministic filename for an assigned workbook. */
@@ -260,9 +260,7 @@ async function secret(
   { key, passphrase }: Options,
   id: string
 ): Promise<string> {
-  if (key) return key;
-  if (passphrase) return security.keygen(passphrase, id);
-  throw new Error.Invalid('assign error: missing key');
+  return key ?? security.keygen(passphrase, id);
 }
 
 function text(cell: Cell): string {

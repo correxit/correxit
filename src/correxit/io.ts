@@ -5,7 +5,7 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
-import * as security from './security';
+import { filename } from './assignment';
 
 type Rack = {
   count: number;
@@ -134,12 +134,7 @@ const vacant = (kept: Rack, limit: number): number => {
 };
 
 /** @returns a deterministic filename for an assigned workbook. */
-export async function assigned(assignment: string, assignee: string) {
-  const name = assignment.replace(/[^\w.-]/g, '');
-  const local = assignee.split('@')[0].replace(/[^\w.-]/g, '');
-  const hash = (await security.digest(assignee)).slice(0, 4);
-  return `${name}-${local}-${hash}.ipynb`;
-}
+export const assigned = filename;
 
 /** @returns an available path in pwd for the given seed name. */
 export async function available(

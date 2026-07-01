@@ -86,6 +86,7 @@ describe('Assignment', () => {
       assignee: 'bob@example.com',
       distribution: 123,
       file: 'bob.ipynb',
+      key: null,
       notebook,
       passphrase: 'passphrase'
     });
@@ -105,6 +106,7 @@ describe('Assignment', () => {
     });
     expect(assigned.identifier.issue).toMatch(/^DIGEST</);
     expect(assigned.encrypted).toEqual(['reference']);
+    expect(assigned.resources).toBeNull();
     expect(unlocked.assignment.assignee).toBe('bob@example.com');
     expect(unlocked.assignment.roster).toEqual([
       'alice@example.com',
@@ -136,6 +138,43 @@ describe('Assignment', () => {
     expect(security.encrypt).not.toHaveBeenCalled();
   });
 
+  it('surfaces resource filenames for the caller to distribute', async () => {
+    const rubric = Rubric.add(base(), {
+      id: 'answer',
+      is: 'reviewable',
+      payload: null,
+      points: 1,
+      references: null
+    });
+    const withResources = await Rubric.assign(rubric, {
+      resources: ['data.csv', 'helper.py'],
+      roster: ['alice@example.com']
+    });
+    const locked = await Rubric.lock(withResources);
+    const notebook: INotebookContent = {
+      nbformat: 4,
+      nbformat_minor: 5,
+      metadata: { correxit: locked },
+      cells: [
+        {
+          cell_type: 'markdown',
+          id: 'answer',
+          metadata: {},
+          source: 'Write your answer here.'
+        }
+      ]
+    };
+
+    const assigned = await Assignment.assign({
+      assignee: 'bob@example.com',
+      key: null,
+      notebook,
+      passphrase: 'passphrase'
+    });
+
+    expect(assigned.resources).toEqual(['data.csv', 'helper.py']);
+  });
+
   it('fails closed when a rubric cell is missing', async () => {
     const { notebook } = await configured();
     notebook.cells = notebook.cells.filter(cell => cell.id !== 'answer');
@@ -143,6 +182,7 @@ describe('Assignment', () => {
     await expect(
       Assignment.assign({
         assignee: 'bob@example.com',
+        key: null,
         notebook,
         passphrase: 'passphrase'
       })

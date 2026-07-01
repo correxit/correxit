@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { Assignment } from '@quantstack/correxit/node';
 
 const usage = () => {
   console.error(
     [
       'Usage:',
-      '  node examples/assign-one.mjs template.ipynb --assignee=email --passphrase=secret [--out=file.ipynb]'
+      '  node examples/assign-one.mjs template.ipynb --assignee=email --passphrase=secret [--out=dir/]'
     ].join('\n')
   );
   process.exit(1);
@@ -28,8 +29,22 @@ if (!template || !assignee || !passphrase) usage();
 
 const source = await readFile(template, 'utf8');
 const notebook = JSON.parse(source);
-const assigned = await Assignment.assign({ assignee, notebook, passphrase });
-const destination = out || assigned.identifier.file;
+const assigned = await Assignment.assign({
+  assignee,
+  key: null,
+  notebook,
+  passphrase
+});
 
+const templateDir = dirname(template) || '.';
+const outputDir = out || assigned.identifier.file.replace(/\.ipynb$/, '');
+await mkdir(outputDir, { recursive: true });
+
+const destination = join(outputDir, assigned.identifier.file);
 await writeFile(destination, `${JSON.stringify(assigned.notebook, null, 2)}\n`);
 console.log(destination);
+
+for (const name of assigned.resources ?? []) {
+  await copyFile(join(templateDir, name), join(outputDir, name));
+  console.log(join(outputDir, name));
+}
