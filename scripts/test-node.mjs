@@ -119,6 +119,7 @@ const assigned = await Assignment.assign({
   assignee: 'bob@example.com',
   distribution: 123,
   notebook,
+  key: null,
   passphrase
 });
 const metadata = assigned.notebook.metadata.correxit;

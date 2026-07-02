@@ -62,6 +62,7 @@ import { Assignment } from '@quantstack/correxit/node';
 const assigned = await Assignment.assign({
   notebook,
   assignee: 'foo@example.com',
+  key: null,
   passphrase: secret
 });
 ```
