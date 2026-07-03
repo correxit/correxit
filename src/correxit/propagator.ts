@@ -2,9 +2,8 @@ import { PathExt } from '@jupyterlab/coreutils';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { ServiceManager } from '@jupyterlab/services';
-import { findIndex } from '@lumino/algorithm';
 import { CommandRegistry } from '@lumino/commands';
-import { Correxit, Rubric, Workbook } from '.';
+import { Assignment, Correxit, Workbook } from '.';
 import * as io from './io';
 import * as security from './security';
 
@@ -34,7 +33,7 @@ export async function* propagate({
   }
   try {
     const {
-      assignment: { expiration, name, overdue, penalty, roster },
+      assignment: { roster },
       key
     } = rubric;
     const path = workbook.context.path;
@@ -43,7 +42,11 @@ export async function* propagate({
     const potential = await io.available(manager, parent, stem);
     const directory = await io.mkdir(manager, parent, potential);
     const total = roster.length;
-    const { encrypted, notebook: content } = await template(workbook, rubric);
+    const source = workbook.context.model.sharedModel.toJSON();
+    const { encrypted, notebook: content } = await Assignment.prepare(
+      source,
+      rubric
+    );
     const author = await security.decrypt(
       rubric.assignment.keys.private.author,
       rubric.key
@@ -70,21 +73,20 @@ export async function* propagate({
     for (const assignee of roster) {
       yield { type: 'separator', slots: [] };
       const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
-      const file = await io.assigned(stem, assignee);
+      const file = await Assignment.filename(stem, assignee);
       const path = PathExt.join(directory.path, file);
-      const individual = { assignee, file, key, notebook, roster };
-      const assigned = await reassign(individual);
-      const id = assigned.assignment;
-      const assignment = { assignee, expiration, id, name, overdue, penalty };
-      const individualized = { assignment, notebook, rubric };
-      const issue = await Rubric.Assignment.issue(individualized);
-      const issuer = await Rubric.Assignment.issuer(issue, author);
-      const issued = { issue, issuer };
-      await reissue({ notebook, roster, ...issued, key });
-
-      const identifier = { ...assigned, issue: issued.issue };
+      const issued = await Assignment.issue({
+        assignee,
+        author,
+        distribution: null,
+        file,
+        key,
+        notebook,
+        roster
+      });
+      const { identifier } = issued;
       const propagated = { identifier, notebook, overwrite, path, resources };
-      stamp(notebook, Date.now());
+      Assignment.stamp(notebook, Date.now());
 
       let distributed = true;
       try {
@@ -94,7 +96,7 @@ export async function* propagate({
           continue;
         }
       } catch (error) {
-        stamp(notebook, null);
+        Assignment.stamp(notebook, null);
         distributed = false;
         yield {
           type: 'distribute-error',
@@ -114,177 +116,4 @@ export async function* propagate({
   } catch (error) {
     yield { type: 'error', slots: [`${error}`] };
   }
-}
-
-/** Stamp the distribution timestamp on a serialized notebook. */
-function stamp(
-  notebook: INotebookContent,
-  distribution: number | null
-): void {
-  const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
-    { assignment: Rubric.Assignment, revised: number };
-  metadata.assignment = { ...metadata.assignment, distribution };
-  metadata.revised = Date.now();
-}
-
-async function encrypt(
-  notebook: INotebookContent,
-  reference: string,
-  key: string
-): Promise<void> {
-  const index = findIndex(notebook.cells, ({ id }) => id === reference);
-  if (!key || index === -1) throw new Correxit.Error.Encrypt('encrypt error');
-
-  const cell = notebook.cells[index];
-  const source = Array.isArray(cell.source)
-    ? cell.source.join('')
-    : cell.source;
-  const encrypted = await security.encrypt(source, key);
-  const jupyter = cell.metadata.jupyter || {};
-  cell.cell_type = 'raw';
-  cell.metadata.editable = false;
-  cell.metadata.jupyter = { ...jupyter, 'source_hidden': true };
-  cell.source = encrypted;
-  delete cell.metadata.trusted;
-}
-
-/** @returns initialized lifecycle stages for a propagated assignment. */
-function lifecycle(expiration: Rubric.Timestamp) {
-  return {
-    certification: null,
-    collected: null,
-    distribution: null,
-    expiration,
-    issue: '',
-    issuer: '',
-    submission: null,
-    submitted: null
-  };
-}
-
-/**
- * Reassigns a serialized workbook to an assignee using a given unlocked rubric.
- *
- * #### Notes
- * This function explicitly mutates the serialized rubric in the given workbook
- * to overwrite its assignee and mac.
- */
-async function reassign({ assignee, file, key, notebook, roster }: {
-  assignee: string;
-  file: string;
-  key: string;
-  notebook: INotebookContent;
-  roster: string[];
-}): Promise<Workbook.Identifier.Assigned> {
-  const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
-    { assignment: Rubric.Assignment, revised: number };
-  const {
-    expiration,
-    id,
-    keys,
-    name,
-    overdue,
-    penalty,
-    resources,
-    roster: encrypted
-  } = metadata.assignment;
-  const report = Rubric.Assignment.Report.empty();
-  const fresh = lifecycle(expiration);
-  const unsigned = {
-    assignee,
-    ...fresh,
-    id,
-    keys,
-    name,
-    overdue,
-    penalty,
-    report,
-    resources,
-    roster
-  };
-  const seal = null;
-  const assignment: Rubric.Assignment = {
-    ...metadata.assignment, ...unsigned, mac: '', seal
-  };
-  const rubric: Rubric.Unlocked = {
-    assignment,
-    cells: metadata.cells,
-    id: metadata.id,
-    key,
-    locked: false,
-    references: metadata.references ?? {},
-    revised: Date.now()
-  };
-  const mac = await Rubric.mac(rubric, key);
-  metadata.assignment = { ...assignment, mac, roster: encrypted };
-  metadata.revised = Date.now();
-  return {
-    assignee,
-    assignment: metadata.assignment.id,
-    file,
-    issue: null,
-    rubric: metadata.id
-  };
-}
-
-async function reissue({ issuer, issue, key, notebook, roster }: {
-  issuer: string;
-  issue: string;
-  key: string;
-  notebook: INotebookContent;
-  roster: string[];
-}): Promise<void> {
-  const metadata = notebook.metadata['correxit'] as unknown as Rubric.Locked &
-    { assignment: Rubric.Assignment, revised: number };
-  const {
-    assignee, expiration, id, keys, name, overdue, penalty, report, resources
-  } = metadata.assignment;
-  const unsigned = {
-    assignee,
-    expiration,
-    id,
-    issue,
-    issuer,
-    keys,
-    name,
-    overdue,
-    penalty,
-    report,
-    resources,
-    roster
-  };
-  const assignment: Rubric.Assignment = {
-    ...metadata.assignment, ...unsigned, mac: ''
-  };
-  const rubric: Rubric.Unlocked = {
-    assignment,
-    cells: metadata.cells,
-    id: metadata.id,
-    key,
-    locked: false,
-    references: metadata.references ?? {},
-    revised: Date.now()
-  };
-  const mac = await Rubric.mac(rubric, key);
-  metadata.assignment = { ...metadata.assignment, issue, issuer, mac };
-  metadata.revised = Date.now();
-}
-
-async function template(
-  workbook: Workbook,
-  rubric: Rubric.Unlocked
-): Promise<{ encrypted: string[]; notebook: INotebookContent }> {
-  const encrypted: string[] = [];
-  const notebook = workbook.context.model.sharedModel.toJSON();
-  for (const reference of Object.values(rubric.references)) {
-    if (!reference.secret) continue;
-    await encrypt(notebook, reference.referent, rubric.key);
-    encrypted.push(reference.referent);
-  }
-  for (const cell of notebook.cells) {
-    const id = cell.id as string | undefined || '';
-    if (Rubric.has(rubric, id)) continue;
-    cell.metadata.editable = false;
-  }
-  return { encrypted, notebook };
 }

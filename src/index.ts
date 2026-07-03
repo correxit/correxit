@@ -1,3 +1,3 @@
-import { Correxit, Rubric, Workbook } from './correxit';
+import { Assignment, Correxit, Rubric, Workbook } from './correxit';
 export { plugins as default } from './plugins';
-export { Correxit, Rubric, Workbook };
+export { Assignment, Correxit, Rubric, Workbook };
