@@ -5,7 +5,6 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
-import { filename } from './assignment';
 
 type Rack = {
   count: number;
@@ -38,8 +37,8 @@ const claim = async(
   }
 
   const index = position >= 0 ? kept.free.splice(position, 1)[0] : kept.count++;
-  kept.used.add(index);
   let released = false;
+  kept.used.add(index);
   return {
     index,
     release: async () => {
@@ -132,9 +131,6 @@ const vacant = (kept: Rack, limit: number): number => {
     if (kept.free[position] < limit) return position;
   return -1;
 };
-
-/** @returns a deterministic filename for an assigned workbook. */
-export const assigned = filename;
 
 /** @returns an available path in pwd for the given seed name. */
 export async function available(

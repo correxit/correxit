@@ -1,7 +1,7 @@
 declare const require: any;
 jest.mock('../correxit/security', () => require('./mocks/security'));
 import { INotebookContent } from '@jupyterlab/nbformat';
-import * as Assignment from '../correxit/assignment';
+import { Assignment } from '../correxit/assignment';
 import { Rubric } from '../correxit/rubric';
 import * as security from './mocks/security';
 

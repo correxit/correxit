@@ -1,4 +1,4 @@
-export * as Assignment from './assignment';
+export { Assignment } from './assignment';
 export { Correxit } from './correxit';
 export { Rubric   } from './rubric';
 export { Unlocker } from './unlocker';

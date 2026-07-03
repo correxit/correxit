@@ -3,8 +3,7 @@ import { INotebookContent } from '@jupyterlab/nbformat';
 import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
-import { Correxit, Workbook } from '.';
-import * as assignment from './assignment';
+import { Assignment, Correxit, Workbook } from '.';
 import * as io from './io';
 import * as security from './security';
 
@@ -44,7 +43,7 @@ export async function* propagate({
     const directory = await io.mkdir(manager, parent, potential);
     const total = roster.length;
     const source = workbook.context.model.sharedModel.toJSON();
-    const { encrypted, notebook: content } = await assignment.prepare(
+    const { encrypted, notebook: content } = await Assignment.prepare(
       source,
       rubric
     );
@@ -74,9 +73,9 @@ export async function* propagate({
     for (const assignee of roster) {
       yield { type: 'separator', slots: [] };
       const notebook: INotebookContent = JSON.parse(JSON.stringify(content));
-      const file = await assignment.filename(stem, assignee);
+      const file = await Assignment.filename(stem, assignee);
       const path = PathExt.join(directory.path, file);
-      const issued = await assignment.issue({
+      const issued = await Assignment.issue({
         assignee,
         author,
         distribution: null,
@@ -87,7 +86,7 @@ export async function* propagate({
       });
       const { identifier } = issued;
       const propagated = { identifier, notebook, overwrite, path, resources };
-      assignment.stamp(notebook, Date.now());
+      Assignment.stamp(notebook, Date.now());
 
       let distributed = true;
       try {
@@ -97,7 +96,7 @@ export async function* propagate({
           continue;
         }
       } catch (error) {
-        assignment.stamp(notebook, null);
+        Assignment.stamp(notebook, null);
         distributed = false;
         yield {
           type: 'distribute-error',

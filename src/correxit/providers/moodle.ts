@@ -1,7 +1,6 @@
 import { URLExt } from '@jupyterlab/coreutils';
-import { Correxit, Rubric, Workbook } from '..';
+import { Assignment, Correxit, Rubric, Workbook } from '..';
 import * as Error from '../error';
-import * as io from '../io';
 
 export namespace Moodle {
   type Assignment = {
@@ -172,7 +171,7 @@ export namespace Moodle {
 
     const notebook = certified.workbook.context.model.sharedModel.toJSON();
     const content = JSON.stringify(notebook);
-    const file = await io.assigned(rubric.assignment.name, assignee);
+    const file = await Assignment.filename(rubric.assignment.name, assignee);
     const item = await upload(url, token, content, file);
     if (!item)
       throw new Error.Plugin(`collector error: upload failed (${assignee})`);
@@ -231,7 +230,7 @@ export namespace Moodle {
     const { name } = metadata.assignment as Partial<Rubric.Assignment>;
     const base =
       (name || `moodle-${course}-${assignment}`).toLocaleLowerCase();
-    const file = await io.assigned(base, assignee);
+    const file = await Assignment.filename(base, assignee);
     const content = JSON.stringify(notebook);
     let draft = await upload(url, token, content, file);
     if (resources) {
