@@ -1,3 +1,10 @@
+# [1.26.0](https://github.com/QuantStack/correxit/compare/v1.25.0...v1.26.0) (2026-07-03)
+
+
+### Features
+
+* standalone assignment module and node runtime example ([#82](https://github.com/QuantStack/correxit/issues/82)) ([501a2a1](https://github.com/QuantStack/correxit/commit/501a2a12083a22e8488f37dba431b0c16ba41157))
+
 # [1.25.0](https://github.com/QuantStack/correxit/compare/v1.24.3...v1.25.0) (2026-06-25)
 
 
