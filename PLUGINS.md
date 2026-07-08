@@ -119,11 +119,11 @@ Otherwise each entry carries the file name and raw bytes.
 
 The `boolean` return is feedback to the propagator:
 
-| Return  | Meaning                                     | Propagator behaviour                                                                                                                                                    |
-| ------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `true`  | Delivered (or no external delivery needed). | Writes the local notebook file, records `assignment.distribution`, and emits a `distributed` event for this assignee.                                                   |
-| `false` | Skip this assignee intentionally.           | Skips writing the local file entirely and emits a `skipped` event. Use this to avoid overwriting an existing delivery when `overwrite` is `false`.                      |
-| throws  | Delivery failed unexpectedly.               | Still writes the local file (so the author can retry), but does **not** record `assignment.distribution` and emits a `distribute-error` event instead of `distributed`. |
+| Return  | Meaning                                     | Propagator behaviour                                                                                                                                                     |
+| ------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `true`  | Delivered (or no external delivery needed). | Attempts to save the local notebook with `assignment.distribution` recorded; on success, emits a `distributed` event, and on local-save failure emits `create-error`.    |
+| `false` | Skip this assignee intentionally.           | Skips writing the local file entirely and emits a `skipped` event. Use this to avoid overwriting an existing delivery when `overwrite` is `false`.                       |
+| throws  | Delivery failed unexpectedly.               | Emits a `distribute-error` event, then attempts to save the local file for recovery without `assignment.distribution`; on local-save failure, also emits `create-error`. |
 
 A distributor that does not interact with any external system should return
 `true` unconditionally, matching the behaviour of the default (manual)
