@@ -1,3 +1,10 @@
+## [1.26.1](https://github.com/QuantStack/correxit/compare/v1.26.0...v1.26.1) (2026-07-08)
+
+
+### Bug Fixes
+
+* update stale distributor documentation ([#83](https://github.com/QuantStack/correxit/issues/83)) ([5ecc28d](https://github.com/QuantStack/correxit/commit/5ecc28d88566f6fe0eba5aec24dcb3ec0a5e4038))
+
 # [1.26.0](https://github.com/QuantStack/correxit/compare/v1.25.0...v1.26.0) (2026-07-03)
 
 
