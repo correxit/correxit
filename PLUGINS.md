@@ -93,32 +93,45 @@ type Resource = { name: string; data: Uint8Array };
 type Distributor = (propagated: {
   identifier: Workbook.Identifier.Assigned;
   notebook: INotebookContent;
+  overwrite: boolean;
   path: string;
   resources: Resource[] | null;
-}) => Promise<void>;
+}) => Promise<boolean>;
 ```
 
-Called when an author propagates a workbook or retries delivery for one saved
-workbook. The distributor receives:
-
-- `propagated` - one personalized notebook ready for delivery.
+Called for each assignee during propagation, and again on a single-workbook
+retry. The distributor receives one personalized notebook ready for delivery.
 
 ```typescript
 type Propagated = {
   identifier: Workbook.Identifier.Assigned;
   notebook: INotebookContent; // nbformat notebook, ready to save
-  path: string; // intended destination path
+  overwrite: boolean; // true when the author explicitly requests re-delivery
+  path: string; // intended local destination path
   resources: Resource[] | null; // sidecar files, loaded by the propagator
 };
 ```
 
 `resources` is `null` when no sidecar files were declared on the assignment.
-Otherwise each entry carries the file name and raw bytes. The distributor is
-responsible for any external delivery of the notebook and resources. The core
-propagator creates the local notebook and sidecar files, then records
-`assignment.distribution` after successful delivery.
+Otherwise each entry carries the file name and raw bytes.
 
-> The default distributor is the manual distributor, which is a no-op.
+### Return value
+
+The `boolean` return is feedback to the propagator:
+
+| Return  | Meaning                                     | Propagator behaviour                                                                                                                                                     |
+| ------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `true`  | Delivered (or no external delivery needed). | Attempts to save the local notebook with `assignment.distribution` recorded; on success, emits a `distributed` event, and on local-save failure emits `create-error`.    |
+| `false` | Skip this assignee intentionally.           | Skips writing the local file entirely and emits a `skipped` event. Use this to avoid overwriting an existing delivery when `overwrite` is `false`.                       |
+| throws  | Delivery failed unexpectedly.               | Emits a `distribute-error` event, then attempts to save the local file for recovery without `assignment.distribution`; on local-save failure, also emits `create-error`. |
+
+A distributor that does not interact with any external system should return
+`true` unconditionally, matching the behaviour of the default (manual)
+distributor. A distributor that checks for an existing delivery should return
+`false` when `overwrite` is `false` and a prior delivery is detected.
+
+> The default distributor is the manual distributor. It returns `true`
+> unconditionally: every workbook is considered delivered locally.
 
 ---
 

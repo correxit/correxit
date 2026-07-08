@@ -12,6 +12,17 @@ export namespace Correxit {
     certified: Workbook.Certified
   ) => Promise<string | null>;
 
+  /**
+   * Called for each assignee during propagation, and again on a single-workbook
+   * retry. Returns `true` to confirm delivery (the propagator attempts to
+   * write the local file with `assignment.distribution` recorded, and emits
+   * `distributed` only when that save succeeds), `false` to skip the assignee
+   * without writing a local file (the propagator emits `skipped`), or throws
+   * to signal an unexpected failure (the propagator attempts to write the
+   * local file for recovery but emits `distribute-error` and does not record
+   * `assignment.distribution`). A distributor with no external target should
+   * return `true` unconditionally.
+   */
   export type Distributor = (propagated: {
     identifier: Workbook.Identifier.Assigned;
     notebook: INotebookContent;
