@@ -31,7 +31,9 @@ into a gradable workbook.
   frontend (JupyterLab / Jupyter Notebook / JupyterLite). There is no backend.
 - All workbook data for both a grader and a student is contained within the
   document itself, which is a Jupyter notebook (`.ipynb`) file with a `correxit`
-  field in its metadata. There is no other data store.
+  field in its metadata. That object carries a required `cxtformat`
+  discriminator independent of the package version. There is no other data
+  store.
 - The author converts a Jupyter notebook into a workbook by configuring which
   cells to grade, optionally setting a local late policy for backendless
   workflows, and encrypting the grading logic with a passphrase.

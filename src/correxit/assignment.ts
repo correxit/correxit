@@ -139,6 +139,7 @@ export namespace Assignment {
     const unlocked: Rubric.Unlocked = {
       assignment,
       cells: metadata.cells,
+      cxtformat: metadata.cxtformat,
       id: metadata.id,
       key,
       locked: false,

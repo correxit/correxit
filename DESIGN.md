@@ -79,6 +79,11 @@ The central data structure is the `Rubric`, stored in notebook metadata under
 the key `correxit`. A Correxit `Workbook` is a Jupyter notebook that has a
 `Rubric`, which describes how to grade and assign it.
 
+The required `cxtformat` field identifies the persisted Correxit metadata
+format independently of the Correxit package version. New workbooks use
+`cxtformat: 1`; missing and unknown formats fail closed and are never silently
+rewritten when opened.
+
 A rubric is immutable. Each mutation returns a new instance (with a new
 `revised` timestamp) via functions in `rubric.ts`.
 
