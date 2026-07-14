@@ -14,10 +14,17 @@ mamba run -n correxit jlpm build
 Run targeted Playwright tests from `ui-tests/` before the full suite when a
 change touches workbook lifecycle, Corrector, Reviewer, or propagation.
 
-Changes to the assignment MAC surface are workbook-format breaks. Before
-releasing a build that expands the authenticated terms, confirm that any
-in-flight assigned workbooks have been re-issued, because older workbooks will
-fail unlock with a MAC mismatch.
+## Workbook format policy
+
+Correxit 1.x and `cxtformat: 1` are provisional until the first public
+Correxit 2.0 release. Workbooks produced during this pre-release period are
+test artifacts and may require re-creation after upgrades. Correxit 2.0 freezes
+the format-1 contract.
+
+Thereafter, incompatible persisted-format changes require a new `cxtformat`,
+while readers for supported earlier formats are retained. Package versions and
+workbook-format versions are independent. Changes to authenticated terms, such
+as the assignment MAC or issue digest surfaces, are persisted-format changes.
 
 ### Python package
 
