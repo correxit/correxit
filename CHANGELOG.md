@@ -1,3 +1,10 @@
+# [1.27.0](https://github.com/QuantStack/correxit/compare/v1.26.1...v1.27.0) (2026-07-21)
+
+
+### Features
+
+* `cxtformat` ([#84](https://github.com/QuantStack/correxit/issues/84)) ([aae08bb](https://github.com/QuantStack/correxit/commit/aae08bbc54b26a94634b1d7db8a4e2aa8df6ab95))
+
 ## [1.26.1](https://github.com/QuantStack/correxit/compare/v1.26.0...v1.26.1) (2026-07-08)
 
 
