@@ -33,6 +33,10 @@ describe('Rubric', () => {
     }) as any;
 
   describe('Lifecycle & Manipulation', () => {
+    it('creates the current Correxit metadata format', () => {
+      expect(Rubric.create().cxtformat).toBe(Rubric.CXTFORMAT);
+    });
+
     it('locks and unlocks data symmetrically', async () => {
       const id = 'test-cell';
       const cell: Rubric.Cell = {
@@ -232,7 +236,18 @@ describe('Rubric', () => {
     it('normalizes a locked rubric', async () => {
       const rubric = await Rubric.lock(create());
       const normalized = Rubric.normalize(rubric);
+      expect(normalized.cxtformat).toBe(Rubric.CXTFORMAT);
       expect(normalized.id).toBeDefined();
+    });
+
+    it.each([
+      ['missing', undefined],
+      ['unknown', 2]
+    ])('rejects cxtformat when %s', async (_, cxtformat) => {
+      const rubric = await Rubric.lock(create());
+      expect(() => Rubric.normalize({ ...rubric, cxtformat } as any)).toThrow(
+        'unsupported cxtformat'
+      );
     });
 
     it('throws when normalizing invalid rubric', () => {
@@ -377,6 +392,21 @@ describe('Rubric', () => {
       await expect(Rubric.validate(score)).rejects.toThrow('mac mismatch');
     });
 
+    it('authenticates cxtformat', async () => {
+      const assignee = 'assignee@example.com';
+      const rubric = await Rubric.assign(create(), {
+        assignee,
+        roster: [assignee]
+      });
+      const tampered = { ...rubric, cxtformat: 2 } as any;
+      await expect(Rubric.validate(tampered)).rejects.toThrow(
+        'unsupported cxtformat'
+      );
+      expect(await Rubric.mac(tampered, rubric.key)).not.toBe(
+        rubric.assignment.mac
+      );
+    });
+
     it('preserves expiration when reassigning', async () => {
       const assignee = 'assignee@example.com';
       const roster = [assignee, 'reassignee@example.com'];
@@ -482,6 +512,26 @@ describe('Rubric', () => {
           rubric
         })
       ).resolves.toBe(true);
+    });
+
+    it('includes cxtformat in the issue digest', async () => {
+      const rubric = create();
+      const notebook = {
+        cells: [{ cell_type: 'code', id: 'c1', source: 'print(1)' }],
+        metadata: {}
+      } as any;
+      const current = await Rubric.Assignment.issue({
+        assignment: rubric.assignment,
+        notebook,
+        rubric
+      });
+      const future = { ...rubric, cxtformat: 2 } as any;
+      const changed = await Rubric.Assignment.issue({
+        assignment: future.assignment,
+        notebook,
+        rubric: future
+      });
+      expect(changed).not.toBe(current);
     });
 
     it('rejects a changed notebook as unstarted', async () => {

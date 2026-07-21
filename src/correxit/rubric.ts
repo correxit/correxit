@@ -15,6 +15,9 @@ import * as security from './security';
 export type Rubric = Rubric.Locked | Rubric.Unlocked;
 
 export namespace Rubric {
+  /** Current persisted Correxit metadata format. */
+  export const CXTFORMAT = 1 as const;
+
   /** Assignment integrity, lifecycle, and grading metadata. */
   export type Assignment = Readonly<{
     assignee: string;
@@ -41,6 +44,7 @@ export namespace Rubric {
   type Base = Readonly<{
     assignment: Assignment;
     cells: Readonly<{ [id: string]: Cell }>;
+    cxtformat: typeof CXTFORMAT;
     id: string;
     references: Readonly<{ [referent: string]: Cell.Reference; }>;
     revised: number;
@@ -380,6 +384,7 @@ export namespace Rubric {
       roster: string[];
     }>;
     cells: Readonly<{ [id: string]: Cell }>;
+    cxtformat: typeof CXTFORMAT;
     id: string;
     references: Readonly<{ [referent: string]: Cell.Reference; }>;
   }>;
@@ -547,7 +552,7 @@ export namespace Rubric {
         'assignee' | 'expiration' | 'id' | 'name' | 'overdue' | 'penalty'
       >;
       notebook: INotebookContent;
-      rubric: Pick<Base, 'cells' | 'id' | 'references'>;
+      rubric: Pick<Base, 'cells' | 'cxtformat' | 'id' | 'references'>;
     }): Promise<string> {
       const sources = notebook.cells
         .map(({ id, source, cell_type }) => [
@@ -566,6 +571,7 @@ export namespace Rubric {
         assignee: assignment.assignee,
         assignment: assignment.id,
         cells,
+        cxtformat: rubric.cxtformat,
         expiration: assignment.expiration,
         name: assignment.name,
         overdue: assignment.overdue,
@@ -601,7 +607,7 @@ export namespace Rubric {
         | 'penalty'
       >;
       notebook: INotebookContent;
-      rubric: Pick<Base, 'cells' | 'id' | 'references'>;
+      rubric: Pick<Base, 'cells' | 'cxtformat' | 'id' | 'references'>;
     }): Promise<boolean> {
       if (!assignment.issue || !assignment.issuer) return false;
       const verified = await security.verify(
@@ -944,7 +950,7 @@ export namespace Rubric {
     const encoded = revised.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
     return {
-      assignment, cells: {}, id,
+      assignment, cells: {}, cxtformat: CXTFORMAT, id,
       locked: false, references: {}, revised
     };
   }
@@ -1047,12 +1053,15 @@ export namespace Rubric {
     await Rubric.validate(signed);
 
     const locked = true;
-    const { cells, id, key, references } = signed;
+    const { cells, cxtformat, id, key, references } = signed;
     const serialized = JSON.stringify(signed.assignment.roster);
     const roster = [await security.encrypt(serialized, key)];
     const assignment = { ...signed.assignment, roster };
     const revised = Date.now();
-    return { assignment, cells, id, key: null, locked, references, revised };
+    return {
+      assignment, cells, cxtformat, id,
+      key: null, locked, references, revised
+    };
   }
 
   /** @returns an HMAC associated with the given rubric. */
@@ -1062,11 +1071,13 @@ export namespace Rubric {
 
   /** @returns a normalized locked rubric or throws. */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
-    const { assignment, cells, id, key, locked, revised } = rubric;
+    const { assignment, cells, cxtformat, id, key, locked, revised } = rubric;
     const object = (value: unknown): value is object =>
       typeof value === 'object' && value !== null;
     const record = (value: unknown): value is { [key: string]: unknown } =>
       object(value) && !Array.isArray(value);
+    if (cxtformat !== CXTFORMAT)
+      throw new Error.Invalid('invalid rubric, unsupported cxtformat');
     if (!revised) throw new Error.Invalid('invalid rubric, missing revised');
     if (typeof id !== 'string' || !id)
       throw new Error.Invalid('invalid rubric, missing id');
@@ -1113,7 +1124,7 @@ export namespace Rubric {
     const references = rubric.references ?? {};
     return {
       assignment: { ...Assignment.empty(), ...assignment, keys, report, seal },
-      cells, id, key, locked, references, revised
+      cells, cxtformat, id, key, locked, references, revised
     };
   }
 
@@ -1207,6 +1218,7 @@ export namespace Rubric {
     return {
       assignment: authored(rubric.assignment),
       cells: cells(rubric.cells),
+      cxtformat: rubric.cxtformat,
       id: rubric.id,
       references: references(rubric.references)
     };
@@ -1240,12 +1252,14 @@ export namespace Rubric {
 
   /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
-    const { cells, id, references, assignment: { roster: [block] } } = rubric;
+    const {
+      cells, cxtformat, id, references, assignment: { roster: [block] }
+    } = rubric;
     const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
     const assignment = { ...rubric.assignment, roster };
     const revised = Date.now();
     const unlocked: Unlocked = {
-      assignment, cells, id, key, locked: false, references, revised
+      assignment, cells, cxtformat, id, key, locked: false, references, revised
     };
     await Rubric.validate(unlocked);
     return unlocked;
@@ -1268,6 +1282,8 @@ export namespace Rubric {
   }
 
   export async function validate(rubric: Unlocked): Promise<void> {
+    if (rubric.cxtformat !== CXTFORMAT)
+      throw new Error.Invalid('invalid rubric, unsupported cxtformat');
     const { assignment, key } = rubric;
     await Assignment.validate(assignment);
     if (!assignment.mac) return;

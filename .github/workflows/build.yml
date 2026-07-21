@@ -125,8 +125,8 @@ jobs:
           python -m pip install -U "jupyterlab>=4.0.0,<5"
 
           yarn install
-          yarn run build:lib
-          
+          yarn run test:node
+
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm publish --access internal  #  Explicitly set public access.
 

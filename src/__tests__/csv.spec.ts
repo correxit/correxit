@@ -55,7 +55,8 @@ const rubric = (overrides: Partial<Rubric.Unlocked> = {}): Rubric.Unlocked => ({
   locked: false,
   references: {},
   revised: 0,
-  ...overrides
+  ...overrides,
+  cxtformat: Rubric.CXTFORMAT
 });
 
 const workbook = (path: string): Headless =>

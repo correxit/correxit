@@ -61,7 +61,7 @@ re-injects them into composite settings on later loads.
 ### Rubric MAC
 
 Authenticates the mutable author-controlled grading state:
-`rubric.id`, rubric `cells`, rubric `references`, assignment
+`rubric.cxtformat`, `rubric.id`, rubric `cells`, rubric `references`, assignment
 `assignee`, `expiration`, `id`, `issue`, `issuer`, `keys`
 (author components only), `name`, `overdue`, `penalty`,
 `resources`, `report` (interventions + scores, sorted), and
@@ -83,9 +83,9 @@ This is different from `Workbook.Identifier`. `Identifier` is a small routing
 key. The MAC proves that the broader authored assignment state still matches
 the secret key held by the author side of Correxit.
 
-**Authenticated:** `rubric.id`, `cells`, `references`, `assignee`,
-`expiration`, `id`, `issue`, `issuer`, `keys` (author only),
-`name`, `overdue`, `penalty`, `resources`, `report`, `roster`.
+**Authenticated:** `rubric.cxtformat`, `rubric.id`, `cells`, `references`,
+`assignee`, `expiration`, `id`, `issue`, `issuer`, `keys` (author only), `name`,
+`overdue`, `penalty`, `resources`, `report`, `roster`.
 
 **Not authenticated:** `certification`, `collected`, `distribution`, `seal`,
 `submission`, `submitted`. These change after signing or are set by the
@@ -308,6 +308,11 @@ been unlocked and authenticated with the rubric key.
   public key, assignee private key requires a corresponding public key.
 
 ## Serialization Invariant
+
+The required `cxtformat` discriminator identifies the persisted Correxit
+metadata format. It is authenticated by both the assignment issue digest and
+the rubric MAC. Missing and unknown formats are rejected before their contents
+are interpreted.
 
 All optional fields use `Type | null`, never `Type?`. This keeps
 `JSON.stringify` deterministic: `null` is serialized, `undefined` is omitted.
