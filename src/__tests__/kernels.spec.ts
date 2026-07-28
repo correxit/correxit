@@ -1,4 +1,12 @@
-import { configure, drain, lease } from '../correxit/kernels';
+import {
+  cap,
+  configure,
+  drain,
+  lease,
+  retries,
+  snapshot,
+  timeout
+} from '../correxit/kernels';
 
 let serial = 0;
 
@@ -82,6 +90,13 @@ describe('kernels', () => {
   });
 
   const named = () => `python3-${serial++}`;
+
+  it('uses the settings defaults', () => {
+    expect(cap()).toBe(3);
+    expect(retries()).toBe(2);
+    expect(timeout()).toBe(60_000);
+    expect(snapshot().concurrency).toBe(3);
+  });
 
   describe('lease', () => {
     it('starts a new kernel when the pool is empty', async () => {
@@ -419,7 +434,7 @@ describe('kernels', () => {
       expect(mock.shutdown).not.toHaveBeenCalled();
     });
 
-    it('limits outstanding leases to workers', async () => {
+    it('limits outstanding leases to the concurrency cap', async () => {
       const name = named();
       const workbook = create({ name });
       const first3 = [lease(workbook), lease(workbook), lease(workbook)];

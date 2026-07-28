@@ -32,6 +32,9 @@ export function useCommand<T>(
   args?: ReadonlyPartialJSONObject
 ): [T[], boolean] {
   const [state, setState] = useState<State<T>>({ idle: true, list: [] });
+  // Object identity is deliberately ignored: serialized arguments define
+  // when a command stream restarts. See DEBT.md for the planned extraction.
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect((interrupted = false) => {
     (async (stream?: Promise<AsyncIterable<T> | Iterable<T>>) => {
       const buffer: T[] = [];
@@ -59,5 +62,6 @@ export function useCommand<T>(
     })(commands.hasCommand(id) ? commands.execute(id, args) : undefined);
     return () => void (interrupted = true);
   }, [id, JSON.stringify(args)]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   return [state.list, state.idle];
 }

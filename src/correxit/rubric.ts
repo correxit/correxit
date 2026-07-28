@@ -516,6 +516,21 @@ export namespace Rubric {
       });
     }
 
+    /** @returns whether an assignment has complete issuance credentials. */
+    export function issued(assignment: Pick<
+      Assignment,
+      'assignee' | 'issue' | 'issuer'
+    >): boolean {
+      return !!(assignment.assignee && assignment.issue && assignment.issuer);
+    }
+
+    /** @returns whether any reviewable cell still needs an intervention. */
+    export function pending(rubric: Rubric): boolean {
+      const { interventions } = rubric.assignment.report;
+      return Object.values(rubric.cells)
+        .some(({ id, is }) => is === 'reviewable' && !interventions[id]);
+    }
+
     /**
      * @returns an amended copy of the assignment report with new scores added.
      * @param id - if the cell is not specified, all cells are scored.

@@ -315,10 +315,7 @@ export function commands(
           const updated = open(workbook);
           const { certification } = updated?.assignment ?? {};
           if (updated && !updated.locked && !certification) {
-            const pending = Object.values(updated.cells)
-              .filter(cell => cell.is === 'reviewable')
-              .some(cell => !updated.assignment.report.interventions[cell.id]);
-            if (!pending) {
+            if (!Rubric.Assignment.pending(updated)) {
               try {
                 await Workbook.certify(workbook, trans, true);
                 await save(workbook);
@@ -481,16 +478,13 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   });
   if (assignment.certification) return grade(report.kernel);
 
-  const { interventions, scores } = report;
+  const { scores } = report;
   const ids = Object.keys(rubric.cells);
   const scored =
     ids.length > 0 && ids.every(id => scores[id] && !unexecuted(scores[id]));
   if (!scored) return null;
 
-  const reviewing = Object.values(rubric.cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !interventions[cell.id]);
-  return reviewing ? grade(report.kernel) : null;
+  return Rubric.Assignment.pending(rubric) ? grade(report.kernel) : null;
 }
 
 async function grade(
@@ -503,11 +497,7 @@ async function grade(
   if (Rubric.Assignment.rejected(rubric.assignment))
     throw new Correxit.Error.Certify('grade error: overdue rejected');
 
-  const { interventions } = rubric.assignment.report;
-  const pending = Object.values(rubric.cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !interventions[cell.id]);
-  if (!pending) {
+  if (!Rubric.Assignment.pending(rubric)) {
     const certified = await Workbook.certify(workbook, trans);
     await save(workbook);
     return certified;
@@ -531,19 +521,23 @@ function precertified(workbook: Headless): Certified | null {
   if (!rubric || !rubric.locked) return null;
 
   const { assignment, cells } = rubric;
-  const { interventions, kernel, scores } = assignment.report;
+  const { kernel, scores } = assignment.report;
   if (Rubric.Assignment.rejected(assignment)) return null;
 
   const path = workbook.context.path;
   const incomplete = Object.keys(cells).some(id => !scores[id]);
   const partial = Object.values(scores).some(unexecuted);
-  const pending = Object.values(cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !interventions[cell.id]);
   const uncertified = !assignment.certification;
   const summary = Rubric.Assignment.summary(assignment.report, assignment);
   const unscored = summary.status === 'unscored';
-  if (incomplete || partial || pending || uncertified || unscored) return null;
+  if (
+    incomplete ||
+    partial ||
+    Rubric.Assignment.pending(rubric) ||
+    uncertified ||
+    unscored
+  )
+    return null;
 
   const grade: Grade = { path, resolved: true, score: summary, spec: kernel };
   const identifier = Workbook.identifier(workbook);

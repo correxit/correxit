@@ -40,7 +40,7 @@ export namespace Result {
  * concurrency slot is free, so the kernel pool never grows faster than grading
  * can drain it.
  *
- * Timeouts are not managed here, the kernel lease deadline (`kernels.lifespan`)
+ * Timeouts are not managed here, the kernel lease deadline (`kernels.timeout`)
  * is the authoritative timeout because it starts after `acquire()` resolves,
  * not while waiting for a pool slot.
  *

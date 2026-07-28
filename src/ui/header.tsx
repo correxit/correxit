@@ -3,6 +3,7 @@ import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
+import { trail } from '../correxit/trail';
 import { Assignment } from './assignment';
 
 type Tone =
@@ -28,26 +29,6 @@ const {
   submit,
   unlock
 } = Correxit.CommandIDs;
-
-const trail = (
-  assignment: Rubric.Assignment,
-  trans: TranslationBundle,
-  unstarted: boolean
-) => {
-  const { certification, collected, distribution, submission, submitted } =
-    assignment;
-  const lines: string[] = [];
-  if (distribution !== null)
-    lines.push(trans.__('Distribution %1', Rubric.timestamp(distribution)));
-  if (submission !== null)
-    lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
-  if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
-  if (certification !== null)
-    lines.push(trans.__('Certification %1', Rubric.timestamp(certification)));
-  if (collected !== null) lines.push(trans.__('Collected: %1', collected));
-  if (unstarted) lines.push(trans.__('Unstarted'));
-  return lines;
-};
 
 const phase = (
   rubric: Rubric | null,
@@ -231,6 +212,8 @@ export const Header: React.FC<{
   trans: TranslationBundle;
   workbook: Workbook | null;
 }> = ({ commands, trans, workbook }) => {
+  const rubric = workbook ? Workbook.open(workbook, true) : null;
+  const unstarted = useUnstarted(workbook, rubric);
   if (!workbook) {
     return (
       <section
@@ -245,7 +228,6 @@ export const Header: React.FC<{
     );
   }
 
-  const rubric = Workbook.open(workbook, true);
   const score = rubric
     ? Rubric.Assignment.summary(rubric.assignment.report, rubric.assignment)
     : null;
@@ -259,16 +241,14 @@ export const Header: React.FC<{
   const titled = scored
     ? trans.__('%1 (%2 of %3)', heading, score.points, score.possible)
     : heading;
-  const unstarted = useUnstarted(workbook, rubric);
   const distributable =
     assignment !== null &&
-    assignment.assignee !== null &&
-    assignment.issue !== null &&
-    assignment.issuer !== null &&
+    Rubric.Assignment.issued(assignment) &&
     assignment.distribution === null;
   const view = phase(rubric, trans, unstarted);
   const next = step(rubric, trans, distributable);
-  const lines = assignment ? trail(assignment, trans, unstarted) : [];
+  const lines = assignment ? trail(assignment, trans) : [];
+  if (unstarted) lines.push(trans.__('Unstarted'));
   const line = lines.at(-1) || '';
   const title = lines.join('\n');
   return (
@@ -321,20 +301,23 @@ export const Header: React.FC<{
   );
 };
 
-function useUnstarted(workbook: Workbook, rubric: Rubric | null): boolean {
+function useUnstarted(
+  workbook: Workbook | null,
+  rubric: Rubric | null
+): boolean {
   const [unstarted, setUnstarted] = useState(false);
   const assignment = rubric?.assignment;
   const needed = !!(
-    assignment?.issue &&
-    assignment?.issuer &&
-    assignment?.certification === null &&
-    assignment?.collected === null &&
-    assignment?.distribution === null &&
-    assignment?.submission === null &&
-    assignment?.submitted === null
+    assignment &&
+    Rubric.Assignment.issued(assignment) &&
+    assignment.certification === null &&
+    assignment.collected === null &&
+    assignment.distribution === null &&
+    assignment.submission === null &&
+    assignment.submitted === null
   );
   useEffect(() => {
-    if (!needed) {
+    if (!workbook || !needed) {
       setUnstarted(false);
       return;
     }

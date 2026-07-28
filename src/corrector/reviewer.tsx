@@ -122,7 +122,7 @@ export function Reviewer(props: Reviewer.Props) {
 
   useEffect(() => {
     if (initial) setCursor(initial);
-  }, [initial?.path, initial?.cell]);
+  }, [initial]);
 
   const columns = useMemo(
     () => workbooks.filter(reified).map(w => w.context.path),
@@ -135,9 +135,13 @@ export function Reviewer(props: Reviewer.Props) {
           .filter(reified)
           .find(({ context: { path } }) => path === cursor.path)) ??
       null,
-    [workbooks, cursor?.path]
+    [cursor, workbooks]
   );
-  const rubric = useMemo(() => open(workbook), [workbook, revision]);
+  const rubric = useMemo(() => {
+    // Manual interventions update the workbook cache in place.
+    void revision;
+    return open(workbook);
+  }, [revision, workbook]);
   const certified = !!(rubric && rubric.assignment.certification);
   const rows = useMemo(() => {
     if (!workbook || !rubric) return [];
@@ -152,7 +156,7 @@ export function Reviewer(props: Reviewer.Props) {
     if (cursor) state.cursor(cursor.cell);
     bridge.navigate(cursor);
     return () => void state.cursor(null);
-  }, [workbook, cursor?.path, cursor?.cell]);
+  }, [commands, cursor, props.on, workbook]);
 
   // Navigation helpers.
   const navigate = useCallback(
@@ -207,14 +211,14 @@ export function Reviewer(props: Reviewer.Props) {
 
   const ref = useRef<(direction: Reviewer.Direction) => void>(navigate);
   ref.current = navigate;
-  useEffect(() => props.on.navigate(ref), []);
+  useEffect(() => props.on.navigate(ref), [props.on]);
 
   const cell = rubric && cursor ? rubric.cells[cursor.cell] : null;
   const model = useMemo<Shared | null>(() => {
     if (!workbook || !cursor) return null;
     const cells = workbook.context.model.sharedModel.cells;
     return cells.find(cell => cell.id === cursor.cell) ?? null;
-  }, [workbook, cursor?.cell]);
+  }, [cursor, workbook]);
   const type = model?.cell_type ?? 'code';
   const source = model?.getSource() ?? '';
   const mimetype = useMemo(
@@ -223,11 +227,11 @@ export function Reviewer(props: Reviewer.Props) {
   );
   const question = useMemo(
     () => instructions(workbook, cursor, rubric),
-    [workbook, cursor?.cell, rubric]
+    [cursor, rubric, workbook]
   );
   const stored: Output[] = code(model) ? model.outputs : [];
   const [corrected, setCorrected] = useState<Rubric.Cell.Output[] | null>(null);
-  useEffect(() => void setCorrected(null), [cursor?.path, cursor?.cell]);
+  useEffect(() => void setCorrected(null), [cursor]);
 
   const outputs: Output[] = corrected ?? stored;
   const report = rubric
@@ -239,13 +243,14 @@ export function Reviewer(props: Reviewer.Props) {
   const [score, setScore] = useState<number | ''>(persisted);
   const [comment, setComment] = useState(report?.comment ?? '');
   useEffect(() => {
+    void revision;
     const resolved =
       rubric && cursor
         ? (Rubric.Score.resolve(rubric.assignment.report, cursor.cell) ?? null)
         : null;
     setScore(resolved && resolved.status !== 'unscored' ? resolved.points : '');
     setComment(resolved?.comment ?? '');
-  }, [cursor?.path, cursor?.cell, rubric?.id, revision]);
+  }, [cursor, revision, rubric]);
 
   const commit = useCallback(
     async (points: number) => {
@@ -261,24 +266,29 @@ export function Reviewer(props: Reviewer.Props) {
         ...(comment ? { comment } : {})
       });
     },
-    [cursor, cell, comment, commands, workbook]
+    [cell, certified, commands, comment, cursor, workbook]
   );
-  const scoring = useRef(false);
+  const scoring = useRef<'idle' | 'saving'>('idle');
   const [busy, setBusy] = useState(false);
+  const save = useCallback(async (write: () => Promise<void>) => {
+    if (scoring.current === 'saving') return;
+    scoring.current = 'saving';
+    setBusy(true);
+    try {
+      await write();
+    } finally {
+      scoring.current = 'idle';
+      setBusy(false);
+    }
+  }, []);
   const directional = useCallback(
     async (points: number, direction: 'down' | 'right') => {
-      if (scoring.current) return;
-      scoring.current = true;
-      setBusy(true);
-      try {
+      await save(async () => {
         await commit(points);
         navigate(direction);
-      } finally {
-        scoring.current = false;
-        setBusy(false);
-      }
+      });
     },
-    [commit, navigate]
+    [commit, navigate, save]
   );
   const fail = (direction: 'down' | 'right') => void directional(0, direction);
   const pass = (direction: 'down' | 'right') => {
@@ -288,10 +298,8 @@ export function Reviewer(props: Reviewer.Props) {
   };
   const judge = useCallback(
     async (action: 'pass' | 'fail') => {
-      if (scoring.current || certified) return;
-      scoring.current = true;
-      setBusy(true);
-      try {
+      if (certified) return;
+      await save(async () => {
         const points =
           action === 'fail'
             ? 0
@@ -299,16 +307,13 @@ export function Reviewer(props: Reviewer.Props) {
               ? score
               : possible;
         await commit(points);
-      } finally {
-        scoring.current = false;
-        setBusy(false);
-      }
+      });
     },
-    [commit, score, possible]
+    [certified, commit, possible, save, score]
   );
   const scored = useRef<(action: 'pass' | 'fail') => void>(judge);
   scored.current = judge;
-  useEffect(() => props.on.score(scored), []);
+  useEffect(() => props.on.score(scored), [props.on]);
 
   const rerun = async () => {
     if (!cursor || !workbook || type !== 'code' || busy) return;
@@ -721,6 +726,9 @@ const Minimap: React.FC<{
   const host = useRef<HTMLDivElement>(null);
   const focus = useRef<HTMLButtonElement | null>(null);
   const grid = useMemo(() => {
+    // These signals invalidate rubric values cached behind stable workbooks.
+    void grades;
+    void revision;
     const rubrics = new Map(
       workbooks
         .filter(reified)

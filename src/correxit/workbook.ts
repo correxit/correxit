@@ -303,6 +303,9 @@ export namespace Workbook {
     }, false);
     if (headed(workbook)) NotebookActions.deselectAll(workbook.content);
   };
+  const sequence = (rubric: Rubric) => Object.keys(rubric.cells).sort();
+  const digest = (ciphertexts: Array<string | string[]>) =>
+    security.digest(ciphertexts.join('\n'));
   const verify = async (
     workbook: Workbook,
     rubric: Rubric.Locked,
@@ -311,13 +314,11 @@ export namespace Workbook {
     const { seal } = rubric.assignment;
     if (!seal) return [];
 
-    const ids = Object.keys(rubric.cells).sort();
-    const notebook = workbook.context.model.sharedModel;
-    const index = Object.fromEntries(
-      notebook.cells.map(cell => [cell.id, cell])
-    );
-    const present = ids.filter(id => id in index);
-    const missing = ids.filter(id => !(id in index));
+    const ids = sequence(rubric);
+    const { cells } = workbook.context.model.sharedModel;
+    const indices = Object.fromEntries(cells.map(cell => [cell.id, cell]));
+    const present = ids.filter(id => id in indices);
+    const missing = ids.filter(id => !(id in indices));
     if (missing.length) {
       if (headless(workbook))
         throw new Error.Unseal(`${action} seal error: missing cells`);
@@ -325,8 +326,8 @@ export namespace Workbook {
       return present;
     }
 
-    const ciphertexts = present.map(id => index[id].getSource());
-    const hash = await security.digest(ciphertexts.join('\n'));
+    const ciphertexts = present.map(id => indices[id].getSource());
+    const hash = await digest(ciphertexts);
     if (hash !== seal)
       throw new Error.Mismatch('seal mismatch: ciphertexts tampered');
     return present;
@@ -540,11 +541,8 @@ export namespace Workbook {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error.Certify('certify error');
 
-    const { interventions } = rubric.assignment.report;
-    const pending = Object.values(rubric.cells)
-      .filter(({ is }) => is === 'reviewable')
-      .some(({ id }) => !interventions[id]);
-    if (pending) throw new Error.Certify('certify error: pending review');
+    if (Rubric.Assignment.pending(rubric))
+      throw new Error.Certify('certify error: pending review');
 
     const identifier = Workbook.identifier(workbook);
     if (!Identifier.assigned(identifier))
@@ -1098,15 +1096,16 @@ export namespace Workbook {
     recipients: string[]
   ): Promise<string> {
     const { assignee } = rubric.assignment;
-    const ids = Object.keys(rubric.cells).sort();
+    const ids = sequence(rubric);
     const prepared = await Promise.all(
       ids.map(id => Cell.seal(workbook, id, assignee, recipients))
     );
     transact(workbook, prepared);
 
-    const sources = prepared.map(({ replacement: { source } }) => source);
-    const joined = sources.join('\n');
-    return security.digest(joined);
+    const ciphertexts = prepared.map(
+      ({ replacement: { source } }) => source
+    );
+    return digest(ciphertexts);
   }
 
   /** Submit an assignment: seal rubric cells, then freeze. */

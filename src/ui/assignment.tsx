@@ -173,6 +173,8 @@ export const Assignment: React.FC<{
       setPending(false);
     }
   };
+  // Enrollment is refreshed only when the workbook or rubric identity changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void request(), [cached, workbook]);
   useEffect(() => keep(rubric.assignment), [rubric.assignment]);
   useEffect(() => {
@@ -202,7 +204,9 @@ export const Assignment: React.FC<{
     }
     pick(identify(matched));
     merge(current => freeze(current, matched));
-  }, [locked, registered, selected]);
+  }, [locked, registered, rubric.assignment.id, selected]);
+  // The listed values are semantic inputs; `reassign` is a render-local verb.
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     const dirty = Draft.persist(
       { assignment, local },
@@ -213,6 +217,7 @@ export const Assignment: React.FC<{
     const delay = window.setTimeout(() => reassign(assignment, locked), DELAY);
     return () => window.clearTimeout(delay);
   }, [assignment, local, locked, rubric.assignment]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const all =
     courses(registered) ??

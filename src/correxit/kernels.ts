@@ -32,49 +32,55 @@ type Runtime = {
 /** Time-to-live for idle kernel caching (ms). */
 const TTL = 5000;
 
+/** Kernel pool configuration. */
+export type Config = { concurrency: number; retries: number; timeout: number };
+export type Snapshot = {
+  active: number;
+  cached: number;
+  concurrency: number;
+  recycling: number;
+  waiting: number;
+};
+
 const pool = new Map<string, Idle[]>();
 const waiters: Array<() => void> = [];
 
-const defaults = { attempts: 1, lifespan: 60, workers: 3 };
-let { attempts, lifespan, workers } = defaults;
+const defaults: Readonly<Config> = {
+  concurrency: 3,
+  retries: 2,
+  timeout: 60
+};
+let configuration: Config = { ...defaults };
 let active = 0;
 let cached = 0;
 let epoch = 0;
 let order = 0;
 let recycling = 0;
 
-/** Kernel pool configuration. */
-export type Config = { concurrency: number; retries: number; timeout: number };
-export type Snapshot = {
-  active: number;
-  cached: number;
-  recycling: number;
-  waiting: number;
-  workers: number;
-};
-
 /** Updates pool configuration and wakes any newly-eligible waiters. */
 export function configure({ concurrency, retries, timeout }: Config): void {
-  attempts = Math.max(0, retries);
-  lifespan = Math.max(0, timeout);
-  workers = Math.max(1, concurrency);
+  configuration = {
+    concurrency: Math.max(1, concurrency),
+    retries: Math.max(0, retries),
+    timeout: Math.max(0, timeout)
+  };
   trim();
-  while (busy() < workers && waiters.length) wake();
+  while (busy() < configuration.concurrency && waiters.length) wake();
 }
 
 /** @returns the current concurrency cap. */
 export function cap(): number {
-  return workers;
+  return configuration.concurrency;
 }
 
 /** @returns the configured retry count. */
 export function retries(): number {
-  return attempts;
+  return configuration.retries;
 }
 
 /** @returns the lease deadline in milliseconds (0 = no deadline). */
 export function timeout(): number {
-  return lifespan * 1000;
+  return configuration.timeout * 1000;
 }
 
 /** @internal Returns pool counters for integration tests. */
@@ -82,9 +88,9 @@ export function snapshot(): Snapshot {
   return {
     active,
     cached,
+    concurrency: configuration.concurrency,
     recycling,
-    waiting: waiters.length,
-    workers
+    waiting: waiters.length
   };
 }
 
@@ -99,12 +105,10 @@ export function drain(): void {
   }
   pool.clear();
   active = 0;
-  attempts = defaults.attempts;
   cached = 0;
-  lifespan = defaults.lifespan;
+  configuration = { ...defaults };
   order = 0;
   recycling = 0;
-  workers = defaults.workers;
   waiters.length = 0;
 }
 
@@ -139,11 +143,13 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
     void dispose(started.session);
     if (mark === epoch) relinquish();
   };
-  const timeout = lifespan > 0 ? setTimeout(expire, lifespan * 1000) : null;
+  const timer = configuration.timeout > 0
+    ? setTimeout(expire, configuration.timeout * 1000)
+    : null;
   const release = async () => {
     if (released) return;
     released = true;
-    if (timeout) clearTimeout(timeout);
+    if (timer) clearTimeout(timer);
     return recycle(started, mark);
   };
   return [kernel, release];
@@ -151,7 +157,7 @@ export async function lease(workbook: Workbook): Promise<Leased | null> {
 
 /** Blocks until a slot opens, then claims it. */
 async function acquire(): Promise<void> {
-  while (busy() >= workers)
+  while (busy() >= configuration.concurrency)
     await new Promise<void>(resolve => waiters.push(resolve));
   active++;
 }
@@ -216,13 +222,13 @@ async function start(
       return null;
     }
 
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    const deadline = lifespan * 1000;
-    const ready = lifespan > 0
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const deadline = configuration.timeout * 1000;
+    const ready = configuration.timeout > 0
       ? Promise.race([
           kernel.info,
           new Promise<never>((_, reject) => {
-            timeout = setTimeout(
+            timer = setTimeout(
               () => reject(new Error('kernel: info timeout')), deadline
             );
           })
@@ -235,7 +241,7 @@ async function start(
       console.warn('kernels: start failed', error);
       return null;
     } finally {
-      if (timeout) clearTimeout(timeout);
+      if (timer) clearTimeout(timer);
     }
     return { kernel, runtime, session };
   } catch (error) {
@@ -256,10 +262,10 @@ async function recycle(started: Started, mark: number): Promise<void> {
   active--;
   recycling++;
   try {
-    const timeout = new Promise<never>((_, reject) =>
+    const deadline = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('restart timeout')), 10_000)
     );
-    const kernel = await Promise.race([restart(started.kernel), timeout]);
+    const kernel = await Promise.race([restart(started.kernel), deadline]);
     if (mark === epoch) keep({ ...started, kernel });
     else await dispose(started.session);
   } catch {
@@ -326,12 +332,12 @@ function shelf(runtime: Runtime): Idle[] {
 
 /** Keeps total idle kernels bounded as cwd values change over time. */
 function trim(): void {
-  if (cached <= workers) return;
+  if (cached <= configuration.concurrency) return;
 
   const excess = [...pool.values()]
     .flat()
     .sort((left, right) => left.order - right.order)
-    .slice(0, cached - workers);
+    .slice(0, cached - configuration.concurrency);
   for (const idle of excess) {
     clearTimeout(idle.timer);
     remove(idle);
