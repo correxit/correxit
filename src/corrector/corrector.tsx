@@ -12,7 +12,6 @@ import React, {
 } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
-import { trail } from '../correxit/trail';
 import { useCommand } from '../correxit/use-command';
 import * as bridge from './bridge';
 import {
@@ -20,6 +19,7 @@ import {
   CommandIDs as COMMAND_IDS,
   Scanned
 } from './commands';
+import { trail } from '../ui/trail';
 import { CorrectorStatus, CorrectorWidget } from './widget';
 
 type Batched = [path: string, file: { grade: Grade; workbook: Headless }];

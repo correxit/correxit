@@ -3,8 +3,8 @@ import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import { trail } from '../correxit/trail';
 import { Assignment } from './assignment';
+import { trail } from './trail';
 
 type Tone =
   | 'active'

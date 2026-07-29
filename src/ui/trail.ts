@@ -1,12 +1,10 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { Rubric } from './rubric';
-
-type TranslationBundle = IRenderMime.TranslationBundle;
+import { Rubric } from '..';
 
 /** @returns chronological assignment lifecycle entries for display. */
 export function trail(
   assignment: Rubric.Assignment,
-  trans: TranslationBundle
+  trans: IRenderMime.TranslationBundle
 ): string[] {
   const { certification, collected, distribution, submission, submitted } =
     assignment;
