@@ -13,13 +13,13 @@ import React, {
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { useCommand } from '../correxit/use-command';
+import { trail } from '../ui/trail';
 import * as bridge from './bridge';
 import {
   commands as COMMANDS,
   CommandIDs as COMMAND_IDS,
   Scanned
 } from './commands';
-import { trail } from '../ui/trail';
 import { CorrectorStatus, CorrectorWidget } from './widget';
 
 type Batched = [path: string, file: { grade: Grade; workbook: Headless }];
@@ -321,10 +321,7 @@ export function Corrector(props: Corrector.Props) {
   const workbooks = useMemo(() => merge(files, grades), [files, grades]);
   const cached = useRef({} as { [path: string]: Headless });
   const walk = useWalk(workbooks);
-  const workbook = useMemo(
-    () => match(workbooks, walk.selected),
-    [workbooks, walk.selected]
-  );
+  const workbook = match(workbooks, walk.selected);
   const focus = workbook?.context.path || null;
   const total = workbooks.length;
   const progress = { graded, grading, loaded, resolved, scanned, total };

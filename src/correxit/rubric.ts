@@ -525,9 +525,9 @@ export namespace Rubric {
     }
 
     /** @returns whether any reviewable cell still needs an intervention. */
-    export function pending(rubric: Rubric): boolean {
-      const { interventions } = rubric.assignment.report;
-      return Object.values(rubric.cells)
+    export function pending({ assignment, cells }: Rubric): boolean {
+      const { interventions } = assignment.report;
+      return Object.values(cells)
         .some(({ id, is }) => is === 'reviewable' && !interventions[id]);
     }
 
