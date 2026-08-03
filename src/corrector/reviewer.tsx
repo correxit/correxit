@@ -128,14 +128,15 @@ export function Reviewer(props: Reviewer.Props) {
     () => workbooks.filter(reified).map(w => w.context.path),
     [workbooks]
   );
+  const path = cursor?.path;
   const workbook = useMemo(
     () =>
-      (cursor &&
-        workbooks
-          .filter(reified)
-          .find(({ context: { path } }) => path === cursor.path)) ??
-      null,
-    [cursor, workbooks]
+      path === undefined
+        ? null
+        : (workbooks
+            .filter(reified)
+            .find(({ context }) => context.path === path) ?? null),
+    [path, workbooks]
   );
   const rubric = useMemo(() => {
     // Manual interventions update the workbook cache in place.
@@ -214,11 +215,12 @@ export function Reviewer(props: Reviewer.Props) {
   useEffect(() => props.on.navigate(ref), [props.on]);
 
   const cell = rubric && cursor ? rubric.cells[cursor.cell] : null;
+  const id = cursor?.cell;
   const model = useMemo<Shared | null>(() => {
-    if (!workbook || !cursor) return null;
+    if (!workbook || !id) return null;
     const cells = workbook.context.model.sharedModel.cells;
-    return cells.find(cell => cell.id === cursor.cell) ?? null;
-  }, [cursor, workbook]);
+    return cells.find(cell => cell.id === id) ?? null;
+  }, [id, workbook]);
   const type = model?.cell_type ?? 'code';
   const source = model?.getSource() ?? '';
   const mimetype = useMemo(

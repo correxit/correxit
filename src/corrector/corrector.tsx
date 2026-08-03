@@ -321,7 +321,10 @@ export function Corrector(props: Corrector.Props) {
   const workbooks = useMemo(() => merge(files, grades), [files, grades]);
   const cached = useRef({} as { [path: string]: Headless });
   const walk = useWalk(workbooks);
-  const workbook = match(workbooks, walk.selected);
+  const workbook = useMemo(
+    () => match(workbooks, walk.selected),
+    [walk.selected, workbooks]
+  );
   const focus = workbook?.context.path || null;
   const total = workbooks.length;
   const progress = { graded, grading, loaded, resolved, scanned, total };
