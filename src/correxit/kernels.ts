@@ -50,6 +50,8 @@ const defaults: Readonly<Config> = {
   retries: 2,
   timeout: 60
 };
+const finite = (value: number, fallback: number) =>
+  Number.isFinite(value) ? value : fallback;
 let configuration: Config = { ...defaults };
 let active = 0;
 let cached = 0;
@@ -60,9 +62,9 @@ let recycling = 0;
 /** Updates pool configuration and wakes any newly-eligible waiters. */
 export function configure({ concurrency, retries, timeout }: Config): void {
   configuration = {
-    concurrency: Math.max(1, concurrency),
-    retries: Math.max(0, retries),
-    timeout: Math.max(0, timeout)
+    concurrency: Math.max(1, finite(concurrency, defaults.concurrency)),
+    retries: Math.max(0, finite(retries, defaults.retries)),
+    timeout: Math.max(0, finite(timeout, defaults.timeout))
   };
   trim();
   while (busy() < configuration.concurrency && waiters.length) wake();

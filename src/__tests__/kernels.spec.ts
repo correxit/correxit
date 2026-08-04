@@ -98,6 +98,13 @@ describe('kernels', () => {
     expect(snapshot().concurrency).toBe(3);
   });
 
+  it('falls back from non-finite settings', () => {
+    configure({ concurrency: NaN, retries: Infinity, timeout: -Infinity });
+    expect(cap()).toBe(3);
+    expect(retries()).toBe(2);
+    expect(timeout()).toBe(60_000);
+  });
+
   describe('lease', () => {
     it('starts a new kernel when the pool is empty', async () => {
       const name = named();
