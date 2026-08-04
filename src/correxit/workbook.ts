@@ -304,7 +304,7 @@ export namespace Workbook {
     if (headed(workbook)) NotebookActions.deselectAll(workbook.content);
   };
   const sequence = (rubric: Rubric) => Object.keys(rubric.cells).sort();
-  const digest = (ciphertexts: Array<string | string[]>) =>
+  const digest = (ciphertexts: string[]) =>
     security.digest(ciphertexts.join('\n'));
   const verify = async (
     workbook: Workbook,
@@ -1103,7 +1103,8 @@ export namespace Workbook {
     transact(workbook, prepared);
 
     const ciphertexts = prepared.map(
-      ({ replacement: { source } }) => source
+      ({ replacement: { source } }) =>
+        Array.isArray(source) ? source.join('') : source
     );
     return digest(ciphertexts);
   }
