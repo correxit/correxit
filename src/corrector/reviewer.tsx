@@ -35,17 +35,13 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 
 const open = (workbook: Scanned | null) =>
   workbook && !workbook.hollow ? Workbook.open(workbook, true) : null;
-
 const reified = (workbook: Scanned): workbook is Headless => !workbook.hollow;
-
 const record = (value: unknown): value is { [key: string]: unknown } =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const code = (
   cell: Shared | null
 ): cell is Extract<Shared, { cell_type: 'code' }> =>
   !!cell && cell.cell_type === 'code';
-
 const language = (workbook: Headless | null): ILanguageInfoMetadata | null => {
   if (!workbook) return null;
 
@@ -58,7 +54,6 @@ const language = (workbook: Headless | null): ILanguageInfoMetadata | null => {
     record(spec) && typeof spec.language === 'string' ? spec.language : null;
   return name ? { name } : null;
 };
-
 const mime = (
   workbook: Headless | null,
   mimeTypeService: IEditorMimeTypeService | null
@@ -70,14 +65,13 @@ const mime = (
     ? mimeTypeService.getMimeTypeByLanguage(info)
     : IEditorMimeTypeService.defaultMimeType;
 };
-
 const integer = (value: string): number | '' => {
   if (value === '') return '';
+
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return '';
   return Math.max(0, Math.floor(parsed));
 };
-
 const instructions = (
   workbook: Headless | null,
   cursor: Cursor | null,
@@ -117,9 +111,7 @@ export function Reviewer(props: Reviewer.Props) {
   const snapshot = bridge.useSnapshot();
   const { workbooks, grades, revision } = snapshot;
   const empty = workbooks.length === 0;
-
   const [cursor, setCursor] = useState<Cursor | null>(initial ?? null);
-
   useEffect(() => {
     if (initial) setCursor(initial);
   }, [initial]);
@@ -150,7 +142,6 @@ export function Reviewer(props: Reviewer.Props) {
       .map(cell => cell.id)
       .filter(id => id in rubric.cells);
   }, [workbook, rubric]);
-
   useEffect(() => {
     props.on.workbook(workbook);
     if (workbook) void bridge.inject(commands, workbook);
@@ -209,7 +200,6 @@ export function Reviewer(props: Reviewer.Props) {
     },
     [cursor, columns, rows]
   );
-
   const ref = useRef<(direction: Reviewer.Direction) => void>(navigate);
   ref.current = navigate;
   useEffect(() => props.on.navigate(ref), [props.on]);
@@ -218,6 +208,7 @@ export function Reviewer(props: Reviewer.Props) {
   const id = cursor?.cell;
   const model = useMemo<Shared | null>(() => {
     if (!workbook || !id) return null;
+
     const cells = workbook.context.model.sharedModel.cells;
     return cells.find(cell => cell.id === id) ?? null;
   }, [id, workbook]);
@@ -329,7 +320,6 @@ export function Reviewer(props: Reviewer.Props) {
       setBusy(false);
     }
   };
-
   const partial =
     typeof score === 'number' && score !== possible && score !== persisted;
   if (empty) {
