@@ -517,11 +517,11 @@ export namespace Rubric {
     }
 
     /** @returns whether an assignment has complete issuance credentials. */
-    export function issued(assignment: Pick<
+    export function issued({ assignee, issue, issuer }: Pick<
       Assignment,
       'assignee' | 'issue' | 'issuer'
     >): boolean {
-      return !!(assignment.assignee && assignment.issue && assignment.issuer);
+      return !!(assignee && issue && issuer);
     }
 
     /** @returns whether any reviewable cell still needs an intervention. */
