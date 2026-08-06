@@ -179,6 +179,7 @@ export const Assignment: React.FC<{
   useEffect(() => keep(rubric.assignment), [rubric.assignment]);
   useEffect(() => {
     if (locked) return;
+
     const resolved = courses(registered);
     const roster = resolved ? flat(resolved) : null;
     if (roster === null) {
@@ -214,6 +215,7 @@ export const Assignment: React.FC<{
       locked
     );
     if (!dirty) return;
+
     const delay = window.setTimeout(() => reassign(assignment, locked), DELAY);
     return () => window.clearTimeout(delay);
   }, [assignment, local, locked, rubric.assignment]);
@@ -640,8 +642,6 @@ const Resources: React.FC<{
   );
 };
 
-const { unassign } = Correxit.CommandIDs;
-
 const Enrollment: React.FC<{
   all: Course[];
   assignment: Assignment;
@@ -706,7 +706,7 @@ const Enrollment: React.FC<{
       <div className="correxit-assignment-assignee">
         <div className="correxit-monospace">{assignee || unassigned}</div>
         <CommandToolbarButtonComponent
-          {...{ commands, id: unassign, label: '' }}
+          {...{ commands, id: Correxit.CommandIDs.unassign, label: '' }}
         />
       </div>
     </>
