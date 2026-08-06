@@ -184,7 +184,7 @@ const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
   if (assignment.collected) return 'collected';
   if (assignment.certification) return 'certified';
 
-  return Rubric.Assignment.pending(rubric) ? 'review' : 'scanned';
+  return Rubric.pending(rubric) ? 'review' : 'scanned';
 };
 
 /** @returns the logo of a kernel in order of preference. */
@@ -302,18 +302,11 @@ const status = (
 export function Corrector(props: Corrector.Props) {
   const { commands, mode, notify, overwrite, path, submitted, trans } = props;
   const grading = mode !== 'scan';
-  const [files, scanned] = useCommand<Scanned>(commands, scan, {
-    path,
-    submitted
-  });
+  const cwd = { path, submitted };
+  const [files, scanned] = useCommand<Scanned>(commands, scan, cwd);
   const command = mode === 'grade' ? batch : mode === 'collect' ? collect : '';
   const auth = mode === 'grade';
-  const config = {
-    overwrite,
-    path,
-    submitted,
-    ...(auth ? { unlock: true } : {})
-  };
+  const config = { ...cwd, overwrite, ...(auth ? { unlock: true } : {}) };
   const [batched, graded] = useCommand<Batched>(commands, command, config);
   const loaded = useMemo(() => files.filter(reified).length, [files]);
   const grades = useMemo(() => new Map(batched) as Collated, [batched]);

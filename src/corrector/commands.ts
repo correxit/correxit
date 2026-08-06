@@ -315,7 +315,7 @@ export function commands(
           const updated = open(workbook);
           const { certification } = updated?.assignment ?? {};
           if (updated && !updated.locked && !certification) {
-            if (!Rubric.Assignment.pending(updated)) {
+            if (!Rubric.pending(updated)) {
               try {
                 await Workbook.certify(workbook, trans, true);
                 await save(workbook);
@@ -484,7 +484,7 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
     ids.length > 0 && ids.every(id => scores[id] && !unexecuted(scores[id]));
   if (!scored) return null;
 
-  return Rubric.Assignment.pending(rubric) ? grade(report.kernel) : null;
+  return Rubric.pending(rubric) ? grade(report.kernel) : null;
 }
 
 async function grade(
@@ -497,7 +497,7 @@ async function grade(
   if (Rubric.Assignment.rejected(rubric.assignment))
     throw new Correxit.Error.Certify('grade error: overdue rejected');
 
-  if (!Rubric.Assignment.pending(rubric)) {
+  if (!Rubric.pending(rubric)) {
     const certified = await Workbook.certify(workbook, trans);
     await save(workbook);
     return certified;
@@ -533,7 +533,7 @@ function precertified(workbook: Headless): Certified | null {
   if (
     incomplete ||
     partial ||
-    Rubric.Assignment.pending(rubric) ||
+    Rubric.pending(rubric) ||
     uncertified ||
     unscored
   )

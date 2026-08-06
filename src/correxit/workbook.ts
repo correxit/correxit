@@ -541,7 +541,7 @@ export namespace Workbook {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error.Certify('certify error');
 
-    if (Rubric.Assignment.pending(rubric))
+    if (Rubric.pending(rubric))
       throw new Error.Certify('certify error: pending review');
 
     const identifier = Workbook.identifier(workbook);

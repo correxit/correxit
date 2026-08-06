@@ -209,7 +209,8 @@ export function commands(
         ({ name, data: await io.load(manager, directory, name) });
       const names = rubric.assignment.resources;
       const resources = names ? await Promise.all(names.map(load)) : null;
-      await distributor({ identifier, notebook, overwrite: true, path, resources });
+      const overwrite = true;
+      await distributor({ identifier, notebook, overwrite, path, resources });
       await distribute(workbook);
       await workbook.context.save();
       return { assignee, error: null, ok: true, path };

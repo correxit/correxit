@@ -283,6 +283,35 @@ describe('Rubric', () => {
         'missing assignment report'
       );
     });
+
+    it('recognizes reviewable cells without interventions', () => {
+      const id = 'review';
+      const pending = Rubric.add(create(), {
+        id,
+        is: 'reviewable',
+        payload: null,
+        points: 1,
+        references: null
+      });
+      expect(Rubric.pending(pending)).toBe(true);
+
+      const intervention = Rubric.Score.intervene(id, {
+        comment: '',
+        points: 1,
+        possible: 1
+      });
+      const resolved = {
+        ...pending,
+        assignment: {
+          ...pending.assignment,
+          report: {
+            ...pending.assignment.report,
+            interventions: { [id]: intervention }
+          }
+        }
+      };
+      expect(Rubric.pending(resolved)).toBe(false);
+    });
   });
 
   describe('Assignment Flow', () => {
@@ -1070,35 +1099,6 @@ describe('Rubric', () => {
           issuer: 'signature'
         })
       ).toBe(true);
-    });
-
-    it('recognizes reviewable cells without interventions', () => {
-      const id = 'review';
-      const pending = Rubric.add(create(), {
-        id,
-        is: 'reviewable',
-        payload: null,
-        points: 1,
-        references: null
-      });
-      expect(Rubric.Assignment.pending(pending)).toBe(true);
-
-      const intervention = Rubric.Score.intervene(id, {
-        comment: '',
-        points: 1,
-        possible: 1
-      });
-      const resolved = {
-        ...pending,
-        assignment: {
-          ...pending.assignment,
-          report: {
-            ...pending.assignment.report,
-            interventions: { [id]: intervention }
-          }
-        }
-      };
-      expect(Rubric.Assignment.pending(resolved)).toBe(false);
     });
 
     it('scores cells and generates a report', async () => {
