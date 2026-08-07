@@ -53,6 +53,7 @@ export const Score: React.FC<{
     seed.comment,
     seed.points,
     seed.possible,
+    seed.score,
     seed.status,
     seed.value
   ]);

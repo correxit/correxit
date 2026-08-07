@@ -283,6 +283,35 @@ describe('Rubric', () => {
         'missing assignment report'
       );
     });
+
+    it('recognizes reviewable cells without interventions', () => {
+      const id = 'review';
+      const pending = Rubric.add(create(), {
+        id,
+        is: 'reviewable',
+        payload: null,
+        points: 1,
+        references: null
+      });
+      expect(Rubric.pending(pending)).toBe(true);
+
+      const intervention = Rubric.Score.intervene(id, {
+        comment: '',
+        points: 1,
+        possible: 1
+      });
+      const resolved = {
+        ...pending,
+        assignment: {
+          ...pending.assignment,
+          report: {
+            ...pending.assignment.report,
+            interventions: { [id]: intervention }
+          }
+        }
+      };
+      expect(Rubric.pending(resolved)).toBe(false);
+    });
   });
 
   describe('Assignment Flow', () => {
@@ -1060,6 +1089,18 @@ describe('Rubric', () => {
   });
 
   describe('Rubric.Assignment', () => {
+    it('recognizes complete issuance credentials', () => {
+      const assignment = Rubric.Assignment.empty();
+      expect(Rubric.Assignment.issued(assignment)).toBe(false);
+      expect(
+        Rubric.Assignment.issued({
+          assignee: 'student@example.com',
+          issue: 'digest',
+          issuer: 'signature'
+        })
+      ).toBe(true);
+    });
+
     it('scores cells and generates a report', async () => {
       const payload = ['DIGEST<42>'];
       const add = (rubric: Rubric.Unlocked) =>

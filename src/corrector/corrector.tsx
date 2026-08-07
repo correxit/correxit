@@ -13,6 +13,7 @@ import React, {
 import { Correxit, Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
 import { useCommand } from '../correxit/use-command';
+import { trail } from '../ui/trail';
 import * as bridge from './bridge';
 import {
   commands as COMMANDS,
@@ -34,7 +35,9 @@ type Phase =
   | 'scanned';
 type TranslationBundle = IRenderMime.TranslationBundle;
 type Walk = {
+  /** The row in the roving tab stop. */
   active: string;
+  /** The workbook currently open for review. */
   selected: string;
   clear: () => void;
   move: (path: string, step: -1 | 1) => void;
@@ -115,18 +118,19 @@ const keydown =
   };
 
 const useWalk = (workbooks: Scanned[]): Walk => {
-  const rows = useRef({} as { [path: string]: HTMLTableRowElement | null });
-  const target = useRef('');
-  const [cursor, setCursor] = useState('');
+  const nodes = useRef({} as { [path: string]: HTMLTableRowElement | null });
+  const pending = useRef('');
+  const [focused, setFocused] = useState('');
   const [selected, setSelected] = useState('');
   const active = useMemo(() => {
-    if (workbooks.some(({ context }) => context.path === cursor)) return cursor;
+    if (workbooks.some(({ context }) => context.path === focused))
+      return focused;
     if (workbooks.some(({ context }) => context.path === selected))
       return selected;
     return workbooks[0]?.context.path || '';
-  }, [cursor, selected, workbooks]);
+  }, [focused, selected, workbooks]);
   const select = useCallback((path: string) => {
-    setCursor(path);
+    setFocused(path);
     setSelected(path);
   }, []);
   const clear = useCallback(() => setSelected(''), []);
@@ -134,29 +138,29 @@ const useWalk = (workbooks: Scanned[]): Walk => {
     (path: string, step: -1 | 1) => {
       const next = advance(workbooks, path, step);
       if (!next) return;
-      target.current = next;
+      pending.current = next;
       select(next);
     },
     [select, workbooks]
   );
   const node = useCallback((path: string, row: HTMLTableRowElement | null) => {
-    rows.current[path] = row;
+    nodes.current[path] = row;
   }, []);
   useEffect(() => {
-    if (!cursor) return;
-    if (workbooks.some(({ context }) => context.path === cursor)) return;
-    setCursor('');
-  }, [cursor, workbooks]);
+    if (!focused) return;
+    if (workbooks.some(({ context }) => context.path === focused)) return;
+    setFocused('');
+  }, [focused, workbooks]);
   useEffect(() => {
     if (!selected) return;
     if (workbooks.some(({ context }) => context.path === selected)) return;
     setSelected('');
   }, [selected, workbooks]);
   useEffect(() => {
-    const row = rows.current[target.current];
+    const row = nodes.current[pending.current];
     if (!row) return;
     row.focus();
-    target.current = '';
+    pending.current = '';
   }, [selected, workbooks]);
   return { active, clear, move, node, select, selected };
 };
@@ -164,20 +168,7 @@ const useWalk = (workbooks: Scanned[]): Walk => {
 /** @returns a multi-line lifecycle history for tooltips. */
 const history = (workbook: Scanned, trans: TranslationBundle): string => {
   const rubric = open(workbook);
-  if (!rubric) return '';
-
-  const { certification, collected, distribution, submission, submitted } =
-    rubric.assignment;
-  const lines: string[] = [];
-  if (distribution !== null)
-    lines.push(trans.__('Distribution %1', Rubric.timestamp(distribution)));
-  if (submission !== null)
-    lines.push(trans.__('Submission %1', Rubric.timestamp(submission)));
-  if (submitted !== null) lines.push(trans.__('Submitted: %1', submitted));
-  if (certification !== null)
-    lines.push(trans.__('Certification %1', Rubric.timestamp(certification)));
-  if (collected !== null) lines.push(trans.__('Collected: %1', collected));
-  return lines.join('\n');
+  return rubric ? trail(rubric.assignment, trans).join('\n') : '';
 };
 
 /** @returns the lifecycle phase of a workbook. */
@@ -193,10 +184,7 @@ const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
   if (assignment.collected) return 'collected';
   if (assignment.certification) return 'certified';
 
-  const pending = Object.values(rubric.cells)
-    .filter(cell => cell.is === 'reviewable')
-    .some(cell => !assignment.report.interventions[cell.id]);
-  return pending ? 'review' : 'scanned';
+  return Rubric.pending(rubric) ? 'review' : 'scanned';
 };
 
 /** @returns the logo of a kernel in order of preference. */
@@ -314,37 +302,36 @@ const status = (
 export function Corrector(props: Corrector.Props) {
   const { commands, mode, notify, overwrite, path, submitted, trans } = props;
   const grading = mode !== 'scan';
-  const [workbooks, scanned] = useCommand<Scanned>(commands, scan, {
-    path,
-    submitted
-  });
+  const cwd = { path, submitted };
+  const [files, scanned] = useCommand<Scanned>(commands, scan, cwd);
   const command = mode === 'grade' ? batch : mode === 'collect' ? collect : '';
   const auth = mode === 'grade';
-  const config = {
-    overwrite,
-    path,
-    submitted,
-    ...(auth ? { unlock: true } : {})
-  };
+  const config = { ...cwd, overwrite, ...(auth ? { unlock: true } : {}) };
   const [batched, graded] = useCommand<Batched>(commands, command, config);
-  const loaded = useMemo(() => workbooks.filter(reified).length, [workbooks]);
+  const loaded = useMemo(() => files.filter(reified).length, [files]);
   const grades = useMemo(() => new Map(batched) as Collated, [batched]);
   const resolved = useMemo(() => resolutions(grades), [grades]);
-  const memo = useMemo(() => merge(workbooks, grades), [workbooks, grades]);
+  const workbooks = useMemo(() => merge(files, grades), [files, grades]);
   const cached = useRef({} as { [path: string]: Headless });
-  const walk = useWalk(memo);
+  const walk = useWalk(workbooks);
   const workbook = useMemo(
-    () => match(memo, walk.selected),
-    [memo, walk.selected]
+    () => match(workbooks, walk.selected),
+    [walk.selected, workbooks]
   );
   const focus = workbook?.context.path || null;
-  const total = memo.length;
+  const total = workbooks.length;
   const progress = { graded, grading, loaded, resolved, scanned, total };
   useEffect(() => () => release(cached.current), []);
-  useEffect(() => bridge.inject(commands, workbook), [workbook]);
-  useEffect(() => notify({ graded, scanned, mode }), [graded, scanned, mode]);
-  useEffect(() => reconcile(cached.current, memo, focus), [focus, memo]);
-  useEffect(() => bridge.publish({ workbooks: memo, grades }), [memo, grades]);
+  useEffect(() => bridge.inject(commands, workbook), [commands, workbook]);
+  useEffect(
+    () => notify({ graded, scanned, mode }),
+    [graded, mode, notify, scanned]
+  );
+  useEffect(
+    () => reconcile(cached.current, workbooks, focus),
+    [focus, workbooks]
+  );
+  useEffect(() => bridge.publish({ workbooks, grades }), [grades, workbooks]);
   return (
     <table
       aria-label={trans.__('Corrector workbooks')}
@@ -353,7 +340,7 @@ export function Corrector(props: Corrector.Props) {
       <Columns />
       <tbody>
         <Progress {...{ ...progress, trans }} />
-        {memo.map(workbook => {
+        {workbooks.map(workbook => {
           const grade = resolve(workbook, grades, graded);
           const { path } = workbook.context;
           const props = { commands, grade, graded, trans, walk, workbook };

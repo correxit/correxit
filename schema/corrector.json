@@ -5,7 +5,7 @@
   "properties": {
     "concurrency": {
       "title": "Grading concurrency",
-      "description": "Maximum number of kernel connections active at any one time. This bounds running, restarting, and idle kernels combined.",
+      "description": "Maximum number of kernels grading or restarting at one time. Up to the same number of additional idle kernels may be cached.",
       "type": "integer",
       "minimum": 1,
       "default": 3
