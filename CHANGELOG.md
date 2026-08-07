@@ -1,3 +1,10 @@
+# [1.28.0](https://github.com/QuantStack/correxit/compare/v1.27.0...v1.28.0) (2026-08-07)
+
+
+### Features
+
+* standardize API ([#86](https://github.com/QuantStack/correxit/issues/86)) ([1a4e818](https://github.com/QuantStack/correxit/commit/1a4e81814d009f5adba4be8644bc398882da1be6))
+
 # [1.27.0](https://github.com/QuantStack/correxit/compare/v1.26.1...v1.27.0) (2026-07-21)
 
 
