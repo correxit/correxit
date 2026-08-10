@@ -6,6 +6,7 @@ import {
   saveIcon,
   spreadsheetIcon
 } from '@jupyterlab/ui-components';
+import CORREXIT from '../../style/brand/correxit-mark-jupyter.svg';
 import ANSWERABLE from '../../style/monitor/icons/answerable.svg';
 import ASSIGNEE from '../../style/monitor/icons/assignee.svg';
 import ASSIGNMENT from '../../style/monitor/icons/assignment.svg';
@@ -39,6 +40,8 @@ export namespace Icons {
     new LabIcon({ name: 'correxit:comment', svgstr: COMMENT });
   export const comparable =
     new LabIcon({ name: 'correxit:comparable', svgstr: COMPARABLE });
+  export const correxit =
+    new LabIcon({ name: 'correxit:correxit', svgstr: CORREXIT });
   export const convert =
     new LabIcon({ name: 'correxit:convert', svgstr: CONVERT });
   export const correct =
