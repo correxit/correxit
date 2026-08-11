@@ -123,6 +123,7 @@ dmypy.json
 
 # JupyterLite
 lite/_output/
+lite/brand/labextension/
 
 # OSX files
 .DS_Store

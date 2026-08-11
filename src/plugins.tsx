@@ -1,13 +1,11 @@
 import { INotebookTree } from '@jupyter-notebook/tree';
 import {
-  ILabShell,
   ILayoutRestorer,
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 import { ICommandPalette, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
-import { PageConfig } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
@@ -17,7 +15,6 @@ import { IStatusBar } from '@jupyterlab/statusbar';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { DisposableDelegate } from '@lumino/disposable';
 import { Signal, Stream } from '@lumino/signaling';
-import { Widget } from '@lumino/widgets';
 import { ISecretsManager, SecretsManager } from 'jupyter-secrets-manager';
 import { Corrector, Reviewer } from './corrector';
 import { Correxit, Rubric, Unlocker, Workbook } from './correxit';
@@ -218,31 +215,6 @@ const galata: JupyterFrontEndPlugin<void> = {
       });
     },
     deactivate: () => deactivator?.()
-  }))()
-};
-
-/** The Correxit mark replaces the JupyterLite logo when configured. */
-const logo: JupyterFrontEndPlugin<void> = {
-  id: 'correxit:logo',
-  description: 'Sets the Correxit mark on the configured JupyterLite app.',
-  autoStart: true,
-  optional: [ILabShell],
-  ...((widget: Widget | null = null) => ({
-    activate: (_: JupyterFrontEnd, shell: ILabShell | null) => {
-      if (!shell || PageConfig.getOption('correxitLogo') !== 'true') return;
-      widget = new Widget();
-      widget.id = 'jp-MainLogo';
-      widget.node.setAttribute('aria-label', 'Correxit');
-      Correxit.Icons.correxit.element({
-        container: widget.node,
-        elementPosition: 'center',
-        margin: '2px 2px 2px 8px',
-        height: 'auto',
-        width: '18px'
-      });
-      shell.add(widget, 'top', { rank: 0 });
-    },
-    deactivate: () => widget?.dispose()
   }))()
 };
 
@@ -500,7 +472,6 @@ export const plugins = [
   corrector,
   distributor,
   galata,
-  logo,
   monitor,
   registrar,
   submitter,

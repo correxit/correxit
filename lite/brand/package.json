@@ -1,0 +1,28 @@
+{
+  "name": "@quantstack/correxit-lite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deployment-only branding for the Correxit JupyterLite site",
+  "license": "UNLICENSED",
+  "main": "index.js",
+  "dependencies": {
+    "@jupyterlab/application": "^4.5.5",
+    "@jupyterlab/ui-components": "^4.5.5",
+    "@lumino/widgets": "^2.7.3"
+  },
+  "devDependencies": {
+    "@jupyter/builder": "^1.0.2"
+  },
+  "jupyterlab": {
+    "extension": true,
+    "outputDir": "labextension",
+    "sharedPackages": {
+      "@jupyterlab/application": {
+        "requiredVersion": "^4.5.5"
+      },
+      "@jupyterlab/ui-components": {
+        "requiredVersion": "^4.5.5"
+      }
+    }
+  }
+}

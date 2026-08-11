@@ -3804,6 +3804,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@quantstack/correxit-lite@workspace:lite/brand":
+  version: 0.0.0-use.local
+  resolution: "@quantstack/correxit-lite@workspace:lite/brand"
+  dependencies:
+    "@jupyter/builder": ^1.0.2
+    "@jupyterlab/application": ^4.5.5
+    "@jupyterlab/ui-components": ^4.5.5
+    "@lumino/widgets": ^2.7.3
+  languageName: unknown
+  linkType: soft
+
 "@quantstack/correxit@workspace:.":
   version: 0.0.0-use.local
   resolution: "@quantstack/correxit@workspace:."
