@@ -140,7 +140,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
         });
       }
       if (launcher)
-        added.push(launcher.add({ category: 'Correxit', command: launch }));
+        added.push(launcher.add({ category: 'Other', command: launch }));
       if (palette)
         added.push(palette.addItem({ category: 'Correxit', command: launch }));
       if (palette)
