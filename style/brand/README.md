@@ -3,7 +3,8 @@
 The Correxit mark is a corrected notebook cell with a secondary `CXT`
 reading. Its four horizontal terminals share the same 44-unit measure. The
 vermilion tick is the primary reading; the single navy continuation quietly
-completes the middle `X`.
+completes the middle `X`. A deliberate break above the lower-right terminal
+keeps the `T` distinct while the aligned terminal completes the notebook cell.
 
 ## Assets
 

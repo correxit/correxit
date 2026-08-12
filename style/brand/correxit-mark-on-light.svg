@@ -2,8 +2,8 @@
   <title id="title">Correxit</title>
   <desc id="description">A corrected notebook cell that subtly forms the letters C, X, and T.</desc>
   <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M98 54H54v148h44M180 54h44M202 54v148h-44" stroke="#003660" stroke-width="18"/>
-    <path d="M110 150l25 25" stroke="#003660" stroke-width="20"/>
-    <path d="m86 126 33 33 56-56" stroke="#ef5b45" stroke-width="20"/>
+    <path d="M98 54H54v148h44M180 54h44M202 54v120M158 202h44" stroke="#003660" stroke-width="18"/>
+    <path d="M107.5 150l25 25" stroke="#003660" stroke-width="20"/>
+    <path d="m83.5 126 33 33 56-56" stroke="#ef5b45" stroke-width="20"/>
   </g>
 </svg>

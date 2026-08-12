@@ -10,7 +10,7 @@ test.beforeEach(() => {
 test('launcher advertises the corrector', async ({ page }) => {
   await page.goto();
   const section = page.locator('.jp-Launcher-section').filter({
-    has: page.getByRole('heading', { name: 'Correxit' })
+    has: page.getByRole('heading', { name: 'Other' })
   });
   const card = section
     .locator('.jp-LauncherCard')
