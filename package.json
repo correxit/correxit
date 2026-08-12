@@ -70,7 +70,7 @@
         "clean:lite": "rimraf lite/_output lite/.jupyterlite.doit.db lite/brand/labextension",
         "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache && jlpm clean:coverage && jlpm clean:ui-tests && jlpm clean:lite",
         "eslint": "jlpm eslint:check --fix",
-        "eslint:check": "eslint . --cache --ext .ts,.tsx",
+        "eslint:check": "eslint . lite/brand/index.js --cache --ext .ts,.tsx",
         "install:extension": "jlpm build",
         "lint": "jlpm stylelint && jlpm prettier && jlpm eslint",
         "lint:check": "jlpm stylelint:check && jlpm prettier:check && jlpm eslint:check",
@@ -283,6 +283,16 @@
         "plugins": [
             "@typescript-eslint",
             "react-hooks"
+        ],
+        "overrides": [
+            {
+                "files": [
+                    "lite/brand/index.js"
+                ],
+                "parserOptions": {
+                    "project": null
+                }
+            }
         ],
         "rules": {
             "semi": "error",
