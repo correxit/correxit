@@ -116,6 +116,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const indicator = new Corrector.Status(trans);
       const active = new Signal<typeof tracker, void>(tracker);
       tracker.corrector.currentChanged.connect(() => active.emit(undefined));
+
       const { down, fail, launch, left, pass, review, right, up } =
         Corrector.CommandIDs;
       const added = Corrector.commands(app, {
@@ -140,8 +141,10 @@ const corrector: JupyterFrontEndPlugin<void> = {
       }
       if (launcher)
         added.push(launcher.add({ category: 'Correxit', command: launch }));
-      if (palette) palette.addItem({ category: 'Correxit', command: launch });
-      if (palette) palette.addItem({ category: 'Correxit', command: review });
+      if (palette)
+        added.push(palette.addItem({ category: 'Correxit', command: launch }));
+      if (palette)
+        added.push(palette.addItem({ category: 'Correxit', command: review }));
       if (restorer) {
         restorer.restore(tracker.corrector, {
           command: launch,
