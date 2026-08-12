@@ -8,6 +8,7 @@ import { ICommandPalette, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
+import { ILauncher } from '@jupyterlab/launcher';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
@@ -75,6 +76,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
     ICommandPalette,
     IDefaultFileBrowser,
     IEditorServices,
+    ILauncher,
     ILayoutRestorer,
     INotebookTree,
     IRenderMimeRegistry,
@@ -92,6 +94,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       palette: ICommandPalette | null,
       browser: IDefaultFileBrowser | null,
       editors: IEditorServices | null,
+      launcher: ILauncher | null,
       restorer: ILayoutRestorer | null,
       tree: INotebookTree | null,
       rendermime: IRenderMimeRegistry | null,
@@ -135,6 +138,8 @@ const corrector: JupyterFrontEndPlugin<void> = {
           activeStateChanged: active
         });
       }
+      if (launcher)
+        added.push(launcher.add({ category: 'Correxit', command: launch }));
       if (palette) palette.addItem({ category: 'Correxit', command: launch });
       if (palette) palette.addItem({ category: 'Correxit', command: review });
       if (restorer) {
