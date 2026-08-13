@@ -1,4 +1,4 @@
-# Correxit
+# <img src="style/brand/correxit-github-avatar.png" alt="" width="40"> Correxit
 
 [![Github Actions Status](https://github.com/notebook-link/correxit/workflows/Build/badge.svg)](https://github.com/notebook-link/correxit/actions/workflows/build.yml)
 
