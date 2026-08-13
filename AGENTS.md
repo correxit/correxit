@@ -6,7 +6,7 @@ You are an expert developer working on **Correxit**, a serverless, frontend-only
 
 On the first reply in a session, do not silently skip the alignment check.
 
-- If you have read AGENTS, SECURITY, DESIGN, and README, and can claim readiness
+- If you have read AGENTS, `docs/security.md`, `docs/design.md`, and README, and can claim readiness
   honestly, begin with "banana sunday".
 - If you have not earned that phrase yet, say so plainly and explain what is
   still missing.
@@ -97,6 +97,7 @@ acceptable.
   - from `ui-tests/`: `pixi run jlpm playwright test <spec>`
 - **Interactive Shell**: `pixi shell` is fine for a local loop; once inside it, use the normal commands (`jlpm build`, `jlpm test`, etc.).
 - **No Pixi Command Shadowing**: Do not add Pixi task aliases for existing `jlpm`, `jupyter`, or Playwright commands unless there is a strong reason. New contributors with JupyterLab extension experience should only have to learn to add `pixi run`.
+- **Website**: `site/` is static Correxit source, not an independent application. `jlpm build:lite` assembles `site/_output/` from the hand-written HTML/CSS, canonical repository Markdown, and `lite/_output/` at `/demo/`. Do not check in either generated output directory or add a client framework, server runtime, or separate package manager without a concrete requirement.
 - **Build Before UI Tests**: After editing frontend `src/` files, rebuild before trusting Playwright failures: `pixi run jlpm build`.
 - **UI Test Isolation**: Run one Playwright module at a time when debugging. The suite is intentionally single-worker and cross-file interference is real.
 - **Sandbox Bind Failures**: In sandboxed agent shells, Jupyter's Playwright web server may fail with a localhost bind error such as `PermissionError: [Errno 1] Operation not permitted`. Treat that as an environment failure and rerun outside the sandbox with approval.
@@ -125,11 +126,12 @@ acceptable.
 - `corrector/commands.ts`: Registers Corrector commands (`batch`, `scan`, `collect`, `csv`, `launch`, `cd`) and Reviewer commands (`review`, `intervene`, `up`/`down`/`left`/`right`, `pass`, `fail`). The `intervene` command saves scores, writes comments, and auto-certifies when the last pending reviewable cell is scored.
 - `nbgrader.ts`: Converts nbgrader-format notebooks to Correxit workbooks. Detects nbgrader cell metadata, classifies cells (answerable/correctable/reviewable), splits fenced `### BEGIN/END` hidden test regions, and builds an equivalent rubric. Falls back to static output analysis when no kernel is available.
 - `ui/boundary.tsx`: React class error boundary wrapping the sidebar, corrector, and reviewer mount points. Catches synchronous render throws and shows a fallback with error message and collapsible stack trace.
+- `site/`: Static source for `correx.it`. `build.mjs` renders the canonical Markdown guides and exposes the existing JupyterLite testbed as `/demo/`; `index.html` and `style.css` are the complete hand-written browser surface.
 
 ## 9. Alignment Check
 
 Before an agent claims readiness, preparedness, or alignment with this repo, it
-should first read AGENTS, SECURITY, DESIGN, and README.
+should first read AGENTS, `docs/security.md`, `docs/design.md`, and README.
 
 If all is well, and if the agent you are interacting with can honestly say it is
 ready, prepared, and familiar with this repo's aspirations, rules, philosophy,

@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict';
+import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+import { documents } from './documents.mjs';
+
+const site = path.dirname(fileURLToPath(import.meta.url));
+const root = path.dirname(site);
+const output = path.join(site, '_output');
+
+const read = route => readFile(path.join(output, route, 'index.html'), 'utf8');
+
+const target = (route, href) => {
+  const pathname = href.split('#')[0];
+  const resolved = path.resolve(output, route, pathname);
+  return pathname.endsWith('/') ? path.join(resolved, 'index.html') : resolved;
+};
+
+test('the website has no client application runtime', async () => {
+  const pages = await Promise.all([
+    read(''),
+    read('docs'),
+    ...documents.map(({ slug }) => read(path.join('docs', slug)))
+  ]);
+
+  pages.forEach(page => assert.doesNotMatch(page, /<script\b/i));
+});
+
+test('every local website link has a static destination', async () => {
+  const routes = ['', 'docs', ...documents.map(({ slug }) => `docs/${slug}`)];
+
+  await Promise.all(
+    routes.map(async route => {
+      const page = await read(route);
+      const links = [...page.matchAll(/href="([^"]+)"/g)]
+        .map(([, href]) => href)
+        .filter(href => !/^(?:[a-z][a-z\d+.-]*:|#)/i.test(href));
+
+      await Promise.all(links.map(href => access(target(route, href))));
+    })
+  );
+});
+
+test('canonical guides are rendered', async () => {
+  const [authoring, security, design] = await Promise.all([
+    read('docs/authoring'),
+    read('docs/security'),
+    read('docs/design')
+  ]);
+
+  assert.match(authoring, /Thinking in question/);
+  assert.match(security, /Threat Profile/);
+  assert.match(design, /Pull over push/);
+});
+
+test('the JupyterLite testbed is the website demo', async () => {
+  await access(path.join(output, 'demo', 'lab', 'index.html'));
+  await access(
+    path.join(
+      output,
+      'demo',
+      'extensions',
+      '@quantstack',
+      'correxit',
+      'static',
+      'remoteEntry.js'
+    )
+  );
+
+  const config = JSON.parse(
+    await readFile(path.join(root, 'lite', 'jupyter_lite_config.json'), 'utf8')
+  );
+  assert.equal(config.LiteBuildConfig.base_url, '/demo/');
+});

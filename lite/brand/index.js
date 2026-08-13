@@ -14,16 +14,20 @@ const plugin = {
   optional: [ILabShell],
   activate: (_, shell) => {
     if (!shell) return;
-    widget = new Widget({
-      node: icon.element({
+    const logo = document.createElement('a');
+    logo.href = '/';
+    logo.append(
+      icon.element({
         elementPosition: 'center',
         margin: '2px 2px 2px 8px',
         height: 'auto',
         width: '18px'
       })
-    });
+    );
+    widget = new Widget({ node: logo });
     widget.id = 'jp-MainLogo';
-    widget.node.setAttribute('aria-label', 'Correxit');
+    widget.node.setAttribute('aria-label', 'Correxit home');
+    widget.node.setAttribute('title', 'Correxit home');
     shell.add(widget, 'top', { rank: 0 });
   },
   deactivate: () => widget?.dispose()

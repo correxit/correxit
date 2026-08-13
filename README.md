@@ -1,4 +1,4 @@
-# <img src="style/brand/correxit-github-avatar.png" alt="" width="40"> Correxit
+# <img src="style/brand/correxit-github-avatar.png" alt="" width="40" align="top"> Correxit
 
 [![Github Actions Status](https://github.com/notebook-link/correxit/workflows/Build/badge.svg)](https://github.com/notebook-link/correxit/actions/workflows/build.yml)
 
@@ -12,15 +12,15 @@ runs in the browser; there is no server component.
 
 ## Documentation
 
-| Document                  | Audience            | Content                                                   |
-| ------------------------- | ------------------- | --------------------------------------------------------- |
-| [AUTHORING](AUTHORING.md) | Assignment author   | How to create, configure, test, and distribute a workbook |
-| [DESIGN](DESIGN.md)       | Developer           | Architecture, data model, async patterns                  |
-| [MOODLE](MOODLE.md)       | Teacher, integrator | Browser-only Moodle workflow and constraints              |
-| [SECURITY](SECURITY.md)   | Developer, auditor  | Threat model, encryption, key management                  |
-| [PLUGINS](PLUGINS.md)     | Integrator          | Plugin token interfaces for LMS and transport             |
-| [RELEASE](RELEASE.md)     | Maintainer          | Release process and versioning                            |
-| [CHANGELOG](CHANGELOG.md) | Everyone            | Version history                                           |
+| Document                       | Audience            | Content                                                   |
+| ------------------------------ | ------------------- | --------------------------------------------------------- |
+| [AUTHORING](docs/authoring.md) | Assignment author   | How to create, configure, test, and distribute a workbook |
+| [DESIGN](docs/design.md)       | Developer           | Architecture, data model, async patterns                  |
+| [MOODLE](docs/moodle.md)       | Teacher, integrator | Browser-only Moodle workflow and constraints              |
+| [SECURITY](docs/security.md)   | Developer, auditor  | Threat model, encryption, key management                  |
+| [PLUGINS](docs/plugins.md)     | Integrator          | Plugin token interfaces for LMS and transport             |
+| [RELEASE](docs/release.md)     | Maintainer          | Release process and versioning                            |
+| [CHANGELOG](CHANGELOG.md)      | Everyone            | Version history                                           |
 
 ## What does it do? How does it work?
 
@@ -145,7 +145,7 @@ instead of a full Jupyter Server. The workflow uses two watch processes and a
 symlink so that every saved TypeScript change is immediately available after a
 browser refresh.
 
-**1. Build the JupyterLite site once:**
+**1. Build the JupyterLite testbed and website once:**
 
 ```bash
 pixi run jlpm build:lite
@@ -154,7 +154,9 @@ pixi run jlpm build:lite
 This pre-compiles the xeus Wasm kernels, copies example content into the static
 site, mounts content files into the kernel virtual filesystem, and runs
 `jlpm link:lite` to symlink the built extension back to `correxit/labextension`.
-Because of the symlink, subsequent TypeScript rebuilds are picked up without
+It then assembles the Correxit website from its static source, the repository
+documentation, and that same JupyterLite build. Because the demo preserves the
+development symlink, subsequent TypeScript rebuilds are picked up without
 re-running `build:lite`.
 
 **2. Start two terminals:**
@@ -163,11 +165,15 @@ re-running `build:lite`.
 # Terminal 1: rebuild on every save
 pixi run jlpm watch
 
-# Terminal 2: serve the static site at http://localhost:8888
+# Terminal 2: serve the website at http://localhost:8888
 pixi run jlpm serve
 ```
 
-**3. Open `http://localhost:8888` and refresh after each rebuild.**
+**3. Open `http://localhost:8888/demo/lab/` and refresh after each rebuild.**
+
+The landing page is at `http://localhost:8888/`. Its documentation is rendered
+directly from `README.md`, `CHANGELOG.md`, and `docs/`; run
+`pixi run jlpm build:site` to refresh it without rebuilding JupyterLite.
 
 If you rebuild the labextension outside of `build:lite` (e.g. after a clean),
 run `pixi run jlpm link:lite` to re-establish the symlink and patch the
@@ -180,6 +186,11 @@ The `lite/` directory contains:
 | `jupyter_lite_config.json` | Build configuration: contents directory, Service Worker toggle                    |
 | `environment.yml`          | Wasm kernel environment (xeus-python, xeus-sqlite) resolved from emscripten-forge |
 | `link.mjs`                 | Post-build script that symlinks the dev extension and patches the manifest hash   |
+
+The `site/` directory contains the hand-written landing page and stylesheet,
+the documentation manifest, and the small build script that assembles the
+published artifact. `site/_output/` and `lite/_output/` are generated and are
+never checked in.
 
 By default, the `jlpm build` command generates the source maps for this
 extension to make it easier to debug using the browser dev tools. To also
@@ -226,4 +237,4 @@ More information is provided within the [ui-tests README](./ui-tests/README.md)
 
 ### Packaging the extension
 
-See [RELEASE](RELEASE.md)
+See [RELEASE](docs/release.md)

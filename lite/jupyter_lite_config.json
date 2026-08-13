@@ -1,8 +1,8 @@
 {
   "LiteBuildConfig": {
+    "base_url": "/demo/",
     "contents": ["../examples", "../src/__tests__/fixtures"],
-    "federated_extensions": ["brand/labextension"],
-    "no_minimize": true
+    "federated_extensions": ["brand/labextension"]
   },
   "ServiceWorkerAddon": {
     "enabled": true

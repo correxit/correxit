@@ -35,7 +35,7 @@ Without feedback files, Correxit has nowhere to attach distributed or graded
 workbooks.
 
 The administrator setup, service functions, and token configuration live in
-[PLUGINS](PLUGINS.md).
+[PLUGINS](plugins.md).
 
 ## The workflow
 
@@ -53,7 +53,7 @@ from their own Jupyter session.
 The teacher creates or converts a notebook into a Correxit workbook, defines
 the rubric, tests it, and locks it for distribution.
 
-This part is LMS-agnostic and is described in [AUTHORING](AUTHORING.md).
+This part is LMS-agnostic and is described in [AUTHORING](authoring.md).
 
 ### 3. The teacher registers the Moodle assignment
 
@@ -148,8 +148,8 @@ The workflow says exactly what the architecture can guarantee.
 
 ## Where this guide fits
 
-- [AUTHORING](AUTHORING.md) explains how to build the workbook itself.
-- [PLUGINS](PLUGINS.md) explains the plugin contracts and Moodle setup.
-- [SECURITY](SECURITY.md) explains locking, sealing, and integrity.
+- [AUTHORING](authoring.md) explains how to build the workbook itself.
+- [PLUGINS](plugins.md) explains the plugin contracts and Moodle setup.
+- [SECURITY](security.md) explains locking, sealing, and integrity.
 
 This document is the operational story that sits between them.
