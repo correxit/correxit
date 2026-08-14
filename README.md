@@ -99,6 +99,46 @@ extension is installed:
 jupyter labextension list
 ```
 
+## License
+
+Copyright (c) 2025-2026 QuantStack and the Correxit contributors.
+
+Correxit is open source under the
+[GNU Affero General Public License version 3 only](LICENSE)
+(`AGPL-3.0-only`). Version 2.0 will be its first open-source release.
+
+### Scheduled transition to BSD 3-Clause
+
+Correxit will switch to the
+[BSD 3-Clause License](https://opensource.org/license/bsd-3-clause) at 00:00
+UTC on 1 January 2028. At that time, QuantStack will exercise its relicensing
+rights and make Correxit available under `BSD-3-Clause`; releases made from
+that time forward will use `BSD-3-Clause`.
+
+The transition does not withdraw or replace rights already granted under
+`AGPL-3.0-only`. Anyone who receives Correxit under the AGPL may continue to
+use that license permanently, provided its conditions are met.
+
+### Contribution terms
+
+These terms are a contributor license agreement. They apply to code,
+documentation, tests, designs, and any other copyrightable material submitted
+to Correxit by any route.
+
+By submitting a contribution, you:
+
+1. represent that you have the legal right to submit and license it;
+2. license it to everyone under `AGPL-3.0-only` from the moment of submission;
+3. grant QuantStack and its successors in title the perpetual, worldwide,
+   non-exclusive, royalty-free, and irrevocable right to relicense it to
+   everyone under `BSD-3-Clause` on or after 1 January 2028; and
+4. acknowledge and agree that QuantStack may distribute it under
+   `AGPL-3.0-only` before the transition and under `BSD-3-Clause` from the
+   transition onward, without revoking any existing AGPL rights.
+
+Submitting a contribution constitutes explicit acknowledgment and acceptance
+of these terms. Do not submit a contribution if you do not agree to them.
+
 ## Contributing
 
 ### Development install

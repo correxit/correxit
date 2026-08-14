@@ -14,7 +14,7 @@
     "bugs": {
         "url": "https://github.com/QuantStack/correxit/issues"
     },
-    "license": "UNLICENSED",
+    "license": "AGPL-3.0-only",
     "author": {
         "name": "A. T. Darian",
         "email": "correxit@darian.link"
