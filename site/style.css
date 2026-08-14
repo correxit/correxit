@@ -16,7 +16,7 @@
 }
 
 html {
-  color-scheme: light;
+  color-scheme: light dark;
 }
 
 body {
@@ -102,7 +102,9 @@ main > .intro {
 h1,
 h2,
 h3,
-h4 {
+h4,
+h5,
+h6 {
   line-height: 1.25;
 }
 
@@ -126,6 +128,12 @@ h3 {
 h4 {
   font-size: 1rem;
   margin: 1.75rem 0 0.5rem;
+}
+
+h5,
+h6 {
+  font-size: 0.92rem;
+  margin: 1.4rem 0 0.45rem;
 }
 
 .actions {
@@ -254,7 +262,9 @@ footer {
 
 .prose h2,
 .prose h3,
-.prose h4 {
+.prose h4,
+.prose h5,
+.prose h6 {
   scroll-margin-top: 1rem;
 }
 
@@ -310,6 +320,39 @@ footer {
 .document-list p {
   font-size: 0.9rem;
   margin: 0.2rem 0 0;
+}
+
+.api-document .prose blockquote {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  color: var(--ink);
+  margin-inline: 0;
+  overflow-x: auto;
+  padding: 0.75rem 1rem;
+}
+
+.api-document .prose blockquote p {
+  margin: 0;
+  max-width: none;
+  width: max-content;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e8eaed;
+    --muted: #aab0b6;
+    --line: #394047;
+    --surface: #1b2025;
+  }
+
+  body {
+    background: #111417;
+  }
+
+  a {
+    color: #8fc7ff;
+  }
 }
 
 @media (width <= 44rem) {

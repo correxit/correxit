@@ -195,9 +195,9 @@ This pre-compiles the xeus Wasm kernels, copies example content into the static
 site, mounts content files into the kernel virtual filesystem, and runs
 `jlpm link:lite` to symlink the built extension back to `correxit/labextension`.
 It then assembles the Correxit website from its static source, the repository
-documentation, and that same JupyterLite build. Because the demo preserves the
-development symlink, subsequent TypeScript rebuilds are picked up without
-re-running `build:lite`.
+documentation, a generated reference for the public TypeScript APIs, and that
+same JupyterLite build. Because the demo preserves the development symlink,
+subsequent TypeScript rebuilds are picked up without re-running `build:lite`.
 
 **2. Start two terminals:**
 
@@ -211,9 +211,10 @@ pixi run jlpm serve
 
 **3. Open `http://localhost:8888/demo/lab/` and refresh after each rebuild.**
 
-The landing page is at `http://localhost:8888/`. Its documentation is rendered
-directly from `README.md`, `CHANGELOG.md`, and `docs/`; run
-`pixi run jlpm build:site` to refresh it without rebuilding JupyterLite.
+The landing page is at `http://localhost:8888/`. Its guides are rendered
+directly from `README.md`, `CHANGELOG.md`, and `docs/`, while its API reference
+is generated from the package's public TypeScript entry points. Run
+`pixi run jlpm build:site` to refresh both without rebuilding JupyterLite.
 
 If you rebuild the labextension outside of `build:lite` (e.g. after a clean),
 run `pixi run jlpm link:lite` to re-establish the symlink and patch the
@@ -229,8 +230,8 @@ The `lite/` directory contains:
 
 The `site/` directory contains the hand-written landing page and stylesheet,
 the documentation manifest, and the small build script that assembles the
-published artifact. `site/_output/` and `lite/_output/` are generated and are
-never checked in.
+published artifact. `site/_api/`, `site/_output/`, and `lite/_output/` are
+generated and are never checked in.
 
 By default, the `jlpm build` command generates the source maps for this
 extension to make it easier to debug using the browser dev tools. To also

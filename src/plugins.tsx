@@ -475,6 +475,7 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
   }
 );
 
+/** JupyterLab plugins provided by the Correxit package. */
 export const plugins = [
   collector,
   corrector,

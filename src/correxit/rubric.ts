@@ -10,10 +10,13 @@ import * as security from './security';
  * notebook with the functionality of a Correxit workbook, including cell
  * correction configuration, assignment metadata, etc.
  *
- * Rubrics are immutable.
+ * Rubrics are immutable. `locked` discriminates their state: a
+ * {@link Rubric.Locked} rubric has no key; an {@link Rubric.Unlocked} rubric
+ * holds its key in memory.
  */
 export type Rubric = Rubric.Locked | Rubric.Unlocked;
 
+/** Immutable assignment, cell, reference, and scoring data. */
 export namespace Rubric {
   /** Current persisted Correxit metadata format. */
   export const CXTFORMAT = 1 as const;
@@ -41,7 +44,8 @@ export namespace Rubric {
     submitted: string | null;
   }>;
 
-  type Base = Readonly<{
+  /** Fields shared by locked and unlocked rubrics. */
+  export type Base = Readonly<{
     assignment: Assignment;
     cells: Readonly<{ [id: string]: Cell }>;
     cxtformat: typeof CXTFORMAT;
@@ -313,6 +317,7 @@ export namespace Rubric {
     }
   }
 
+  /** A rubric whose key is absent. */
   export type Locked = Base & Readonly<{ key: null; locked: true; }>;
 
   export namespace Reference {
@@ -391,6 +396,7 @@ export namespace Rubric {
 
   export type Timestamp = number | null;
 
+  /** A rubric whose key is available in memory. */
   export type Unlocked = Base & Readonly<{ key: string; locked: false; }>;
 
   export namespace Assignment {
@@ -402,12 +408,14 @@ export namespace Rubric {
     >;
 
     export namespace Equal {
-      type Course = {
+      /** A named group of assignment registrations. */
+      export type Course = {
         assignments: Registration[];
         group: string;
       };
 
-      type Registered = Registration[] | Course[] | null;
+      /** Registration shapes accepted by a registrar. */
+      export type Registered = Registration[] | Course[] | null;
 
       const course = (x: Course, y: Course): boolean =>
         x.group === y.group &&

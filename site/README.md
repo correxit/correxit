@@ -5,8 +5,9 @@ of the Correxit repository:
 
 - `index.html` and `style.css` are the hand-written website.
 - `build.mjs` renders the canonical repository Markdown into documentation.
+- TypeDoc generates a reference from the public TypeScript entry points.
 - the existing JupyterLite testbed is included at `/demo/`.
-- `_output/` is generated and is not checked in.
+- `_api/` and `_output/` are generated and are not checked in.
 
 There is no client-side website framework, package, or hosting runtime. The
 only browser JavaScript in the published artifact belongs to JupyterLite and
@@ -26,4 +27,4 @@ pixi run jlpm serve
 ```
 
 After an initial JupyterLite build, `pixi run jlpm build:site` is enough to
-refresh only the landing page and documentation.
+refresh the landing page, guides, and API reference.

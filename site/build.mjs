@@ -2,6 +2,7 @@ import {
   access,
   cp,
   mkdir,
+  readdir,
   readFile,
   rm,
   symlink,
@@ -14,12 +15,48 @@ import { documents } from './documents.mjs';
 
 const site = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(site);
+const api = path.join(site, '_api');
 const output = path.join(site, '_output');
 const lite = path.join(root, 'lite', '_output');
 const repository = process.env.GITHUB_REPOSITORY
   ? `https://github.com/${process.env.GITHUB_REPOSITORY}`
   : 'https://github.com/QuantStack/correxit';
 const routes = new Map(documents.map(({ slug, source }) => [source, slug]));
+
+const descend = async directory =>
+  (
+    await Promise.all(
+      (await readdir(directory, { withFileTypes: true })).map(async entry => {
+        const target = path.join(directory, entry.name);
+        return entry.isDirectory() ? descend(target) : [target];
+      })
+    )
+  ).flat();
+
+const posix = value => value.split(path.sep).join(path.posix.sep);
+const apiRoute = source => {
+  const relative = posix(path.relative(api, source)).replace(/\.md$/, '');
+  return (
+    relative === 'index' ? '' : relative.replace(/\/index$/, '')
+  ).toLowerCase();
+};
+
+const apiPages = await Promise.all(
+  (await descend(api))
+    .filter(source => source.endsWith('.md'))
+    .map(async source => {
+      const markdown = await readFile(source, 'utf8');
+      const heading = markdown.match(/^# (.+)$/m);
+      if (!heading) throw new Error(`API page has no title: ${source}`);
+      return {
+        markdown,
+        route: apiRoute(source),
+        source: posix(path.relative(api, source)),
+        title: heading[1]
+      };
+    })
+);
+const apiRoutes = new Map(apiPages.map(({ route, source }) => [source, route]));
 
 const escape = value =>
   value
@@ -48,10 +85,36 @@ const resolve = (document, href, image) => {
   return `${repository}/${image ? 'raw' : 'blob'}/main/${source}${hash}`;
 };
 
+const resolveApi = (document, href) => {
+  if (/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(href)) return href;
+
+  const { pathname, hash } = split(href);
+  if (!pathname.endsWith('.md')) return href;
+
+  const source = path.posix.normalize(
+    path.posix.join(path.posix.dirname(document.source), pathname)
+  );
+  if (!apiRoutes.has(source))
+    throw new Error(`API link has no generated page: ${source}`);
+
+  const route = apiRoutes.get(source);
+  const current = path.posix.join('api', document.route);
+  const target = path.posix.join('api', route);
+  const relative = path.posix.relative(current, target) || '.';
+  return `${relative}/${hash}`;
+};
+
 const clean = markdown =>
   markdown
     .replace(/^# .+\n+/, '')
     .replace(/^\[!\[Github Actions Status\].+\n+/m, '');
+
+const cleanApi = markdown => {
+  const heading = markdown.match(/^# .+\n+/m);
+  return heading
+    ? markdown.slice((heading.index ?? 0) + heading[0].length)
+    : markdown;
+};
 
 const slugify = value =>
   value
@@ -86,20 +149,63 @@ const render = async document => {
   return headings(await parser.parse(clean(markdown)));
 };
 
-const navigation = current => `
+const renderApi = async document => {
+  const parser = new Marked({
+    gfm: true,
+    walkTokens(token) {
+      if (token.type === 'link') token.href = resolveApi(document, token.href);
+    }
+  });
+  return headings(await parser.parse(cleanApi(document.markdown)));
+};
+
+const navigation = (current, base = '../') => `
   <nav class="docs-nav" aria-label="Documentation">
     <strong>Documentation</strong>
     <ul>
       ${documents
         .map(
           ({ slug, title }) => `
-        <li><a href="../${slug}/"${
+        <li><a href="${base}${slug}/"${
           slug === current ? ' aria-current="page"' : ''
         }>${escape(title)}</a></li>`
         )
         .join('')}
+        <li><a href="${base}../api/">API Reference</a></li>
     </ul>
   </nav>`;
+
+const apiHref = (current, target) => {
+  const from = path.posix.join('api', current);
+  const to = path.posix.join('api', target);
+  return `${path.posix.relative(from, to) || '.'}/`;
+};
+
+const apiNavigation = current => {
+  const links = [
+    ['', 'Overview'],
+    ['browser', 'Browser'],
+    ['node', 'Node'],
+    ['browser/namespaces/assignment', 'Assignment'],
+    ['browser/namespaces/correxit', 'Correxit'],
+    ['browser/namespaces/rubric', 'Rubric'],
+    ['browser/namespaces/workbook', 'Workbook']
+  ];
+  return `
+  <nav class="docs-nav" aria-label="API Reference">
+    <strong>API Reference</strong>
+    <ul>
+      ${links
+        .map(
+          ([route, title]) => `
+        <li><a href="${apiHref(current, route)}"${
+          route === current ? ' aria-current="page"' : ''
+        }>${title}</a></li>`
+        )
+        .join('')}
+    </ul>
+  </nav>`;
+};
 
 const page = ({ title, description, body, base = '../../' }) => `<!doctype html>
 <html lang="en">
@@ -119,6 +225,7 @@ const page = ({ title, description, body, base = '../../' }) => `<!doctype html>
       </a>
       <nav aria-label="Primary navigation">
         <a href="${base}docs/">Documentation</a>
+        <a href="${base}api/">API</a>
         <a href="${base}demo/lab/">Demo</a>
         <a href="${repository}">GitHub</a>
       </nav>
@@ -145,14 +252,33 @@ const documentPage = async document =>
     </div>`
   });
 
+const apiPage = async document =>
+  page({
+    title: document.route ? document.title : 'API Reference',
+    description: "Generated reference for Correxit's public APIs.",
+    base: '../'.repeat(
+      1 + (document.route ? document.route.split('/').length : 0)
+    ),
+    body: `<div class="docs">
+      ${apiNavigation(document.route)}
+      <main class="document api-document">
+        <header class="document-header">
+          <h1>${escape(document.route ? document.title : 'API Reference')}</h1>
+          <p>${
+            document.route ? '' : `${escape(document.title)}. `
+          }Generated from Correxit's public TypeScript declarations.</p>
+        </header>
+        <article class="prose">${await renderApi(document)}</article>
+      </main>
+    </div>`
+  });
+
 const indexPage = page({
   title: 'Documentation',
   description: 'Correxit documentation built from the repository guides.',
   base: '../',
   body: `<div class="docs">
-    <nav class="docs-nav" aria-label="Documentation">
-      <strong>Documentation</strong>
-    </nav>
+    ${navigation(null, '')}
     <main class="document">
       <header class="document-header">
         <h1>Documentation</h1>
@@ -200,6 +326,17 @@ await Promise.all(
   })
 );
 
+await Promise.all(
+  apiPages.map(async document => {
+    const directory = path.join(output, 'api', document.route);
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      path.join(directory, 'index.html'),
+      await apiPage(document)
+    );
+  })
+);
+
 await access(path.join(lite, 'lab', 'index.html'));
 await symlink(path.relative(output, lite), path.join(output, 'demo'), 'dir');
 
@@ -215,6 +352,12 @@ await writeFile(
   <url><loc>https://correx.it/docs/</loc></url>
   ${documents
     .map(({ slug }) => `<url><loc>https://correx.it/docs/${slug}/</loc></url>`)
+    .join('\n  ')}
+  ${apiPages
+    .map(
+      ({ route }) =>
+        `<url><loc>https://correx.it/api/${route ? `${route}/` : ''}</loc></url>`
+    )
     .join('\n  ')}
   <url><loc>https://correx.it/demo/lab/</loc></url>
 </urlset>
