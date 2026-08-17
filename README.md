@@ -119,23 +119,24 @@ use that license permanently, provided its conditions are met.
 
 ### Contribution terms
 
-These terms are a contributor license agreement. They apply to code,
-documentation, tests, designs, and any other copyrightable material submitted
-to Correxit by any route.
+Until 00:00 UTC on 1 January 2028, external contributions are accepted under
+the [Correxit Contributor License Agreement](CLA.md). Contributors retain
+ownership of their work. The CLA grants the public an AGPL license immediately
+and an irrevocable BSD 3-Clause license taking effect at the transition. It
+also grants QuantStack an immediate, non-exclusive right to use and license
+accepted contributions under commercial or proprietary terms. Any contribution
+used under that additional license remains available in public Correxit under
+the applicable public license.
 
-By submitting a contribution, you:
+The CLA requirement ends at the transition. Contributions submitted at or
+after 00:00 UTC on 1 January 2028 require no CLA and are accepted under
+`BSD-3-Clause` alone. Rights already granted for earlier contributions remain
+in effect.
 
-1. represent that you have the legal right to submit and license it;
-2. license it to everyone under `AGPL-3.0-only` from the moment of submission;
-3. license it to everyone under `BSD-3-Clause`, irrevocably and with that
-   license taking effect at 00:00 UTC on 1 January 2028 or, for a contribution
-   submitted later, at the moment of submission; and
-4. acknowledge and agree that Correxit may distribute it under
-   `AGPL-3.0-only` before the transition and under `BSD-3-Clause` from the
-   transition onward, without revoking any existing AGPL rights.
-
-Submitting a contribution constitutes explicit acknowledgment and acceptance
-of these terms. Do not submit a contribution if you do not agree to them.
+Before the transition, do not submit a contribution unless you have read and
+accepted the CLA and have the authority to grant its rights. Contributions
+whose necessary rights are already held under another applicable agreement do
+not require a separate acceptance.
 
 ## Contributing
 
