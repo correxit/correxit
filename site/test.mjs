@@ -32,7 +32,7 @@ const target = (route, href) => {
   return pathname.endsWith('/') ? path.join(resolved, 'index.html') : resolved;
 };
 
-test('the website has no client application runtime', async () => {
+test('the website has no active content', async () => {
   const api = await apiRoutes();
   const pages = await Promise.all([
     read(''),
@@ -41,7 +41,11 @@ test('the website has no client application runtime', async () => {
     ...api.map(read)
   ]);
 
-  pages.forEach(page => assert.doesNotMatch(page, /<script\b/i));
+  pages.forEach(page => {
+    assert.doesNotMatch(page, /<(?:embed|iframe|object|script)\b/i);
+    assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
+    assert.doesNotMatch(page, /(?:href|src)="(?:data:|javascript:|[\\/]{2})/i);
+  });
 });
 
 test('every local website link has a static destination', async () => {

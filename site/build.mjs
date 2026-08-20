@@ -11,6 +11,7 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
+import sanitizeHtml from 'sanitize-html';
 import { documents } from './documents.mjs';
 
 const site = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +65,18 @@ const escape = value =>
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+
+const policy = {
+  allowedTags: [...sanitizeHtml.defaults.allowedTags, 'img'],
+  allowedAttributes: {
+    ...sanitizeHtml.defaults.allowedAttributes,
+    code: ['class']
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  allowedSchemesByTag: { img: ['http', 'https'] },
+  allowProtocolRelative: false
+};
+const sanitize = html => sanitizeHtml(html, policy);
 
 const split = href => {
   const index = href.indexOf('#');
@@ -146,7 +159,7 @@ const render = async document => {
         token.href = resolve(document, token.href, true);
     }
   });
-  return headings(await parser.parse(clean(markdown)));
+  return headings(sanitize(await parser.parse(clean(markdown))));
 };
 
 const renderApi = async document => {
@@ -156,7 +169,7 @@ const renderApi = async document => {
       if (token.type === 'link') token.href = resolveApi(document, token.href);
     }
   });
-  return headings(await parser.parse(cleanApi(document.markdown)));
+  return headings(sanitize(await parser.parse(cleanApi(document.markdown))));
 };
 
 const navigation = (current, base = '../') => `
