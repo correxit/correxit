@@ -8,7 +8,7 @@ let widget = null;
 const icon = new LabIcon({ name: 'correxit:lite-logo', svgstr: CORREXIT });
 
 const plugin = {
-  id: '@quantstack/correxit-lite:logo',
+  id: '@correxit:lite-logo',
   description: 'Sets the Correxit mark on the JupyterLite app.',
   autoStart: true,
   optional: [ILabShell],

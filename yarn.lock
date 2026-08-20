@@ -1586,6 +1586,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@correxit/lite-logo@workspace:lite/brand":
+  version: 0.0.0-use.local
+  resolution: "@correxit/lite-logo@workspace:lite/brand"
+  dependencies:
+    "@jupyter/builder": ^1.0.2
+    "@jupyterlab/application": ^4.5.5
+    "@jupyterlab/ui-components": ^4.5.5
+    "@lumino/widgets": ^2.7.3
+  languageName: unknown
+  linkType: soft
+
 "@csstools/css-parser-algorithms@npm:^2.3.1":
   version: 2.7.1
   resolution: "@csstools/css-parser-algorithms@npm:2.7.1"
@@ -3834,17 +3845,6 @@ __metadata:
   checksum: b8f1ac88a52ec4a00acaeecee8b2668b8a398685179352e5c19280c3df40f763fdf1a527e6c9cdcee20d8964a9a962cfc660516c17a6ab2b22eb655181d9f170
   languageName: node
   linkType: hard
-
-"@quantstack/correxit-lite@workspace:lite/brand":
-  version: 0.0.0-use.local
-  resolution: "@quantstack/correxit-lite@workspace:lite/brand"
-  dependencies:
-    "@jupyter/builder": ^1.0.2
-    "@jupyterlab/application": ^4.5.5
-    "@jupyterlab/ui-components": ^4.5.5
-    "@lumino/widgets": ^2.7.3
-  languageName: unknown
-  linkType: soft
 
 "@quantstack/correxit@workspace:.":
   version: 0.0.0-use.local
