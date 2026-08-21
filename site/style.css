@@ -43,8 +43,8 @@ body > footer {
   width: 2rem;
 }
 
-.site-header nav,
-body > footer {
+body > footer nav,
+.site-header nav {
   display: flex;
   font-size: 0.9rem;
   gap: 1.25rem;
