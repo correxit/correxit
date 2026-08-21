@@ -18,7 +18,6 @@ test('launcher advertises the corrector', async ({ page }) => {
 
   await expect(card).toBeVisible();
   await expect(card.locator('svg')).toBeVisible();
-  await expect(card.locator('svg title')).toHaveText('Correxit');
   await card.click();
   await expect(page.locator('.correxit-corrector')).toBeVisible();
   await close(page);

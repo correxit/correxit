@@ -227,10 +227,11 @@ The `lite/` directory contains:
 | `environment.yml`          | Wasm kernel environment (xeus-python, xeus-sqlite) resolved from emscripten-forge |
 | `link.mjs`                 | Post-build script that symlinks the dev extension and patches the manifest hash   |
 
-The `site/` directory contains the hand-written landing page and stylesheet,
-the documentation manifest, and the small build script that assembles the
-published artifact. `site/_api/`, `site/_output/`, and `lite/_output/` are
-generated and are never checked in.
+The `site/` directory contains the hand-written landing page, small
+Correxit-specific overrides for the Pico CSS baseline, the documentation
+manifest, and the build script that assembles the published artifact.
+`site/_api/`, `site/_output/`, and `lite/_output/` are generated and are never
+checked in.
 
 By default, the `jlpm build` command generates the source maps for this
 extension to make it easier to debug using the browser dev tools. To also

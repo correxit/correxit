@@ -139,8 +139,11 @@ const corrector: JupyterFrontEndPlugin<void> = {
           activeStateChanged: active
         });
       }
-      if (launcher)
-        added.push(launcher.add({ category: 'Other', command: launch }));
+      if (launcher) {
+        added.push(
+          launcher.add({ category: trans.__('Other'), command: launch })
+        );
+      }
       if (palette)
         added.push(palette.addItem({ category: 'Correxit', command: launch }));
       if (palette)

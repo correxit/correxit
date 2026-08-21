@@ -5,9 +5,9 @@
 ## Contribution terms
 
 - [ ] If this contribution was submitted before 00:00 UTC on 1 January 2028,
-      I have read and accept the [Correxit Contributor License
-      Agreement](../CLA.md), including the additional proprietary-use license
-      described there. I am authorized to grant its rights.
+      I have read and accept the [Correxit Contributor License Agreement](https://github.com/QuantStack/correxit/blob/main/CLA.md),
+      including the additional proprietary-use license described there. I am
+      authorized to grant its rights.
 
 Every contributor whose work is included in this pull request must record the
 same acceptance in the pull request before it can be merged, unless the work is

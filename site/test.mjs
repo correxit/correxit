@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { documents } from './documents.mjs';
+import { direct, parse } from './markdown.mjs';
 
 const site = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(site);
@@ -32,6 +33,21 @@ const target = (route, href) => {
   return pathname.endsWith('/') ? path.join(resolved, 'index.html') : resolved;
 };
 
+test('Markdown cannot introduce active content', async () => {
+  const html = await parse(
+    '<style>body{display:none}</style><svg><textarea><img src=x onerror=alert(1)></textarea></svg>',
+    () => {}
+  );
+
+  assert.doesNotMatch(html, /<(?:img|style|svg|textarea)\b|onerror/i);
+  ['//example.com', 'data:text/html,hello', 'javascript:alert(1)'].forEach(
+    href => assert.throws(() => direct(href, false), /Unsafe URL/)
+  );
+  assert.throws(() => direct('mailto:hello@example.com', true), /Unsafe URL/);
+  assert.equal(direct('https://example.com', false), 'https://example.com');
+  assert.equal(direct('../guide.md', false), null);
+});
+
 test('the website has no active content', async () => {
   const api = await apiRoutes();
   const pages = await Promise.all([
@@ -42,13 +58,17 @@ test('the website has no active content', async () => {
   ]);
 
   pages.forEach(page => {
-    assert.doesNotMatch(page, /<(?:embed|iframe|object|script)\b/i);
+    assert.match(page, /Content-Security-Policy/);
+    assert.doesNotMatch(page, /<(?:embed|iframe|object|script|style)\b/i);
     assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
-    assert.doesNotMatch(page, /(?:href|src)="(?:data:|javascript:|[\\/]{2})/i);
+    assert.doesNotMatch(
+      page,
+      /(?:href|src|srcset)="(?:data:|javascript:|[\\/]{2})/i
+    );
   });
 });
 
-test('every local website link has a static destination', async () => {
+test('every local website reference has a static destination', async () => {
   const routes = [
     '',
     'docs',
@@ -59,11 +79,11 @@ test('every local website link has a static destination', async () => {
   await Promise.all(
     routes.map(async route => {
       const page = await read(route);
-      const links = [...page.matchAll(/href="([^"]+)"/g)]
+      const references = [...page.matchAll(/(?:href|src|srcset)="([^"]+)"/g)]
         .map(([, href]) => href)
         .filter(href => !/^(?:[a-z][a-z\d+.-]*:|#)/i.test(href));
 
-      await Promise.all(links.map(href => access(target(route, href))));
+      await Promise.all(references.map(href => access(target(route, href))));
     })
   );
 });

@@ -8,17 +8,20 @@ import {
   symlink,
   writeFile
 } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Marked } from 'marked';
-import sanitizeHtml from 'sanitize-html';
 import { documents } from './documents.mjs';
+import { direct, parse } from './markdown.mjs';
 
 const site = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(site);
+const require = createRequire(import.meta.url);
 const api = path.join(site, '_api');
 const output = path.join(site, '_output');
 const lite = path.join(root, 'lite', '_output');
+const pico = require.resolve('@picocss/pico/css/pico.classless.min.css');
+const license = require.resolve('@picocss/pico/LICENSE.md');
 const repository = process.env.GITHUB_REPOSITORY
   ? `https://github.com/${process.env.GITHUB_REPOSITORY}`
   : 'https://github.com/QuantStack/correxit';
@@ -66,18 +69,6 @@ const escape = value =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
 
-const policy = {
-  allowedTags: [...sanitizeHtml.defaults.allowedTags, 'img'],
-  allowedAttributes: {
-    ...sanitizeHtml.defaults.allowedAttributes,
-    code: ['class']
-  },
-  allowedSchemes: ['http', 'https', 'mailto'],
-  allowedSchemesByTag: { img: ['http', 'https'] },
-  allowProtocolRelative: false
-};
-const sanitize = html => sanitizeHtml(html, policy);
-
 const split = href => {
   const index = href.indexOf('#');
   return index < 0
@@ -86,7 +77,8 @@ const split = href => {
 };
 
 const resolve = (document, href, image) => {
-  if (/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(href)) return href;
+  const absolute = direct(href, image);
+  if (absolute) return absolute;
 
   const { pathname, hash } = split(href);
   const source = path.posix.normalize(
@@ -99,7 +91,8 @@ const resolve = (document, href, image) => {
 };
 
 const resolveApi = (document, href) => {
-  if (/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(href)) return href;
+  const absolute = direct(href, false);
+  if (absolute) return absolute;
 
   const { pathname, hash } = split(href);
   if (!pathname.endsWith('.md')) return href;
@@ -150,27 +143,22 @@ const headings = html => {
 
 const render = async document => {
   const markdown = await readFile(path.join(root, document.source), 'utf8');
-  const parser = new Marked({
-    gfm: true,
-    walkTokens(token) {
+  return headings(
+    await parse(clean(markdown), token => {
       if (token.type === 'link')
         token.href = resolve(document, token.href, false);
       if (token.type === 'image')
         token.href = resolve(document, token.href, true);
-    }
-  });
-  return headings(sanitize(await parser.parse(clean(markdown))));
+    })
+  );
 };
 
-const renderApi = async document => {
-  const parser = new Marked({
-    gfm: true,
-    walkTokens(token) {
+const renderApi = async document =>
+  headings(
+    await parse(cleanApi(document.markdown), token => {
       if (token.type === 'link') token.href = resolveApi(document, token.href);
-    }
-  });
-  return headings(sanitize(await parser.parse(cleanApi(document.markdown))));
-};
+    })
+  );
 
 const navigation = (current, base = '../') => `
   <nav class="docs-nav" aria-label="Documentation">
@@ -225,15 +213,21 @@ const page = ({ title, description, body, base = '../../' }) => `<!doctype html>
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self'; base-uri 'none'; form-action 'none'">
     <meta name="description" content="${escape(description)}">
     <title>${escape(title)} · Correxit</title>
-    <link rel="icon" href="${base}assets/correxit.svg" type="image/svg+xml">
+    <link rel="icon" href="${base}assets/correxit-light.svg" type="image/svg+xml" media="(prefers-color-scheme: light)">
+    <link rel="icon" href="${base}assets/correxit-dark.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
+    <link rel="stylesheet" href="${base}pico.css">
     <link rel="stylesheet" href="${base}style.css">
   </head>
   <body>
     <header class="site-header">
       <a class="brand" href="${base}" aria-label="Correxit home">
-        <img src="${base}assets/correxit.svg" alt="" width="32" height="32">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="${base}assets/correxit-dark.svg">
+          <img src="${base}assets/correxit-light.svg" alt="" width="32" height="32">
+        </picture>
         <span>Correxit</span>
       </a>
       <nav aria-label="Primary navigation">
@@ -244,7 +238,13 @@ const page = ({ title, description, body, base = '../../' }) => `<!doctype html>
       </nav>
     </header>
     ${body}
-    <footer><span>Correxit</span><a href="${repository}">Source</a></footer>
+    <footer>
+      <span>Correxit</span>
+      <nav aria-label="Footer navigation">
+        <a href="${repository}">Source</a>
+        <a href="${base}licenses/pico.txt">Pico license</a>
+      </nav>
+    </footer>
   </body>
 </html>
 `;
@@ -253,16 +253,14 @@ const documentPage = async document =>
   page({
     title: document.title,
     description: document.description,
-    body: `<div class="docs">
+    body: `<main class="document">
       ${navigation(document.slug)}
-      <main class="document">
-        <header class="document-header">
-          <h1>${escape(document.title)}</h1>
-          <p>${escape(document.description)}</p>
-        </header>
-        <article class="prose">${await render(document)}</article>
-      </main>
-    </div>`
+      <header>
+        <h1>${escape(document.title)}</h1>
+        <p>${escape(document.description)}</p>
+      </header>
+      <div class="prose">${await render(document)}</div>
+    </main>`
   });
 
 const apiPage = async document =>
@@ -272,52 +270,55 @@ const apiPage = async document =>
     base: '../'.repeat(
       1 + (document.route ? document.route.split('/').length : 0)
     ),
-    body: `<div class="docs">
+    body: `<main class="document api-document">
       ${apiNavigation(document.route)}
-      <main class="document api-document">
-        <header class="document-header">
-          <h1>${escape(document.route ? document.title : 'API Reference')}</h1>
-          <p>${
-            document.route ? '' : `${escape(document.title)}. `
-          }Generated from Correxit's public TypeScript declarations.</p>
-        </header>
-        <article class="prose">${await renderApi(document)}</article>
-      </main>
-    </div>`
+      <header>
+        <h1>${escape(document.route ? document.title : 'API Reference')}</h1>
+        <p>${
+          document.route ? '' : `${escape(document.title)}. `
+        }Generated from Correxit's public TypeScript declarations.</p>
+      </header>
+      <div class="prose">${await renderApi(document)}</div>
+    </main>`
   });
 
 const indexPage = page({
   title: 'Documentation',
   description: 'Correxit documentation built from the repository guides.',
   base: '../',
-  body: `<div class="docs">
+  body: `<main class="document">
     ${navigation(null, '')}
-    <main class="document">
-      <header class="document-header">
-        <h1>Documentation</h1>
-        <p>Built directly from the Markdown guides in the Correxit repository.</p>
-      </header>
-      <ul class="document-list">
-        ${documents
-          .map(
-            ({ slug, title, description, audience }) => `
-          <li>
-            <h2><a href="${slug}/">${escape(title)}</a></h2>
-            <p>${escape(description)} ${escape(audience)}.</p>
-          </li>`
-          )
-          .join('')}
-      </ul>
-    </main>
-  </div>`
+    <header>
+      <h1>Documentation</h1>
+      <p>Built directly from the Markdown guides in the Correxit repository.</p>
+    </header>
+    <ul>
+      ${documents
+        .map(
+          ({ slug, title, description, audience }) => `
+        <li>
+          <a href="${slug}/"><strong>${escape(title)}</strong></a><br>
+          <small>${escape(description)} ${escape(audience)}.</small>
+        </li>`
+        )
+        .join('')}
+    </ul>
+  </main>`
 });
 
 await rm(output, { recursive: true, force: true });
 await mkdir(path.join(output, 'assets'), { recursive: true });
-await cp(
-  path.join(root, 'style', 'brand', 'correxit-mark-on-light.svg'),
-  path.join(output, 'assets', 'correxit.svg')
+await Promise.all(
+  ['light', 'dark'].map(mode =>
+    cp(
+      path.join(root, 'style', 'brand', `correxit-mark-on-${mode}.svg`),
+      path.join(output, 'assets', `correxit-${mode}.svg`)
+    )
+  )
 );
+await cp(pico, path.join(output, 'pico.css'));
+await mkdir(path.join(output, 'licenses'));
+await cp(license, path.join(output, 'licenses', 'pico.txt'));
 await cp(path.join(site, 'style.css'), path.join(output, 'style.css'));
 
 const home = (await readFile(path.join(site, 'index.html'), 'utf8')).replaceAll(

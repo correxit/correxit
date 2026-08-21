@@ -1,6 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" color="#003660" role="img" aria-labelledby="title description">
-  <title id="title">Correxit</title>
-  <desc id="description">A corrected notebook cell that subtly forms the letters C, X, and T.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" color="#003660" role="img" aria-label="Correxit, a corrected notebook cell that subtly forms the letters C, X, and T.">
   <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
     <path d="M98 54H54v148h44M180 54h44M202 54v120M158 202h44" stroke-width="18"/>
     <path d="M107.5 150l25 25" stroke-width="20"/>

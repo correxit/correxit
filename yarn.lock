@@ -3794,6 +3794,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@picocss/pico@npm:^2.1.1":
+  version: 2.1.1
+  resolution: "@picocss/pico@npm:2.1.1"
+  checksum: 52c2f41cc63378c0fe1dca9bd561c9ad34637180ae73089da5a648eb31b0fcf674918be1dea51e5ed33f1bc9a037b0c6afac90afd5bea32c44b1a9d2630fe6e6
+  languageName: node
+  linkType: hard
+
 "@pkgjs/parseargs@npm:^0.11.0":
   version: 0.11.0
   resolution: "@pkgjs/parseargs@npm:0.11.0"
@@ -3878,6 +3885,7 @@ __metadata:
     "@lumino/polling": ^2.1.5
     "@lumino/signaling": ^2.1.5
     "@lumino/widgets": ^2.7.3
+    "@picocss/pico": ^2.1.1
     "@semantic-release/changelog": ^6.0.3
     "@semantic-release/git": ^10.0.1
     "@semantic-release/npm": ^12.0.1
@@ -3903,7 +3911,6 @@ __metadata:
     prettier: ^3.0.0
     react: ^18.2.0
     rimraf: ^5.0.1
-    sanitize-html: ~2.12.1
     semantic-release: ^24.0.0
     source-map-loader: ^1.0.2
     style-loader: ^3.3.1

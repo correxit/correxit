@@ -4,17 +4,39 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' https: data:; style-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta
       name="description"
       content="Correxit is a kernel-agnostic Jupyter extension for grading notebooks."
     />
     <title>Correxit</title>
-    <link rel="icon" href="assets/correxit.svg" type="image/svg+xml" />
+    <link
+      rel="icon"
+      href="assets/correxit-light.svg"
+      type="image/svg+xml"
+      media="(prefers-color-scheme: light)"
+    />
+    <link
+      rel="icon"
+      href="assets/correxit-dark.svg"
+      type="image/svg+xml"
+      media="(prefers-color-scheme: dark)"
+    />
+    <link rel="stylesheet" href="pico.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header class="site-header">
       <a class="brand" href="./" aria-label="Correxit home">
-        <img src="assets/correxit.svg" alt="" width="32" height="32" />
+        <picture>
+          <source
+            media="(prefers-color-scheme: dark)"
+            srcset="assets/correxit-dark.svg"
+          />
+          <img src="assets/correxit-light.svg" alt="" width="32" height="32" />
+        </picture>
         <span>Correxit</span>
       </a>
       <nav aria-label="Primary navigation">
@@ -26,7 +48,7 @@
     </header>
 
     <main>
-      <section class="intro">
+      <section>
         <h1>
           A kernel-agnostic Jupyter extension for grading Jupyter notebooks.
         </h1>
@@ -35,8 +57,8 @@
           and grading logic runs in the browser, and all workbook data stays in
           the <code>.ipynb</code> file. There is no Correxit server.
         </p>
-        <p class="actions">
-          <a class="button" href="demo/lab/">Try the JupyterLite demo</a>
+        <p>
+          <a href="demo/lab/">Try the JupyterLite demo</a>
           <a href="docs/authoring/">Read the authoring guide</a>
         </p>
         <pre
@@ -65,7 +87,10 @@
 
     <footer>
       <span>Correxit</span>
-      <a href="{{repository}}">Source</a>
+      <nav aria-label="Footer navigation">
+        <a href="{{repository}}">Source</a>
+        <a href="licenses/pico.txt">Pico license</a>
+      </nav>
     </footer>
   </body>
 </html>
