@@ -11,6 +11,7 @@ import {
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Mustache from 'mustache';
 import { documents } from './documents.mjs';
 import { direct, parse } from './markdown.mjs';
 
@@ -22,10 +23,24 @@ const output = path.join(site, '_output');
 const lite = path.join(root, 'lite', '_output');
 const pico = require.resolve('@picocss/pico/css/pico.classless.min.css');
 const license = require.resolve('@picocss/pico/LICENSE.md');
-const repository = process.env.GITHUB_REPOSITORY
-  ? `https://github.com/${process.env.GITHUB_REPOSITORY}`
-  : 'https://github.com/QuantStack/correxit';
+const github = process.env.GITHUB_REPOSITORY;
+const repository =
+  github && /^[\w.-]+\/[\w.-]+$/.test(github)
+    ? `https://github.com/${github}`
+    : 'https://github.com/QuantStack/correxit';
 const routes = new Map(documents.map(({ slug, source }) => [source, slug]));
+const templates = Object.fromEntries(
+  await Promise.all(
+    ['document', 'listing', 'navigation', 'page'].map(async name => [
+      name,
+      await readFile(path.join(site, 'templates', `${name}.html`), 'utf8')
+    ])
+  )
+);
+const template = (name, view) =>
+  Mustache.render(templates[name], view, {
+    navigation: templates.navigation
+  });
 
 const descend = async directory =>
   (
@@ -61,13 +76,6 @@ const apiPages = await Promise.all(
     })
 );
 const apiRoutes = new Map(apiPages.map(({ route, source }) => [source, route]));
-
-const escape = value =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 
 const split = href => {
   const index = href.indexOf('#');
@@ -160,21 +168,17 @@ const renderApi = async document =>
     })
   );
 
-const navigation = (current, base = '../') => `
-  <nav class="docs-nav" aria-label="Documentation">
-    <strong>Documentation</strong>
-    <ul>
-      ${documents
-        .map(
-          ({ slug, title }) => `
-        <li><a href="${base}${slug}/"${
-          slug === current ? ' aria-current="page"' : ''
-        }>${escape(title)}</a></li>`
-        )
-        .join('')}
-        <li><a href="${base}../api/">API Reference</a></li>
-    </ul>
-  </nav>`;
+const navigation = (current, base = '../') => ({
+  label: 'Documentation',
+  links: [
+    ...documents.map(({ slug, title }) => ({
+      current: slug === current,
+      href: `${base}${slug}/`,
+      title
+    })),
+    { current: false, href: `${base}../api/`, title: 'API Reference' }
+  ]
+});
 
 const apiHref = (current, target) => {
   const from = path.posix.join('api', current);
@@ -182,8 +186,9 @@ const apiHref = (current, target) => {
   return `${path.posix.relative(from, to) || '.'}/`;
 };
 
-const apiNavigation = current => {
-  const links = [
+const apiNavigation = current => ({
+  label: 'API Reference',
+  links: [
     ['', 'Overview'],
     ['browser', 'Browser'],
     ['node', 'Node'],
@@ -191,76 +196,27 @@ const apiNavigation = current => {
     ['browser/namespaces/correxit', 'Correxit'],
     ['browser/namespaces/rubric', 'Rubric'],
     ['browser/namespaces/workbook', 'Workbook']
-  ];
-  return `
-  <nav class="docs-nav" aria-label="API Reference">
-    <strong>API Reference</strong>
-    <ul>
-      ${links
-        .map(
-          ([route, title]) => `
-        <li><a href="${apiHref(current, route)}"${
-          route === current ? ' aria-current="page"' : ''
-        }>${title}</a></li>`
-        )
-        .join('')}
-    </ul>
-  </nav>`;
-};
+  ].map(([route, title]) => ({
+    current: route === current,
+    href: apiHref(current, route),
+    title
+  }))
+});
 
-const page = ({ title, description, body, base = '../../' }) => `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self'; base-uri 'none'; form-action 'none'">
-    <meta name="description" content="${escape(description)}">
-    <title>${escape(title)} · Correxit</title>
-    <link rel="icon" href="${base}assets/correxit-light.svg" type="image/svg+xml" media="(prefers-color-scheme: light)">
-    <link rel="icon" href="${base}assets/correxit-dark.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
-    <link rel="stylesheet" href="${base}pico.css">
-    <link rel="stylesheet" href="${base}style.css">
-  </head>
-  <body>
-    <header class="site-header">
-      <a class="brand" href="${base}" aria-label="Correxit home">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="${base}assets/correxit-dark.svg">
-          <img src="${base}assets/correxit-light.svg" alt="" width="32" height="32">
-        </picture>
-        <span>Correxit</span>
-      </a>
-      <nav aria-label="Primary navigation">
-        <a href="${base}docs/">Documentation</a>
-        <a href="${base}api/">API</a>
-        <a href="${base}demo/lab/">Demo</a>
-        <a href="${repository}">GitHub</a>
-      </nav>
-    </header>
-    ${body}
-    <footer>
-      <span>Correxit</span>
-      <nav aria-label="Footer navigation">
-        <a href="${repository}">Source</a>
-        <a href="${base}licenses/pico.txt">Pico license</a>
-      </nav>
-    </footer>
-  </body>
-</html>
-`;
+const page = ({ title, description, body, base = '../../', suffix = true }) =>
+  template('page', { base, body, description, repository, suffix, title });
 
 const documentPage = async document =>
   page({
     title: document.title,
     description: document.description,
-    body: `<main class="document">
-      ${navigation(document.slug)}
-      <header>
-        <h1>${escape(document.title)}</h1>
-        <p>${escape(document.description)}</p>
-      </header>
-      <div class="prose">${await render(document)}</div>
-    </main>`
+    body: template('document', {
+      classes: 'document',
+      content: await render(document),
+      navigation: navigation(document.slug),
+      summary: document.description,
+      title: document.title
+    })
   });
 
 const apiPage = async document =>
@@ -270,40 +226,23 @@ const apiPage = async document =>
     base: '../'.repeat(
       1 + (document.route ? document.route.split('/').length : 0)
     ),
-    body: `<main class="document api-document">
-      ${apiNavigation(document.route)}
-      <header>
-        <h1>${escape(document.route ? document.title : 'API Reference')}</h1>
-        <p>${
-          document.route ? '' : `${escape(document.title)}. `
-        }Generated from Correxit's public TypeScript declarations.</p>
-      </header>
-      <div class="prose">${await renderApi(document)}</div>
-    </main>`
+    body: template('document', {
+      classes: 'document api-document',
+      content: await renderApi(document),
+      navigation: apiNavigation(document.route),
+      summary: `${document.route ? '' : `${document.title}. `}Generated from Correxit's public TypeScript declarations.`,
+      title: document.route ? document.title : 'API Reference'
+    })
   });
 
 const indexPage = page({
   title: 'Documentation',
   description: 'Correxit documentation built from the repository guides.',
   base: '../',
-  body: `<main class="document">
-    ${navigation(null, '')}
-    <header>
-      <h1>Documentation</h1>
-      <p>Built directly from the Markdown guides in the Correxit repository.</p>
-    </header>
-    <ul>
-      ${documents
-        .map(
-          ({ slug, title, description, audience }) => `
-        <li>
-          <a href="${slug}/"><strong>${escape(title)}</strong></a><br>
-          <small>${escape(description)} ${escape(audience)}.</small>
-        </li>`
-        )
-        .join('')}
-    </ul>
-  </main>`
+  body: template('listing', {
+    documents,
+    navigation: navigation(null, '')
+  })
 });
 
 await rm(output, { recursive: true, force: true });
@@ -321,10 +260,14 @@ await mkdir(path.join(output, 'licenses'));
 await cp(license, path.join(output, 'licenses', 'pico.txt'));
 await cp(path.join(site, 'style.css'), path.join(output, 'style.css'));
 
-const home = (await readFile(path.join(site, 'index.html'), 'utf8')).replaceAll(
-  '{{repository}}',
-  repository
-);
+const home = page({
+  title: 'Correxit',
+  description:
+    'Correxit is a kernel-agnostic Jupyter extension for grading notebooks.',
+  base: './',
+  body: await readFile(path.join(site, 'index.html'), 'utf8'),
+  suffix: false
+});
 await writeFile(path.join(output, 'index.html'), home);
 await mkdir(path.join(output, 'docs'), { recursive: true });
 await writeFile(path.join(output, 'docs', 'index.html'), indexPage);

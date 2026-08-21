@@ -1,96 +1,35 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' https: data:; style-src 'self'; base-uri 'none'; form-action 'none'"
-    />
-    <meta
-      name="description"
-      content="Correxit is a kernel-agnostic Jupyter extension for grading notebooks."
-    />
-    <title>Correxit</title>
-    <link
-      rel="icon"
-      href="assets/correxit-light.svg"
-      type="image/svg+xml"
-      media="(prefers-color-scheme: light)"
-    />
-    <link
-      rel="icon"
-      href="assets/correxit-dark.svg"
-      type="image/svg+xml"
-      media="(prefers-color-scheme: dark)"
-    />
-    <link rel="stylesheet" href="pico.css" />
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <header class="site-header">
-      <a class="brand" href="./" aria-label="Correxit home">
-        <picture>
-          <source
-            media="(prefers-color-scheme: dark)"
-            srcset="assets/correxit-dark.svg"
-          />
-          <img src="assets/correxit-light.svg" alt="" width="32" height="32" />
-        </picture>
-        <span>Correxit</span>
-      </a>
-      <nav aria-label="Primary navigation">
-        <a href="docs/">Documentation</a>
-        <a href="api/">API</a>
-        <a href="demo/lab/">Demo</a>
-        <a href="{{repository}}">GitHub</a>
-      </nav>
-    </header>
+<main>
+  <section>
+    <h1>A kernel-agnostic Jupyter extension for grading Jupyter notebooks.</h1>
+    <p>
+      Correxit converts a notebook into a gradable workbook. All authoring and
+      grading logic runs in the browser, and all workbook data stays in the
+      <code>.ipynb</code> file. There is no Correxit server.
+    </p>
+    <p>
+      <a href="demo/lab/">Try the JupyterLite demo</a>
+      <a href="docs/authoring/">Read the authoring guide</a>
+    </p>
+    <pre
+      aria-label="Installation command"
+    ><code>pip install correxit</code></pre>
+  </section>
 
-    <main>
-      <section>
-        <h1>
-          A kernel-agnostic Jupyter extension for grading Jupyter notebooks.
-        </h1>
-        <p>
-          Correxit converts a notebook into a gradable workbook. All authoring
-          and grading logic runs in the browser, and all workbook data stays in
-          the <code>.ipynb</code> file. There is no Correxit server.
-        </p>
-        <p>
-          <a href="demo/lab/">Try the JupyterLite demo</a>
-          <a href="docs/authoring/">Read the authoring guide</a>
-        </p>
-        <pre
-          aria-label="Installation command"
-        ><code>pip install correxit</code></pre>
-      </section>
+  <section>
+    <h2>One notebook, the whole assignment</h2>
+    <ul>
+      <li>Author questions for any Jupyter language kernel.</li>
+      <li>Distribute protected workbooks without another data store.</li>
+      <li>Submit, batch-grade, review, and return feedback in Jupyter.</li>
+    </ul>
+  </section>
 
-      <section>
-        <h2>One notebook, the whole assignment</h2>
-        <ul>
-          <li>Author questions for any Jupyter language kernel.</li>
-          <li>Distribute protected workbooks without another data store.</li>
-          <li>Submit, batch-grade, review, and return feedback in Jupyter.</li>
-        </ul>
-      </section>
-
-      <section>
-        <h2>Documentation</h2>
-        <p>
-          The website is built directly from Correxit&rsquo;s repository guides,
-          so the documentation changes with the software.
-        </p>
-        <p><a href="docs/">Browse the documentation</a></p>
-      </section>
-    </main>
-
-    <footer>
-      <span>Correxit</span>
-      <nav aria-label="Footer navigation">
-        <a href="{{repository}}">Source</a>
-        <a href="licenses/pico.txt">Pico license</a>
-      </nav>
-    </footer>
-  </body>
-</html>
+  <section>
+    <h2>Documentation</h2>
+    <p>
+      The website is built directly from Correxit&rsquo;s repository guides, so
+      the documentation changes with the software.
+    </p>
+    <p><a href="docs/">Browse the documentation</a></p>
+  </section>
+</main>

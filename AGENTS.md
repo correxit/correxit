@@ -126,7 +126,7 @@ acceptable.
 - `corrector/commands.ts`: Registers Corrector commands (`batch`, `scan`, `collect`, `csv`, `launch`, `cd`) and Reviewer commands (`review`, `intervene`, `up`/`down`/`left`/`right`, `pass`, `fail`). The `intervene` command saves scores, writes comments, and auto-certifies when the last pending reviewable cell is scored.
 - `nbgrader.ts`: Converts nbgrader-format notebooks to Correxit workbooks. Detects nbgrader cell metadata, classifies cells (answerable/correctable/reviewable), splits fenced `### BEGIN/END` hidden test regions, and builds an equivalent rubric. Falls back to static output analysis when no kernel is available.
 - `ui/boundary.tsx`: React class error boundary wrapping the sidebar, corrector, and reviewer mount points. Catches synchronous render throws and shows a fallback with error message and collapsible stack trace.
-- `site/`: Static source for `correx.it`. `build.mjs` renders the canonical Markdown guides, copies the Pico CSS baseline, and exposes the existing JupyterLite testbed as `/demo/`; `index.html` and the small `style.css` override are the hand-written browser surface.
+- `site/`: Static source for `correx.it`. `build.mjs` renders the canonical Markdown guides through shared Mustache layouts, copies the Pico CSS baseline, and exposes the existing JupyterLite testbed as `/demo/`; `index.html`, `templates/`, and the small `style.css` override are the hand-written browser surface.
 
 ## 9. Alignment Check
 
