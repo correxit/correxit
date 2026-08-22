@@ -36,6 +36,7 @@ export async function shutdown(page: any): Promise<void> {
       bridge?.kernels?.drain?.();
       await sessions.shutdownAll();
       await kernels.refreshRunning().catch(() => {});
+
       const running = Array.from(kernels.running()) as Array<{ id: string }>;
       await Promise.all(
         running.map(({ id }) => kernels.shutdown(id).catch(() => {}))

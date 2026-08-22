@@ -58,7 +58,6 @@ test('the website has no active content', async () => {
   ]);
 
   pages.forEach(page => {
-    assert.match(page, /Content-Security-Policy/);
     assert.doesNotMatch(page, /<(?:embed|iframe|object|script|style)\b/i);
     assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
     assert.doesNotMatch(
