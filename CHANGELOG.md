@@ -1,3 +1,10 @@
+# [1.29.0](https://github.com/QuantStack/correxit/compare/v1.28.0...v1.29.0) (2026-08-24)
+
+
+### Features
+
+* Prepare for OSS launch ([#87](https://github.com/QuantStack/correxit/issues/87)) ([912ba53](https://github.com/QuantStack/correxit/commit/912ba53aebc58e918a5d89f58d39bab1a2e2f1f8))
+
 # [1.28.0](https://github.com/QuantStack/correxit/compare/v1.27.0...v1.28.0) (2026-08-07)
 
 
