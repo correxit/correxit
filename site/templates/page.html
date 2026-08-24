@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="{{description}}" />
+    <title>{{title}}{{#suffix}} · Correxit{{/suffix}}</title>
+    <link
+      rel="icon"
+      href="{{{base}}}assets/correxit-light.svg"
+      type="image/svg+xml"
+      media="(prefers-color-scheme: light)"
+    />
+    <link
+      rel="icon"
+      href="{{{base}}}assets/correxit-dark.svg"
+      type="image/svg+xml"
+      media="(prefers-color-scheme: dark)"
+    />
+    <link rel="stylesheet" href="{{{base}}}pico.css" />
+    <link rel="stylesheet" href="{{{base}}}style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="{{{base}}}" aria-label="Correxit home">
+        <picture>
+          <source
+            media="(prefers-color-scheme: dark)"
+            srcset="{{{base}}}assets/correxit-dark.svg"
+          />
+          <img
+            src="{{{base}}}assets/correxit-light.svg"
+            alt=""
+            width="32"
+            height="32"
+          />
+        </picture>
+        <span>Correxit</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="{{{base}}}docs/">Documentation</a>
+        <a href="{{{base}}}api/">API</a>
+        <a href="{{{base}}}demo/lab/">Demo</a>
+        <a href="{{{repository}}}">GitHub</a>
+      </nav>
+    </header>
+    {{{body}}}
+    <footer>
+      <span>Correxit</span>
+      <nav aria-label="Footer navigation">
+        <a href="{{{repository}}}">Source</a>
+      </nav>
+    </footer>
+  </body>
+</html>

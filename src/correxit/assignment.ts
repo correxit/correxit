@@ -7,6 +7,7 @@ import * as security from './security';
 
 type Cell = INotebookContent['cells'][number];
 
+/** Utilities for preparing and issuing serialized notebook assignments. */
 export namespace Assignment {
   export type Assigned = {
     encrypted: string[];

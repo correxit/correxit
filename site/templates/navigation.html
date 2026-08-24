@@ -1,0 +1,16 @@
+{{#navigation}}
+<nav class="docs-nav" aria-label="{{label}}">
+  <strong>{{label}}</strong>
+  <ul>
+    {{#links}}
+    <li>
+      {{#current}}
+      <a href="{{{href}}}" aria-current="page">{{title}}</a>
+      {{/current}} {{^current}}
+      <a href="{{{href}}}">{{title}}</a>
+      {{/current}}
+    </li>
+    {{/links}}
+  </ul>
+</nav>
+{{/navigation}}

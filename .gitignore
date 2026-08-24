@@ -108,9 +108,6 @@ celerybeat-schedule
 .project
 .pydevproject
 
-# mkdocs documentation
-/site
-
 # mypy
 .mypy_cache/
 .dmypy.json
@@ -123,6 +120,7 @@ dmypy.json
 
 # JupyterLite
 lite/_output/
+lite/brand/labextension/
 
 # OSX files
 .DS_Store

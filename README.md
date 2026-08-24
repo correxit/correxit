@@ -1,4 +1,4 @@
-# Correxit
+# <img src="style/brand/correxit-github-avatar.png" alt="" width="40" align="top"> Correxit
 
 [![Github Actions Status](https://github.com/notebook-link/correxit/workflows/Build/badge.svg)](https://github.com/notebook-link/correxit/actions/workflows/build.yml)
 
@@ -12,15 +12,15 @@ runs in the browser; there is no server component.
 
 ## Documentation
 
-| Document                  | Audience            | Content                                                   |
-| ------------------------- | ------------------- | --------------------------------------------------------- |
-| [AUTHORING](AUTHORING.md) | Assignment author   | How to create, configure, test, and distribute a workbook |
-| [DESIGN](DESIGN.md)       | Developer           | Architecture, data model, async patterns                  |
-| [MOODLE](MOODLE.md)       | Teacher, integrator | Browser-only Moodle workflow and constraints              |
-| [SECURITY](SECURITY.md)   | Developer, auditor  | Threat model, encryption, key management                  |
-| [PLUGINS](PLUGINS.md)     | Integrator          | Plugin token interfaces for LMS and transport             |
-| [RELEASE](RELEASE.md)     | Maintainer          | Release process and versioning                            |
-| [CHANGELOG](CHANGELOG.md) | Everyone            | Version history                                           |
+| Document                       | Audience            | Content                                                   |
+| ------------------------------ | ------------------- | --------------------------------------------------------- |
+| [AUTHORING](docs/authoring.md) | Assignment author   | How to create, configure, test, and distribute a workbook |
+| [DESIGN](docs/design.md)       | Developer           | Architecture, data model, async patterns                  |
+| [MOODLE](docs/moodle.md)       | Teacher, integrator | Browser-only Moodle workflow and constraints              |
+| [SECURITY](docs/security.md)   | Developer, auditor  | Threat model, encryption, key management                  |
+| [PLUGINS](docs/plugins.md)     | Integrator          | Plugin token interfaces for LMS and transport             |
+| [RELEASE](docs/release.md)     | Maintainer          | Release process and versioning                            |
+| [CHANGELOG](CHANGELOG.md)      | Everyone            | Version history                                           |
 
 ## What does it do? How does it work?
 
@@ -99,6 +99,45 @@ extension is installed:
 jupyter labextension list
 ```
 
+## License
+
+Correxit is open source under the
+[GNU Affero General Public License version 3 only](LICENSE)
+(`AGPL-3.0-only`). Version 2.0 will be its first open-source release.
+
+### Scheduled transition to BSD 3-Clause
+
+Correxit will switch to the
+[BSD 3-Clause License](https://opensource.org/license/bsd-3-clause) at 00:00
+UTC on 1 January 2028. At that time, Correxit will also become available under
+`BSD-3-Clause`; releases made from that time forward will use
+`BSD-3-Clause`.
+
+The transition does not withdraw or replace rights already granted under
+`AGPL-3.0-only`. Anyone who receives Correxit under the AGPL may continue to
+use that license permanently, provided its conditions are met.
+
+### Contribution terms
+
+Until 00:00 UTC on 1 January 2028, external contributions are accepted under
+the [Correxit Contributor License Agreement](CLA.md). Contributors retain
+ownership of their work. The CLA grants the public an AGPL license immediately
+and an irrevocable BSD 3-Clause license taking effect at the transition. It
+also grants QuantStack an immediate, non-exclusive right to use and license
+accepted contributions under commercial or proprietary terms. Any contribution
+used under that additional license remains available in public Correxit under
+the applicable public license.
+
+The CLA requirement ends at the transition. Contributions submitted at or
+after 00:00 UTC on 1 January 2028 require no CLA and are accepted under
+`BSD-3-Clause` alone. Rights already granted for earlier contributions remain
+in effect.
+
+Before the transition, do not submit a contribution unless you have read and
+accepted the CLA and have the authority to grant its rights. Contributions
+whose necessary rights are already held under another applicable agreement do
+not require a separate acceptance.
+
 ## Contributing
 
 ### Development install
@@ -145,7 +184,7 @@ instead of a full Jupyter Server. The workflow uses two watch processes and a
 symlink so that every saved TypeScript change is immediately available after a
 browser refresh.
 
-**1. Build the JupyterLite site once:**
+**1. Build the JupyterLite testbed and website once:**
 
 ```bash
 pixi run jlpm build:lite
@@ -154,8 +193,10 @@ pixi run jlpm build:lite
 This pre-compiles the xeus Wasm kernels, copies example content into the static
 site, mounts content files into the kernel virtual filesystem, and runs
 `jlpm link:lite` to symlink the built extension back to `correxit/labextension`.
-Because of the symlink, subsequent TypeScript rebuilds are picked up without
-re-running `build:lite`.
+It then assembles the Correxit website from its static source, the repository
+documentation, a generated reference for the public TypeScript APIs, and that
+same JupyterLite build. Because the demo preserves the development symlink,
+subsequent TypeScript rebuilds are picked up without re-running `build:lite`.
 
 **2. Start two terminals:**
 
@@ -163,11 +204,16 @@ re-running `build:lite`.
 # Terminal 1: rebuild on every save
 pixi run jlpm watch
 
-# Terminal 2: serve the static site at http://localhost:8888
+# Terminal 2: serve the website at http://localhost:8888
 pixi run jlpm serve
 ```
 
-**3. Open `http://localhost:8888` and refresh after each rebuild.**
+**3. Open `http://localhost:8888/demo/lab/` and refresh after each rebuild.**
+
+The landing page is at `http://localhost:8888/`. Its guides are rendered
+directly from `README.md`, `CHANGELOG.md`, and `docs/`, while its API reference
+is generated from the package's public TypeScript entry points. Run
+`pixi run jlpm build:site` to refresh both without rebuilding JupyterLite.
 
 If you rebuild the labextension outside of `build:lite` (e.g. after a clean),
 run `pixi run jlpm link:lite` to re-establish the symlink and patch the
@@ -180,6 +226,12 @@ The `lite/` directory contains:
 | `jupyter_lite_config.json` | Build configuration: contents directory, Service Worker toggle                    |
 | `environment.yml`          | Wasm kernel environment (xeus-python, xeus-sqlite) resolved from emscripten-forge |
 | `link.mjs`                 | Post-build script that symlinks the dev extension and patches the manifest hash   |
+
+The `site/` directory contains the hand-written landing page, small
+Correxit-specific overrides for the Pico CSS baseline, the documentation
+manifest, and the build script that assembles the published artifact.
+`site/_api/`, `site/_output/`, and `lite/_output/` are generated and are never
+checked in.
 
 By default, the `jlpm build` command generates the source maps for this
 extension to make it easier to debug using the browser dev tools. To also
@@ -226,4 +278,4 @@ More information is provided within the [ui-tests README](./ui-tests/README.md)
 
 ### Packaging the extension
 
-See [RELEASE](RELEASE.md)
+See [RELEASE](docs/release.md)

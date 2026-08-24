@@ -33,13 +33,14 @@ export async function shutdown(page: any): Promise<void> {
       const app = (window as any).jupyterapp;
       const bridge = (window as any).__correxit__;
       const { kernels, sessions } = app.serviceManager;
+      bridge?.kernels?.drain?.();
       await sessions.shutdownAll();
       await kernels.refreshRunning().catch(() => {});
+
       const running = Array.from(kernels.running()) as Array<{ id: string }>;
       await Promise.all(
         running.map(({ id }) => kernels.shutdown(id).catch(() => {}))
       );
-      bridge?.kernels?.drain?.();
     })
     .catch(() => {});
 }

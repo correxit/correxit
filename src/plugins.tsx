@@ -8,6 +8,7 @@ import { ICommandPalette, WidgetTracker } from '@jupyterlab/apputils';
 import { IEditorServices } from '@jupyterlab/codeeditor';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { IDefaultFileBrowser } from '@jupyterlab/filebrowser';
+import { ILauncher } from '@jupyterlab/launcher';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
@@ -75,6 +76,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
     ICommandPalette,
     IDefaultFileBrowser,
     IEditorServices,
+    ILauncher,
     ILayoutRestorer,
     INotebookTree,
     IRenderMimeRegistry,
@@ -92,6 +94,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       palette: ICommandPalette | null,
       browser: IDefaultFileBrowser | null,
       editors: IEditorServices | null,
+      launcher: ILauncher | null,
       restorer: ILayoutRestorer | null,
       tree: INotebookTree | null,
       rendermime: IRenderMimeRegistry | null,
@@ -113,6 +116,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       const indicator = new Corrector.Status(trans);
       const active = new Signal<typeof tracker, void>(tracker);
       tracker.corrector.currentChanged.connect(() => active.emit(undefined));
+
       const { down, fail, launch, left, pass, review, right, up } =
         Corrector.CommandIDs;
       const added = Corrector.commands(app, {
@@ -135,8 +139,15 @@ const corrector: JupyterFrontEndPlugin<void> = {
           activeStateChanged: active
         });
       }
-      if (palette) palette.addItem({ category: 'Correxit', command: launch });
-      if (palette) palette.addItem({ category: 'Correxit', command: review });
+      if (launcher) {
+        added.push(
+          launcher.add({ category: trans.__('Other'), command: launch })
+        );
+      }
+      if (palette)
+        added.push(palette.addItem({ category: 'Correxit', command: launch }));
+      if (palette)
+        added.push(palette.addItem({ category: 'Correxit', command: review }));
       if (restorer) {
         restorer.restore(tracker.corrector, {
           command: launch,
@@ -376,11 +387,12 @@ const ui: JupyterFrontEndPlugin<void> = {
       const caption = trans.__('Correxit');
       widget.id = 'correxit-sidebar';
       widget.title.caption = caption;
+      widget.title.icon = Correxit.Icons.correxit;
       widget.title.label = caption;
       shell.add(widget, 'right', {});
       const added = [
         commands.addCommand(launch, {
-          icon: Correxit.Icons.correct,
+          icon: Correxit.Icons.correxit,
           caption: trans.__('Open Correxit sidebar'),
           label: trans.__('Open Correxit sidebar'),
           execute: () => shell.activateById(widget.id)
@@ -466,6 +478,7 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
   }
 );
 
+/** JupyterLab plugins provided by the Correxit package. */
 export const plugins = [
   collector,
   corrector,

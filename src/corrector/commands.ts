@@ -194,6 +194,7 @@ export function commands(
   );
   disposables.push(
     commands.addCommand(CommandIDs.launch, {
+      icon: Icons.correxit,
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
         if (!corrector || corrector.isDisposed) {

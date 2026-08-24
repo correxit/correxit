@@ -1,0 +1,16 @@
+<main class="document">
+  {{> navigation}}
+  <header>
+    <h1>Documentation</h1>
+    <p>Built directly from the Markdown guides in the Correxit repository.</p>
+  </header>
+  <ul>
+    {{#documents}}
+    <li>
+      <a href="{{{slug}}}/"><strong>{{title}}</strong></a
+      ><br />
+      <small>{{description}} {{audience}}.</small>
+    </li>
+    {{/documents}}
+  </ul>
+</main>

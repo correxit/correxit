@@ -17,14 +17,22 @@ import * as kernels from './kernels';
 import * as security from './security';
 import * as state from './state';
 
-/** A headed or headless Correxit workbook. */
+/**
+ * A Correxit workbook, discriminated by `content`.
+ *
+ * A {@link Workbook.Headed} workbook has a live notebook widget; a
+ * {@link Workbook.Headless} workbook has `null` content but retains its
+ * document context. Use {@link Workbook.headed} and {@link Workbook.headless}
+ * to narrow it.
+ */
 export type Workbook = Workbook.Headed | Workbook.Headless;
 
+/** Notebook state, identity, lifecycle, and grading operations. */
 export namespace Workbook {
   /** The result of an audit on a workbook's rubric. */
   export type Audit = Audit.Pass | Audit.Fail;
 
-  namespace Audit {
+  export namespace Audit {
     export type Pass = {
       ok: true;
       rubric: Rubric;
@@ -71,11 +79,13 @@ export namespace Workbook {
     export type Verbose = Grade & { outputs: Rubric.Outputs; };
   }
 
+  /** A workbook with a live notebook widget. */
   export type Headed = {
     readonly content: Notebook;
     readonly context: DocumentRegistry.IContext<INotebookModel>;
   };
 
+  /** A workbook retaining document context without a live notebook widget. */
   export type Headless = {
     readonly content: null;
     readonly context: DocumentRegistry.IContext<INotebookModel>;

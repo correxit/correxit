@@ -6,6 +6,7 @@ import * as description from './description';
 import * as error from './error';
 import { Icons as ICONS } from './icons';
 
+/** Tokens and contracts for composing Correxit JupyterLab plugins. */
 export namespace Correxit {
   /** A collector of certified workbook grades. */
   export type Collector = (
@@ -77,7 +78,7 @@ export namespace Correxit {
 
   export const Collector = new Token<Collector>(COLLECTOR);
 
-  export const CommandIDs = COMMAND_IDS;
+  export import CommandIDs = COMMAND_IDS;
 
   export const commands = COMMANDS;
 
@@ -119,7 +120,7 @@ export namespace Correxit {
 
   export const GALATA = '@quantstack/correxit:galata';
 
-  export const Icons = ICONS;
+  export import Icons = ICONS;
 
   export const MONITOR = '@quantstack/correxit:monitor';
 

@@ -1683,7 +1683,8 @@ test.describe('nbgrader scoring (fixtures)', () => {
     await convert(page);
 
     const result = await score(page);
-    expect(result.possible).toBe(4);
-    expect(result.points).toBe(0);
+    const debug = JSON.stringify(result, null, 2);
+    expect(result.possible, debug).toBe(4);
+    expect(result.points, debug).toBe(0);
   });
 });

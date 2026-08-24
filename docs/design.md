@@ -279,7 +279,7 @@ implementation requires no changes to the propagator loop or commands.
   Default: `Stream`-based async iterable.
 
 Type definitions are in `src/correxit/correxit.ts`. Default implementations are
-in `src/plugins.tsx`. See [PLUGINS.md](PLUGINS.md) for the full integration
+in `src/plugins.tsx`. See [PLUGINS.md](plugins.md) for the full integration
 API.
 
 ## Design philosophy

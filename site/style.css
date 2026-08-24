@@ -1,0 +1,130 @@
+:root {
+  --pico-font-size: 100%;
+  --pico-primary: #003660;
+  --pico-primary-background: #003660;
+  --pico-primary-border: #003660;
+  --pico-primary-hover: #002b4d;
+  --pico-primary-hover-background: #002b4d;
+  --pico-primary-hover-border: #002b4d;
+  --pico-primary-focus: rgb(239 91 69 / 50%);
+}
+
+body > header,
+body > main,
+body > footer {
+  max-width: 62rem;
+}
+
+.site-header,
+body > footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  justify-content: space-between;
+  padding-block: 1rem;
+}
+
+.site-header {
+  border-bottom: var(--pico-border-width) solid var(--pico-muted-border-color);
+}
+
+.brand {
+  align-items: center;
+  color: var(--pico-color);
+  display: inline-flex;
+  font-weight: 650;
+  gap: 0.6rem;
+  text-decoration: none;
+}
+
+.brand img {
+  height: 2rem;
+  width: 2rem;
+}
+
+body > footer nav,
+.site-header nav {
+  display: flex;
+  font-size: 0.9rem;
+  gap: 1.25rem;
+}
+
+body > footer {
+  border-top: var(--pico-border-width) solid var(--pico-muted-border-color);
+  color: var(--pico-muted-color);
+}
+
+/* Only the documentation structure remains project-specific. */
+
+body > main.document {
+  max-width: 50rem;
+}
+
+.docs-nav {
+  --pico-nav-element-spacing-horizontal: 0.5rem;
+  --pico-nav-element-spacing-vertical: 0.25rem;
+
+  align-items: baseline;
+  border-bottom: var(--pico-border-width) solid var(--pico-muted-border-color);
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 3rem;
+  padding-bottom: 1rem;
+}
+
+.docs-nav ul {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.docs-nav a[aria-current='page'] {
+  color: var(--pico-color);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.prose {
+  overflow-wrap: anywhere;
+}
+
+.prose table {
+  display: block;
+  overflow-x: auto;
+}
+
+.api-document .prose blockquote {
+  border: var(--pico-border-width) solid var(--pico-muted-border-color);
+  margin-inline: 0;
+  overflow-x: auto;
+}
+
+.api-document .prose blockquote p {
+  margin: 0;
+  max-width: none;
+  width: max-content;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --pico-primary: #8fc7ff;
+    --pico-primary-hover: #b8dcff;
+    --pico-primary-focus: rgb(239 91 69 / 60%);
+  }
+}
+
+@media (width <= 44rem) {
+  .site-header {
+    align-items: flex-start;
+  }
+
+  .site-header nav {
+    overflow-x: auto;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  .docs-nav ul {
+    justify-content: flex-start;
+  }
+}

@@ -32,6 +32,7 @@ export const test = galataTest.extend<{ reset: void }>({
               new Promise(resolve => window.setTimeout(resolve, ms))
             ]);
 
+          bridge?.kernels?.drain?.();
           await settle(sessions.shutdownAll());
           await kernels.refreshRunning().catch(() => {});
           const running = Array.from(kernels.running()) as Array<{
@@ -40,7 +41,6 @@ export const test = galataTest.extend<{ reset: void }>({
           await Promise.all(
             running.map(({ id }) => kernels.shutdown(id).catch(() => {}))
           );
-          bridge?.kernels?.drain?.();
         })
         .catch(() => {});
     },

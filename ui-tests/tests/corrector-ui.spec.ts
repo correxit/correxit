@@ -7,6 +7,22 @@ test.beforeEach(() => {
   test.setTimeout(180_000);
 });
 
+test('launcher advertises the corrector', async ({ page }) => {
+  await page.goto();
+  const section = page.locator('.jp-Launcher-section').filter({
+    has: page.getByRole('heading', { name: 'Other' })
+  });
+  const card = section
+    .locator('.jp-LauncherCard')
+    .filter({ hasText: 'Launch Correxit Corrector' });
+
+  await expect(card).toBeVisible();
+  await expect(card.locator('svg')).toBeVisible();
+  await card.click();
+  await expect(page.locator('.correxit-corrector')).toBeVisible();
+  await close(page);
+});
+
 /**
  * Creates a propagated workbook directory and returns cleanup metadata.
  *
