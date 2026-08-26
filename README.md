@@ -59,7 +59,7 @@ Correxit also publishes a narrow Node runtime entrypoint for issuing one
 already-authored workbook without reopening the Jupyter UI:
 
 ```js
-import { Assignment } from '@quantstack/correxit/node';
+import { Assignment } from 'correxit/node';
 
 const assigned = await Assignment.assign({
   notebook,

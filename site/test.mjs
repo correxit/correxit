@@ -125,7 +125,6 @@ test('the JupyterLite testbed is the website demo', async () => {
       output,
       'demo',
       'extensions',
-      '@quantstack',
       'correxit',
       'static',
       'remoteEntry.js'

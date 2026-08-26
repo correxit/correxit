@@ -1085,8 +1085,8 @@ packages:
   timestamp: 1753453984907
 - pypi: ./
   name: correxit
-  version: 1.24.3
-  sha256: d5a84994e39141eea05cc5e2975b99d9ae873e3af40d1ea0576ff40d0d8fbc53
+  version: 1.29.0
+  sha256: c195720f6f1de91ac6a9599db813ba330fd2e8b40ee2c36e33aa6e7271ec0747
   requires_dist:
   - jupyter-secrets-manager>=0.5,<0.6
   - jupyter-server>=2.4.0,<3

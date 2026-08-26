@@ -1,5 +1,5 @@
 {
-    "name": "@quantstack/correxit",
+    "name": "correxit",
     "version": "1.29.0",
     "workspaces": [
         "lite/brand"
@@ -59,7 +59,7 @@
         "build:node": "node scripts/build-node.cjs",
         "build:npm": "jlpm clean:lib && jlpm build:lib:prod && jlpm build:node",
         "build:lite": "jlpm build:lite:app && jlpm build:site",
-        "build:lite:app": "jlpm build:lite:brand && rimraf lite/_output/extensions/@quantstack/correxit && cd lite && jupyter lite build --output-dir _output --XeusAddon.mount_jupyterlite_content=True && jlpm link:lite",
+        "build:lite:app": "jlpm build:lite:brand && rimraf lite/_output/extensions/correxit && cd lite && jupyter lite build --output-dir _output --XeusAddon.mount_jupyterlite_content=True && jlpm link:lite",
         "build:lite:brand": "jupyter-builder build lite/brand",
         "build:api": "typedoc",
         "build:site": "jlpm build:api && node site/build.mjs",
