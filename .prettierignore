@@ -9,3 +9,5 @@ CHANGELOG.md
 lite/_output
 lite/brand/labextension
 site/_output
+site/_api
+site/_docs

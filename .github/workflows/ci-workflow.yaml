@@ -83,6 +83,13 @@ jobs:
         pixi run jlpm build:lite
         pixi run jlpm test:site
 
+    - name: Verify the versioned website snapshot
+      env:
+        MIKE_DOCS_VERSION: ci
+      run: |
+        pixi run mkdocs build --strict
+        pixi run jlpm test:site
+
   test_isolated:
     needs: build
     runs-on: ubuntu-slim

@@ -193,10 +193,11 @@ pixi run jlpm build:lite
 This pre-compiles the xeus Wasm kernels, copies example content into the static
 site, mounts content files into the kernel virtual filesystem, and runs
 `jlpm link:lite` to symlink the built extension back to `correxit/labextension`.
-It then assembles the Correxit website from its static source, the repository
-documentation, a generated reference for the public TypeScript APIs, and that
-same JupyterLite build. Because the demo preserves the development symlink,
-subsequent TypeScript rebuilds are picked up without re-running `build:lite`.
+It then assembles the MkDocs website from its landing page, the canonical
+repository documentation, a generated reference for the public TypeScript
+APIs, and that same JupyterLite build. Because the development site links the
+demo rather than copying it, subsequent TypeScript rebuilds are picked up
+without re-running `build:lite`.
 
 **2. Start two terminals:**
 
@@ -208,7 +209,9 @@ pixi run jlpm watch
 pixi run jlpm serve
 ```
 
-**3. Open `http://localhost:8888/demo/lab/` and refresh after each rebuild.**
+**3. Open `http://localhost:8888/demo/notebooks/?path=chinook.ipynb` and refresh
+after each rebuild.** JupyterLab remains available at
+`http://localhost:8888/demo/lab/`.
 
 The landing page is at `http://localhost:8888/`. Its guides are rendered
 directly from `README.md`, `CHANGELOG.md`, and `docs/`, while its API reference
@@ -227,11 +230,11 @@ The `lite/` directory contains:
 | `environment.yml`          | Wasm kernel environment (xeus-python, xeus-sqlite) resolved from emscripten-forge |
 | `link.mjs`                 | Post-build script that symlinks the dev extension and patches the manifest hash   |
 
-The `site/` directory contains the hand-written landing page, small
-Correxit-specific overrides for the Pico CSS baseline, the documentation
-manifest, and the build script that assembles the published artifact.
-`site/_api/`, `site/_output/`, and `lite/_output/` are generated and are never
-checked in.
+The `site/` directory contains the landing page, small Correxit-specific
+overrides for MkDocs Material, the documentation manifest, and the staging hook
+that assembles the published artifact. `mkdocs.yml` defines the navigation and
+`mike` versioning. `site/_api/`, `site/_docs/`, `site/_output/`, and
+`lite/_output/` are generated and are never checked in.
 
 By default, the `jlpm build` command generates the source maps for this
 extension to make it easier to debug using the browser dev tools. To also
