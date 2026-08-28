@@ -3,6 +3,7 @@ import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { expand } from '../lite/brand/demo.js';
 import { documents } from './documents.mjs';
 import { direct, parse } from './markdown.mjs';
 
@@ -28,7 +29,7 @@ const apiRoutes = async () =>
     .map(source => path.relative(output, path.dirname(source)));
 
 const target = (route, href) => {
-  const pathname = href.split('#')[0];
+  const pathname = href.split(/[?#]/)[0];
   const resolved = path.resolve(output, route, pathname);
   return pathname.endsWith('/') ? path.join(resolved, 'index.html') : resolved;
 };
@@ -118,8 +119,28 @@ test('the public API reference is generated', async () => {
   );
 });
 
-test('the JupyterLite testbed is the website demo', async () => {
-  await access(path.join(output, 'demo', 'lab', 'index.html'));
+test('the JupyterLite demo opens Chinook in Jupyter Notebook', async () => {
+  const demo = 'demo/notebooks/index.html?path=chinook.ipynb';
+  const instructions = (
+    await readFile(path.join(root, 'lite', 'files', 'README.md'), 'utf8')
+  ).trim();
+  const notebooks = await Promise.all(
+    [
+      path.join(root, 'examples', 'chinook.ipynb'),
+      path.join(output, 'demo', 'files', 'chinook.ipynb')
+    ].map(async source => JSON.parse(await readFile(source, 'utf8')))
+  );
+  const [home, documentation, sitemap] = await Promise.all([
+    read(''),
+    read('docs'),
+    readFile(path.join(output, 'sitemap.xml'), 'utf8')
+  ]);
+
+  await Promise.all([
+    access(path.join(output, 'demo', 'notebooks', 'index.html')),
+    access(path.join(output, 'demo', 'lab', 'index.html')),
+    access(path.join(output, 'demo', 'files', 'chinook.db'))
+  ]);
   await access(
     path.join(
       output,
@@ -130,9 +151,39 @@ test('the JupyterLite testbed is the website demo', async () => {
       'remoteEntry.js'
     )
   );
-
-  const config = JSON.parse(
-    await readFile(path.join(root, 'lite', 'jupyter_lite_config.json'), 'utf8')
+  assert.ok(home.includes(`href="${demo}"`));
+  assert.ok(documentation.includes(`href="../${demo}"`));
+  assert.match(
+    sitemap,
+    /https:\/\/correx\.it\/demo\/notebooks\/index\.html\?path=chinook\.ipynb/
   );
-  assert.equal(config.LiteBuildConfig.base_url, '/demo/');
+  notebooks.forEach(notebook => {
+    const [welcome] = notebook.cells;
+    assert.equal(welcome.cell_type, 'markdown');
+    assert.equal(welcome.source, instructions);
+    assert.equal(notebook.metadata.correxit.cells[welcome.id], undefined);
+  });
+
+  const [build, runtime] = await Promise.all(
+    ['jupyter_lite_config.json', 'jupyter-lite.json'].map(async file =>
+      JSON.parse(await readFile(path.join(root, 'lite', file), 'utf8'))
+    )
+  );
+  assert.equal(build.LiteBuildConfig.base_url, '/demo/');
+  assert.equal(runtime['jupyter-config-data'].appUrl, './notebooks');
+});
+
+test('the JupyterLite demo expands the Correxit sidebar', async () => {
+  const launched = [];
+  const app = {
+    started: Promise.resolve(),
+    restored: Promise.resolve(),
+    commands: {
+      hasCommand: command => command === 'correxit:launch',
+      execute: async command => launched.push(command)
+    }
+  };
+
+  assert.equal(await expand(app), true);
+  assert.deepEqual(launched, ['correxit:launch']);
 });

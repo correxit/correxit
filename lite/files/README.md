@@ -10,8 +10,8 @@ There is no server behind it, and your changes stay on this device.
 It contains three questions whose results are compared with encrypted reference
 answers.
 
-- `chinook.ipynb` — the workbook open beside these instructions
-- `chinook.db` — the SQLite database loaded by the first notebook cell
+- `chinook.ipynb` — this workbook
+- `chinook.db` — the SQLite database loaded by the first code cell
 - **Author passphrase:** `xsql`
 
 ## Try Correxit
@@ -31,5 +31,5 @@ works with notebooks written for Python, R, Julia, and other Jupyter kernels.
 used by this browser demo. The `nbgrader` folder contains notebooks for trying
 Correxit's nbgrader importer.
 
-The file browser is tucked away to keep the demo focused. You can reopen it at
-any time from JupyterLab's left activity bar.
+The demo opens in Jupyter Notebook so the assignment stays front and center.
+JupyterLab remains available at `/demo/lab/` for development and exploration.

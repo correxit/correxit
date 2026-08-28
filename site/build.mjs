@@ -294,7 +294,9 @@ await Promise.all(
   })
 );
 
-await access(path.join(lite, 'lab', 'index.html'));
+await Promise.all(
+  ['lab', 'notebooks'].map(app => access(path.join(lite, app, 'index.html')))
+);
 await symlink(path.relative(output, lite), path.join(output, 'demo'), 'dir');
 
 await writeFile(
@@ -316,7 +318,7 @@ await writeFile(
         `<url><loc>https://correx.it/api/${route ? `${route}/` : ''}</loc></url>`
     )
     .join('\n  ')}
-  <url><loc>https://correx.it/demo/lab/</loc></url>
+  <url><loc>https://correx.it/demo/notebooks/index.html?path=chinook.ipynb</loc></url>
 </urlset>
 `
 );

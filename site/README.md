@@ -10,7 +10,9 @@ of the Correxit repository:
   layouts.
 - `build.mjs` prepares page data and renders the canonical repository Markdown.
 - TypeDoc generates a reference from the public TypeScript entry points.
-- the existing JupyterLite testbed is included at `/demo/`.
+- the existing JupyterLite testbed is included at `/demo/`; public links open
+  the Chinook workbook in Jupyter Notebook, while JupyterLab remains at
+  `/demo/lab/`.
 - `_api/` and `_output/` are generated and are not checked in.
 
 There is no client-side website framework or hosting runtime. Mustache is used

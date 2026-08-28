@@ -4,6 +4,7 @@
   "private": true,
   "description": "Deployment-only branding for the Correxit JupyterLite site",
   "license": "AGPL-3.0-only",
+  "type": "module",
   "main": "index.js",
   "dependencies": {
     "@jupyterlab/application": "^4.5.5",

@@ -33,4 +33,22 @@ const plugin = {
   deactivate: () => widget?.dispose()
 };
 
-export default plugin;
+const showcase = {
+  id: '@correxit:lite-demo',
+  description: 'Opens Correxit sidebar.',
+  autoStart: true,
+  activate: app => {
+    const launch = 'correxit:launch';
+    const expand = async app => {
+      await Promise.all([app.started, app.restored]);
+      if (!app.commands.hasCommand(launch)) return false;
+      await app.commands.execute(launch);
+      return true;
+    };
+    void expand(app).catch(reason =>
+      console.warn('@correxit:lite-demo', 'sidebar error', reason)
+    );
+  }
+};
+
+export default [plugin, showcase];
