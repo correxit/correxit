@@ -1,48 +1,20 @@
-name: QuantStack CI
+name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - "*"
-  release:
-    types: [published]
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  packages: read
 
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ============================================================
-  # Setup: Run only in QuantStack Org
-  # ============================================================
-  set-repo-name:
-    if: github.repository_owner == 'quantstack'
-    runs-on: ubuntu-slim
-    outputs:
-      REPO_NAME_ONLY: ${{ steps.repo.outputs.repo_name_only }}
-      QS_REPO_NAME: ${{ steps.repo.outputs.qs_repo_name }}
-    steps:
-      - id: repo
-        run: |
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          QS_REPO_NAME="quantstack/$REPO_NAME"
-
-          echo "repo_name_only=$REPO_NAME" >> $GITHUB_OUTPUT
-          echo "qs_repo_name=$QS_REPO_NAME" >> $GITHUB_OUTPUT
-
   build:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    needs: set-repo-name
     steps:
     - name: Checkout
       uses: actions/checkout@v5
@@ -91,10 +63,29 @@ jobs:
         path: dist/correxit*
         if-no-files-found: error
 
+  site:
+    name: Website
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5
+
+    - name: Set up Pixi
+      uses: prefix-dev/setup-pixi@v0.10.2
+      with:
+        pixi-version: v0.59.0
+
+    - name: Install dependencies
+      run: pixi run jlpm
+
+    - name: Build and test the website
+      run: |
+        pixi run jlpm build:lite
+        pixi run jlpm test:site
+
   test_isolated:
     needs: build
     runs-on: ubuntu-slim
-    if: github.event_name == 'pull_request'
     steps:
     - name: Install Python
       uses: actions/setup-python@v5
@@ -126,7 +117,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    if: github.event_name == 'pull_request'
     env:
       PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
 
@@ -172,61 +162,3 @@ jobs:
         path: |
           ui-tests/test-results
           ui-tests/playwright-report
-
-
-  # ============================================================
-  # Main Branch: Mirror to Notebook-Link
-  # ============================================================
-  mirror-commit-to-notebook-link:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [set-repo-name]
-    runs-on: ubuntu-latest
-    env:
-      NO_ORG_REPO_NAME: ${{ needs.set-repo-name.outputs.REPO_NAME_ONLY }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-
-      - name: Generate GitHub App token to write to notebook-link repo
-        id: dest-app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.NOTEBOOK_LINK_DEPLOYER_APP_ID }}
-          private-key: ${{ secrets.NOTEBOOK_LINK_DEPLOYER_APP_PRIVATE_KEY }}
-          owner: notebook-link
-          repositories: ${{ env.NO_ORG_REPO_NAME }}
-
-      - name: Sync commit from quantstack to notebook-link
-        uses: QuantStack/cluster-app-template/.github/actions/mirror-repo@main
-        with:
-          source_access_token: ${{ secrets.GITHUB_TOKEN }}
-          dest_access_token: ${{ steps.dest-app-token.outputs.token }}
-          source_owner: "quantstack"
-          dest_owner: "notebook-link"
-          repo_name: ${{ env.NO_ORG_REPO_NAME }}
-          ref: main
-          sync_tag: "true"
-
-  trigger-version-bump:
-    needs: [mirror-commit-to-notebook-link]
-    if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check if semantic release
-        id: check
-        run: |
-          if [[ "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "is_semantic=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_semantic=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Trigger event
-        if: steps.check.outputs.is_semantic == 'true'
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.ADMIN_GITHUB_TOKEN }}
-          repository: QuantStack/notebook-link-jupyterlite
-          event-type: trigger-deps-bump
-          client-payload: '{"commitHash": "${{ github.sha }}", "libName":"correxit"}'

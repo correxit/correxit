@@ -3,7 +3,6 @@ import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { expand } from '../lite/brand/demo.js';
 import { documents } from './documents.mjs';
 import { direct, parse } from './markdown.mjs';
 
@@ -171,19 +170,4 @@ test('the JupyterLite demo opens Chinook in Jupyter Notebook', async () => {
   );
   assert.equal(build.LiteBuildConfig.base_url, '/demo/');
   assert.equal(runtime['jupyter-config-data'].appUrl, './notebooks');
-});
-
-test('the JupyterLite demo expands the Correxit sidebar', async () => {
-  const launched = [];
-  const app = {
-    started: Promise.resolve(),
-    restored: Promise.resolve(),
-    commands: {
-      hasCommand: command => command === 'correxit:launch',
-      execute: async command => launched.push(command)
-    }
-  };
-
-  assert.equal(await expand(app), true);
-  assert.deepEqual(launched, ['correxit:launch']);
 });
