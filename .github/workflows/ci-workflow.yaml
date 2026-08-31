@@ -87,7 +87,7 @@ jobs:
       env:
         MIKE_DOCS_VERSION: ci
       run: |
-        pixi run mkdocs build --strict
+        NO_MKDOCS_2_WARNING=true pixi run mkdocs build --strict
         pixi run jlpm test:site
 
   test_isolated:

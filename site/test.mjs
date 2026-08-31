@@ -128,8 +128,9 @@ test('the demo opens Chinook in Jupyter Notebook', async () => {
       path.join(output, 'demo', 'files', 'chinook.ipynb')
     ].map(async source => JSON.parse(await readFile(source, 'utf8')))
   );
-  const [home, runtime] = await Promise.all([
+  const [home, notebook, runtime] = await Promise.all([
     read(''),
+    readFile(path.join(output, 'demo', 'notebooks', 'index.html'), 'utf8'),
     readFile(path.join(output, 'demo', 'jupyter-lite.json'), 'utf8').then(
       JSON.parse
     )
@@ -149,6 +150,8 @@ test('the demo opens Chinook in Jupyter Notebook', async () => {
     !process.env.MIKE_DOCS_VERSION
   );
   assert.match(home, /href="demo\/notebooks\/?\?path=chinook\.ipynb"/);
+  assert.match(notebook, /id="jupyter-lite-main"/);
+  assert.match(notebook, /config-utils\.js/);
   notebooks.forEach(notebook => {
     const [welcome] = notebook.cells;
     assert.equal(welcome.cell_type, 'markdown');
