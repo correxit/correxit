@@ -19,7 +19,6 @@ self-contained static snapshot, including the JupyterLite demo.
 Build the extension, demo, and current website together:
 
 ```bash
-pixi run jlpm build
 pixi run jlpm build:lite
 pixi run jlpm test:site
 ```

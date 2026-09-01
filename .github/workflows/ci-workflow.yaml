@@ -31,10 +31,11 @@ jobs:
         jlpm
         jlpm run lint:check
 
-    - name: Test the extension
+    - name: Test the extension and Node entrypoint
       run: |
         set -eux
         jlpm run test
+        jlpm run test:node
 
     - name: Build the extension
       run: |

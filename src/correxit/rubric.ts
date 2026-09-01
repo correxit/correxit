@@ -1095,8 +1095,9 @@ export namespace Rubric {
     const record = (value: unknown): value is { [key: string]: unknown } =>
       object(value) && !Array.isArray(value);
     const absent = (value: object, template: object): string | null =>
-      Object.keys(template).find(
-        field => !Object.prototype.hasOwnProperty.call(value, field)
+      Object.keys(template).find(field =>
+        !Object.prototype.hasOwnProperty.call(value, field) ||
+        (value as { [key: string]: unknown })[field] === undefined
       ) ?? null;
     if (cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');

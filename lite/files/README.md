@@ -32,4 +32,4 @@ used by this browser demo. The `nbgrader` folder contains notebooks for trying
 Correxit's nbgrader importer.
 
 The demo opens in Jupyter Notebook so the assignment stays front and center.
-JupyterLab remains available at `/demo/lab/` for development and exploration.
+[JupyterLab](../lab/) remains available for development and exploration.

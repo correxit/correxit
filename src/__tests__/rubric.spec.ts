@@ -255,6 +255,32 @@ describe('Rubric', () => {
       }
     );
 
+    it.each(Object.keys(format.assignment))(
+      'rejects format-1 metadata with undefined assignment.%s',
+      field => {
+        const metadata = JSON.parse(JSON.stringify(format));
+        metadata.assignment[field] = undefined;
+        expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
+      }
+    );
+
+    it.each([
+      [
+        'private assignee key',
+        (metadata: any) =>
+          (metadata.assignment.keys.private.assignee = undefined)
+      ],
+      [
+        'public assignee key',
+        (metadata: any) =>
+          (metadata.assignment.keys.public.assignee = undefined)
+      ]
+    ])('rejects format-1 metadata with undefined %s', (_, corrupt) => {
+      const metadata = JSON.parse(JSON.stringify(format));
+      corrupt(metadata);
+      expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
+    });
+
     it.each([
       ['references', (metadata: any) => delete metadata.references],
       [
