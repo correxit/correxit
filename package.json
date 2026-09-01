@@ -58,7 +58,7 @@
         "build:lib:prod": "tsc",
         "build:node": "node scripts/build-node.cjs",
         "build:npm": "jlpm clean:lib && jlpm build:lib:prod && jlpm build:node",
-        "build:lite": "jlpm build:lite:app && jlpm build:site",
+        "build:lite": "jlpm build && jlpm build:lite:app && jlpm build:site",
         "build:lite:app": "jlpm build:lite:brand && rimraf lite/_output/extensions/correxit && cd lite && jupyter lite build --output-dir _output --XeusAddon.mount_jupyterlite_content=True && jlpm link:lite",
         "build:lite:brand": "jupyter-builder build lite/brand",
         "build:api": "typedoc",
