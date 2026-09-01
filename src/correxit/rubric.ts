@@ -1150,7 +1150,10 @@ export namespace Rubric {
     }
     if (!record(scores))
       throw new Error.Invalid('invalid rubric, missing assignment scores');
-    if (kernel !== null && !object(kernel))
+    if (
+      kernel !== null &&
+      (!record(kernel) || !record(kernel.resources))
+    )
       throw new Error.Invalid('invalid rubric, invalid kernel spec');
     return {
       assignment: assignment as Assignment,

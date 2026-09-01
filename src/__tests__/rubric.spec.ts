@@ -294,6 +294,10 @@ describe('Rubric', () => {
       [
         'report kernel',
         (metadata: any) => delete metadata.assignment.report.kernel
+      ],
+      [
+        'kernel resources',
+        (metadata: any) => delete metadata.assignment.report.kernel.resources
       ]
     ])('rejects format-1 metadata missing %s', (_, corrupt) => {
       const metadata = JSON.parse(JSON.stringify(format));
@@ -319,7 +323,12 @@ describe('Rubric', () => {
         'interventions',
         (metadata: any) => (metadata.assignment.report.interventions = [])
       ],
-      ['scores', (metadata: any) => (metadata.assignment.report.scores = [])]
+      ['scores', (metadata: any) => (metadata.assignment.report.scores = [])],
+      ['kernel', (metadata: any) => (metadata.assignment.report.kernel = [])],
+      [
+        'kernel resources',
+        (metadata: any) => (metadata.assignment.report.kernel.resources = [])
+      ]
     ])('rejects malformed format-1 %s container', (_, corrupt) => {
       const metadata = JSON.parse(JSON.stringify(format));
       corrupt(metadata);
