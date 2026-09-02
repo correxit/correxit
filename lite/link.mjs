@@ -8,7 +8,7 @@ import {
 import { resolve, join } from 'path';
 
 const ext = resolve('correxit/labextension');
-const dest = resolve('lite/_output/extensions/@quantstack/correxit');
+const dest = resolve('lite/_output/extensions/correxit');
 const favicon = resolve('style/brand/correxit-mark-on-light.svg');
 const faviconDest = resolve('lite/_output/correxit.svg');
 const manifest = resolve('lite/_output/jupyter-lite.json');
@@ -29,7 +29,7 @@ symlinkSync(target, stable);
 
 const lite = JSON.parse(readFileSync(manifest, 'utf8'));
 const entry = lite['jupyter-config-data'].federated_extensions.find(
-  e => e.name === '@quantstack/correxit'
+  e => e.name === 'correxit'
 );
 
 if (entry) {

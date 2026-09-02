@@ -97,7 +97,7 @@ acceptable.
   - from `ui-tests/`: `pixi run jlpm playwright test <spec>`
 - **Interactive Shell**: `pixi shell` is fine for a local loop; once inside it, use the normal commands (`jlpm build`, `jlpm test`, etc.).
 - **No Pixi Command Shadowing**: Do not add Pixi task aliases for existing `jlpm`, `jupyter`, or Playwright commands unless there is a strong reason. New contributors with JupyterLab extension experience should only have to learn to add `pixi run`.
-- **Website**: `site/` is static Correxit source, not an independent application. `jlpm build:lite` assembles `site/_output/` from the landing page, Pico CSS plus small Correxit-specific overrides, canonical repository Markdown, and `lite/_output/` at `/demo/`. Do not check in either generated output directory or add a client framework, server runtime, or separate package manager without a concrete requirement.
+- **Website**: `site/` is static Correxit source, not an independent application. MkDocs Material supplies the documentation theme and search; `site/prepare.mjs` stages canonical repository Markdown and the TypeDoc API reference, while `site/hooks.py` links the JupyterLite demo during development and copies it into Mike version snapshots. `jlpm build:lite` assembles the extension, demo, and current site in `site/_output/`. Do not check in generated output directories or add a client framework, server runtime, or separate package manager without a concrete requirement.
 - **Build Before UI Tests**: After editing frontend `src/` files, rebuild before trusting Playwright failures: `pixi run jlpm build`.
 - **UI Test Isolation**: Run one Playwright module at a time when debugging. The suite is intentionally single-worker and cross-file interference is real.
 - **Sandbox Bind Failures**: In sandboxed agent shells, Jupyter's Playwright web server may fail with a localhost bind error such as `PermissionError: [Errno 1] Operation not permitted`. Treat that as an environment failure and rerun outside the sandbox with approval.
@@ -126,7 +126,7 @@ acceptable.
 - `corrector/commands.ts`: Registers Corrector commands (`batch`, `scan`, `collect`, `csv`, `launch`, `cd`) and Reviewer commands (`review`, `intervene`, `up`/`down`/`left`/`right`, `pass`, `fail`). The `intervene` command saves scores, writes comments, and auto-certifies when the last pending reviewable cell is scored.
 - `nbgrader.ts`: Converts nbgrader-format notebooks to Correxit workbooks. Detects nbgrader cell metadata, classifies cells (answerable/correctable/reviewable), splits fenced `### BEGIN/END` hidden test regions, and builds an equivalent rubric. Falls back to static output analysis when no kernel is available.
 - `ui/boundary.tsx`: React class error boundary wrapping the sidebar, corrector, and reviewer mount points. Catches synchronous render throws and shows a fallback with error message and collapsible stack trace.
-- `site/`: Static source for `correx.it`. `build.mjs` renders the canonical Markdown guides through shared Mustache layouts, copies the Pico CSS baseline, and exposes the existing JupyterLite testbed as `/demo/`; `index.html`, `templates/`, and the small `style.css` override are the hand-written browser surface.
+- `site/`: Static source for `correx.it`. MkDocs Material renders `index.md`, canonical Markdown guides staged by `prepare.mjs`, and the TypeDoc API reference. `hooks.py` exposes the JupyterLite testbed under each site's `/demo/`, while `style.css` contains Correxit-specific theme overrides.
 
 ## 9. Alignment Check
 

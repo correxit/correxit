@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
-import { access, readdir, readFile } from 'node:fs/promises';
+import { access, lstat, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { documents } from './documents.mjs';
-import { direct, parse } from './markdown.mjs';
 
 const site = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(site);
@@ -28,57 +27,51 @@ const apiRoutes = async () =>
     .map(source => path.relative(output, path.dirname(source)));
 
 const target = (route, href) => {
-  const pathname = href.split('#')[0];
+  const pathname = decodeURI(href.split(/[?#]/)[0]);
   const resolved = path.resolve(output, route, pathname);
   return pathname.endsWith('/') ? path.join(resolved, 'index.html') : resolved;
 };
 
-test('Markdown cannot introduce active content', async () => {
-  const html = await parse(
-    '<style>body{display:none}</style><svg><textarea><img src=x onerror=alert(1)></textarea></svg>',
-    () => {}
+test('canonical Markdown cannot introduce executable content', async () => {
+  const markdown = await Promise.all(
+    documents.map(({ source }) => readFile(path.join(root, source), 'utf8'))
   );
 
-  assert.doesNotMatch(html, /<(?:img|style|svg|textarea)\b|onerror/i);
-  ['//example.com', 'data:text/html,hello', 'javascript:alert(1)'].forEach(
-    href => assert.throws(() => direct(href, false), /Unsafe URL/)
-  );
-  assert.throws(() => direct('mailto:hello@example.com', true), /Unsafe URL/);
-  assert.equal(direct('https://example.com', false), 'https://example.com');
-  assert.equal(direct('../guide.md', false), null);
+  markdown.forEach(source => {
+    assert.doesNotMatch(source, /<(?:embed|iframe|object|script|style)\b/i);
+    assert.doesNotMatch(source, /\son[a-z]+\s*=/i);
+    assert.doesNotMatch(source, /\]\((?:data:|javascript:|[\\/]{2})/i);
+  });
 });
 
-test('the website has no active content', async () => {
+test('the generated website is self-contained', async () => {
   const api = await apiRoutes();
   const pages = await Promise.all([
     read(''),
-    read('docs'),
-    ...documents.map(({ slug }) => read(path.join('docs', slug))),
+    ...documents.map(({ slug }) => read(slug)),
     ...api.map(read)
   ]);
 
   pages.forEach(page => {
-    assert.doesNotMatch(page, /<(?:embed|iframe|object|script|style)\b/i);
+    assert.doesNotMatch(page, /<(?:embed|iframe|object)\b/i);
     assert.doesNotMatch(page, /\son[a-z]+\s*=/i);
-    assert.doesNotMatch(
-      page,
-      /(?:href|src|srcset)="(?:data:|javascript:|[\\/]{2})/i
-    );
+    assert.doesNotMatch(page, /(?:href|src)="(?:data:|javascript:|[\\/]{2})/i);
+    assert.doesNotMatch(page, /<script[^>]+src="https?:/i);
+    assert.doesNotMatch(page, /<link[^>]+rel="stylesheet"[^>]+href="https?:/i);
   });
 });
 
 test('every local website reference has a static destination', async () => {
   const routes = [
     '',
-    'docs',
-    ...documents.map(({ slug }) => `docs/${slug}`),
+    ...documents.map(({ slug }) => slug),
     ...(await apiRoutes())
   ];
 
   await Promise.all(
     routes.map(async route => {
       const page = await read(route);
-      const references = [...page.matchAll(/(?:href|src|srcset)="([^"]+)"/g)]
+      const references = [...page.matchAll(/(?:href|src)="([^"]+)"/g)]
         .map(([, href]) => href)
         .filter(href => !/^(?:[a-z][a-z\d+.-]*:|#)/i.test(href));
 
@@ -87,11 +80,11 @@ test('every local website reference has a static destination', async () => {
   );
 });
 
-test('canonical guides are rendered', async () => {
+test('canonical guides are rendered at short routes', async () => {
   const [authoring, security, design] = await Promise.all([
-    read('docs/authoring'),
-    read('docs/security'),
-    read('docs/design')
+    read('authoring'),
+    read('security'),
+    read('design')
   ]);
 
   assert.match(authoring, /Thinking in question/);
@@ -118,22 +111,53 @@ test('the public API reference is generated', async () => {
   );
 });
 
-test('the JupyterLite testbed is the website demo', async () => {
-  await access(path.join(output, 'demo', 'lab', 'index.html'));
-  await access(
-    path.join(
-      output,
-      'demo',
-      'extensions',
-      '@quantstack',
-      'correxit',
-      'static',
-      'remoteEntry.js'
-    )
-  );
+test('mike owns the published version paths', async () => {
+  const config = await readFile(path.join(root, 'mkdocs.yml'), 'utf8');
+  assert.match(config, /provider: mike/);
+  assert.match(config, /alias_type: redirect/);
+  assert.match(config, /canonical_version: latest/);
+});
 
-  const config = JSON.parse(
-    await readFile(path.join(root, 'lite', 'jupyter_lite_config.json'), 'utf8')
+test('the demo opens Chinook in Jupyter Notebook', async () => {
+  const instructions = (
+    await readFile(path.join(root, 'lite', 'files', 'README.md'), 'utf8')
+  ).trim();
+  const notebooks = await Promise.all(
+    [
+      path.join(root, 'examples', 'chinook.ipynb'),
+      path.join(output, 'demo', 'files', 'chinook.ipynb')
+    ].map(async source => JSON.parse(await readFile(source, 'utf8')))
   );
-  assert.equal(config.LiteBuildConfig.base_url, '/demo/');
+  const [home, notebook, runtime] = await Promise.all([
+    read(''),
+    readFile(path.join(output, 'demo', 'notebooks', 'index.html'), 'utf8'),
+    readFile(path.join(output, 'demo', 'jupyter-lite.json'), 'utf8').then(
+      JSON.parse
+    )
+  ]);
+
+  const extension = runtime['jupyter-config-data'].federated_extensions.find(
+    ({ name }) => name === 'correxit'
+  );
+  await Promise.all([
+    access(path.join(output, 'demo', 'notebooks', 'index.html')),
+    access(path.join(output, 'demo', 'lab', 'index.html')),
+    access(path.join(output, 'demo', 'files', 'chinook.db')),
+    access(path.join(output, 'demo', 'extensions', 'correxit', extension.load))
+  ]);
+  assert.equal(
+    (await lstat(path.join(output, 'demo'))).isSymbolicLink(),
+    !process.env.MIKE_DOCS_VERSION
+  );
+  assert.match(home, /href="demo\/notebooks\/?\?path=chinook\.ipynb"/);
+  assert.match(notebook, /id="jupyter-lite-main"/);
+  assert.match(notebook, /config-utils\.js/);
+  notebooks.forEach(notebook => {
+    const [welcome] = notebook.cells;
+    assert.equal(welcome.cell_type, 'markdown');
+    assert.equal(welcome.source, instructions);
+    assert.equal(notebook.metadata.correxit.cells[welcome.id], undefined);
+  });
+  assert.equal(runtime['jupyter-config-data'].appUrl, './notebooks');
+  assert.equal(runtime['jupyter-config-data'].baseUrl, './');
 });

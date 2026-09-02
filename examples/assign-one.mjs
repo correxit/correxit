@@ -2,7 +2,7 @@
 
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { Assignment } from '@quantstack/correxit/node';
+import { Assignment } from 'correxit/node';
 
 const usage = () => {
   console.error(

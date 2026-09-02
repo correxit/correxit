@@ -74,7 +74,7 @@ export namespace Correxit {
     ): Promise<Rubric.Unlocked | null>;
   };
 
-  export const COLLECTOR = '@quantstack/correxit:collector';
+  export const COLLECTOR = 'correxit:collector';
 
   export const Collector = new Token<Collector>(COLLECTOR);
 
@@ -82,11 +82,11 @@ export namespace Correxit {
 
   export const commands = COMMANDS;
 
-  export const DISTRIBUTOR = '@quantstack/correxit:distributor';
+  export const DISTRIBUTOR = 'correxit:distributor';
 
   export const Distributor = new Token<Distributor>(DISTRIBUTOR);
 
-  export const CORRECTOR = '@quantstack/correxit:corrector';
+  export const CORRECTOR = 'correxit:corrector';
 
   export const DESCRIPTION = {
     COLLECTOR: description.COLLECTOR,
@@ -118,29 +118,29 @@ export namespace Correxit {
     export import reason    = error.reason;
   }
 
-  export const GALATA = '@quantstack/correxit:galata';
+  export const GALATA = 'correxit:galata';
 
   export import Icons = ICONS;
 
-  export const MONITOR = '@quantstack/correxit:monitor';
+  export const MONITOR = 'correxit:monitor';
 
   export const Monitor = new Token<Monitor>(MONITOR);
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
 
-  export const REGISTRAR = '@quantstack/correxit:registrar';
+  export const REGISTRAR = 'correxit:registrar';
 
   export const Registrar = new Token<Registrar>(REGISTRAR);
 
-  export const SUBMITTER = '@quantstack/correxit:submitter';
+  export const SUBMITTER = 'correxit:submitter';
 
   export const Submitter = new Token<Correxit.Submitter>(SUBMITTER);
 
-  export const TOOLBARS = '@quantstack/correxit:toolbars';
+  export const TOOLBARS = 'correxit:toolbars';
 
-  export const UI = '@quantstack/correxit:ui';
+  export const UI = 'correxit:ui';
 
-  export const UNLOCKER = '@quantstack/correxit:unlocker';
+  export const UNLOCKER = 'correxit:unlocker';
 
   export const Unlocker = new Token<Unlocker>(UNLOCKER);
 }

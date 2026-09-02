@@ -229,7 +229,7 @@ Each token is a standard Lumino `Token<T>`. Override a default by declaring a
 
 ```typescript
 import { JupyterFrontEndPlugin } from '@jupyterlab/application';
-import { Correxit } from '@quantstack/correxit';
+import { Correxit } from 'correxit';
 
 const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
   id: 'my-lms:submitter',

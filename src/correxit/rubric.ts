@@ -1087,11 +1087,18 @@ export namespace Rubric {
 
   /** @returns a normalized locked rubric or throws. */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
-    const { assignment, cells, cxtformat, id, key, locked, revised } = rubric;
+    const {
+      assignment, cells, cxtformat, id, key, locked, references, revised
+    } = rubric;
     const object = (value: unknown): value is object =>
       typeof value === 'object' && value !== null;
     const record = (value: unknown): value is { [key: string]: unknown } =>
       object(value) && !Array.isArray(value);
+    const absent = (value: object, template: object): string | null =>
+      Object.keys(template).find(field =>
+        !Object.prototype.hasOwnProperty.call(value, field) ||
+        (value as { [key: string]: unknown })[field] === undefined
+      ) ?? null;
     if (cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');
     if (!revised) throw new Error.Invalid('invalid rubric, missing revised');
@@ -1101,15 +1108,41 @@ export namespace Rubric {
       throw new Error.Invalid('invalid rubric, missing (null) key');
     if (locked !== true)
       throw new Error.Invalid('invalid rubric, must be locked');
-    if (!cells || typeof cells !== 'object' || Array.isArray(cells))
+    if (!record(cells))
       throw new Error.Invalid('invalid rubric, missing cells');
-    if (!assignment)
+    if (!record(references))
+      throw new Error.Invalid('invalid rubric, missing references');
+    if (!record(assignment))
       throw new Error.Invalid('invalid rubric, missing assignment');
-    if (!record(assignment.report))
+
+    const missing = absent(assignment, Assignment.empty());
+    if (missing)
+      throw new Error.Invalid(`invalid rubric, missing assignment ${missing}`);
+
+    const { keys, report } = assignment;
+    if (!record(keys))
+      throw new Error.Invalid('invalid rubric, invalid assignment keys');
+
+    const blank = Assignment.Keys.empty();
+    if (absent(keys, blank))
+      throw new Error.Invalid('invalid rubric, missing assignment key fields');
+    const { private: secret, public: shared } = keys;
+    if (!record(secret) || !record(shared))
+      throw new Error.Invalid('invalid rubric, invalid assignment keys');
+    if (absent(secret, blank.private) || absent(shared, blank.public))
+      throw new Error.Invalid('invalid rubric, missing assignment key fields');
+    if (typeof secret.author !== 'string' || !secret.author)
+      throw new Error.Invalid('invalid rubric, missing author private key');
+    if (typeof shared.author !== 'string' || !shared.author)
+      throw new Error.Invalid('invalid rubric, missing author public key');
+    if (!record(report))
       throw new Error.Invalid('invalid rubric, missing assignment report');
 
-    const { interventions, kernel: spec, scores } = assignment.report;
-    const kernel = spec ?? null;
+    const field = absent(report, Assignment.Report.empty());
+    if (field)
+      throw new Error.Invalid(`invalid rubric, missing assignment ${field}`);
+
+    const { interventions, kernel, scores } = report;
     if (!record(interventions)) {
       throw new Error.Invalid(
         'invalid rubric, missing assignment interventions'
@@ -1117,29 +1150,13 @@ export namespace Rubric {
     }
     if (!record(scores))
       throw new Error.Invalid('invalid rubric, missing assignment scores');
-    if (kernel !== null && !object(kernel))
+    if (
+      kernel !== null &&
+      (!record(kernel) || !record(kernel.resources))
+    )
       throw new Error.Invalid('invalid rubric, invalid kernel spec');
-    const blank = Assignment.Report.empty();
-    const report = { ...blank, interventions, kernel, scores };
-    const keys = {
-      private: {
-        ...Assignment.Keys.empty().private,
-        ...assignment.keys?.private
-      },
-      public: {
-        ...Assignment.Keys.empty().public,
-        ...assignment.keys?.public
-      }
-    };
-    if (!keys.private.author)
-      throw new Error.Invalid('invalid rubric, missing author private key');
-    if (!keys.public.author)
-      throw new Error.Invalid('invalid rubric, missing author public key');
-
-    const seal = assignment.seal ?? null;
-    const references = rubric.references ?? {};
     return {
-      assignment: { ...Assignment.empty(), ...assignment, keys, report, seal },
+      assignment: assignment as Assignment,
       cells, cxtformat, id, key, locked, references, revised
     };
   }

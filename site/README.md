@@ -1,38 +1,38 @@
 # Correxit website
 
-The source for [correx.it](https://correx.it). It is deliberately a static part
-of the Correxit repository:
+The source for [correx.it](https://correx.it) is part of the Correxit repository:
 
-- Pico CSS provides the typography and component baseline; `style.css` contains
-  only Correxit's brand and documentation layout.
-- `index.html` is the hand-written landing content.
-- `templates/` contains the shared Mustache page, navigation, and document
-  layouts.
-- `build.mjs` prepares page data and renders the canonical repository Markdown.
-- TypeDoc generates a reference from the public TypeScript entry points.
-- the existing JupyterLite testbed is included at `/demo/`.
-- `_api/` and `_output/` are generated and are not checked in.
+- MkDocs Material supplies the static documentation theme and search.
+- `index.md` is the landing page.
+- `prepare.mjs` stages the canonical repository Markdown and the TypeDoc API
+  reference in `_docs/`.
+- `hooks.py` links the existing JupyterLite build at `/demo/` during local
+  development and copies it into each published version.
+- `mike` keeps released sites under permanent version paths and provides the
+  `latest` selector and redirect.
+- `_api/`, `_docs/`, `_output/`, and `lite/_output/` are generated and are not
+  checked in.
 
-There is no client-side website framework or hosting runtime. Mustache is used
-only while building static HTML. The Pico CSS dependency and its license are
-copied into the output at build time. The only browser JavaScript in the
-published artifact belongs to JupyterLite and Correxit itself.
+There is no website server or application framework. The released site is a
+self-contained static snapshot, including the JupyterLite demo.
 
-Build the extension, JupyterLite demo, and website together:
+Build the extension, demo, and current website together:
 
 ```bash
-pixi run jlpm build
 pixi run jlpm build:lite
+pixi run jlpm test:site
 ```
 
-Then serve the complete result at <http://localhost:8888>:
+Serve that development build at <http://localhost:8888>:
 
 ```bash
 pixi run jlpm serve
 ```
 
-After an initial JupyterLite build, `pixi run jlpm build:site` is enough to
-refresh the landing page, guides, and API reference.
+After the initial JupyterLite build, `pixi run jlpm build:site` refreshes the
+landing page, guides, and API reference. Its demo remains linked to
+`lite/_output`, so extension watch builds are visible after a browser refresh.
 
-Run `pixi run jlpm test:site` after either build to verify generated routes,
-local references, inactive Markdown, and the embedded demo.
+Published routes are versioned, for example `/2.0.0/authoring/` and
+`/2.0.0/demo/`. See [the release guide](../docs/release.md) for the deliberately
+manual publishing step.

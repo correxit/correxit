@@ -1,0 +1,93 @@
+site_name: Correxit
+site_description: A kernel-agnostic Jupyter extension for grading notebooks.
+site_url: https://correx.it/
+repo_name: QuantStack/correxit
+repo_url: https://github.com/QuantStack/correxit
+
+docs_dir: site/_docs
+site_dir: site/_output
+use_directory_urls: true
+
+theme:
+  name: material
+  logo: assets/correxit-dark.svg
+  favicon: assets/correxit-light.svg
+  font: false
+  features:
+    - content.code.copy
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Use dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Use light mode
+
+nav:
+  - Home: index.md
+  - Overview: overview.md
+  - Authoring: authoring.md
+  - Integrations:
+      - Moodle: moodle.md
+      - Plugins: plugins.md
+  - Internals:
+      - Design: design.md
+      - Security: security.md
+      - API:
+          - Overview: api/index.md
+          - Browser: api/browser/index.md
+          - Node: api/node.md
+          - Assignment: api/browser/namespaces/assignment.md
+          - Correxit: api/browser/namespaces/correxit/index.md
+          - Rubric: api/browser/namespaces/rubric/index.md
+          - Workbook: api/browser/namespaces/workbook/index.md
+  - Changelog: changelog.md
+  - Release: release.md
+
+not_in_nav: |
+  api/**
+  demo/**
+
+hooks:
+  - site/hooks.py
+
+plugins:
+  - search
+  - mike:
+      alias_type: redirect
+      canonical_version: latest
+      version_selector: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+extra:
+  generator: false
+  version:
+    provider: mike
+    default: latest
+
+extra_css:
+  - assets/stylesheets/correxit.css
+
+copyright: Correxit

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { Assignment, Rubric } from '@quantstack/correxit/node';
+import { Assignment, Rubric } from 'correxit/node';
 import * as openpgp from 'openpgp';
 
 const passphrase = 'correct horse battery staple';

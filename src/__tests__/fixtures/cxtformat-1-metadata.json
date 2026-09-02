@@ -1,0 +1,115 @@
+{
+  "assignment": {
+    "assignee": "student@example.com",
+    "certification": 1710000004000,
+    "collected": "collection-receipt",
+    "distribution": 1710000000000,
+    "expiration": 1710600000000,
+    "id": "course:assignment",
+    "issue": "issue-digest",
+    "issuer": "issue-signature",
+    "keys": {
+      "private": {
+        "assignee": null,
+        "author": "encrypted-author-private-key"
+      },
+      "public": {
+        "assignee": null,
+        "author": "author-public-key"
+      }
+    },
+    "mac": "assignment-mac",
+    "name": "Format 1 assignment",
+    "overdue": "dock",
+    "penalty": 10,
+    "report": {
+      "interventions": {
+        "review": {
+          "code": "intervene",
+          "comment": "Partial credit",
+          "id": "review",
+          "points": 1,
+          "possible": 2,
+          "status": "partial"
+        }
+      },
+      "kernel": {
+        "argv": [
+          "python",
+          "-m",
+          "ipykernel_launcher",
+          "-f",
+          "{connection_file}"
+        ],
+        "display_name": "Python 3",
+        "language": "python",
+        "name": "python3",
+        "resources": {}
+      },
+      "scores": {
+        "answer": {
+          "code": "",
+          "comment": "",
+          "id": "answer",
+          "points": 1,
+          "possible": 1,
+          "status": "correct"
+        }
+      }
+    },
+    "resources": ["data.csv"],
+    "roster": ["encrypted-roster"],
+    "seal": null,
+    "submission": 1710000002000,
+    "submitted": "submission-receipt"
+  },
+  "cells": {
+    "answer": {
+      "id": "answer",
+      "is": "answerable",
+      "payload": ["expected-digest"],
+      "points": 1,
+      "references": null
+    },
+    "compare": {
+      "id": "compare",
+      "is": "comparable",
+      "payload": null,
+      "points": 1,
+      "references": ["compare-reference"]
+    },
+    "correct": {
+      "id": "correct",
+      "is": "correctable",
+      "payload": null,
+      "points": 2,
+      "references": ["correct-reference"]
+    },
+    "review": {
+      "id": "review",
+      "is": "reviewable",
+      "payload": null,
+      "points": 2,
+      "references": null
+    }
+  },
+  "cxtformat": 1,
+  "id": "wb-format-1",
+  "key": null,
+  "locked": true,
+  "references": {
+    "compare-reference": {
+      "cell": "compare",
+      "points": 1,
+      "referent": "compare-reference",
+      "secret": true
+    },
+    "correct-reference": {
+      "cell": "correct",
+      "points": 2,
+      "referent": "correct-reference",
+      "secret": false
+    }
+  },
+  "revised": 1710000005000
+}

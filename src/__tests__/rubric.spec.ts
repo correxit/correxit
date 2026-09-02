@@ -1,6 +1,7 @@
 declare const require: any;
 jest.mock('../correxit/security', () => require('./mocks/security'));
 import { Rubric } from '../correxit/rubric';
+const format = require('./fixtures/cxtformat-1-metadata.json');
 
 describe('Rubric', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -238,6 +239,100 @@ describe('Rubric', () => {
       const normalized = Rubric.normalize(rubric);
       expect(normalized.cxtformat).toBe(Rubric.CXTFORMAT);
       expect(normalized.id).toBeDefined();
+    });
+
+    it('normalizes golden format-1 metadata without completing it', () => {
+      const metadata = JSON.parse(JSON.stringify(format));
+      expect(Rubric.normalize(metadata)).toEqual(metadata);
+    });
+
+    it.each(Object.keys(format.assignment))(
+      'rejects format-1 metadata missing assignment.%s',
+      field => {
+        const metadata = JSON.parse(JSON.stringify(format));
+        delete metadata.assignment[field];
+        expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
+      }
+    );
+
+    it.each(Object.keys(format.assignment))(
+      'rejects format-1 metadata with undefined assignment.%s',
+      field => {
+        const metadata = JSON.parse(JSON.stringify(format));
+        metadata.assignment[field] = undefined;
+        expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
+      }
+    );
+
+    it.each([
+      [
+        'private assignee key',
+        (metadata: any) =>
+          (metadata.assignment.keys.private.assignee = undefined)
+      ],
+      [
+        'public assignee key',
+        (metadata: any) =>
+          (metadata.assignment.keys.public.assignee = undefined)
+      ]
+    ])('rejects format-1 metadata with undefined %s', (_, corrupt) => {
+      const metadata = JSON.parse(JSON.stringify(format));
+      corrupt(metadata);
+      expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
+    });
+
+    it.each([
+      ['references', (metadata: any) => delete metadata.references],
+      [
+        'private assignee key',
+        (metadata: any) => delete metadata.assignment.keys.private.assignee
+      ],
+      [
+        'public assignee key',
+        (metadata: any) => delete metadata.assignment.keys.public.assignee
+      ],
+      [
+        'report kernel',
+        (metadata: any) => delete metadata.assignment.report.kernel
+      ],
+      [
+        'kernel resources',
+        (metadata: any) => delete metadata.assignment.report.kernel.resources
+      ]
+    ])('rejects format-1 metadata missing %s', (_, corrupt) => {
+      const metadata = JSON.parse(JSON.stringify(format));
+      corrupt(metadata);
+      expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
+    });
+
+    it.each([
+      ['cells', (metadata: any) => (metadata.cells = [])],
+      ['references', (metadata: any) => (metadata.references = [])],
+      ['assignment', (metadata: any) => (metadata.assignment = [])],
+      ['report', (metadata: any) => (metadata.assignment.report = [])],
+      ['keys', (metadata: any) => (metadata.assignment.keys = [])],
+      [
+        'private keys',
+        (metadata: any) => (metadata.assignment.keys.private = [])
+      ],
+      [
+        'public keys',
+        (metadata: any) => (metadata.assignment.keys.public = [])
+      ],
+      [
+        'interventions',
+        (metadata: any) => (metadata.assignment.report.interventions = [])
+      ],
+      ['scores', (metadata: any) => (metadata.assignment.report.scores = [])],
+      ['kernel', (metadata: any) => (metadata.assignment.report.kernel = [])],
+      [
+        'kernel resources',
+        (metadata: any) => (metadata.assignment.report.kernel.resources = [])
+      ]
+    ])('rejects malformed format-1 %s container', (_, corrupt) => {
+      const metadata = JSON.parse(JSON.stringify(format));
+      corrupt(metadata);
+      expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
     });
 
     it.each([
