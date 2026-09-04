@@ -12,7 +12,7 @@
     ],
     "homepage": "https://correx.it",
     "bugs": {
-        "url": "https://github.com/QuantStack/correxit/issues"
+        "url": "https://github.com/correxit/correxit/issues"
     },
     "license": "AGPL-3.0-only",
     "author": {
@@ -47,7 +47,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/QuantStack/correxit.git"
+        "url": "https://github.com/correxit/correxit.git"
     },
     "scripts": {
         "build": "jlpm build:lib && jlpm build:node && jlpm build:labextension:dev",

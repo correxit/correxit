@@ -1,5 +1,5 @@
 name: 'Bump version using semantic-release'
-description: 'Bump version action for QSAI.'
+description: 'Bump version action for Correxit.'
 author: 'QuantStack'
 inputs:
   github_token:

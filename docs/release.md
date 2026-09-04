@@ -1,9 +1,8 @@
 # Making a Correxit release
 
-Publishing is deliberately disabled in GitHub Actions until the repository has
-moved to `github.com/correxit/correxit` and its package registries and Pages
-settings have been configured. Pull requests still build and test the complete
-website without pushing it anywhere.
+Publishing is deliberately disabled in GitHub Actions until the repository is
+public and its package registries and Pages settings have been configured. Pull
+requests still build and test the complete website without pushing it anywhere.
 
 ## Release checks
 
@@ -43,7 +42,7 @@ During `mike deploy`, the build copies and dereferences the complete JupyterLite
 site instead, so a released version has no dependency on the current source
 tree and contains no symlinks.
 
-After the repository transfer, make the first website release manually:
+After the repository is public, make the first website release manually:
 
 ```bash
 pixi run jlpm build
