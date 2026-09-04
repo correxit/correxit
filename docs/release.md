@@ -1,9 +1,45 @@
 # Making a Correxit release
 
 Publishing is deliberately disabled in GitHub Actions until the repository has
-moved to `github.com/correxit/correxit` and its package registries and Pages
+become public at `github.com/correxit/correxit` and its package registries and Pages
 settings have been configured. Pull requests still build and test the complete
 website without pushing it anywhere.
+
+## Public transition
+
+Before changing the repository visibility:
+
+- verify `correx.it` in the `correxit` organization Pages settings and keep
+  the DNS challenge TXT record;
+- audit the complete Git history and contributor provenance, not only the
+  current tree;
+- review or delete private Actions logs and artifacts that should not become
+  public;
+- decide whether the pre-public 1.x GitHub release objects should remain
+  visible; and
+- confirm control of the existing `correxit` projects on PyPI and npm.
+
+Do not publish the website from a working directory that contains ignored
+notebooks, rosters, checkpoints, or other local data. Use a clean checkout for
+every release.
+
+Immediately after making the repository public, before accepting external pull
+requests:
+
+- protect `main` with a ruleset requiring a pull request, code-owner review,
+  CI, PR-title validation, and the configured CLA check;
+- require approval before Actions workflows from every external contributor
+  can run;
+- enable Dependabot alerts, secret scanning, push protection, code scanning,
+  and private vulnerability reporting;
+- restrict allowed Actions and require full-length commit SHA references; and
+- enable organization two-factor authentication after confirming that every
+  member and outside collaborator is ready.
+
+The CLA check must cover the pull request author and every commit author or
+co-author, bind acceptance to the applicable CLA version, retain an auditable
+record, and allow only documented exemptions. Until that check is installed,
+follow the manual process in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Release checks
 
@@ -43,7 +79,8 @@ During `mike deploy`, the build copies and dereferences the complete JupyterLite
 site instead, so a released version has no dependency on the current source
 tree and contains no symlinks.
 
-After the repository transfer, make the first website release manually:
+After the repository is public, make the first website release manually from a
+clean checkout:
 
 ```bash
 pixi run jlpm build
@@ -86,6 +123,18 @@ pixi run python -m build
 ```
 
 Inspect the artifacts in `dist/` before uploading them to PyPI. The frontend
-package is published separately to npm with public access. Registry publishing
-must remain a manual, authenticated action until the Correxit organization owns
-the corresponding projects and secrets.
+package is published separately to npm with public access.
+
+The existing PyPI and npm projects predate the repository move. Confirm their
+maintainers, require two-factor authentication, and replace their old project
+links with the metadata from the 2.0 release. Configure separate PyPI and npm
+trusted publishers for a narrowly scoped `release.yml` workflow in
+`correxit/correxit`. Use a protected GitHub environment with required
+reviewers and short-lived OIDC credentials rather than restoring the former
+personal-token semantic-release workflow.
+
+Build distributions in an ordinary read-only job. A separate publishing job
+should receive only the already-built artifacts and the minimum
+`id-token: write` permission required by the registries. Keep publishing
+manual until both trusted-publisher relationships and their environment
+protections have been tested.

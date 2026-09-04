@@ -7,6 +7,20 @@ export const documents = [
     source: 'README.md'
   },
   {
+    slug: 'contributing',
+    title: 'Contributing',
+    description: 'Development workflow, pull requests, and contribution terms.',
+    audience: 'Contributors',
+    source: 'CONTRIBUTING.md'
+  },
+  {
+    slug: 'reporting',
+    title: 'Security policy',
+    description: 'Supported versions and private vulnerability reporting.',
+    audience: 'Everyone',
+    source: 'SECURITY.md'
+  },
+  {
     slug: 'authoring',
     title: 'Authoring',
     description: 'Create, configure, test, and distribute a workbook.',

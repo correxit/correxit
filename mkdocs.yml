@@ -1,8 +1,8 @@
 site_name: Correxit
 site_description: A kernel-agnostic Jupyter extension for grading notebooks.
 site_url: https://correx.it/
-repo_name: QuantStack/correxit
-repo_url: https://github.com/QuantStack/correxit
+repo_name: correxit/correxit
+repo_url: https://github.com/correxit/correxit
 
 docs_dir: site/_docs
 site_dir: site/_output
@@ -38,13 +38,15 @@ theme:
 nav:
   - Home: index.md
   - Overview: overview.md
+  - Contributing: contributing.md
   - Authoring: authoring.md
   - Integrations:
       - Moodle: moodle.md
       - Plugins: plugins.md
   - Internals:
       - Design: design.md
-      - Security: security.md
+      - Security model: security.md
+      - Security policy: reporting.md
       - API:
           - Overview: api/index.md
           - Browser: api/browser/index.md

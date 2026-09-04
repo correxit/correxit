@@ -5,7 +5,7 @@
 ## Contribution terms
 
 - [ ] If this contribution was submitted before 00:00 UTC on 1 January 2028,
-      I have read and accept the [Correxit Contributor License Agreement](https://github.com/QuantStack/correxit/blob/main/CLA.md),
+      I have read and accept the [Correxit Contributor License Agreement](https://github.com/correxit/correxit/blob/main/CLA.md),
       including the additional proprietary-use license described there. I am
       authorized to grant its rights.
 
@@ -15,3 +15,6 @@ already covered by an applicable agreement granting the necessary rights. The
 CLA and this acceptance requirement do not apply to contributions submitted at
 or after 00:00 UTC on 1 January 2028; those contributions use
 `BSD-3-Clause`.
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the acceptance process when a
+pull request contains work by more than one contributor.

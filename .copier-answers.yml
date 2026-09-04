@@ -10,6 +10,5 @@ labextension_name: correxit
 project_short_description: correxit is a JupyterLab extension and the third-person singular
     perfect active indicative conjugation of the Latin verb corrigere
 python_name: correxit
-repository: https://github.com/notebook-link/correxit
+repository: https://github.com/correxit/correxit
 test: true
-
