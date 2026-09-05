@@ -61,8 +61,9 @@ that snapshot.
 Once `gh-pages` exists, configure GitHub Pages to publish its root, then set
 `correx.it` as the custom domain in the repository's Pages settings and enable
 HTTPS. GitHub will place `CNAME` at the branch root; `mike` preserves unrelated
-root files and supplies `.nojekyll`. Do this configuration before changing DNS
-or announcing the site.
+root files and supplies `.nojekyll`. Verify domain ownership in the organization's
+Pages settings using the DNS TXT challenge before pointing the domain at GitHub
+Pages. Keep that TXT record, and announce the site after DNS and HTTPS work.
 
 ## Workbook format policy
 

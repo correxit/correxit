@@ -59,7 +59,7 @@
         "build:node": "node scripts/build-node.cjs",
         "build:npm": "jlpm clean:lib && jlpm build:lib:prod && jlpm build:node",
         "build:lite": "jlpm build && jlpm build:lite:app && jlpm build:site",
-        "build:lite:app": "jlpm build:lite:brand && rimraf lite/_output/extensions/correxit && cd lite && jupyter lite build --output-dir _output --XeusAddon.mount_jupyterlite_content=True && jlpm link:lite",
+        "build:lite:app": "jlpm build:lite:brand && rimraf lite/_output/extensions/correxit lite/_output/files lite/_output/api/contents && cd lite && jupyter lite build --output-dir _output --XeusAddon.mount_jupyterlite_content=True && jlpm link:lite",
         "build:lite:brand": "jupyter-builder build lite/brand",
         "build:api": "typedoc",
         "build:site": "jlpm build:api && node site/prepare.mjs && NO_MKDOCS_2_WARNING=true mkdocs build --strict",
