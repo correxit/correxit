@@ -161,3 +161,16 @@ test('the demo opens Chinook in Jupyter Notebook', async () => {
   assert.equal(runtime['jupyter-config-data'].appUrl, './notebooks');
   assert.equal(runtime['jupyter-config-data'].baseUrl, './');
 });
+
+test('the demo excludes hidden local files', async () => {
+  const files = await descend(path.join(output, 'demo', 'files'));
+
+  files.forEach(file => {
+    const relative = path.relative(path.join(output, 'demo', 'files'), file);
+    assert.equal(
+      relative.split(path.sep).some(segment => segment.startsWith('.')),
+      false,
+      `hidden file leaked into demo: ${relative}`
+    );
+  });
+});

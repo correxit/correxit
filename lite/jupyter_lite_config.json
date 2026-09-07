@@ -2,6 +2,7 @@
   "LiteBuildConfig": {
     "base_url": "/demo/",
     "contents": ["files", "../examples", "../src/__tests__/fixtures"],
+    "extra_ignore_contents": ["(^|/)\\."],
     "federated_extensions": ["brand/labextension"]
   },
   "ServiceWorkerAddon": {
