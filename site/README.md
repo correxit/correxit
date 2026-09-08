@@ -8,10 +8,12 @@ The source for [correx.it](https://correx.it) is part of the Correxit repository
   reference in `_docs/`.
 - `hooks.py` links the existing JupyterLite build at `/demo/` during local
   development and copies it into each published version.
-- `mike` keeps released sites under permanent version paths and provides the
-  `latest` selector and redirect.
-- `_api/`, `_docs/`, `_output/`, and `lite/_output/` are generated and are not
-  checked in.
+- `mike` keeps numbered snapshots under permanent version paths and provides
+  the version selector. `/latest/` redirects to the newest stable website release.
+- `snapshot.py` assembles and tests the numbered snapshots and redirects for
+  GitHub Pages, preserving existing versions when publication is retried.
+- `_api/`, `_docs/`, `_output/`, `_pages/`, and `lite/_output/` are generated and
+  are not checked in on source branches.
 
 There is no website server or application framework. The released site is a
 self-contained static snapshot, including the JupyterLite demo.
@@ -34,5 +36,10 @@ landing page, guides, and API reference. Its demo remains linked to
 `lite/_output`, so extension watch builds are visible after a browser refresh.
 
 Published routes are versioned, for example `/2.0.0/authoring/` and
-`/2.0.0/demo/`. See [the release guide](../docs/release.md) for the deliberately
-manual publishing step.
+`/2.0.0/demo/`. The **Publish website** workflow deploys published stable GitHub
+releases and can also retry an existing release manually from GitHub. See
+[the release guide](../docs/release.md) for publication and retry instructions.
+
+To verify the complete versioned site locally after building, run
+`pixi run python site/snapshot.py`. It updates the local `gh-pages` branch and
+extracts the snapshots into `site/_pages/` without pushing or deploying.

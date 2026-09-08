@@ -1,3 +1,28 @@
+# 2.0.0
+
+Correxit 2.0 is the first open-source release under `AGPL-3.0-only`.
+
+### Compatibility
+
+- The frontend package and extension name is now `correxit`, replacing
+  `@quantstack/correxit`. Integrations must update package imports and any
+  hard-coded token or plugin identifiers that use the old prefix. The optional
+  Node assignment entrypoint is `correxit/node`.
+- Version 2.0 freezes the `cxtformat: 1` workbook contract. Missing format
+  discriminators, unsupported formats, and incomplete authenticated metadata
+  are rejected. Workbooks from the provisional 1.x period may need to be
+  recreated; do not assume they can be migrated by editing their metadata.
+
+### Documentation and distribution
+
+- Versioned documentation, API reference, and a self-contained JupyterLite demo
+  are published at `correx.it` for stable releases. Numbered website snapshots
+  remain fixed, and `latest` follows the newest stable version.
+- Public npm and PyPI packages are published from the artifacts of the tested
+  release commit through GitHub Actions trusted publishing.
+- The README includes a new screencast, and external contributions use CLA
+  Assistant to record acceptance of the Correxit Contributor License Agreement.
+
 # [1.29.0](https://github.com/correxit/correxit/compare/v1.28.0...v1.29.0) (2026-08-24)
 
 

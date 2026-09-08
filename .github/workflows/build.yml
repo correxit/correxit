@@ -1,14 +1,203 @@
-name: Release (disabled)
+name: Publish packages
 
 on:
-  workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
 
+concurrency:
+  group: package-release
+  cancel-in-progress: false
+
 jobs:
-  notice:
-    name: Publishing is disabled
-    runs-on: ubuntu-slim
+  prepare:
+    if: >-
+      github.repository == 'correxit/correxit' &&
+      !github.event.repository.private &&
+      !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
     steps:
-      - run: echo "Configure the Correxit organization and package registries before enabling releases."
+      - name: Require a published stable release
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::Choose a stable release tag such as v2.0.0.'
+            exit 1
+          fi
+          published=$(gh release view "$RELEASE_TAG" --json isDraft,isPrerelease \
+            --jq '(.isDraft == false) and (.isPrerelease == false)')
+          if [ "$published" != true ]; then
+            echo '::error::The selected release must be published and must not be a prerelease.'
+            exit 1
+          fi
+
+      - name: Checkout the release tag
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Verify the release version
+        id: version
+        run: |
+          version=$(jq -r .version package.json)
+          if [ "v$version" != "$RELEASE_TAG" ]; then
+            echo '::error::The release tag must match the version in package.json.'
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download the tested packages
+        run: |
+          commit=$(git rev-parse HEAD)
+          run=$(gh run list --workflow ci-workflow.yaml --branch main \
+            --commit "$commit" --event push --limit 1 \
+            --json databaseId,conclusion \
+            --jq '.[0] | select(.conclusion == "success") | .databaseId')
+          if [ -z "$run" ]; then
+            echo '::error::The release commit must have successful push-triggered CI on main.'
+            exit 1
+          fi
+          gh run download "$run" --name extension-artifacts --dir dist/python
+          gh run download "$run" --name npm-artifact --dir dist/npm
+
+      - name: Verify the package versions and contents
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import tarfile
+          import zipfile
+          from email.parser import BytesParser
+          from pathlib import Path
+
+          version = os.environ['VERSION']
+          wheel = Path(f'dist/python/correxit-{version}-py3-none-any.whl')
+          source = Path(f'dist/python/correxit-{version}.tar.gz')
+          npm = Path(f'dist/npm/correxit-{version}.tgz')
+          assert set(Path('dist/python').iterdir()) == {wheel, source}
+          assert set(Path('dist/npm').iterdir()) == {npm}
+          with zipfile.ZipFile(wheel) as archive:
+              metadata = BytesParser().parsebytes(archive.read(f'correxit-{version}.dist-info/METADATA'))
+              assert metadata['Name'] == 'correxit' and metadata['Version'] == version
+              extension = json.loads(archive.read(
+                  f'correxit-{version}.data/data/share/jupyter/labextensions/correxit/package.json'))
+              assert extension['name'] == 'correxit' and extension['version'] == version
+          with tarfile.open(source) as archive:
+              metadata = BytesParser().parsebytes(archive.extractfile(f'correxit-{version}/PKG-INFO').read())
+              assert metadata['Name'] == 'correxit' and metadata['Version'] == version
+          with tarfile.open(npm) as archive:
+              package = json.load(archive.extractfile('package/package.json'))
+              assert package['name'] == 'correxit' and package['version'] == version
+              for name in ['lib/index.js', 'lib/index.d.ts', 'lib/node.mjs', 'LICENSE']:
+                  assert archive.getmember(f'package/{name}').isfile()
+          print(f'Verified Python and npm artifacts for {version}')
+          PY
+
+      - name: Stage the Python packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-python
+          path: dist/python/*
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Stage the npm package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-npm
+          path: dist/npm/*
+          if-no-files-found: error
+          overwrite: true
+
+  pypi:
+    name: Publish to PyPI
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/correxit/${{ needs.prepare.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the tested Python packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-python
+          path: dist
+
+      - name: Publish with trusted publishing
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          skip-existing: true
+
+  npm:
+    name: Publish to npm
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/correxit/v/${{ needs.prepare.outputs.version }}
+    permissions:
+      id-token: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Download the tested npm package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-npm
+          path: dist
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+
+      - name: Check whether publication is needed
+        id: registry
+        run: |
+          node --input-type=module - <<'JS'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+
+          const { VERSION: version, GITHUB_OUTPUT: output } = process.env;
+          const response = await fetch('https://registry.npmjs.org/correxit');
+          if (!response.ok) throw new Error(`Registry lookup failed: ${response.status}`);
+          const registry = await response.json();
+          const published = registry.versions[version];
+          const integrity = 'sha512-' + createHash('sha512')
+            .update(readFileSync(`dist/correxit-${version}.tgz`)).digest('base64');
+          if (published && published.dist.integrity !== integrity)
+            throw new Error('This npm version already exists with different package contents.');
+          const latest = registry['dist-tags'].latest;
+          const compare = (a, b) => {
+            const left = a.split('.').map(Number);
+            const right = b.split('.').map(Number);
+            return left.map((value, index) => value - right[index]).find(value => value !== 0) ?? 0;
+          };
+          const stable = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+          if (!stable.test(latest)) throw new Error('The npm latest tag must point to a stable version.');
+          const tag = compare(version, latest) >= 0 ? 'latest' : `release-${version}`;
+          appendFileSync(output, `publish=${!published}\ntag=${tag}\n`);
+          console.log(published ? `Verified existing correxit@${version}` : `Publishing correxit@${version} with tag ${tag}`);
+          JS
+
+      - name: Publish with trusted publishing
+        if: steps.registry.outputs.publish == 'true'
+        env:
+          DIST_TAG: ${{ steps.registry.outputs.tag }}
+        run: npm publish "dist/correxit-$VERSION.tgz" --access public --provenance --ignore-scripts --tag "$DIST_TAG"

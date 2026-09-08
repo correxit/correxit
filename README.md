@@ -103,7 +103,7 @@ jupyter labextension list
 
 Correxit is open source under the
 [GNU Affero General Public License version 3 only](LICENSE)
-(`AGPL-3.0-only`). Version 2.0 will be its first open-source release.
+(`AGPL-3.0-only`). Version 2.0 marks its first open-source release.
 
 ### Scheduled transition to BSD 3-Clause
 
