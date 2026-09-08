@@ -57,13 +57,30 @@ jobs:
 
         pip install build
         python -m build
+
+        jlpm build:npm
+        npm pack --ignore-scripts --pack-destination dist
+        archive=$(mktemp -d)
+        tar -xzf "dist/correxit-$(node -p "require('./package.json').version").tgz" -C "$archive"
+        ln -s "$GITHUB_WORKSPACE/node_modules" "$archive/package/node_modules"
+        node "$archive/package/scripts/test-node.mjs"
+
         pip uninstall -y "correxit" jupyterlab
 
     - name: Upload extension packages
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: extension-artifacts
-        path: dist/correxit*
+        path: |
+          dist/correxit*.whl
+          dist/correxit*.tar.gz
+        if-no-files-found: error
+
+    - name: Upload npm package
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: npm-artifact
+        path: dist/correxit*.tgz
         if-no-files-found: error
 
   site:
@@ -91,10 +108,12 @@ jobs:
 
     - name: Verify the versioned website snapshot
       env:
-        MIKE_DOCS_VERSION: ci
+        NO_MKDOCS_2_WARNING: 'true'
+        GIT_COMMITTER_NAME: github-actions[bot]
+        GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
       run: |
-        NO_MKDOCS_2_WARNING=true pixi run mkdocs build --strict
-        pixi run jlpm test:site
+        pixi run python -m unittest discover -s site -p 'test_*.py'
+        pixi run python site/snapshot.py
 
   test_isolated:
     needs: build

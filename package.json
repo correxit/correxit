@@ -70,7 +70,7 @@
         "clean:labextension": "rimraf correxit/labextension correxit/_version.py",
         "clean:coverage": "rimraf coverage junit.xml",
         "clean:ui-tests": "rimraf ui-tests/test-results ui-tests/playwright-report ui-tests/screenshots ui-tests/demo.webm",
-        "clean:lite": "rimraf lite/_output lite/.jupyterlite.doit.db lite/brand/labextension site/_api site/_docs site/_output",
+        "clean:lite": "rimraf lite/_output lite/.jupyterlite.doit.db lite/brand/labextension site/_api site/_docs site/_output site/_pages",
         "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache && jlpm clean:coverage && jlpm clean:ui-tests && jlpm clean:lite",
         "eslint": "jlpm eslint:check --fix",
         "eslint:check": "eslint . lite/brand/*.js site/*.mjs --cache --ext .ts,.tsx",

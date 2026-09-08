@@ -1,0 +1,122 @@
+name: Publish website
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag to retry (for example v2.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: >-
+      github.repository == 'correxit/correxit' &&
+      !github.event.repository.private &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+       (github.event_name == 'release' && !github.event.release.prerelease))
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      NO_MKDOCS_2_WARNING: 'true'
+      GIT_COMMITTER_NAME: github-actions[bot]
+      GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Require a published stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::Choose a stable release tag such as v2.0.0.'
+            exit 1
+          fi
+          published=$(gh release view "$RELEASE_TAG" --json isDraft,isPrerelease \
+            --jq '(.isDraft == false) and (.isPrerelease == false)')
+          if [ "$published" != true ]; then
+            echo '::error::The selected release must be published and must not be a prerelease.'
+            exit 1
+          fi
+
+      - name: Checkout the release tag
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Require successful CI for the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          commit=$(git rev-parse HEAD)
+          conclusion=$(gh run list --workflow ci-workflow.yaml --branch main \
+            --commit "$commit" --event push --limit 1 \
+            --json conclusion --jq '.[0].conclusion')
+          if [ "$conclusion" != success ]; then
+            echo '::error::The release commit must have successful push-triggered CI on main.'
+            exit 1
+          fi
+
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          pixi-version: v0.59.0
+
+      - name: Install dependencies
+        run: pixi run jlpm
+
+      - name: Verify the release version
+        run: |
+          version=$(pixi run node -p "require('./package.json').version")
+          if [ "v$version" != "$RELEASE_TAG" ]; then
+            echo '::error::The release tag must match the version in package.json.'
+            exit 1
+          fi
+
+      - name: Build and test the website
+        run: |
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
+          export SOURCE_DATE_EPOCH
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" >> "$GITHUB_ENV"
+          pixi run jlpm build:lite
+          pixi run jlpm test:site
+
+      - name: Assemble and verify the versioned site
+        run: pixi run python site/snapshot.py
+
+      - name: Preserve the website snapshots
+        run: git push origin gh-pages
+
+      - name: Upload the Pages site
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: site/_pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+      - name: Deploy the website
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

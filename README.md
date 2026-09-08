@@ -46,7 +46,7 @@ Chinook database in SQLite and runs some queries and renders a Vega graph of the
 genres and media types tables. The user converts the notebook into a workbook
 and demonstrates the basic features of Correxit.
 
-https://github.com/user-attachments/assets/04c5218e-772d-4e94-afca-2af2e15864d1
+https://github.com/user-attachments/assets/638b0fde-0168-499b-8ff4-d0ef0a25f031
 
 ## Requirements
 
@@ -103,7 +103,7 @@ jupyter labextension list
 
 Correxit is open source under the
 [GNU Affero General Public License version 3 only](LICENSE)
-(`AGPL-3.0-only`). Version 2.0 will be its first open-source release.
+(`AGPL-3.0-only`). Version 2.0 marks its first open-source release.
 
 ### Scheduled transition to BSD 3-Clause
 

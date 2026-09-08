@@ -7,7 +7,7 @@ import { documents } from './documents.mjs';
 
 const site = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(site);
-const output = path.join(site, '_output');
+const output = process.env.CORREXIT_SITE_OUTPUT ?? path.join(site, '_output');
 
 const read = route => readFile(path.join(output, route, 'index.html'), 'utf8');
 

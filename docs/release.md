@@ -1,91 +1,62 @@
 # Making a Correxit release
 
-Publishing is deliberately disabled in GitHub Actions until the repository is
-public and its package registries and Pages settings have been configured. Pull
-requests still build and test the complete website without pushing it anywhere.
+Publishing a stable GitHub release publishes the npm and PyPI packages and the
+versioned website. Pull requests and pushes to `main` run CI without publishing.
 
-## Release checks
+## Release
 
-Run the checks from the repository root in the Pixi environment:
+1. Prepare a PR with the version in `package.json` and release notes in
+   [CHANGELOG](../CHANGELOG.md).
+2. Merge it and wait for CI on the merged commit in `main` to pass.
+3. Publish a stable GitHub release at that exact commit. Its tag must be `v`
+   followed by the package version, such as `v2.0.0`. Use the changelog entry as
+   the release notes.
+4. Check **Publish packages** and **Publish website**, then confirm the version
+   is available on npm, PyPI, and `correx.it`, including the demo.
 
-```bash
-pixi run jlpm
-pixi run jlpm lint:check
-pixi run jlpm test --runInBand
-pixi run jlpm build
-pixi run jlpm build:lite
-pixi run jlpm test:site
-```
-
-Run targeted Playwright tests from `ui-tests/` before the full suite when a
-change touches workbook lifecycle, Corrector, Reviewer, or propagation.
-
-## Versioned website
-
-`mike` publishes one self-contained static snapshot per package version to the
-`gh-pages` branch. A release therefore owns paths such as:
-
-```text
-/2.0.0/
-/2.0.0/authoring/
-/2.0.0/api/
-/2.0.0/demo/notebooks/?path=chinook.ipynb
-```
-
-`/latest/...` redirects to the corresponding page in the current release, and
-the domain root redirects to `/latest/`. Use an exact version URL when a link
-must remain fixed. The pre-release unversioned routes are not part of the public
-compatibility contract.
-
-The ordinary local build links `/demo/` to `lite/_output` for a fast watch loop.
-During `mike deploy`, the build copies and dereferences the complete JupyterLite
-site instead, so a released version has no dependency on the current source
-tree and contains no symlinks.
-
-After the repository is public, make the first website release manually:
+Use GitHub's release page or the CLI:
 
 ```bash
-pixi run jlpm build
-pixi run jlpm build:lite
-pixi run jlpm test:site
-pixi run mike deploy --push --update-aliases 2.0.0 latest
-pixi run mike set-default --push latest
+gh release create v2.0.0 --repo correxit/correxit \
+  --target TESTED_COMMIT_SHA --title 'Correxit 2.0.0' \
+  --notes-file /path/to/release-notes.md --latest
 ```
 
-Replace `2.0.0` with the exact package version. The first three commands are
-local checks; the final two are the only commands that publish. Deploying a new
-version leaves every earlier version intact. Treat exact versions as immutable
-once announced; explicitly deploying the same number again would replace only
-that snapshot.
+Replace the example version, commit SHA, and notes file as appropriate. Packages
+come from the successful CI run for that commit; the website builds from its
+release tag. Drafts and prereleases do not publish either.
 
-Once `gh-pages` exists, configure GitHub Pages to publish its root, then set
-`correx.it` as the custom domain in the repository's Pages settings and enable
-HTTPS. GitHub will place `CNAME` at the branch root; `mike` preserves unrelated
-root files and supplies `.nojekyll`. Verify domain ownership in the organization's
-Pages settings using the DNS TXT challenge before pointing the domain at GitHub
-Pages. Keep that TXT record, and announce the site after DNS and HTTPS work.
+## Retry a failed publication
 
-## Workbook format policy
+- **Packages:** fix the failure and select **Re-run failed jobs** on the original
+  **Publish packages** run. Retries require the retained CI artifacts.
+- **Website:** open **Publish website → Run workflow**, choose `main`, and enter
+  the published release tag.
 
-Correxit 1.x and `cxtformat: 1` are provisional until the first public Correxit
-2.0 release. Workbooks produced during this pre-release period are test
-artifacts and may require re-creation after upgrades. Correxit 2.0 freezes the
-format-1 contract.
+The packages and website publish independently. Retry the failed publication
+using the original tag; do not move the tag or recreate the release.
 
+## Versioning
+
+Numbered website snapshots, such as `/2.0.0/`, remain fixed. The domain root and
+`/latest/` lead to the newest stable website version. Backports and retries do
+not move `latest` backwards.
+
+Correxit 1.x treated `cxtformat: 1` as provisional. Workbooks produced during
+that period may require re-creation. Correxit 2.0 freezes the format-1 contract.
 Thereafter, incompatible persisted-format changes require a new `cxtformat`,
 while readers for supported earlier formats are retained. Package versions and
 workbook-format versions are independent. Changes to authenticated terms, such
 as the assignment MAC or issue digest surfaces, are persisted-format changes.
 
-## Packages
+## Local packaging
 
-The Python package is built with:
+To inspect package archives without publishing:
 
 ```bash
 pixi run python -m build
+pixi run jlpm build:npm
+pixi run npm pack --ignore-scripts --pack-destination dist
 ```
 
-Inspect the artifacts in `dist/` before uploading them to PyPI. The frontend
-package is published separately to npm with public access. Registry publishing
-must remain a manual, authenticated action until the Correxit organization owns
-the corresponding projects and secrets.
+Website development commands are in the [site README](../site/README.md).
