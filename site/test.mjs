@@ -118,6 +118,49 @@ test('mike owns the published version paths', async () => {
   assert.match(config, /canonical_version: latest/);
 });
 
+test(
+  'the published root serves the latest homepage directly',
+  {
+    skip: !process.env.MIKE_DOCS_VERSION
+  },
+  async () => {
+    const directory = path.dirname(output);
+    const versions = JSON.parse(
+      await readFile(path.join(directory, 'versions.json'), 'utf8')
+    );
+    const { version } = versions.find(({ aliases }) =>
+      aliases.includes('latest')
+    );
+    const page = await readFile(path.join(directory, 'index.html'), 'utf8');
+    assert.doesNotMatch(page, /http-equiv="refresh"/i);
+    assert.match(page, /rel="canonical" href="https:\/\/correx\.it\/"/);
+    assert.ok(page.includes(`href="${version}/authoring/"`));
+    assert.ok(
+      page.includes(`href="${version}/demo/notebooks/?path=chinook.ipynb"`)
+    );
+    const config = JSON.parse(
+      page.match(/<script id="__config"[^>]*>(.*?)<\/script>/)[1]
+    );
+    assert.equal(config.base, `${version}/`);
+    const references = [...page.matchAll(/(?:href|src)="([^"]+)"/g)]
+      .map(([, href]) => href)
+      .concat(config.search)
+      .filter(href => !/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(href));
+    await Promise.all(
+      references.map(href => {
+        const pathname = decodeURI(href.split(/[?#]/)[0]);
+        return access(
+          path.join(
+            directory,
+            pathname,
+            pathname.endsWith('/') ? 'index.html' : ''
+          )
+        );
+      })
+    );
+  }
+);
+
 test('the demo opens Chinook in Jupyter Notebook', async () => {
   const instructions = (
     await readFile(path.join(root, 'lite', 'files', 'README.md'), 'utf8')

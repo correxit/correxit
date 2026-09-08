@@ -200,4 +200,4 @@ jobs:
         if: steps.registry.outputs.publish == 'true'
         env:
           DIST_TAG: ${{ steps.registry.outputs.tag }}
-        run: npm publish "dist/correxit-$VERSION.tgz" --access public --provenance --ignore-scripts --tag "$DIST_TAG"
+        run: npm publish "./dist/correxit-$VERSION.tgz" --access public --provenance --ignore-scripts --tag "$DIST_TAG"
