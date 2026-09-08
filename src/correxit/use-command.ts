@@ -32,8 +32,7 @@ export function useCommand<T>(
   args?: ReadonlyPartialJSONObject
 ): [T[], boolean] {
   const [state, setState] = useState<State<T>>({ idle: true, list: [] });
-  // Object identity is deliberately ignored: serialized arguments define
-  // when a command stream restarts. See DEBT.md for the planned extraction.
+  // Serialized arguments rather than object identity define stream restarts.
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect((interrupted = false) => {
     (async (stream?: Promise<AsyncIterable<T> | Iterable<T>>) => {
