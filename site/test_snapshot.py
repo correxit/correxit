@@ -4,11 +4,12 @@ import json
 import os
 from pathlib import Path
 import re
-from shutil import copyfile
+from shutil import copyfile, copytree
 from subprocess import CalledProcessError, STDOUT, check_output
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from urllib.parse import urlsplit
 
 
 class Snapshots(unittest.TestCase):
@@ -25,26 +26,36 @@ class Snapshots(unittest.TestCase):
             "SOURCE_DATE_EPOCH": "1700000000",
             "NO_MKDOCS_2_WARNING": "true",
         }
-        for directory in ["site/_docs", "lite/_output"]:
+        for directory in ["site/_docs/assets", "site/_docs/demo", "lite/_output"]:
             (self.root / directory).mkdir(parents=True)
         for name in ["snapshot.py", "hooks.py"]:
             copyfile(Path(__file__).with_name(name), self.root / "site" / name)
+        copytree(Path(__file__).with_name("overrides"), self.root / "site/overrides")
+        copyfile(
+            Path(__file__).resolve().parent.parent / "style/brand/correxit-github-avatar.png",
+            self.root / "site/_docs/assets/correxit.png",
+        )
         self.write("package.json", '{"version": "1.0.0"}')
         self.write("site/_docs/index.md", "# Original\n")
         self.write("site/_docs/guide.md", "# Guide\n")
+        self.write("site/_docs/demo/index.html", "Demo placeholder\n")
         self.write("lite/_output/index.html", "Interactive demo\n")
         self.write(
             "site/test.mjs",
             "import { accessSync } from 'node:fs';\n"
-            "accessSync(process.env.CORREXIT_SITE_OUTPUT + '/index.html');\n",
+            "import test from 'node:test';\n"
+            "test('the published root exists', () => {\n"
+            "  accessSync(process.env.CORREXIT_SITE_OUTPUT + '/index.html');\n"
+            "});\n",
         )
         self.write(
             "mkdocs.yml",
             "site_name: Pages test\n"
+            "site_description: A test site\n"
             "site_url: https://example.invalid/\n"
             "docs_dir: site/_docs\n"
             "site_dir: site/_output\n"
-            "theme: {name: material}\n"
+            "theme: {name: material, custom_dir: site/overrides}\n"
             "hooks: [site/hooks.py]\n"
             "plugins:\n"
             "  - search\n"
@@ -62,8 +73,8 @@ class Snapshots(unittest.TestCase):
     def run_command(self, *args):
         return check_output(args, cwd=self.root, env=self.env, text=True, stderr=STDOUT)
 
-    def publish(self):
-        self.run_command(sys.executable, "site/snapshot.py")
+    def publish(self, *args):
+        self.run_command(sys.executable, "site/snapshot.py", *args)
 
     def assert_homepage(self, version, title):
         output = self.root / "site/_pages"
@@ -71,6 +82,7 @@ class Snapshots(unittest.TestCase):
         self.assertIn(title, page)
         self.assertNotIn('http-equiv="refresh"', page)
         self.assertIn('rel="canonical" href="https://example.invalid/"', page)
+        self.assertIn('property="og:url" content="https://example.invalid/"', page)
         self.assertIn(f'href="{version}/guide/"', page)
         config = json.loads(re.search(r'<script id="__config"[^>]*>(.*?)</script>', page)[1])
         self.assertEqual(config["base"], f"{version}/")
@@ -145,13 +157,51 @@ class Snapshots(unittest.TestCase):
         page = self.assert_homepage("1.0.0", "Café")
         self.assertIn("{{ value }}", page)
         self.assertIn("{% raw %}", page)
-        self.assertIn('href="1.0.0/demo/index.html"', page)
+        self.assertIn('href="1.0.0/demo/"', page)
         self.assertIn('href="#section"', page)
 
     def test_failed_validation_does_not_create_an_artifact(self):
         self.write("site/test.mjs", "throw new Error('Invalid site');\n")
         with self.assertRaises(CalledProcessError):
             self.publish()
+        self.assertFalse((self.root / "site/_pages").exists())
+
+    def test_homepage_refresh_preserves_releases_and_survives_retries(self):
+        self.publish()
+        snapshots = ["gh-pages:1.0.0", "gh-pages:latest", "gh-pages:versions.json"]
+        original = self.run_command("git", "rev-parse", *snapshots)
+        output = self.root / "site/_pages"
+        self.write("package.json", '{"version": "1.1.0"}')
+        self.write("site/_docs/index.md", '# Refreshed\n\n[Demo](demo/index.html)\n')
+        # A homepage refresh does not need a local demo build.
+        (self.root / "lite/_output/index.html").unlink()
+        self.run_command("mkdocs", "build", "--strict")
+        self.publish("--homepage")
+        page = self.assert_homepage("1.0.0", "Refreshed")
+        self.assertIn('href="1.0.0/demo/"', page)
+        image = re.search(r'property="og:image" content="([^"]+)"', page)[1]
+        self.assertTrue((output / urlsplit(image).path.lstrip("/")).is_file())
+        self.assertFalse((output / "1.1.0").exists())
+        self.assertEqual(self.run_command("git", "rev-parse", *snapshots), original)
+
+        previous = self.run_command("git", "rev-parse", "gh-pages")
+        self.publish("--homepage")
+        self.assertEqual(self.run_command("git", "rev-parse", "gh-pages"), previous)
+        self.write("package.json", '{"version": "1.0.0"}')
+        self.publish()
+        self.assertEqual(self.assert_homepage("1.0.0", "Refreshed"), page)
+
+        self.write("package.json", '{"version": "0.9.1"}')
+        self.publish()
+        self.assertEqual(self.assert_homepage("1.0.0", "Refreshed"), page)
+        self.write("package.json", '{"version": "1.1.0"}')
+        self.write("site/_docs/index.md", "# New release\n")
+        self.publish()
+        self.assert_homepage("1.1.0", "New release")
+
+    def test_homepage_refresh_requires_an_existing_release(self):
+        with self.assertRaises(CalledProcessError):
+            self.publish("--homepage")
         self.assertFalse((self.root / "site/_pages").exists())
 
 

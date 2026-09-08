@@ -1,6 +1,18 @@
 import os
 from pathlib import Path
 from shutil import copytree, rmtree
+from urllib.parse import urljoin
+
+from mkdocs.plugins import event_priority
+
+
+@event_priority(100)
+def on_config(config, **_kwargs):
+    # Mike's latest alias redirects HTML only; images need the numbered URL.
+    version = os.environ.get("MIKE_DOCS_VERSION", "")
+    config.extra["image"] = urljoin(
+        config.site_url, f"{version}/assets/correxit.png".lstrip("/")
+    )
 
 
 def _remove(demo):

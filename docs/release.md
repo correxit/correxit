@@ -43,6 +43,20 @@ serves the newest stable homepage directly, with links to its versioned guides
 and demo. `/latest/` redirects to that version. Backports and retries do not
 move the homepage or `latest` backwards.
 
+## Update the homepage without a release
+
+Merge the page changes to `main` and wait for CI to pass. Open **Publish website
+→ Run workflow**, select `main`, and leave `tag` empty.
+
+This publishes the current homepage, sharing metadata, and theme assets without
+publishing npm or PyPI packages or rebuilding JupyterLite. The homepage's guides,
+search, and demo continue to use the newest stable release. A stable website
+snapshot must already exist. Numbered snapshots and `/latest/` are unchanged.
+Retries and backports preserve the refreshed homepage; the next newer stable
+release replaces it with that release's homepage.
+
+## Workbook format
+
 Correxit 1.x treated `cxtformat: 1` as provisional. Workbooks produced during
 that period may require re-creation. Correxit 2.0 freezes the format-1 contract.
 Thereafter, incompatible persisted-format changes require a new `cxtformat`,

@@ -10,6 +10,7 @@ use_directory_urls: true
 
 theme:
   name: material
+  custom_dir: site/overrides
   logo: assets/correxit-dark.svg
   favicon: assets/correxit-light.svg
   font: false

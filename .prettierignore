@@ -12,3 +12,5 @@ site/_output
 site/_api
 site/_docs
 site/_pages
+# MkDocs overrides use Jinja template syntax.
+site/overrides
