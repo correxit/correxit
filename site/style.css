@@ -9,6 +9,15 @@
   --md-accent-fg-color: #b8dcff;
 }
 
+[data-md-color-scheme='slate'] .md-button {
+  --md-accent-bg-color: var(--md-default-bg-color);
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+[data-md-color-scheme='slate'] .md-button:not(.md-button--primary) {
+  --md-primary-fg-color: var(--md-typeset-a-color);
+}
+
 .md-grid {
   max-width: 64rem;
 }

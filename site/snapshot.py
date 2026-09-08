@@ -1,4 +1,4 @@
-"""Preserve release snapshots and point latest at the newest stable version."""
+"""Preserve release snapshots and serve the newest stable homepage at the root."""
 
 import json
 import os
@@ -6,7 +6,37 @@ from pathlib import Path
 import re
 from shutil import rmtree
 from subprocess import CalledProcessError, check_call, check_output
-from tempfile import TemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryFile
+from urllib.parse import urljoin
+
+
+def homepage(version):
+    page = check_output(["git", "show", f"gh-pages:{version}/index.html"], text=True)
+
+    def link(match):
+        attribute, value = match.groups()
+        if value == ".":
+            value = "/"
+        elif not re.match(r"(?:[a-z][a-z\d+.-]*:|/|#)", value, re.I):
+            value = urljoin(f"{version}/", value)
+        return f'{attribute}="{value}"'
+
+    page = re.sub(r'\b(href|src)="([^"]*)"', link, page)
+    page = re.sub(
+        r'(<link rel="canonical" href=")([^"]*)(")',
+        lambda match: match[1] + urljoin(match[2], "../") + match[3],
+        page,
+    )
+
+    def configuration(match):
+        config = json.loads(match[2])
+        config["base"] = f"{version}/"
+        config["search"] = urljoin(f"{version}/", config["search"])
+        return match[1] + json.dumps(config) + match[3]
+
+    return re.sub(
+        r'(<script id="__config"[^>]*>)(.*?)(</script>)', configuration, page
+    )
 
 
 def snapshot():
@@ -31,7 +61,11 @@ def snapshot():
         stable, key=lambda item: tuple(map(int, item.split("."))), default=version
     )
     check_call(["mike", "alias", "--update-aliases", latest, "latest"])
-    check_call(["mike", "set-default", "latest"])
+    with NamedTemporaryFile(mode="w", suffix=".html") as template:
+        # Render the stored page literally, including any Jinja syntax in its text.
+        template.write("{{ " + json.dumps(homepage(latest)) + " | safe }}")
+        template.flush()
+        check_call(["mike", "set-default", "latest", "--template", template.name])
 
     # Pages artifacts must contain real files, including the JupyterLite demo.
     tree = check_output(["git", "ls-tree", "-r", "gh-pages"], text=True)

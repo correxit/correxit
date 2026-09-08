@@ -1,3 +1,13 @@
+# 2.0.1
+
+### Bug fixes
+
+- Fix npm publishing from the release workflow.
+- Improve homepage button contrast in dark mode, including hover and keyboard
+  focus.
+- Serve the homepage directly at `correx.it/`, with links to the versioned
+  guides and demo.
+
 # 2.0.0
 
 Correxit 2.0 is the first open-source release under `AGPL-3.0-only`.

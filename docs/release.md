@@ -38,9 +38,10 @@ using the original tag; do not move the tag or recreate the release.
 
 ## Versioning
 
-Numbered website snapshots, such as `/2.0.0/`, remain fixed. The domain root and
-`/latest/` lead to the newest stable website version. Backports and retries do
-not move `latest` backwards.
+Numbered website snapshots, such as `/2.0.0/`, remain fixed. The domain root
+serves the newest stable homepage directly, with links to its versioned guides
+and demo. `/latest/` redirects to that version. Backports and retries do not
+move the homepage or `latest` backwards.
 
 Correxit 1.x treated `cxtformat: 1` as provisional. Workbooks produced during
 that period may require re-creation. Correxit 2.0 freezes the format-1 contract.

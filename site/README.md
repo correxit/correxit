@@ -10,8 +10,9 @@ The source for [correx.it](https://correx.it) is part of the Correxit repository
   development and copies it into each published version.
 - `mike` keeps numbered snapshots under permanent version paths and provides
   the version selector. `/latest/` redirects to the newest stable website release.
-- `snapshot.py` assembles and tests the numbered snapshots and redirects for
-  GitHub Pages, preserving existing versions when publication is retried.
+- `snapshot.py` serves the newest stable homepage directly at the domain root,
+  linking to its versioned guides and demo. It assembles and tests the GitHub
+  Pages site, preserving existing versions when publication is retried.
 - `_api/`, `_docs/`, `_output/`, `_pages/`, and `lite/_output/` are generated and
   are not checked in on source branches.
 
