@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Published stable release tag to retry (for example v2.0.0)
-        required: true
+        description: Leave empty to refresh the homepage from main, or enter a stable release tag to retry
+        required: false
         type: string
 
 permissions:
@@ -35,6 +35,7 @@ jobs:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - name: Require a published stable release
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -50,13 +51,13 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout the release tag
+      - name: Checkout website source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          ref: refs/tags/${{ env.RELEASE_TAG }}
+          ref: ${{ env.RELEASE_TAG && format('refs/tags/{0}', env.RELEASE_TAG) || github.sha }}
           fetch-depth: 0
 
-      - name: Require successful CI for the release commit
+      - name: Require successful CI for the source commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -65,7 +66,7 @@ jobs:
             --commit "$commit" --event push --limit 1 \
             --json conclusion --jq '.[0].conclusion')
           if [ "$conclusion" != success ]; then
-            echo '::error::The release commit must have successful push-triggered CI on main.'
+            echo '::error::The source commit must have successful push-triggered CI on main.'
             exit 1
           fi
 
@@ -78,6 +79,7 @@ jobs:
         run: pixi run jlpm
 
       - name: Verify the release version
+        if: env.RELEASE_TAG != ''
         run: |
           version=$(pixi run node -p "require('./package.json').version")
           if [ "v$version" != "$RELEASE_TAG" ]; then
@@ -90,11 +92,24 @@ jobs:
           SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
           export SOURCE_DATE_EPOCH
           echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" >> "$GITHUB_ENV"
-          pixi run jlpm build:lite
-          pixi run jlpm test:site
+          if [ -z "$RELEASE_TAG" ]; then
+            pixi run jlpm build:site
+          else
+            pixi run jlpm build:lite
+            pixi run jlpm test:site
+          fi
 
       - name: Assemble and verify the versioned site
-        run: pixi run python site/snapshot.py
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          # Retrying an old tag still uses the workflow's homepage preservation rules.
+          git show "$WORKFLOW_SHA:site/snapshot.py" > site/snapshot.py
+          if [ -z "$RELEASE_TAG" ]; then
+            pixi run python site/snapshot.py --homepage
+          else
+            pixi run python site/snapshot.py
+          fi
 
       - name: Preserve the website snapshots
         run: git push origin gh-pages

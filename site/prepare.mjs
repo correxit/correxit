@@ -131,6 +131,10 @@ await cp(
   path.join(source, 'assets', 'stylesheets', 'correxit.css')
 );
 await cp(path.join(site, 'index.md'), path.join(source, 'index.md'));
+await cp(
+  path.join(root, 'style', 'brand', 'correxit-github-avatar.png'),
+  path.join(source, 'assets', 'correxit.png')
+);
 await mkdir(path.join(source, 'demo', 'notebooks'), { recursive: true });
 await writeFile(
   path.join(source, 'demo', 'notebooks', 'index.html'),

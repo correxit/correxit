@@ -11,6 +11,13 @@ const output = process.env.CORREXIT_SITE_OUTPUT ?? path.join(site, '_output');
 
 const read = route => readFile(path.join(output, route, 'index.html'), 'utf8');
 
+const metadata = page =>
+  Object.fromEntries(
+    [
+      ...page.matchAll(/<meta (?:property|name)="([^"]+)" content="([^"]*)"/g)
+    ].map(([, name, content]) => [name, content])
+  );
+
 const descend = async directory =>
   (
     await Promise.all(
@@ -92,6 +99,26 @@ test('canonical guides are rendered at short routes', async () => {
   assert.match(design, /Pull over push/);
 });
 
+test('sharing metadata survives the site build', async () => {
+  const directory = process.env.MIKE_DOCS_VERSION
+    ? path.dirname(output)
+    : output;
+  await Promise.all(
+    ['', 'authoring'].map(async route => {
+      const page = await read(route);
+      const meta = metadata(page);
+      ['og:title', 'og:description', 'twitter:card', 'twitter:image'].forEach(
+        name => assert.ok(meta[name], `Missing ${name} on /${route}`)
+      );
+      assert.equal(
+        meta['og:url'],
+        page.match(/rel="canonical" href="([^"]+)"/)[1]
+      );
+      await access(path.join(directory, new URL(meta['og:image']).pathname));
+    })
+  );
+});
+
 test('the public API reference is generated', async () => {
   const [overview, browser, node, rubric] = await Promise.all([
     read('api'),
@@ -134,6 +161,12 @@ test(
     const page = await readFile(path.join(directory, 'index.html'), 'utf8');
     assert.doesNotMatch(page, /http-equiv="refresh"/i);
     assert.match(page, /rel="canonical" href="https:\/\/correx\.it\/"/);
+    const meta = metadata(page);
+    // Historical snapshots may predate sharing metadata; a refresh must add it.
+    if (meta['og:url'] || process.env.CORREXIT_HOMEPAGE) {
+      assert.equal(meta['og:url'], 'https://correx.it/');
+      await access(path.join(directory, new URL(meta['og:image']).pathname));
+    }
     assert.ok(page.includes(`href="${version}/authoring/"`));
     assert.ok(
       page.includes(`href="${version}/demo/notebooks/?path=chinook.ipynb"`)
