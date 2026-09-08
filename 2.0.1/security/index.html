@@ -1,0 +1,2009 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A kernel-agnostic Jupyter extension for grading notebooks.">
+      
+      
+      
+        <link rel="canonical" href="https://correx.it/latest/security/">
+      
+      
+        <link rel="prev" href="../design/">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/correxit-light.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Security - Correxit</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/correxit.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#correxit-security-model" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Correxit" class="md-header__button md-logo" aria-label="Correxit" data-md-component="logo">
+      
+  <img src="../assets/correxit-dark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Correxit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Security
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Use dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Use dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Use light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Use light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/correxit/correxit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    correxit/correxit
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Correxit" class="md-nav__button md-logo" aria-label="Correxit" data-md-component="logo">
+      
+  <img src="../assets/correxit-dark.svg" alt="logo">
+
+    </a>
+    Correxit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/correxit/correxit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    correxit/correxit
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../moodle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moodle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internals
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Internals
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#threat-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threat Profile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#settings-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings Secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integrity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integrity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rubric-mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rubric MAC
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submission-time-and-late-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submission Time and Late Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blank-slate-authenticity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blank-Slate Authenticity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seal-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seal Integrity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transport-integrity-plugin-responsibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transport Integrity (Plugin Responsibility)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Encryption
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Encryption">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#symmetric-aes-256-via-openpgp-password-based" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Symmetric (AES-256 via openpgp, password-based)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asymmetric-pgp-curve25519" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asymmetric (PGP, Curve25519)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sealed-submissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sealed Submissions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sealed Submissions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#payload-binding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Payload Binding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-grading-plaintext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Grading Plaintext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pgp-nondeterminism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PGP Nondeterminism
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lifecycle_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lifecycle
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lifecycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#assignment-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignment Fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#certification-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Certification Sequence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#serialization-invariant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization Invariant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Representation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assignee-key-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignee Key Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/browser/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/browser/namespaces/assignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assignment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/browser/namespaces/correxit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correxit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/browser/namespaces/rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rubric
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/browser/namespaces/workbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#threat-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threat Profile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#settings-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings Secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integrity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integrity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rubric-mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rubric MAC
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submission-time-and-late-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submission Time and Late Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blank-slate-authenticity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blank-Slate Authenticity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seal-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seal Integrity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transport-integrity-plugin-responsibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transport Integrity (Plugin Responsibility)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Encryption
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Encryption">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#symmetric-aes-256-via-openpgp-password-based" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Symmetric (AES-256 via openpgp, password-based)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asymmetric-pgp-curve25519" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asymmetric (PGP, Curve25519)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sealed-submissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sealed Submissions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sealed Submissions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#payload-binding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Payload Binding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-grading-plaintext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Grading Plaintext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pgp-nondeterminism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PGP Nondeterminism
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lifecycle_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lifecycle
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lifecycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#assignment-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignment Fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#certification-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Certification Sequence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#serialization-invariant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization Invariant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Representation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assignee-key-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignee Key Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="correxit-security-model">Correxit Security Model<a class="headerlink" href="#correxit-security-model" title="Permanent link">&para;</a></h1>
+<p>Correxit is a serverless, frontend-only JupyterLab extension. All logic runs
+in the browser. There is no backend authority or trusted third party.
+Cryptographic primitives use <code>window.crypto</code> and <code>openpgp.js</code>.</p>
+<h2 id="threat-profile">Threat Profile<a class="headerlink" href="#threat-profile" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Student reads the reference cells:
+  secret reference encryption (<code>openpgp</code>, AES-256).</li>
+<li>Student reads answerable payload:
+  answer payloads are SHA-256 digests.</li>
+<li>Student reads the roster:
+  roster encryption (<code>openpgp</code>, AES-256).</li>
+<li>Student alters authored assignment state:
+  assignment MAC (keyed SHA-256).</li>
+<li>Student edits cells after submission:
+  workbook locking and freezing.</li>
+<li>Peer reads answers from file:
+  sealed submissions to the author key.</li>
+<li>Student tampers after submit:
+  seal hash plus transport integrity.</li>
+<li>Student copies peer's sealed blobs:
+  assignee and cell id are bound into the encrypted payload.</li>
+<li>Student starts from a forged blank slate:
+  <code>issue</code> digest plus <code>issuer</code> PGP signature.</li>
+</ul>
+<p><strong>Out of scope:</strong> malicious authors, browser memory extraction,
+compromised JupyterLab servers, and preventing cross-student file access
+itself. Those are trust, host, or LMS access-control problems, not
+workbook-format problems. If a peer does obtain another student's file,
+Correxit still aims to protect the contents it actually encrypts or seals:
+secret references, the roster, and sealed submission sources.</p>
+<h2 id="key-management">Key Management<a class="headerlink" href="#key-management" title="Permanent link">&para;</a></h2>
+<p>Plaintext keys are <strong>never written to notebook metadata, settings JSON, or
+assignment files</strong>. They enter via user input or a configured <code>Unlocker</code>.
+<code>Rubric.Unlocked</code> carries the PBKDF2 key; <code>Rubric.Locked</code> has <code>key: null</code>.
+Notebook metadata stores only locked rubrics.</p>
+<p>The shipped secrets-manager connector is in-memory. Deployments may configure
+a different secrets connector or <code>Unlocker</code>; that is an intentional key custody
+choice made by the deployment, not a hidden Correxit write path.</p>
+<p>The author's PGP private key is stored in
+<code>assignment.keys.private.author</code>, encrypted with the same
+PBKDF2-derived symmetric key that encrypts the roster. <code>unlock</code>
+recovers it into local scope, uses it, and discards it before
+returning.</p>
+<h3 id="settings-secrets">Settings Secrets<a class="headerlink" href="#settings-secrets" title="Permanent link">&para;</a></h3>
+<p>Provider-dispatched plugins may receive API tokens via the JupyterLab settings
+editor. <code>dispatcher.ts</code> registers a <code>compose</code> transform that intercepts token
+values, moves them to <code>SecretsManager</code>, blanks them from persisted JSON, and
+re-injects them into composite settings on later loads.</p>
+<h2 id="integrity">Integrity<a class="headerlink" href="#integrity" title="Permanent link">&para;</a></h2>
+<h3 id="rubric-mac">Rubric MAC<a class="headerlink" href="#rubric-mac" title="Permanent link">&para;</a></h3>
+<p>Authenticates the mutable author-controlled grading state:
+<code>rubric.cxtformat</code>, <code>rubric.id</code>, rubric <code>cells</code>, rubric <code>references</code>, assignment
+<code>assignee</code>, <code>expiration</code>, <code>id</code>, <code>issue</code>, <code>issuer</code>, <code>keys</code>
+(author components only), <code>name</code>, <code>overdue</code>, <code>penalty</code>,
+<code>resources</code>, <code>report</code> (interventions + scores, sorted), and
+<code>roster</code>.</p>
+<p>The <code>Rubric.terms</code> function extracts <code>Keys.author(keys)</code> to include only
+<code>{ private, public }</code> for the author. Student key fields
+(<code>keys.private.assignee</code>, <code>keys.public.assignee</code>) are absent from
+<code>Rubric.Terms</code>, so they do not affect the HMAC. A student setting
+their own keypair at submit time does not invalidate the MAC.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>mac = HMAC-SHA-256(JSON.stringify(Rubric.terms(rubric)), key)
+</code></pre></div>
+<p>Any modification to authenticated fields invalidates the MAC.</p>
+<p>This is different from <code>Workbook.Identifier</code>. <code>Identifier</code> is a small routing
+key. The MAC proves that the broader authored assignment state still matches
+the secret key held by the author side of Correxit.</p>
+<p><strong>Authenticated:</strong> <code>rubric.cxtformat</code>, <code>rubric.id</code>, <code>cells</code>, <code>references</code>,
+<code>assignee</code>, <code>expiration</code>, <code>id</code>, <code>issue</code>, <code>issuer</code>, <code>keys</code> (author only), <code>name</code>,
+<code>overdue</code>, <code>penalty</code>, <code>resources</code>, <code>report</code>, <code>roster</code>.</p>
+<p><strong>Not authenticated:</strong> <code>certification</code>, <code>collected</code>, <code>distribution</code>, <code>seal</code>,
+<code>submission</code>, <code>submitted</code>. These change after signing or are set by the
+student (who does not have the symmetric key).</p>
+<h3 id="submission-time-and-late-policy">Submission Time and Late Policy<a class="headerlink" href="#submission-time-and-late-policy" title="Permanent link">&para;</a></h3>
+<p>Correxit can record two different kinds of submission evidence:</p>
+<ul>
+<li><code>submission</code>: a local timestamp written into the workbook when the student
+  clicks submit</li>
+<li><code>submitted</code>: an optional external receipt returned by a <code>Submitter</code> plugin</li>
+</ul>
+<p>Only the second can come from an authority outside the document.</p>
+<p>The local <code>submission</code> field is intentionally <strong>not authenticated</strong>. In a
+frontend-only system there is no trusted Correxit clock, and there is no
+backend authority that can witness when the student clicked submit. This means
+the local timestamp is useful workflow state, but not cryptographic proof of
+when delivery happened.</p>
+<p>That distinction matters for overdue handling:</p>
+<ul>
+<li>In backendless workflows, Correxit may still apply a local overdue policy to
+  the document being graded. This is a convenience policy for manual exchange
+  workflows such as git, email, or shared storage. Corrector may also choose
+  to accept only workbooks with a non-null local <code>submission</code> timestamp.</li>
+<li>In backend-backed workflows, the upstream system's deadline rules and receipt
+  should be treated as authoritative. Correxit should not be described as the
+  authority on timeliness in that mode.</li>
+</ul>
+<p>Put differently: Correxit can protect workbook contents and preserve local
+submission state, but it cannot by itself prove that a submission was on time.</p>
+<h3 id="blank-slate-authenticity">Blank-Slate Authenticity<a class="headerlink" href="#blank-slate-authenticity" title="Permanent link">&para;</a></h3>
+<p>Each propagated workbook carries two additional assignment fields:</p>
+<ul>
+<li><code>issue</code>: a deterministic digest of the issued blank-slate state</li>
+<li><code>issuer</code>: a cleartext PGP signature over that digest made with the
+  author key</li>
+</ul>
+<p>These fields stay stable after later author-side edits. They answer a
+different question from the MAC: whether the student started from the authentic
+issued workbook.</p>
+<h3 id="seal-integrity">Seal Integrity<a class="headerlink" href="#seal-integrity" title="Permanent link">&para;</a></h3>
+<p>Sealed submissions use a separate integrity mechanism. At submit time, the
+SHA-256 hash of all ciphertexts, sorted by cell id and joined with newline, is
+stored as <code>assignment.seal</code>. At unlock time, <code>Workbook.unlock</code> recomputes the
+hash from the current ciphertexts. A mismatch fails the workbook.</p>
+<p>The seal hash is <strong>not signed</strong>. It cannot be: at submit time the workbook is
+locked and the HMAC key is absent. The hash detects accidental corruption and
+casual tampering. It does not stop a sophisticated student from re-encrypting
+cells with the cleartext public key, recomputing the hash, and updating
+<code>assignment.seal</code>. Strong post-submission integrity against deliberate file
+modification depends on the Submitter plugin delivering an independent copy to
+the LMS at submit time.</p>
+<h3 id="transport-integrity-plugin-responsibility">Transport Integrity (Plugin Responsibility)<a class="headerlink" href="#transport-integrity-plugin-responsibility" title="Permanent link">&para;</a></h3>
+<p>The distributor does not return a receipt. Correxit records only the local
+<code>assignment.distribution</code> timestamp after a successful delivery and save.
+Blank-slate authenticity comes from <code>issue</code> and <code>issuer</code>, not from
+distribution. If an LMS needs a delivery receipt, that record belongs to the
+external system.</p>
+<h2 id="encryption">Encryption<a class="headerlink" href="#encryption" title="Permanent link">&para;</a></h2>
+<h3 id="symmetric-aes-256-via-openpgp-password-based">Symmetric (AES-256 via openpgp, password-based)<a class="headerlink" href="#symmetric-aes-256-via-openpgp-password-based" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Reference cells:</strong> <code>comparable</code> and <code>correctable</code> cells marked
+  <code>secret: true</code> have their reference cells encrypted with the
+  assignment key on lock. Students cannot read secret reference
+  answers without the key. Cells marked <code>secret: false</code> leave
+  reference cells visible.</li>
+<li><strong>Roster:</strong> Encrypted with the assignment key on lock. Students
+  cannot enumerate the roster.</li>
+<li><strong>Answerable cells:</strong> Store a SHA-256 digest of the expected
+  output, not the output itself. One-way.</li>
+<li><strong>Author PGP private key:</strong> Encrypted with the PBKDF2 key at
+  authoring time. Stored in <code>assignment.keys.private.author</code>.</li>
+<li><strong>Student PGP private key:</strong> Encrypted with the student's own
+  PBKDF2 key (derived from their passphrase). Stored in
+  <code>assignment.keys.private.assignee</code>. Null for fire-and-forget
+  submissions.</li>
+</ul>
+<h3 id="asymmetric-pgp-curve25519">Asymmetric (PGP, Curve25519)<a class="headerlink" href="#asymmetric-pgp-curve25519" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Sealed submissions:</strong> At submit time, each rubric cell's source
+  is encrypted as <code>JSON.stringify({ assignee, id, source, type })</code>
+  using <code>security.seal</code> with the author's PGP public key (and
+  optionally the student's). The cell is converted to <code>raw</code> type
+  with <code>editable: false</code> and <code>source_hidden: true</code>.</li>
+</ul>
+<p>At grading time, <code>Workbook.unlock</code> decrypts the author's PGP
+  private key, verifies the seal hash, and unseals each cell. Payload binding
+  prevents cross-student replay (<code>assignee</code>) and cell rearrangement (<code>id</code>).</p>
+<h2 id="sealed-submissions">Sealed Submissions<a class="headerlink" href="#sealed-submissions" title="Permanent link">&para;</a></h2>
+<h3 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Permanent link">&para;</a></h3>
+<ol>
+<li>
+<p><strong>Authoring</strong> (<code>Workbook.convert</code>): <code>security.keypair()</code> generates
+   a Curve25519 PGP keypair. The public key is stored in cleartext.
+   The private key is encrypted with the PBKDF2 key before storage.</p>
+</li>
+<li>
+<p><strong>Propagation</strong> (<code>propagator.ts</code>): No changes. Keys travel in
+   assignment metadata, copied to each student notebook. The <code>seal</code>
+   and student key fields start as null.</p>
+</li>
+<li>
+<p><strong>Submit, fire-and-forget</strong> (<code>Workbook.submit</code>): Each rubric cell
+   is sealed to <code>[keys.public.author]</code>. Cells are sorted by id.
+   The seal hash is computed and stored. The workbook is frozen.</p>
+</li>
+<li>
+<p><strong>Submit, with passphrase</strong> (<code>commands.ts: submit</code>): Student
+   generates their own keypair. Their private key is encrypted
+   with their PBKDF2 key. Cells are sealed to both
+   <code>[keys.public.author, keys.public.assignee]</code>.</p>
+</li>
+<li>
+<p><strong>Revise</strong> (<code>commands.ts: revise</code>, <code>Workbook.revise</code>): Student
+   enters a passphrase, derives a key, decrypts their PGP private key,
+   unseals all cells, clears <code>seal</code>, <code>submission</code>, <code>submitted</code>, and
+   student key fields, then defrosts the notebook.</p>
+</li>
+<li>
+<p><strong>Grading</strong> (<code>Workbook.unlock</code>): Validates metadata first so a tampered
+   workbook never gets plaintext written. If <code>assignment.seal</code> is non-null, it
+   decrypts the author PGP private key in local scope, verifies the seal hash
+   when all rubric cells are present, unseals each cell, and clears <code>seal</code>
+   because the cells are now plaintext. Finally, it decrypts reference cells.</p>
+</li>
+</ol>
+<p>If rubric cells are missing from a sealed notebook, headless unlock and revise
+hard-fail. In a live headed notebook, Correxit warns and unseals the cells that
+remain so the secret holder can repair the file. That repair path is not seal
+authentication and must not be used as grading or collection authority.
+<code>Workbook.recover</code> remains the explicit forensic escape hatch for damaged
+workbooks.</p>
+<h3 id="payload-binding">Payload Binding<a class="headerlink" href="#payload-binding" title="Permanent link">&para;</a></h3>
+<p>Each sealed cell payload is <code>{ assignee, id, source, type }</code>. At unseal time:</p>
+<ul>
+<li><code>assignee</code> must match <code>assignment.assignee</code>. Prevents Student B
+  from copying Student A's ciphertexts.</li>
+<li><code>id</code> must match the cell id in the notebook. Prevents cell
+  rearrangement after submission.</li>
+<li><code>type</code> restores the original cell type (e.g. <code>code</code>, <code>markdown</code>)
+  from <code>raw</code>.</li>
+</ul>
+<p>Cross-assignment replay is not a concern: each rubric gets a fresh random PGP
+keypair at authoring time, so ciphertext from one assignment cannot be
+decrypted by another assignment's key.</p>
+<h3 id="post-grading-plaintext">Post-Grading Plaintext<a class="headerlink" href="#post-grading-plaintext" title="Permanent link">&para;</a></h3>
+<p>Graded notebooks are saved with student answers decrypted. The seal protects
+the submission-to-grading corridor. After certification, the notebook is a
+feedback receipt, so students need plaintext to review scores and outputs.
+Re-encrypting after grading would lock fire-and-forget students out of their
+own feedback for no security gain.</p>
+<h3 id="pgp-nondeterminism">PGP Nondeterminism<a class="headerlink" href="#pgp-nondeterminism" title="Permanent link">&para;</a></h3>
+<p>PGP encryption uses random session keys. Encrypting the same
+plaintext twice produces different ciphertext. The seal hash can
+only be verified by hashing the existing ciphertexts, never by
+re-encrypting and comparing.</p>
+<h2 id="lifecycle_1">Lifecycle<a class="headerlink" href="#lifecycle_1" title="Permanent link">&para;</a></h2>
+<h3 id="assignment-fields">Assignment Fields<a class="headerlink" href="#assignment-fields" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>assignee</code>: <code>string</code>, signed, student identifier.</li>
+<li><code>roster</code>: <code>string[]</code>, signed, encrypted on lock.</li>
+<li><code>expiration</code>: <code>number | null</code>, signed, deadline.</li>
+<li><code>id</code>: <code>string | null</code>, signed, external assignment id.</li>
+<li><code>keys</code>: <code>Keys</code>, partially signed. Author keys are MACed, student keys
+  are not.</li>
+<li><code>name</code>: <code>string</code>, signed, assignment display name.</li>
+<li><code>overdue</code>: <code>'accept' | 'dock' | 'reject' | null</code>, signed, local
+  backendless overdue policy.</li>
+<li><code>penalty</code>: <code>number | null</code>, signed, percentage deduction used by the
+  local <code>dock</code> policy.</li>
+<li><code>report</code>: <code>Report</code>, signed, scores and interventions.</li>
+<li><code>issue</code>: <code>string</code>, signed, deterministic blank-slate digest.</li>
+<li><code>issuer</code>: <code>string</code>, signed, author PGP signature over <code>issue</code>.</li>
+<li><code>seal</code>: <code>string | null</code>, unsigned, SHA-256 of concatenated
+  ciphertexts.</li>
+<li><code>mac</code>: <code>string</code>, mutable rubric authenticity MAC.</li>
+<li><code>certification</code>: <code>number | null</code>, unsigned, final grade timestamp.</li>
+<li><code>submission</code>: <code>number | null</code>, unsigned, student submission
+  timestamp written into the workbook.</li>
+<li><code>submitted</code>: <code>string | null</code>, unsigned, external submission receipt from a
+  submitter authority.</li>
+<li><code>distribution</code>: <code>number | null</code>, unsigned, local distribution
+  timestamp.</li>
+<li><code>collected</code>: <code>string | null</code>, unsigned, external collection receipt.</li>
+</ul>
+<h3 id="certification-sequence">Certification Sequence<a class="headerlink" href="#certification-sequence" title="Permanent link">&para;</a></h3>
+<ol>
+<li><code>correct()</code> - execute cells, compute scores, sign report
+   if all cells resolve</li>
+<li><code>certify()</code> - write certification timestamp</li>
+<li><code>lock()</code> - encrypt reference cells and roster, erase key</li>
+<li><code>freeze()</code> - set cells to non-editable</li>
+</ol>
+<p>A workbook cannot be collected without a non-null <code>certification</code>.
+Corrector may display locked certified metadata while scanning, but it does not
+trust that metadata for grade skipping or collection until the workbook has
+been unlocked and authenticated with the rubric key.</p>
+<h3 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Rubric.validate(rubric)</code> - structural and authenticity checks:
+  assignee must appear in roster, MAC must be valid if assignee or
+  roster exists, issue and issuer must appear together and verify,
+  author keys must be present, sealed assignments must have an author
+  public key, assignee private key requires a corresponding public key.</li>
+</ul>
+<h2 id="serialization-invariant">Serialization Invariant<a class="headerlink" href="#serialization-invariant" title="Permanent link">&para;</a></h2>
+<p>The required <code>cxtformat</code> discriminator identifies the persisted Correxit
+metadata format. It is authenticated by both the assignment issue digest and
+the rubric MAC. Missing and unknown formats are rejected before their contents
+are interpreted.</p>
+<p>All optional fields use <code>Type | null</code>, never <code>Type?</code>. This keeps
+<code>JSON.stringify</code> deterministic: <code>null</code> is serialized, <code>undefined</code> is omitted.
+Since MACs hash stringified JSON, field presence must stay stable.</p>
+<h2 id="key-representation">Key Representation<a class="headerlink" href="#key-representation" title="Permanent link">&para;</a></h2>
+<p>The PBKDF2-derived key is a 256-bit value stored as a 64-character lowercase
+hex string. <code>hmac</code> decodes this to 32 raw bytes before importing it as HMAC
+key material. The same hex string is used as-is for the openpgp symmetric
+password.</p>
+<h2 id="assignee-key-lifecycle">Assignee Key Lifecycle<a class="headerlink" href="#assignee-key-lifecycle" title="Permanent link">&para;</a></h2>
+<p>Assignee key fields start as null from propagation and remain null unless the
+student chooses "Set passphrase" at submit time. <code>Rubric.unseal()</code> clears them
+back to null on revise. Fire-and-forget submissions therefore never offer a
+revise option.</p>
+<p><code>Rubric.assign()</code> preserves keys when reassigning, but it only operates on
+unlocked rubrics, where assignee key fields are always null. Stale student
+keys therefore cannot leak across assignments.</p>
+<h2 id="known-limitations">Known Limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Client-side only.</strong> A technically sophisticated student could
+   modify extension code in-browser to bypass locking or encryption.
+   The cryptographic mechanisms detect tampering after the fact.</p>
+</li>
+<li>
+<p><strong>No separation of duties.</strong> The author holds the key and
+   can perform any operation. There is no independent audit role.</p>
+</li>
+<li>
+<p><strong>Seal is unsigned.</strong> The seal hash is SHA-256, not HMAC. A
+   student with file access and the cleartext public key could
+   forge new ciphertexts and a matching hash. The seal detects
+   corruption, not deliberate forgery. See Seal Integrity.</p>
+</li>
+<li>
+<p><strong>Grading executes student code.</strong> Batch grading runs submitted notebooks in
+   Jupyter kernels. Use an isolated grading Jupyter environment for adversarial
+   submissions.</p>
+</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../design/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Design">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Design
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../api/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Overview
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Correxit
+    </div>
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.top"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
