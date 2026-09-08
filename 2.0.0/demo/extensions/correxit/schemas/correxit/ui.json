@@ -1,0 +1,77 @@
+{
+  "jupyter.lab.shortcuts": [],
+  "title": "Correxit UI",
+  "description": "Correxit notebook annotations, sidebar, and toolbar buttons",
+  "type": "object",
+  "properties": {
+    "annotate": {
+      "title": "Annotate Correxit workbooks",
+      "description": "Whether to show workbook annotations in the notebook UI",
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "jupyter.lab.toolbars": {
+    "Cell": [
+      {
+        "name": "correxit-configure-answerable",
+        "command": "correxit:configure",
+        "args": { "correxit:cell-toolbar": true, "is": "answerable" },
+        "label": ""
+      },
+      {
+        "name": "correxit-configure-comparable",
+        "command": "correxit:configure",
+        "args": { "correxit:cell-toolbar": true, "is": "comparable" },
+        "label": ""
+      },
+      {
+        "name": "correxit-configure-correctable",
+        "command": "correxit:configure",
+        "args": { "correxit:cell-toolbar": true, "is": "correctable" },
+        "label": ""
+      },
+      {
+        "name": "correxit-configure-reviewable",
+        "command": "correxit:configure",
+        "args": { "correxit:cell-toolbar": true, "is": "reviewable" },
+        "label": ""
+      },
+      {
+        "name": "correxit-correct",
+        "command": "correxit:correct",
+        "args": { "correxit:cell-toolbar": true },
+        "label": ""
+      },
+      {
+        "name": "correxit-share",
+        "command": "correxit:share",
+        "args": { "correxit:cell-toolbar": true },
+        "label": ""
+      }
+    ],
+    "Notebook": [
+      {
+        "name": "correxit-convert",
+        "command": "correxit:convert",
+        "label": ""
+      },
+      {
+        "name": "correxit-lock",
+        "command": "correxit:lock",
+        "label": ""
+      },
+      {
+        "name": "correxit-unlock",
+        "command": "correxit:unlock",
+        "label": ""
+      },
+      {
+        "name": "correxit-correct",
+        "command": "correxit:correct",
+        "label": ""
+      }
+    ]
+  },
+  "additionalProperties": false
+}

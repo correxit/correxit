@@ -1,0 +1,3110 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A kernel-agnostic Jupyter extension for grading notebooks.">
+      
+      
+      
+        <link rel="canonical" href="https://correx.it/latest/api/browser/namespaces/correxit/">
+      
+      
+        <link rel="prev" href="../assignment/">
+      
+      
+        <link rel="next" href="../rubric/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../../assets/correxit-light.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Correxit - Correxit</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/stylesheets/correxit.css">
+    
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#correxit" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../.." title="Correxit" class="md-header__button md-logo" aria-label="Correxit" data-md-component="logo">
+      
+  <img src="../../../../assets/correxit-dark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Correxit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Correxit
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Use dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Use dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Use light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Use light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/correxit/correxit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    correxit/correxit
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../.." title="Correxit" class="md-nav__button md-logo" aria-label="Correxit" data-md-component="logo">
+      
+  <img src="../../../../assets/correxit-dark.svg" alt="logo">
+
+    </a>
+    Correxit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/correxit/correxit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    correxit/correxit
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../authoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../moodle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moodle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internals
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Internals
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../assignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assignment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correxit
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correxit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#namespaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Namespaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#type-aliases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type Aliases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Type Aliases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collector
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Collector">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Distributor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#injector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Injector
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Injector">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registrar
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registrar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameters-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Properties">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        name
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submitter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Submitter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlocker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unlocker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Unlocker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="store()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unlock()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="unlock()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#collector-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collector
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collector-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        COLLECTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#corrector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CORRECTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DESCRIPTION
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DESCRIPTION">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-declaration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type Declaration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Type Declaration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#collector-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        COLLECTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#corrector-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CORRECTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributor-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DISTRIBUTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MONITOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrar-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REGISTRAR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submitter-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SUBMITTER
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlocker-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UNLOCKER
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributor-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributor-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DISTRIBUTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#galata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GALATA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MONITOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no_correxit_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NO_CORREXIT_METADATA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrar-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registrar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrar-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REGISTRAR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submitter-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submitter-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SUBMITTER
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#toolbars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TOOLBARS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlocker-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unlocker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlocker-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UNLOCKER
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rubric
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#namespaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Namespaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#type-aliases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type Aliases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Type Aliases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collector
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Collector">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Distributor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#injector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Injector
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Injector">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registrar
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registrar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameters-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Properties">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        name
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submitter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Submitter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlocker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unlocker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Unlocker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="store()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unlock()
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="unlock()">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#collector-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collector
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collector-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        COLLECTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returns-7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#corrector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CORRECTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DESCRIPTION
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DESCRIPTION">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-declaration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type Declaration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Type Declaration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#collector-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        COLLECTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#corrector-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CORRECTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributor-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DISTRIBUTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MONITOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrar-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REGISTRAR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submitter-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SUBMITTER
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlocker-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UNLOCKER
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributor-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distributor-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DISTRIBUTOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#galata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GALATA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MONITOR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no_correxit_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NO_CORREXIT_METADATA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrar-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registrar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrar-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REGISTRAR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submitter-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#submitter-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SUBMITTER
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#toolbars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TOOLBARS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlocker-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unlocker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unlocker-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UNLOCKER
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="../../../"><strong>Correxit API v2.0.0</strong></a></p>
+<hr />
+<p><a href="../../../">Correxit API</a> / <a href="../../">Browser</a> / Correxit</p>
+<h1 id="correxit">Correxit<a class="headerlink" href="#correxit" title="Permanent link">&para;</a></h1>
+<p>Tokens and contracts for composing Correxit JupyterLab plugins.</p>
+<h2 id="namespaces">Namespaces<a class="headerlink" href="#namespaces" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Namespace</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="namespaces/commandids/">CommandIDs</a></td>
+<td>-</td>
+</tr>
+<tr>
+<td><a href="namespaces/error/">Error</a></td>
+<td>-</td>
+</tr>
+<tr>
+<td><a href="namespaces/icons/">Icons</a></td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h2 id="type-aliases">Type Aliases<a class="headerlink" href="#type-aliases" title="Permanent link">&para;</a></h2>
+<h3 id="collector">Collector<a class="headerlink" href="#collector" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Collector</strong> = (<code>certified</code>) =&gt; <code>Promise</code>\&lt;<code>string</code> | <code>null</code>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L12">src/correxit/correxit.ts:12</a></p>
+<p>A collector of certified workbook grades.</p>
+<h4 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>certified</code></td>
+<td><a href="../workbook/#certified"><code>Certified</code></a></td>
+</tr>
+</tbody>
+</table>
+<h4 id="returns">Returns<a class="headerlink" href="#returns" title="Permanent link">&para;</a></h4>
+<p><code>Promise</code>\&lt;<code>string</code> | <code>null</code>&gt;</p>
+<hr />
+<h3 id="distributor">Distributor<a class="headerlink" href="#distributor" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Distributor</strong> = (<code>propagated</code>) =&gt; <code>Promise</code>\&lt;<code>boolean</code>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L27">src/correxit/correxit.ts:27</a></p>
+<p>Called for each assignee during propagation, and again on a single-workbook
+retry. Returns <code>true</code> to confirm delivery (the propagator attempts to
+write the local file with <code>assignment.distribution</code> recorded, and emits
+<code>distributed</code> only when that save succeeds), <code>false</code> to skip the assignee
+without writing a local file (the propagator emits <code>skipped</code>), or throws
+to signal an unexpected failure (the propagator attempts to write the
+local file for recovery but emits <code>distribute-error</code> and does not record
+<code>assignment.distribution</code>). A distributor with no external target should
+return <code>true</code> unconditionally.</p>
+<h4 id="parameters-1">Parameters<a class="headerlink" href="#parameters-1" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>propagated</code></td>
+<td>{ <code>identifier</code>: <a href="../workbook/namespaces/identifier/#assigned"><code>Assigned</code></a>; <code>notebook</code>: <code>INotebookContent</code>; <code>overwrite</code>: <code>boolean</code>; <code>path</code>: <code>string</code>; <code>resources</code>: <a href="#resource"><code>Resource</code></a>[] | <code>null</code>; }</td>
+</tr>
+<tr>
+<td><code>propagated.identifier</code></td>
+<td><a href="../workbook/namespaces/identifier/#assigned"><code>Assigned</code></a></td>
+</tr>
+<tr>
+<td><code>propagated.notebook</code></td>
+<td><code>INotebookContent</code></td>
+</tr>
+<tr>
+<td><code>propagated.overwrite</code></td>
+<td><code>boolean</code></td>
+</tr>
+<tr>
+<td><code>propagated.path</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>propagated.resources</code></td>
+<td><a href="#resource"><code>Resource</code></a>[] | <code>null</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="returns-1">Returns<a class="headerlink" href="#returns-1" title="Permanent link">&para;</a></h4>
+<p><code>Promise</code>\&lt;<code>boolean</code>&gt;</p>
+<hr />
+<h3 id="injector">Injector<a class="headerlink" href="#injector" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Injector</strong> = (<code>workbook</code>) =&gt; <code>void</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L35">src/correxit/correxit.ts:35</a></p>
+<h4 id="parameters-2">Parameters<a class="headerlink" href="#parameters-2" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>workbook</code></td>
+<td><a href="../../#workbook"><code>Workbook</code></a> | <code>null</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="returns-2">Returns<a class="headerlink" href="#returns-2" title="Permanent link">&para;</a></h4>
+<p><code>void</code></p>
+<hr />
+<h3 id="monitor">Monitor<a class="headerlink" href="#monitor" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Monitor</strong> = <code>AsyncIterable</code>\&lt;<a href="../../#workbook"><code>Workbook</code></a> | <code>null</code>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L38">src/correxit/correxit.ts:38</a></p>
+<p>Connects/disconnects workbooks and yields them to plugins.</p>
+<hr />
+<h3 id="registrar">Registrar<a class="headerlink" href="#registrar" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Registrar</strong> = (<code>workbook</code>, <code>identifier</code>) =&gt; <code>Promise</code>\&lt;<a href="../rubric/namespaces/assignment/#registration"><code>Registration</code></a>[] | <code>object</code>[] | <code>null</code>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L47">src/correxit/correxit.ts:47</a></p>
+<p>A registrar that provides assignment registrations for a workbook.</p>
+<h4 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h4>
+<p>If the returned registrations are null, assignment input is unlocked.
+If registrations are empty or populated, assignment input is locked.</p>
+<h4 id="parameters-3">Parameters<a class="headerlink" href="#parameters-3" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>workbook</code></td>
+<td><a href="../../#workbook"><code>Workbook</code></a></td>
+</tr>
+<tr>
+<td><code>identifier</code></td>
+<td><a href="../workbook/#identifier-1"><code>Identifier</code></a></td>
+</tr>
+</tbody>
+</table>
+<h4 id="returns-3">Returns<a class="headerlink" href="#returns-3" title="Permanent link">&para;</a></h4>
+<p><code>Promise</code>\&lt;<a href="../rubric/namespaces/assignment/#registration"><code>Registration</code></a>[] | <code>object</code>[] | <code>null</code>&gt;</p>
+<hr />
+<h3 id="resource">Resource<a class="headerlink" href="#resource" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Resource</strong> = <code>object</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L59">src/correxit/correxit.ts:59</a></p>
+<p>A simple sidecar file utility type to encapsulate required workbook files.</p>
+<h4 id="properties">Properties<a class="headerlink" href="#properties" title="Permanent link">&para;</a></h4>
+<h5 id="data">data<a class="headerlink" href="#data" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>data</strong>: <code>Uint8Array</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L59">src/correxit/correxit.ts:59</a></p>
+<h5 id="name">name<a class="headerlink" href="#name" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>name</strong>: <code>string</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L59">src/correxit/correxit.ts:59</a></p>
+<hr />
+<h3 id="submitter">Submitter<a class="headerlink" href="#submitter" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Submitter</strong> = (<code>workbook</code>, <code>identifier</code>) =&gt; <code>Promise</code>\&lt;<code>string</code> | <code>null</code>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L61">src/correxit/correxit.ts:61</a></p>
+<h4 id="parameters-4">Parameters<a class="headerlink" href="#parameters-4" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>workbook</code></td>
+<td><a href="../../#workbook"><code>Workbook</code></a></td>
+</tr>
+<tr>
+<td><code>identifier</code></td>
+<td><a href="../workbook/namespaces/identifier/#assigned"><code>Assigned</code></a></td>
+</tr>
+</tbody>
+</table>
+<h4 id="returns-4">Returns<a class="headerlink" href="#returns-4" title="Permanent link">&para;</a></h4>
+<p><code>Promise</code>\&lt;<code>string</code> | <code>null</code>&gt;</p>
+<hr />
+<h3 id="unlocker">Unlocker<a class="headerlink" href="#unlocker" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Unlocker</strong> = <code>object</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L66">src/correxit/correxit.ts:66</a></p>
+<h4 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h4>
+<h5 id="store">store()<a class="headerlink" href="#store" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>store</strong>(<code>id</code>, <code>key</code>): <code>Promise</code>\&lt;<code>void</code>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L68">src/correxit/correxit.ts:68</a></p>
+<p>Store the key for a given rubric id.</p>
+<h6 id="parameters-5">Parameters<a class="headerlink" href="#parameters-5" title="Permanent link">&para;</a></h6>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td><code>string</code></td>
+</tr>
+</tbody>
+</table>
+<h6 id="returns-5">Returns<a class="headerlink" href="#returns-5" title="Permanent link">&para;</a></h6>
+<p><code>Promise</code>\&lt;<code>void</code>&gt;</p>
+<h5 id="unlock">unlock()<a class="headerlink" href="#unlock" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>unlock</strong>(<code>workbook</code>, <code>credentials</code>): <code>Promise</code>\&lt;<a href="../rubric/#unlocked"><code>Unlocked</code></a> | <code>null</code>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L71">src/correxit/correxit.ts:71</a></p>
+<p>Unlock a given workbook with the given credentials.</p>
+<h6 id="parameters-6">Parameters<a class="headerlink" href="#parameters-6" title="Permanent link">&para;</a></h6>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>workbook</code></td>
+<td><a href="../../#workbook"><code>Workbook</code></a></td>
+</tr>
+<tr>
+<td><code>credentials</code></td>
+<td><code>Partial</code>\&lt;Credentials &amp; { silent: boolean; }&gt; | <code>null</code></td>
+</tr>
+</tbody>
+</table>
+<h6 id="returns-6">Returns<a class="headerlink" href="#returns-6" title="Permanent link">&para;</a></h6>
+<p><code>Promise</code>\&lt;<a href="../rubric/#unlocked"><code>Unlocked</code></a> | <code>null</code>&gt;</p>
+<h2 id="variables">Variables<a class="headerlink" href="#variables" title="Permanent link">&para;</a></h2>
+<h3 id="collector-1">Collector<a class="headerlink" href="#collector-1" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Collector</strong>: <code>Token</code>\&lt;<a href="#collector"><code>Collector</code></a>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L12">src/correxit/correxit.ts:12</a></p>
+<hr />
+<h3 id="collector-2">COLLECTOR<a class="headerlink" href="#collector-2" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>COLLECTOR</strong>: <code>"correxit:collector"</code> = <code>'correxit:collector'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L77">src/correxit/correxit.ts:77</a></p>
+<hr />
+<h3 id="commands">commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>commands</strong>: (<code>app</code>, <code>utilities</code>) =&gt; <code>IDisposable</code>[] = <code>COMMANDS</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L83">src/correxit/correxit.ts:83</a></p>
+<h4 id="parameters-7">Parameters<a class="headerlink" href="#parameters-7" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>app</code></td>
+<td><code>JupyterFrontEnd</code></td>
+</tr>
+<tr>
+<td><code>utilities</code></td>
+<td>{ <code>collector</code>: <a href="#collector"><code>Collector</code></a>; <code>distributor</code>: <a href="#distributor"><code>Distributor</code></a>; <code>documents</code>: <code>IDocumentManager</code>; <code>injector</code>: <a href="#injector"><code>Injector</code></a>; <code>registrar</code>: <a href="#registrar"><code>Registrar</code></a>; <code>submitter</code>: <a href="#submitter"><code>Submitter</code></a>; <code>translator</code>: <code>ITranslator</code>; <code>unlocker</code>: <a href="#unlocker"><code>Unlocker</code></a>; }</td>
+</tr>
+<tr>
+<td><code>utilities.collector</code></td>
+<td><a href="#collector"><code>Collector</code></a></td>
+</tr>
+<tr>
+<td><code>utilities.distributor</code></td>
+<td><a href="#distributor"><code>Distributor</code></a></td>
+</tr>
+<tr>
+<td><code>utilities.documents</code></td>
+<td><code>IDocumentManager</code></td>
+</tr>
+<tr>
+<td><code>utilities.injector</code></td>
+<td><a href="#injector"><code>Injector</code></a></td>
+</tr>
+<tr>
+<td><code>utilities.registrar</code></td>
+<td><a href="#registrar"><code>Registrar</code></a></td>
+</tr>
+<tr>
+<td><code>utilities.submitter</code></td>
+<td><a href="#submitter"><code>Submitter</code></a></td>
+</tr>
+<tr>
+<td><code>utilities.translator</code></td>
+<td><code>ITranslator</code></td>
+</tr>
+<tr>
+<td><code>utilities.unlocker</code></td>
+<td><a href="#unlocker"><code>Unlocker</code></a></td>
+</tr>
+</tbody>
+</table>
+<h4 id="returns-7">Returns<a class="headerlink" href="#returns-7" title="Permanent link">&para;</a></h4>
+<p><code>IDisposable</code>[]</p>
+<hr />
+<h3 id="corrector">CORRECTOR<a class="headerlink" href="#corrector" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>CORRECTOR</strong>: <code>"correxit:corrector"</code> = <code>'correxit:corrector'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L89">src/correxit/correxit.ts:89</a></p>
+<hr />
+<h3 id="description">DESCRIPTION<a class="headerlink" href="#description" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>DESCRIPTION</strong>: <code>object</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L91">src/correxit/correxit.ts:91</a></p>
+<h4 id="type-declaration">Type Declaration<a class="headerlink" href="#type-declaration" title="Permanent link">&para;</a></h4>
+<h5 id="collector-3">COLLECTOR<a class="headerlink" href="#collector-3" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>COLLECTOR</strong>: <code>string</code> = <code>description.COLLECTOR</code></p>
+</blockquote>
+<h5 id="corrector-1">CORRECTOR<a class="headerlink" href="#corrector-1" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>CORRECTOR</strong>: <code>string</code> = <code>description.CORRECTOR</code></p>
+</blockquote>
+<h5 id="distributor-1">DISTRIBUTOR<a class="headerlink" href="#distributor-1" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>DISTRIBUTOR</strong>: <code>string</code> = <code>description.DISTRIBUTOR</code></p>
+</blockquote>
+<h5 id="monitor-1">MONITOR<a class="headerlink" href="#monitor-1" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>MONITOR</strong>: <code>string</code> = <code>description.MONITOR</code></p>
+</blockquote>
+<h5 id="registrar-1">REGISTRAR<a class="headerlink" href="#registrar-1" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>REGISTRAR</strong>: <code>string</code> = <code>description.REGISTRAR</code></p>
+</blockquote>
+<h5 id="submitter-1">SUBMITTER<a class="headerlink" href="#submitter-1" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>SUBMITTER</strong>: <code>string</code> = <code>description.SUBMITTER</code></p>
+</blockquote>
+<h5 id="ui">UI<a class="headerlink" href="#ui" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>UI</strong>: <code>string</code> = <code>description.UI</code></p>
+</blockquote>
+<h5 id="unlocker-1">UNLOCKER<a class="headerlink" href="#unlocker-1" title="Permanent link">&para;</a></h5>
+<blockquote>
+<p><strong>UNLOCKER</strong>: <code>string</code> = <code>description.UNLOCKER</code></p>
+</blockquote>
+<hr />
+<h3 id="distributor-2">Distributor<a class="headerlink" href="#distributor-2" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Distributor</strong>: <code>Token</code>\&lt;<a href="#distributor"><code>Distributor</code></a>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L27">src/correxit/correxit.ts:27</a></p>
+<hr />
+<h3 id="distributor-3">DISTRIBUTOR<a class="headerlink" href="#distributor-3" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>DISTRIBUTOR</strong>: <code>"correxit:distributor"</code> = <code>'correxit:distributor'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L85">src/correxit/correxit.ts:85</a></p>
+<hr />
+<h3 id="galata">GALATA<a class="headerlink" href="#galata" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>GALATA</strong>: <code>"correxit:galata"</code> = <code>'correxit:galata'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L121">src/correxit/correxit.ts:121</a></p>
+<hr />
+<h3 id="monitor-2">Monitor<a class="headerlink" href="#monitor-2" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Monitor</strong>: <code>Token</code>\&lt;<a href="#monitor"><code>Monitor</code></a>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L38">src/correxit/correxit.ts:38</a></p>
+<hr />
+<h3 id="monitor-3">MONITOR<a class="headerlink" href="#monitor-3" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>MONITOR</strong>: <code>"correxit:monitor"</code> = <code>'correxit:monitor'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L125">src/correxit/correxit.ts:125</a></p>
+<hr />
+<h3 id="no_correxit_metadata">NO_CORREXIT_METADATA<a class="headerlink" href="#no_correxit_metadata" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>NO_CORREXIT_METADATA</strong>: <code>TypeError</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L129">src/correxit/correxit.ts:129</a></p>
+<hr />
+<h3 id="registrar-2">Registrar<a class="headerlink" href="#registrar-2" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Registrar</strong>: <code>Token</code>\&lt;<a href="#registrar"><code>Registrar</code></a>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L47">src/correxit/correxit.ts:47</a></p>
+<hr />
+<h3 id="registrar-3">REGISTRAR<a class="headerlink" href="#registrar-3" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>REGISTRAR</strong>: <code>"correxit:registrar"</code> = <code>'correxit:registrar'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L131">src/correxit/correxit.ts:131</a></p>
+<hr />
+<h3 id="submitter-2">Submitter<a class="headerlink" href="#submitter-2" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Submitter</strong>: <code>Token</code>\&lt;<a href="#submitter"><code>Submitter</code></a>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L61">src/correxit/correxit.ts:61</a></p>
+<hr />
+<h3 id="submitter-3">SUBMITTER<a class="headerlink" href="#submitter-3" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>SUBMITTER</strong>: <code>"correxit:submitter"</code> = <code>'correxit:submitter'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L135">src/correxit/correxit.ts:135</a></p>
+<hr />
+<h3 id="toolbars">TOOLBARS<a class="headerlink" href="#toolbars" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>TOOLBARS</strong>: <code>"correxit:toolbars"</code> = <code>'correxit:toolbars'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L139">src/correxit/correxit.ts:139</a></p>
+<hr />
+<h3 id="ui-1">UI<a class="headerlink" href="#ui-1" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>UI</strong>: <code>"correxit:ui"</code> = <code>'correxit:ui'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L141">src/correxit/correxit.ts:141</a></p>
+<hr />
+<h3 id="unlocker-2">Unlocker<a class="headerlink" href="#unlocker-2" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Unlocker</strong>: <code>Token</code>\&lt;<a href="#unlocker"><code>Unlocker</code></a>&gt;</p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L66">src/correxit/correxit.ts:66</a></p>
+<hr />
+<h3 id="unlocker-3">UNLOCKER<a class="headerlink" href="#unlocker-3" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><code>const</code> <strong>UNLOCKER</strong>: <code>"correxit:unlocker"</code> = <code>'correxit:unlocker'</code></p>
+</blockquote>
+<p>Defined in: <a href="https://github.com/correxit/correxit/blob/2523f5d15fd8cfd66b015aeb8ec52481e5328a75/src/correxit/correxit.ts#L143">src/correxit/correxit.ts:143</a></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../assignment/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Assignment">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Assignment
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../rubric/" class="md-footer__link md-footer__link--next" aria-label="Next: Rubric">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Rubric
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Correxit
+    </div>
+  
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["content.code.copy", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.top"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
