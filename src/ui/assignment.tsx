@@ -150,32 +150,28 @@ export const Assignment: React.FC<{
     setState(current => Draft.merge(current, mutate));
   const pick = (next: string | null) =>
     setSelected(current => (current === next ? current : next));
-  const store = (next: Registered) =>
-    setRegistered(current =>
-      Equal.registered(current, next) ? current : next
-    );
-  const reassign = (assignment: Assignment, locked: boolean) => {
-    if (!locked && !equal(rubric.assignment, assignment))
-      void commands.execute(assign, assignment).catch(_ => {});
-  };
-  const request = async () => {
-    const now = Date.now();
-    const current = enrolled.get(workbook);
-    if (current?.cached === cached) store(current.registered);
-    setPending(!current);
-    if (current?.cached === cached && now < current.expires) return;
-    try {
-      const result = await commands.execute(enroll).catch(_ => null);
-      const registered = result as Registered;
-      enrolled.set(workbook, { cached, expires: now + TTL, registered });
-      store(registered);
-    } finally {
-      setPending(false);
-    }
-  };
-  // Enrollment is refreshed only when the workbook or rubric identity changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => void request(), [cached, workbook]);
+  useEffect(() => {
+    const store = (next: Registered) =>
+      setRegistered(current =>
+        Equal.registered(current, next) ? current : next
+      );
+    const request = async () => {
+      const now = Date.now();
+      const current = enrolled.get(workbook);
+      if (current?.cached === cached) store(current.registered);
+      setPending(!current);
+      if (current?.cached === cached && now < current.expires) return;
+      try {
+        const result = await commands.execute(enroll).catch(_ => null);
+        const registered = result as Registered;
+        enrolled.set(workbook, { cached, expires: now + TTL, registered });
+        store(registered);
+      } finally {
+        setPending(false);
+      }
+    };
+    void request();
+  }, [cached, commands, workbook]);
   useEffect(() => keep(rubric.assignment), [rubric.assignment]);
   useEffect(() => {
     if (locked) return;
@@ -206,8 +202,6 @@ export const Assignment: React.FC<{
     pick(identify(matched));
     merge(current => freeze(current, matched));
   }, [locked, registered, rubric.assignment.id, selected]);
-  // The listed values are semantic inputs; `reassign` is a render-local verb.
-  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     const dirty = Draft.persist(
       { assignment, local },
@@ -216,10 +210,11 @@ export const Assignment: React.FC<{
     );
     if (!dirty) return;
 
-    const delay = window.setTimeout(() => reassign(assignment, locked), DELAY);
+    const delay = window.setTimeout(() => {
+      void commands.execute(assign, assignment).catch(_ => {});
+    }, DELAY);
     return () => window.clearTimeout(delay);
-  }, [assignment, local, locked, rubric.assignment]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [assignment, commands, local, locked, rubric.assignment]);
 
   const all =
     courses(registered) ??
