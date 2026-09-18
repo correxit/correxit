@@ -21,7 +21,8 @@ type State<T> = { idle: boolean; list: T[]; };
  * React UI, enabling real-time visualization of "streaming" data. The consuming
  * component should use memoization to render efficiently.
  *
- * Command streams restart when `id` or serialized `args` changes.
+ * Command streams restart when `commands`, `id`, or serialized `args` changes.
+ * Each invocation receives its JSON argument snapshot.
  * Cleanup marks the prior stream interrupted and drops subsequent emissions.
  *
  * State updates are buffered and throttled to ~60fps (16ms).
@@ -32,9 +33,10 @@ export function useCommand<T>(
   args?: ReadonlyPartialJSONObject
 ): [T[], boolean] {
   const [state, setState] = useState<State<T>>({ idle: true, list: [] });
-  // Serialized arguments rather than object identity define stream restarts.
-  /* eslint-disable react-hooks/exhaustive-deps */
+  const snapshot = JSON.stringify(args);
   useEffect((interrupted = false) => {
+    const args: ReadonlyPartialJSONObject | undefined =
+      snapshot === undefined ? undefined : JSON.parse(snapshot);
     (async (stream?: Promise<AsyncIterable<T> | Iterable<T>>) => {
       const buffer: T[] = [];
       const flush = () => {
@@ -55,12 +57,10 @@ export function useCommand<T>(
         flush();
       } finally {
         throttler.dispose();
-        if (!interrupted)
-          setState(({ list }) => ({ idle: true, list }));
+        if (!interrupted) setState(({ list }) => ({ idle: true, list }));
       }
     })(commands.hasCommand(id) ? commands.execute(id, args) : undefined);
     return () => void (interrupted = true);
-  }, [id, JSON.stringify(args)]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [commands, id, snapshot]);
   return [state.list, state.idle];
 }
