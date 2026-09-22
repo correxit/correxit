@@ -1,0 +1,57 @@
+name: Generate changelog
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  changelog:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout the PR merge
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+
+      - name: Generate release notes
+        run: |
+          # Older PR branches may not yet contain the generator from main.
+          cp scripts/changelog.mjs "$RUNNER_TEMP/changelog.mjs"
+          git checkout --detach "$HEAD_SHA"
+          node "$RUNNER_TEMP/changelog.mjs" "$BASE_SHA"
+
+      - name: Update the release PR
+        run: |
+          if git diff --quiet -- CHANGELOG.md; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md
+          git commit -m 'docs: generate release changelog'
+          git push origin "HEAD:refs/heads/$BRANCH"
+          # Explicitly test the bot commit without relying on recursive PR events.
+          gh workflow run ci-workflow.yaml --ref "$BRANCH"

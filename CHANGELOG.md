@@ -1,3 +1,22 @@
+# 2.0.2
+
+### Release tooling
+
+- Generate changelog entries automatically for release PRs when the package
+  version increases, preserving hand-written notes.
+
+<!-- START GENERATED CHANGELOG: 2.0.2 -->
+
+## What's Changed
+* docs: update site metadata by @afshin in https://github.com/correxit/correxit/pull/93
+* chore: remove stale comment by @afshin in https://github.com/correxit/correxit/pull/94
+* chore: improve react hook dependency management by @afshin in https://github.com/correxit/correxit/pull/95
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v2.0.1...v2.0.2
+
+<!-- END GENERATED CHANGELOG: 2.0.2 -->
+
 # 2.0.1
 
 ### Bug fixes

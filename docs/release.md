@@ -5,8 +5,12 @@ versioned website. Pull requests and pushes to `main` run CI without publishing.
 
 ## Release
 
-1. Prepare a PR with the version in `package.json` and release notes in
-   [CHANGELOG](../CHANGELOG.md).
+1. Prepare a PR from a branch in this repository to `main`, increasing the
+   stable version in `package.json`. **Generate changelog** commits an entry to
+   [CHANGELOG](../CHANGELOG.md) using GitHub's generated notes for merged PRs
+   since the base version's tag. Review that entry before merging. Add any
+   compatibility guidance or other hand-written notes outside its generated
+   markers; subsequent pushes refresh only the generated block.
 2. Merge it and wait for CI on the merged commit in `main` to pass.
 3. Publish a stable GitHub release at that exact commit. Its tag must be `v`
    followed by the package version, such as `v2.0.0`. Use the changelog entry as
@@ -25,6 +29,19 @@ gh release create v2.0.0 --repo correxit/correxit \
 Replace the example version, commit SHA, and notes file as appropriate. Packages
 come from the successful CI run for that commit; the website builds from its
 release tag. Drafts and prereleases do not publish either.
+
+Changelog generation requires the previous version's tag to be an ancestor of
+the release branch and refuses to change notes for an already tagged version.
+It skips PRs without a version change and PRs from forks. The job uses the
+repository's `GITHUB_TOKEN` and explicitly starts CI after committing its update.
+The open release PR itself is not yet in GitHub's merged-PR notes, so describe
+any changes made within it in the hand-written portion of the entry.
+
+To generate the same entry locally with an authenticated GitHub CLI:
+
+```bash
+pixi run node scripts/changelog.mjs origin/main
+```
 
 ## Retry a failed publication
 
