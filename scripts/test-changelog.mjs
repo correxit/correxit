@@ -17,7 +17,7 @@ const script = fileURLToPath(new URL('./changelog.mjs', import.meta.url));
 const history = '# 2.0.1\n\nPrevious release notes.\n';
 const notes = "## What's Changed\n* Fix grading in PR #123\n";
 
-const fixture = t => {
+const fixture = (t, markdown = history) => {
   const directory = mkdtempSync(path.join(tmpdir(), 'correxit-changelog-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const write = (name, content) =>
@@ -31,7 +31,7 @@ const fixture = t => {
   git('config', 'commit.gpgsign', 'false');
   git('config', 'core.hooksPath', '/dev/null');
   write('package.json', JSON.stringify({ version: '2.0.1' }));
-  write('CHANGELOG.md', history);
+  write('CHANGELOG.md', markdown);
   git('add', 'package.json', 'CHANGELOG.md');
   git('commit', '--quiet', '-m', 'Previous release');
   git('tag', 'v2.0.1');
@@ -102,6 +102,44 @@ test('release notes use the exact tag range and preserve curated notes on reruns
     generated.replace(notes.trim(), 'Updated PR list.')
   );
 });
+
+for (const version of ['2.0.3', '2.0.1']) {
+  test(`changing a generated release to ${version} requires cleanup`, t => {
+    const { directory, write, read, git, run } = fixture(t);
+    write('package.json', JSON.stringify({ version: '2.0.2' }));
+    write(
+      'CHANGELOG.md',
+      `# 2.0.2\n\nKeep this compatibility warning.\n\n${history}`
+    );
+    assert.equal(run().status, 0);
+    const generated = read('CHANGELOG.md');
+    git('add', 'package.json', 'CHANGELOG.md');
+    git('commit', '--quiet', '-m', 'Generate release changelog');
+    rmSync(path.join(directory, 'request.json'));
+
+    write('package.json', JSON.stringify({ version }));
+    const result = run();
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Generated changelog entry for 2\.0\.2/);
+    assert.match(result.stderr, /Remove or rename/);
+    assert.equal(read('CHANGELOG.md'), generated);
+    assert.equal(existsSync(path.join(directory, 'request.json')), false);
+  });
+}
+
+for (const version of ['2.0.1', '2.0.2']) {
+  test(`published generated entries are preserved with package version ${version}`, t => {
+    const published = update(history, '2.0.1', 'Published generated notes.');
+    const { directory, write, read, run } = fixture(t, published);
+    write('package.json', JSON.stringify({ version }));
+    assert.equal(run().status, 0);
+    assert.ok(read('CHANGELOG.md').endsWith(published));
+    assert.equal(
+      existsSync(path.join(directory, 'request.json')),
+      version !== '2.0.1'
+    );
+  });
+}
 
 test('new release entries preserve the complete existing history', () => {
   const generated = update(history, '2.0.2', notes);

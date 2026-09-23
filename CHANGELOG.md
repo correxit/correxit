@@ -4,6 +4,13 @@
 
 - Generate changelog entries automatically for release PRs when the package
   version increases, preserving hand-written notes.
+- Reject obsolete generated entries when the proposed version changes or its
+  bump is reverted, with instructions for preserving hand-written notes.
+
+### Documentation
+
+- Add PyPI, npm, documentation, and JupyterLite badges to the README and update
+  the release instructions.
 
 <!-- START GENERATED CHANGELOG: 2.0.2 -->
 

@@ -5,6 +5,12 @@ import { pathToFileURL } from 'node:url';
 const run = (command, ...args) =>
   execFileSync(command, args, { encoding: 'utf8' }).trim();
 
+const entries = markdown =>
+  Array.from(
+    markdown.matchAll(/^<!-- (?:START|END) GENERATED CHANGELOG: (.+) -->$/gm),
+    ([, version]) => version
+  );
+
 export const update = (markdown, version, notes) => {
   const start = `<!-- START GENERATED CHANGELOG: ${version} -->`;
   const end = `<!-- END GENERATED CHANGELOG: ${version} -->`;
@@ -30,6 +36,16 @@ export const generate = base => {
   const { version: previous } = JSON.parse(
     run('git', 'show', `${base}:package.json`)
   );
+  const markdown = readFileSync('CHANGELOG.md', 'utf8');
+  const history = new Set(entries(run('git', 'show', `${base}:CHANGELOG.md`)));
+  const obsolete = entries(markdown).find(
+    entry => !history.has(entry) && (version === previous || entry !== version)
+  );
+  if (obsolete)
+    throw new Error(
+      `Generated changelog entry for ${obsolete} is obsolete for package version ${version}. ` +
+        'Remove or rename its heading and generated block in CHANGELOG.md, preserving any handwritten notes.'
+    );
   if (version === previous) return;
 
   const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -64,7 +80,6 @@ export const generate = base => {
   );
   if (typeof body !== 'string' || !body.trim())
     throw new Error('GitHub returned no release notes.');
-  const markdown = readFileSync('CHANGELOG.md', 'utf8');
   writeFileSync('CHANGELOG.md', update(markdown, version, body));
 };
 
