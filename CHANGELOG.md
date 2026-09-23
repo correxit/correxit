@@ -1,3 +1,30 @@
+# 2.0.2
+
+### Release tooling
+
+- Generate changelog entries automatically for release PRs when the package
+  version increases, preserving hand-written notes.
+- Reject obsolete generated entries when the proposed version changes or its
+  bump is reverted, with instructions for preserving hand-written notes.
+- Execute the changelog generator from the reviewed PR base commit.
+
+### Documentation
+
+- Add PyPI, npm, documentation, and JupyterLite badges to the README and update
+  the release instructions.
+
+<!-- START GENERATED CHANGELOG: 2.0.2 -->
+
+## What's Changed
+* docs: update site metadata by @afshin in https://github.com/correxit/correxit/pull/93
+* chore: remove stale comment by @afshin in https://github.com/correxit/correxit/pull/94
+* chore: improve react hook dependency management by @afshin in https://github.com/correxit/correxit/pull/95
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v2.0.1...v2.0.2
+
+<!-- END GENERATED CHANGELOG: 2.0.2 -->
+
 # 2.0.1
 
 ### Bug fixes
