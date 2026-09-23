@@ -1,0 +1,35 @@
+:root {
+  --md-primary-fg-color: #003660;
+  --md-primary-fg-color--dark: #002b4d; /* stylelint-disable-line custom-property-pattern */
+  --md-accent-fg-color: #ef5b45;
+}
+
+[data-md-color-scheme='slate'] {
+  --md-typeset-a-color: #8fc7ff;
+  --md-accent-fg-color: #b8dcff;
+}
+
+[data-md-color-scheme='slate'] .md-button {
+  --md-accent-bg-color: var(--md-default-bg-color);
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+[data-md-color-scheme='slate'] .md-button:not(.md-button--primary) {
+  --md-primary-fg-color: var(--md-typeset-a-color);
+}
+
+.md-grid {
+  max-width: 64rem;
+}
+
+.md-typeset {
+  overflow-wrap: anywhere;
+}
+
+.md-typeset table:not([class]) {
+  display: table;
+}
+
+.md-header__button.md-logo img {
+  height: 1.8rem;
+}

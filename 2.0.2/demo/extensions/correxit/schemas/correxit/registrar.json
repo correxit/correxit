@@ -1,0 +1,37 @@
+{
+  "title": "Correxit Registrar",
+  "description": "Settings for the Correxit assignment registrar",
+  "jupyter.lab.transform": true,
+  "type": "object",
+  "properties": {
+    "provider": {
+      "title": "Registrar provider",
+      "description": "Which registrar to use for assignment registration",
+      "type": "string",
+      "enum": ["manual", "moodle"],
+      "default": "manual"
+    },
+    "moodle": {
+      "title": "Moodle",
+      "description": "Moodle registrar settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "title": "URL",
+          "description": "Base URL of the Moodle instance",
+          "type": "string",
+          "default": ""
+        },
+        "token": {
+          "title": "API token",
+          "description": "Moodle REST token. Stored in the secrets manager.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false,
+      "default": {}
+    }
+  },
+  "additionalProperties": false
+}
