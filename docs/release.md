@@ -37,6 +37,12 @@ repository's `GITHUB_TOKEN` and explicitly starts CI after committing its update
 The open release PR itself is not yet in GitHub's merged-PR notes, so describe
 any changes made within it in the hand-written portion of the entry.
 
+The workflow executes the generator from the PR's exact base commit, so changes
+to the generator take effect after merging. If the base has no generator yet,
+the job skips generation with a notice; maintain that first PR's notes manually.
+The automation remains restricted to branches in this repository and trusts
+repository writers to manage its workflow and permissions.
+
 If you change or revert the proposed version after notes have been generated,
 the job fails until you rename or remove the obsolete release heading and
 generated block. Move any hand-written notes you want to keep to the appropriate

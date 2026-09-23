@@ -6,6 +6,7 @@
   version increases, preserving hand-written notes.
 - Reject obsolete generated entries when the proposed version changes or its
   bump is reverted, with instructions for preserving hand-written notes.
+- Execute the changelog generator from the reviewed PR base commit.
 
 ### Documentation
 

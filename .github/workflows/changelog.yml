@@ -38,8 +38,12 @@ jobs:
 
       - name: Generate release notes
         run: |
-          # Older PR branches may not yet contain the generator from main.
-          cp scripts/changelog.mjs "$RUNNER_TEMP/changelog.mjs"
+          # Only execute the generator already reviewed on the PR base.
+          if ! git cat-file -e "$BASE_SHA:scripts/changelog.mjs" 2>/dev/null; then
+            echo '::notice::The PR base has no changelog generator yet; keep release notes up to date manually until it is merged.'
+            exit 0
+          fi
+          git show "$BASE_SHA:scripts/changelog.mjs" > "$RUNNER_TEMP/changelog.mjs"
           git checkout --detach "$HEAD_SHA"
           node "$RUNNER_TEMP/changelog.mjs" "$BASE_SHA"
 
