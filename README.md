@@ -1,6 +1,10 @@
 # <img src="style/brand/correxit-github-avatar.png" alt="" width="40" align="top"> Correxit
 
 [![GitHub Actions status](https://github.com/correxit/correxit/actions/workflows/ci-workflow.yaml/badge.svg)](https://github.com/correxit/correxit/actions/workflows/ci-workflow.yaml)
+[![PyPI version](https://img.shields.io/pypi/v/correxit)](https://pypi.org/project/correxit/)
+[![npm version](https://img.shields.io/npm/v/correxit)](https://www.npmjs.com/package/correxit)
+[![Documentation](https://img.shields.io/badge/docs-online-blue)](https://correx.it/latest/authoring/)
+[![Launch JupyterLite](https://jupyterlite.rtfd.io/en/latest/_static/badge.svg)](https://correx.it/2.0.1/demo/lab)
 
 Correxit is a kernel-agnostic Jupyter extension for grading Jupyter notebooks.
 It is also the third-person singular perfect active indicative conjugation of
