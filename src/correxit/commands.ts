@@ -62,14 +62,6 @@ type Reified =
   { handle: Credentials | null; rubric: Rubric; workbook: Workbook; };
 type Resources = { resources: string[] | null };
 
-const { get, has } = Rubric;
-const {
-  acknowledge, add, assign, certify, collect, comment, convert, correct,
-  dereference, distribute, draft, headed, headless, intervene, lock, recover,
-  refer, remove, reset, restore, revise, reweight, submit, toggle
-} = Workbook;
-const { normalize } = Workbook.Credentials;
-
 export function commands(
   app: JupyterFrontEnd,
   utilities: {
@@ -159,7 +151,7 @@ export function commands(
     });
   };
   const reify = async (args: Partial<Credentials>): Promise<Reified> => {
-    const handle = normalize(args);
+    const handle = Workbook.Credentials.normalize(args);
     const workbook = handle
       ? await fetch(handle)
       : active();
@@ -176,7 +168,7 @@ export function commands(
   }> => {
     const current = state.workbook();
     const path = args.path || current?.context.path || '';
-    const handle = path && normalize({ path });
+    const handle = path && Workbook.Credentials.normalize({ path });
     if (!path || !handle) {
       const error = 'distribute error: invalid path';
       return { assignee: path, error, ok: false, path };
@@ -211,7 +203,7 @@ export function commands(
       const resources = names ? await Promise.all(names.map(load)) : null;
       const overwrite = true;
       await distributor({ identifier, notebook, overwrite, path, resources });
-      await distribute(workbook);
+      await Workbook.distribute(workbook);
       await workbook.context.save();
       return { assignee, error: null, ok: true, path };
     } catch (error) {
@@ -232,7 +224,7 @@ export function commands(
       const paths: string[] = [];
       for (const { path } of notebooks) {
         const active = current?.context.path === path ? current : null;
-        const handle = normalize({ path });
+        const handle = Workbook.Credentials.normalize({ path });
         const workbook = active || (handle && await fetch(handle, true));
         if (!workbook) continue;
         try {
@@ -278,7 +270,7 @@ export function commands(
     execute: async (args: Partial<Credentials & Assignment>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
-      await assign(workbook, args);
+      await Workbook.assign(workbook, args);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.unassign, {
@@ -298,7 +290,7 @@ export function commands(
       );
       const { button } = await showDialog({ body, title });
       if (!button.accept) return;
-      await assign(workbook, { assignee: '' });
+      await Workbook.assign(workbook, { assignee: '' });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.resource, {
@@ -317,7 +309,7 @@ export function commands(
       try {
         if ('resources' in args) {
           const resources = args.resources && files(args.resources, directory);
-          await assign(workbook, { resources });
+          await Workbook.assign(workbook, { resources });
           return;
         }
 
@@ -344,7 +336,7 @@ export function commands(
           return item.path;
         });
         const resources = files(paths, directory);
-        await assign(workbook, { resources });
+        await Workbook.assign(workbook, { resources });
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }
@@ -367,7 +359,7 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
       try {
-        await certify(workbook, trans);
+        await Workbook.certify(workbook, trans);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
@@ -388,9 +380,9 @@ export function commands(
       const { rubric, workbook } = await reify(args);
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
       try {
-        const certified = await certify(workbook, trans, true);
+        const certified = await Workbook.certify(workbook, trans, true);
         const receipt = await collector(certified);
-        await collect(workbook, receipt);
+        await Workbook.collect(workbook, receipt);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
@@ -404,7 +396,7 @@ export function commands(
       const id = state.cell(args);
       const rubric = open(workbook);
       if (!workbook || !id || !rubric) return;
-      await comment(workbook, id, args.comment || '');
+      await Workbook.comment(workbook, id, args.comment || '');
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.configure, {
@@ -419,7 +411,7 @@ export function commands(
       const rubric = open(workbook);
       if (!cell || !rubric || !id || references?.includes(id)) return false;
       if (rubric.locked || rubric.assignment.assignee) return false;
-      if (has(rubric, id)) return get(rubric, id)?.is === args.is;
+      if (Rubric.has(rubric, id)) return Rubric.get(rubric, id)?.is === args.is;
 
       const code = cell.cell_type === 'code';
       if (!code) return args.is === 'reviewable';
@@ -428,14 +420,14 @@ export function commands(
     isToggled: (args: Partial<Cell>) => {
       const id = state.cell(args);
       const rubric = open(active());
-      return !!rubric && !!id && get(rubric, id)?.is === args.is;
+      return !!rubric && !!id && Rubric.get(rubric, id)?.is === args.is;
     },
     isVisible: (args: Partial<Cell>) => {
       const id = state.cell(args);
       const rubric = open(active());
       if (!id || !rubric) return false;
       if (rubric.locked || rubric.assignment.assignee) return false;
-      if (has(rubric, id)) return get(rubric, id)?.is === args.is;
+      if (Rubric.has(rubric, id)) return Rubric.get(rubric, id)?.is === args.is;
       return commands.isEnabled(CommandIDs.configure, args);
     },
     caption: (cell: Partial<Cell>) => {
@@ -466,9 +458,9 @@ export function commands(
           Dialog.okButton({ label: trans.__('Yes') })
         ]
       });
-      if (has(rubric, id)) {
+      if (Rubric.has(rubric, id)) {
         if (!(await confirm()).button.accept) return;
-        await remove(workbook, id);
+        await Workbook.remove(workbook, id);
       }
       if (is === 'answerable') {
         const expected = await input.text({
@@ -480,14 +472,14 @@ export function commands(
         const payload = [await security.digest(expected)];
         const points = 1;
         const references = null;
-        await add(workbook, { id, is, payload, points, references });
+        await Workbook.add(workbook, { id, is, payload, points, references });
         return;
       }
       if (is === 'reviewable') {
         const payload = null;
         const points = 1;
         const references = null;
-        await add(workbook, { id, is, payload, points, references });
+        await Workbook.add(workbook, { id, is, payload, points, references });
         return;
       }
       if (is !== 'comparable' && is !== 'correctable') return;
@@ -496,13 +488,13 @@ export function commands(
       if (!references) {
         const rubric = open(workbook);
         if (!rubric || rubric.locked) return;
-        const selected = headed(workbook)
+        const selected = Workbook.headed(workbook)
           ? await choose(workbook, rubric, id)
           : null;
         references = selected && [selected.id];
       }
       if (!references || references.includes(id)) return;
-      if (headed(workbook)) {
+      if (Workbook.headed(workbook)) {
         const { widgets } = workbook.content;
         const original = find(widgets, ({ model }) => model.id === id);
         if (original) await workbook.content.scrollToCell(original);
@@ -510,13 +502,11 @@ export function commands(
 
       const payload = null;
       const points = 1;
-      await add(
-        workbook,
-        { id, is, payload, points, references },
-        references.map(referent =>
-          ({ cell: id, referent, points: 1, secret: true })
-        )
+      const cell = { id, is, payload, points, references };
+      const referents = references.map(referent =>
+        ({ cell: id, referent, points: 1, secret: true })
       );
+      await Workbook.add(workbook, cell, referents);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.convert, {
@@ -575,10 +565,10 @@ If conversion fails, Correxit restores the original notebook.`
 
       let report: string[] | null;
       try {
-        await convert(workbook, passphrase, unlocker);
+        await Workbook.convert(workbook, passphrase, unlocker);
         report = await nbgrader.convert(workbook, trans);
       } catch (error) {
-        restore(workbook, snapshot);
+        Workbook.restore(workbook, snapshot);
 
         const restored = trans.__('The original notebook was restored.');
         const detail = Error.reason(error);
@@ -611,7 +601,7 @@ If conversion fails, Correxit restores the original notebook.`
       const rubric = open(workbook);
       const id = state.cell(args);
       if (args[Rubric.Cell.TOOLBAR] && !id) return false;
-      if (!rubric || !headed(workbook)) return false;
+      if (!rubric || !Workbook.headed(workbook)) return false;
       if (!id) {
         const cells = Object.values(rubric.cells);
         const references = rubric.references;
@@ -625,7 +615,7 @@ If conversion fails, Correxit restores the original notebook.`
         });
       }
 
-      const cell = get(rubric, id);
+      const cell = Rubric.get(rubric, id);
       if (!cell || cell.is === 'reviewable') return false;
       if (!rubric.locked) return true;
 
@@ -651,8 +641,8 @@ If conversion fails, Correxit restores the original notebook.`
       if (args[Rubric.Cell.TOOLBAR] && !id)
         return { resolved: true, score: Rubric.Score.UNSCORED, spec: null };
 
-      const result = await correct(workbook, id);
-    if (headless(workbook)) return result;
+      const result = await Workbook.correct(workbook, id);
+    if (Workbook.headless(workbook)) return result;
 
       const unscored = result.score.status === 'unscored';
       const [x, y] = [result.score.points, result.score.possible];
@@ -679,7 +669,7 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<{ referent: string }>) => {
       const workbook = state.workbook();
       if (!workbook || !args.referent) return;
-      dereference(workbook, args.referent);
+      Workbook.dereference(workbook, args.referent);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.distribute, {
@@ -722,7 +712,7 @@ If conversion fails, Correxit restores the original notebook.`
       const { button } = await showDialog({ title, body, buttons });
       if (!button.accept) return;
       try {
-        await draft(workbook);
+        await Workbook.draft(workbook);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
@@ -733,7 +723,7 @@ If conversion fails, Correxit restores the original notebook.`
     label: trans.__('Fetch a headless Correxit workbook for a given path'),
     execute: async (args: Partial<Credentials & { silent: boolean }>):
       Promise<Headless | null> => {
-      const handle = normalize(args);
+      const handle = Workbook.Credentials.normalize(args);
       try {
         return handle && await fetch(handle, !!args.silent);
       } catch (error) {
@@ -762,7 +752,7 @@ If conversion fails, Correxit restores the original notebook.`
       const rubric = open(workbook);
       if (!workbook || !id || !rubric) return;
       if (args.intervention !== undefined)
-        await intervene(workbook, id, args.intervention);
+        await Workbook.intervene(workbook, id, args.intervention);
       await commands.execute(CommandIDs.save, { undo: false });
     }
   }));
@@ -771,7 +761,7 @@ If conversion fails, Correxit restores the original notebook.`
     isEnabled: () => {
       const workbook = state.workbook();
       const rubric = open(workbook);
-      return !!(headed(workbook) && rubric && !rubric.locked);
+      return !!(Workbook.headed(workbook) && rubric && !rubric.locked);
     },
     isVisible: () => commands.isEnabled(CommandIDs.lock),
     label: trans.__('Lock'),
@@ -779,7 +769,7 @@ If conversion fails, Correxit restores the original notebook.`
       const { rubric, workbook } = await reify(args);
       if (!rubric) return;
       try {
-        await lock(workbook);
+        await Workbook.lock(workbook);
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
@@ -898,7 +888,7 @@ If conversion fails, Correxit restores the original notebook.`
       if (!id || !rubric || rubric.locked) return false;
       if (rubric.assignment.assignee) return false;
 
-      const cell = get(rubric, id);
+      const cell = Rubric.get(rubric, id);
       if (!cell) return false;
       if (cell.is === 'correctable') return true;
       return cell.is === 'comparable' && !cell.references.length;
@@ -908,7 +898,8 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<Cell & Credentials>) => {
       const { rubric: unmodified, workbook } = await reify(args);
       const id = state.cell(args);
-      if (!unmodified || !id || unmodified.locked || !headed(workbook)) return;
+      if (!unmodified || !id || unmodified.locked || !Workbook.headed(workbook))
+        return;
 
       const { id: referent } = await choose(workbook, unmodified, id) ?? {};
       if (!referent) return;
@@ -916,7 +907,7 @@ If conversion fails, Correxit restores the original notebook.`
       const rubric = open(workbook);
       if (!rubric || rubric.locked) return;
 
-      const { is } = get(rubric, id) ?? {};
+      const { is } = Rubric.get(rubric, id) ?? {};
       if (!is || is !== 'comparable' && is !== 'correctable') return;
       if (
         referent === id ||
@@ -924,7 +915,7 @@ If conversion fails, Correxit restores the original notebook.`
         referent in rubric.cells
       ) return;
       const reference = { cell: id, referent, points: 1, secret: true };
-      await refer(workbook, id, reference);
+      await Workbook.refer(workbook, id, reference);
 
       const { widgets } = workbook.content;
       const original = find(widgets, ({ model }) => model.id === id);
@@ -938,7 +929,7 @@ If conversion fails, Correxit restores the original notebook.`
       const rubric = open(state.workbook());
       if (!id || !rubric || rubric.locked || rubric.assignment.assignee)
         return false;
-      return has(rubric, id);
+      return Rubric.has(rubric, id);
     },
     isVisible: args => commands.isEnabled(CommandIDs.remove, args),
     icon: Icons.remove,
@@ -946,7 +937,7 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<Cell>) => {
       const workbook = state.workbook();
       const id = state.cell(args);
-      if (workbook && id) remove(workbook, id);
+      if (workbook && id) Workbook.remove(workbook, id);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.reset, {
@@ -975,7 +966,7 @@ If conversion fails, Correxit restores the original notebook.`
           label: trans.__('Enter a passphrase to attempt decryption')
         });
         if (passphrase) {
-          const recovered = await recover(workbook, passphrase);
+          const recovered = await Workbook.recover(workbook, passphrase);
           if (!recovered) {
             const { button } = await showDialog({
               title: trans.__('Recovery failed'),
@@ -998,7 +989,7 @@ If conversion fails, Correxit restores the original notebook.`
         const { button } = await showDialog({ body, title });
         if (!button.accept) return;
       }
-      await reset(workbook);
+      await Workbook.reset(workbook);
       await commands.execute(CommandIDs.save, { ...args, undo: false });
     }
   }));
@@ -1010,7 +1001,7 @@ If conversion fails, Correxit restores the original notebook.`
       const workbook = state.workbook();
       const id = args.id || state.cell(args);
       if (workbook && id && typeof args.points === 'number')
-        await reweight(workbook, id, args.points);
+        await Workbook.reweight(workbook, id, args.points);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.save, {
@@ -1057,7 +1048,7 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<Cell>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return;
       const id = state.cell(args);
-      await toggle(state.workbook()!, id);
+      await Workbook.toggle(state.workbook()!, id);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.submit, {
@@ -1081,7 +1072,7 @@ If conversion fails, Correxit restores the original notebook.`
       if (rubric.assignment.submission && !rubric.assignment.submitted) {
         try {
           const receipt = await submitter(workbook, identifier);
-          await acknowledge(workbook, receipt);
+          await Workbook.acknowledge(workbook, receipt);
           await commands.execute(CommandIDs.save, { ...args, undo: false });
         } catch (error) {
           showErrorMessage(...Error.interpret(error, trans));
@@ -1121,10 +1112,10 @@ Or do you just want to seal and submit? This document will be locked.`
       if (actions.includes('passphrase') && !passphrase) return;
       try {
         const recipients = await Workbook.recipients(workbook, passphrase);
-        await submit(workbook, recipients);
+        await Workbook.submit(workbook, recipients);
         try {
           const receipt = await submitter(workbook, identifier);
-          await acknowledge(workbook, receipt);
+          await Workbook.acknowledge(workbook, receipt);
         } catch (error) {
           const reason = Error.reason(error);
           const message = `Submission sealed but receipt failed: ${reason}`;
@@ -1162,7 +1153,7 @@ Or do you just want to seal and submit? This document will be locked.`
         const armored = await security.decrypt(
           rubric.assignment.keys.private.assignee!, secret
         );
-        await revise(workbook, await security.parse(armored));
+        await Workbook.revise(workbook, await security.parse(armored));
         await commands.execute(CommandIDs.save, { ...args, undo: false });
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
@@ -1174,7 +1165,7 @@ Or do you just want to seal and submit? This document will be locked.`
     isEnabled: () => {
       const workbook = state.workbook();
       const rubric = open(workbook);
-      return !!(headed(workbook) && rubric && rubric.locked);
+      return !!(Workbook.headed(workbook) && rubric && rubric.locked);
     },
     isVisible: () => commands.isEnabled(CommandIDs.unlock),
     label: trans.__('Unlock'),
