@@ -49,8 +49,7 @@ export namespace Workbook {
 
   export type Credentials = |
     { path: string; unlock: null; key: null; passphrase: null; } |
-    { path: string; unlock: null; key: string; passphrase: null; } |
-    { path: string; unlock: null; key: null; passphrase: string; } |
+    ({ path: string; unlock: null; } & security.Secret) |
     { path: string; unlock: boolean; key: null; passphrase: null; };
 
   export namespace Credentials {
@@ -594,7 +593,7 @@ export namespace Workbook {
   /** Convert a plain notebook into a workbook and return its rubric. */
   export async function convert(
     workbook: Workbook,
-    credentials: security.Credentials | string,
+    credentials: security.Secret | string,
     unlocker: Correxit.Unlocker
   ): Promise<Rubric.Unlocked> {
     try {
@@ -931,7 +930,7 @@ export namespace Workbook {
   /** @returns provisioned recipient keys for a given workbook. */
   export async function recipients(
     workbook: Workbook,
-    credentials: security.Credentials | string | null
+    credentials: security.Secret | string | null
   ): Promise<string[]> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked || !rubric.assignment.assignee)
@@ -963,7 +962,7 @@ export namespace Workbook {
    */
   export async function recover(
     workbook: Workbook,
-    credentials: security.Credentials | string
+    credentials: security.Secret | string
   ): Promise<number> {
     const notebook = workbook.context.model.sharedModel;
     const { assignee, id, keys } = forensic(

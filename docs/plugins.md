@@ -199,7 +199,7 @@ workbook via the identifier, and return the server's receipt.
 ## `Correxit.Unlocker`
 
 ```typescript
-type Credentials =
+type Secret =
   | { key: string; passphrase: null }
   | { key: null; passphrase: string };
 
@@ -209,7 +209,7 @@ type Unlocker = {
     workbook: Workbook,
     purpose: 'create' | 'submit' | 'revise' | 'recover',
     credentials: Partial<Workbook.Credentials> | null
-  ): Promise<{ secret: Credentials | null } | null>;
+  ): Promise<{ secret: Secret | null } | null>;
   unlock(
     workbook: Workbook,
     credentials: Partial<Workbook.Credentials & { silent: boolean }> | null
@@ -218,6 +218,8 @@ type Unlocker = {
 ```
 
 Manages credential acquisition and custody throughout the workbook lifecycle.
+`Secret` is the shared key-or-passphrase type exported by `correxit`.
+`Workbook.Credentials` retains the path and unlock intent used by commands.
 `unlock` retains its author-side meaning: authenticate and unlock the rubric.
 `store` records an author key by rubric id. Conversion awaits `store` before
 committing the new rubric, so a failed custody write aborts conversion.

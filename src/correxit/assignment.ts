@@ -22,10 +22,7 @@ export namespace Assignment {
     file?: string | null;
     notebook: INotebookContent;
     roster?: string[] | null;
-  } & (
-    | { key: string; passphrase: null }
-    | { key: null; passphrase: string }
-  );
+  } & security.Secret;
 
   export type Prepared = {
     encrypted: string[];

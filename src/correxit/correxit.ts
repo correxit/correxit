@@ -5,7 +5,7 @@ import { commands as COMMANDS, CommandIDs as COMMAND_IDS } from './commands';
 import * as description from './description';
 import * as error from './error';
 import { Icons as ICONS } from './icons';
-import type { Credentials } from './security';
+import type { Secret } from './security';
 
 /** Tokens and contracts for composing Correxit JupyterLab plugins. */
 export namespace Correxit {
@@ -77,7 +77,7 @@ export namespace Correxit {
       workbook: Workbook,
       purpose: Unlocker.Purpose,
       credentials: Partial<Workbook.Credentials> | null
-    ): Promise<{ secret: Credentials | null } | null>;
+    ): Promise<{ secret: Secret | null } | null>;
 
     /** Authenticate and unlock the author-side rubric. */
     unlock(

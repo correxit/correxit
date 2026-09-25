@@ -3,13 +3,13 @@ import * as pgp from 'openpgp';
 export type PrivateKey = pgp.PrivateKey;
 
 /** A supplied key or a passphrase from which to derive one. */
-export type Credentials =
+export type Secret =
   | { key: string; passphrase: null; }
   | { key: null; passphrase: string; };
 
 /** Resolve credentials using the rubric id as the passphrase salt. */
 export async function derive(
-  credentials: Credentials | string,
+  credentials: Secret | string,
   id: string
 ): Promise<string> {
   if (typeof credentials === 'string') return keygen(credentials, id);

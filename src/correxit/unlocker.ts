@@ -24,7 +24,7 @@ export namespace Unlocker {
     purpose: Correxit.Unlocker.Purpose,
     credentials: Partial<Workbook.Credentials> | null,
     trans: IRenderMime.TranslationBundle
-  ): Promise<{ secret: security.Credentials | null } | null> {
+  ): Promise<{ secret: security.Secret | null } | null> {
     if (credentials?.key)
       return { secret: { key: credentials.key, passphrase: null } };
     if (credentials?.passphrase)
