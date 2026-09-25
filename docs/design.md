@@ -273,8 +273,9 @@ implementation requires no changes to the propagator loop or commands.
 - **`Registrar`**: provides assignment registrations. Default: `null`
   for manual entry.
 - **`Submitter`**: handles submission receipts. Default: digest receipt.
-- **`Unlocker`**: manages rubric key lifecycle. Default:
-  `SecretsManager`.
+- **`Unlocker`**: acquires credentials for creation, submission, revision, and
+  recovery; stores author keys and unlocks rubrics. Default: passphrase prompts
+  and in-memory `SecretsManager`. Hosted providers can supply keys directly.
 - **`Monitor`**: yields the active workbook as the user switches tabs.
   Default: `Stream`-based async iterable.
 

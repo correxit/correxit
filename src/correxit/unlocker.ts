@@ -18,6 +18,55 @@ export namespace Unlocker {
     await manager.set(token, Correxit.UNLOCKER, id, secret);
   }
 
+  /** Acquire credentials without opening the rubric or changing the workbook. */
+  export async function request(
+    workbook: Workbook,
+    purpose: Correxit.Unlocker.Purpose,
+    credentials: Partial<Workbook.Credentials> | null,
+    trans: IRenderMime.TranslationBundle
+  ): Promise<{ secret: security.Secret | null } | null> {
+    if (credentials?.key)
+      return { secret: { key: credentials.key, passphrase: null } };
+    if (credentials?.passphrase)
+      return { secret: { key: null, passphrase: credentials.passphrase } };
+
+    if (purpose === 'submit') {
+      const revision = await input.submission(trans);
+      if (revision === null) return null;
+      if (!revision) return { secret: null };
+    }
+
+    const prompts = {
+      create: {
+        title: trans.__('Enter a passphrase'),
+        label: trans.__('Enter a passphrase for this workbook')
+      },
+      submit: {
+        title: trans.__('Set a submission passphrase'),
+        label: trans.__('Enter a passphrase to seal your submission')
+      },
+      revise: {
+        title: trans.__('Enter your submission passphrase'),
+        label: trans.__('Enter the passphrase you used when submitting')
+      },
+      recover: {
+        title: trans.__('Recover encrypted cells'),
+        label: trans.__('Enter a passphrase to attempt decryption')
+      }
+    };
+    const passphrase = await input.text(prompts[purpose]);
+    if (passphrase) return { secret: { key: null, passphrase } };
+    if (purpose !== 'recover') return null;
+
+    const accepted = await input.confirm({
+      title: trans.__('Revert to notebook'),
+      body: trans.__(
+        'Encrypted cells were detected. Reset without recovering?'
+      )
+    });
+    return accepted ? { secret: null } : null;
+  }
+
   /**
    * Unlock a workbook trying, in order:
    * - the key, if provided as an argument

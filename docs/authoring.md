@@ -38,13 +38,16 @@ you explicitly mark for grading.
 ## Converting a notebook
 
 Open any Jupyter notebook and click **Convert to a workbook assignment…**
-in the Correxit sidebar. You will be asked for a passphrase. This
+in the Correxit sidebar. By default, you will be asked for a passphrase. This
 passphrase derives a symmetric encryption key that protects reference
 cells and the roster. Choose something memorable; you will need it
 every time you unlock the workbook.
 
-The passphrase never leaves the browser. It is not stored in the
-notebook, in settings, or anywhere on disk.
+With the default provider, the passphrase never leaves the browser and is
+kept only in memory. Hosted installations may manage credentials through an
+authenticated service, so you can create, unlock, submit, and revise without
+entering passphrases. Credentials are never stored in notebook metadata or
+Jupyter settings.
 
 After conversion the notebook is a workbook. The sidebar switches from
 a single button to the full authoring interface.
@@ -333,6 +336,8 @@ editable again while keeping the rubric locked.
 If the student chose **Set passphrase** when submitting, the workbook is
 sealed to both the author and student keys. In that case the student uses
 **Revise submission** and must enter the same submission passphrase.
+Hosted installations may arrange revision access automatically through the
+configured `Unlocker`, using the student's authenticated account.
 
 Revision decrypts the sealed answers, clears the seal and submission
 metadata, clears the student key material, and makes answer cells editable

@@ -2,7 +2,11 @@ declare const require: any;
 
 jest.mock('../correxit/commands', () => ({ CommandIDs: {} }));
 jest.mock('../correxit/icons', () => ({ Icons: {} }));
-jest.mock('../correxit/input', () => ({ text: jest.fn() }));
+jest.mock('../correxit/input', () => ({
+  confirm: jest.fn(),
+  submission: jest.fn(),
+  text: jest.fn()
+}));
 jest.mock('../correxit/security', () => require('./mocks/security'));
 jest.mock('../correxit/workbook', () => ({
   Workbook: {
@@ -234,6 +238,77 @@ describe('Unlocker', () => {
       expect(Workbook.unlock).toHaveBeenNthCalledWith(1, workbook, wrong);
       expect(Workbook.unlock).toHaveBeenNthCalledWith(2, workbook, expected);
       expect(result).toBe(unlocked);
+    });
+  });
+
+  describe('request()', () => {
+    const request = (
+      purpose: Correxit.Unlocker.Purpose,
+      credentials: Partial<Workbook.Credentials> | null = null
+    ) => Unlocker.request(workbook, purpose, credentials, trans);
+
+    it.each(['create', 'submit', 'revise', 'recover'] as const)(
+      'accepts a supplied key for %s without prompting or unlocking',
+      async purpose => {
+        expect(await request(purpose, { key: 'supplied' })).toEqual({
+          secret: { key: 'supplied', passphrase: null }
+        });
+        expect(input.text).not.toHaveBeenCalled();
+        expect(input.submission).not.toHaveBeenCalled();
+        expect(Workbook.unlock).not.toHaveBeenCalled();
+        expect(manager.get).not.toHaveBeenCalled();
+        expect(manager.set).not.toHaveBeenCalled();
+      }
+    );
+
+    it('preserves supplied passphrases for derivation with the rubric id', async () => {
+      expect(await request('create', { passphrase: 'chosen' })).toEqual({
+        secret: { key: null, passphrase: 'chosen' }
+      });
+      expect(security.keygen).not.toHaveBeenCalled();
+      expect(input.text).not.toHaveBeenCalled();
+    });
+
+    it('prompts for creation credentials', async () => {
+      (input.text as jest.Mock).mockResolvedValue('chosen');
+      expect(await request('create')).toEqual({
+        secret: { key: null, passphrase: 'chosen' }
+      });
+    });
+
+    it('distinguishes declining revision access from cancelling submission', async () => {
+      (input.submission as jest.Mock).mockResolvedValue(false);
+      expect(await request('submit')).toEqual({ secret: null });
+      (input.submission as jest.Mock).mockResolvedValue(null);
+      expect(await request('submit')).toBeNull();
+      expect(input.text).not.toHaveBeenCalled();
+    });
+
+    it('cancels submission when the chosen passphrase is cancelled', async () => {
+      (input.submission as jest.Mock).mockResolvedValue(true);
+      (input.text as jest.Mock).mockResolvedValue('');
+      expect(await request('submit')).toBeNull();
+    });
+
+    it.each(['submit', 'revise'] as const)(
+      'keeps %s passphrases out of author credentials',
+      async purpose => {
+        (input.submission as jest.Mock).mockResolvedValue(true);
+        (input.text as jest.Mock).mockResolvedValue('student');
+        expect(await request(purpose)).toEqual({
+          secret: { key: null, passphrase: 'student' }
+        });
+        expect(Workbook.unlock).not.toHaveBeenCalled();
+        expect(manager.set).not.toHaveBeenCalled();
+      }
+    );
+
+    it('requires an explicit choice to skip recovery', async () => {
+      (input.text as jest.Mock).mockResolvedValue('');
+      (input.confirm as jest.Mock).mockResolvedValue(false);
+      expect(await request('recover')).toBeNull();
+      (input.confirm as jest.Mock).mockResolvedValue(true);
+      expect(await request('recover')).toEqual({ secret: null });
     });
   });
 });
