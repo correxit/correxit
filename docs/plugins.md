@@ -199,8 +199,17 @@ workbook via the identifier, and return the server's receipt.
 ## `Correxit.Unlocker`
 
 ```typescript
+type Credentials =
+  | { key: string; passphrase: null }
+  | { key: null; passphrase: string };
+
 type Unlocker = {
   store(id: string, key: string): Promise<void>;
+  request(
+    workbook: Workbook,
+    purpose: 'create' | 'submit' | 'revise' | 'recover',
+    credentials: Partial<Workbook.Credentials> | null
+  ): Promise<{ secret: Credentials | null } | null>;
   unlock(
     workbook: Workbook,
     credentials: Partial<Workbook.Credentials & { silent: boolean }> | null
@@ -208,9 +217,39 @@ type Unlocker = {
 };
 ```
 
-Manages the rubric key lifecycle. `store` persists a key for a rubric id in
-memory only. `unlock` attempts to unlock a workbook, optionally prompting for
-credentials.
+Manages credential acquisition and custody throughout the workbook lifecycle.
+`unlock` retains its author-side meaning: authenticate and unlock the rubric.
+`store` records an author key by rubric id. Conversion awaits `store` before
+committing the new rubric, so a failed custody write aborts conversion.
+
+`request` acquires credentials without mutating the workbook:
+
+| Purpose   | Credential                    | When it is needed                                                       |
+| --------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `create`  | Author                        | Before a plain notebook has a rubric; `store` later supplies its new id |
+| `submit`  | Assignee                      | Protect the student's private key so they can revise later              |
+| `revise`  | Assignee                      | Recover that private key while leaving the rubric locked                |
+| `recover` | Authorized author or assignee | Recover encrypted cells from a damaged workbook before resetting it     |
+
+Return `{ secret: { key, passphrase: null } }` for an existing or generated
+256-bit key, represented as 64 lowercase hexadecimal characters. Return
+`{ secret: { key: null, passphrase } }` to let Correxit derive the key using
+the rubric id. The supplied command credentials are hints for the provider;
+they do not establish authorization.
+
+- `null` cancels the operation without changing the workbook.
+- `{ secret: null }` explicitly proceeds without student revision access on
+  submit, or without decryption on recovery. Creation and revision require a
+  secret and stop if it is absent.
+- Throw to report a failure or denied access. Commands report the error and
+  stop; they do not fall back to a prompt or silently submit without revision
+  access.
+
+The default provider owns the passphrase prompts and submission choice. It
+keeps student credentials out of the author key and passphrase caches. Its
+recovery prompt asks for confirmation before proceeding without decryption.
+Existing custom unlockers must implement `request` as well as `store` and
+`unlock`.
 
 The default implementation uses JupyterLab `SecretsManager`. Institutional
 deployments may replace it with an HSM-backed or vault-backed provider.
@@ -219,6 +258,19 @@ Correxit does not store rubric keys in notebook metadata, settings JSON, or
 assignment files. The configured `Unlocker` is the key-custody boundary. The
 bundled secrets-manager connector is in-memory; a persistent connector is a
 deployment choice.
+
+In a hosted provider, use `Workbook.identifier(workbook)` to locate assignment
+and assignee credentials, and authenticate and authorize the request in the
+external service. Notebook identifiers are routing data, not access grants.
+Recovery may involve invalid metadata, so the provider must also support a
+trusted lookup by document context or decline the request.
+
+Keep author keys separate from student revision keys. Student storage must be
+scoped by rubric and assignee, within the authenticated deployment. Persist
+the student secret before returning it for a `submit` request, and retain
+access to secrets needed by earlier submissions. `store` is only for author
+keys; submission never puts a student key in the author cache. Revision uses
+the student private key to reopen answers and leaves the grading rubric locked.
 
 ---
 

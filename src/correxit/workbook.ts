@@ -594,12 +594,12 @@ export namespace Workbook {
   /** Convert a plain notebook into a workbook and return its rubric. */
   export async function convert(
     workbook: Workbook,
-    passphrase: string,
+    credentials: security.Credentials | string,
     unlocker: Correxit.Unlocker
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
-      const key = await security.keygen(passphrase, opened.id);
+      const key = await security.derive(credentials, opened.id);
       const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
       return update(workbook, rubric);
     } catch (error) {
@@ -614,7 +614,7 @@ export namespace Workbook {
       }
 
       const created = Rubric.create();
-      const key = await security.keygen(passphrase, created.id);
+      const key = await security.derive(credentials, created.id);
       const pair = await security.keypair();
       const armored = await security.encrypt(pair.private, key);
       const keys: Rubric.Assignment.Keys = {
@@ -622,7 +622,7 @@ export namespace Workbook {
         public: { assignee: null, author: pair.public }
       };
       const assignment = { ...created.assignment, keys };
-      unlocker.store(created.id, key);
+      await unlocker.store(created.id, key);
       return update(workbook, { ...created, assignment, key });
     }
   }
@@ -931,16 +931,16 @@ export namespace Workbook {
   /** @returns provisioned recipient keys for a given workbook. */
   export async function recipients(
     workbook: Workbook,
-    passphrase: string | null
+    credentials: security.Credentials | string | null
   ): Promise<string[]> {
     const rubric = open(workbook, quiet);
     if (!rubric?.locked || !rubric.assignment.assignee)
       throw new Error.Submit('recipients error');
 
     const { author } = rubric.assignment.keys.public;
-    if (!passphrase) return [author];
+    if (!credentials) return [author];
 
-    const secret = await security.keygen(passphrase, rubric.id);
+    const secret = await security.derive(credentials, rubric.id);
     const pair = await security.keypair();
     const armored = await security.encrypt(pair.private, secret);
     const keys: Rubric.Assignment.Keys = {
@@ -963,7 +963,7 @@ export namespace Workbook {
    */
   export async function recover(
     workbook: Workbook,
-    passphrase: string
+    credentials: security.Credentials | string
   ): Promise<number> {
     const notebook = workbook.context.model.sharedModel;
     const { assignee, id, keys } = forensic(
@@ -971,7 +971,7 @@ export namespace Workbook {
     );
     if (!id) return 0;
 
-    const key = await security.keygen(passphrase, id);
+    const key = await security.derive(credentials, id);
     const recipients: security.PrivateKey[] = [];
     const types = new Set(['code', 'markdown', 'raw']);
     const sanitize = ({ index, payload, replacement }: Recovered) => {

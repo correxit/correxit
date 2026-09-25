@@ -2,6 +2,22 @@ import * as pgp from 'openpgp';
 
 export type PrivateKey = pgp.PrivateKey;
 
+/** A supplied key or a passphrase from which to derive one. */
+export type Credentials =
+  | { key: string; passphrase: null; }
+  | { key: null; passphrase: string; };
+
+/** Resolve credentials using the rubric id as the passphrase salt. */
+export async function derive(
+  credentials: Credentials | string,
+  id: string
+): Promise<string> {
+  if (typeof credentials === 'string') return keygen(credentials, id);
+  return credentials.key !== null
+    ? credentials.key
+    : keygen(credentials.passphrase, id);
+}
+
 export async function decrypt(text: string, password: string): Promise<string> {
   let message;
   try {

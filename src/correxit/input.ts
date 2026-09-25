@@ -1,5 +1,6 @@
-import { InputDialog } from '@jupyterlab/apputils';
+import { Dialog, InputDialog, showDialog } from '@jupyterlab/apputils';
 import { Cell, ICellModel } from '@jupyterlab/cells';
+import { IRenderMime } from '@jupyterlab/rendermime';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
 import { Workbook } from '..';
@@ -221,6 +222,38 @@ export function cell(
   document.addEventListener('keydown', keydown, true);
   void reveal(target);
   return delegate.promise;
+}
+
+/** Ask for confirmation. */
+export async function confirm(options: { title: string; body: string }) {
+  const { button } = await showDialog(options);
+  return button.accept;
+}
+
+/** Choose revision access, submission alone, or cancellation. */
+export async function submission(
+  trans: IRenderMime.TranslationBundle
+): Promise<boolean | null> {
+  const { button: { accept, actions } } = await showDialog({
+    title: trans.__('Submit assignment'),
+    body: trans.__(
+`Would you like to set a passphrase to revise your submission later?
+Or do you just want to seal and submit? This document will be locked.`
+    ),
+    buttons: [
+      Dialog.cancelButton({ label: trans.__('Cancel') }),
+      Dialog.okButton({
+        className: 'jp-mod-styled correxit-dialog-revert',
+        label: trans.__('Submit without passphrase')
+      }),
+      Dialog.okButton({
+        className: 'jp-mod-styled',
+        label: trans.__('Set passphrase'),
+        actions: ['passphrase']
+      })
+    ]
+  });
+  return accept ? actions.includes('passphrase') : null;
 }
 
 /** @returns text input from the user. */

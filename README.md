@@ -40,7 +40,9 @@ into a gradable workbook.
   store.
 - The author converts a Jupyter notebook into a workbook by configuring which
   cells to grade, optionally setting a local late policy for backendless
-  workflows, and encrypting the grading logic with a passphrase.
+  workflows, and encrypting the grading logic with a passphrase or a
+  deployment-managed key. A custom `Unlocker` can provide credentials from an
+  authenticated service throughout the author and student workflows.
 - A grader uses the Correxit Corrector panel to scan a directory of submitted
   workbooks, optionally unlock them, and batch-grade them, with configurable
   concurrency and a per-workbook timeout to handle hung kernels.

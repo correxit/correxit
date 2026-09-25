@@ -85,6 +85,20 @@ export function commands(
   const fetch = (handle: Credentials, silent = false) =>
     io.request(handle, factory, manager, unlocker, silent);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
+  const save = async (workbook: Workbook, undo = true) => {
+    if (!undo) workbook.context.model.sharedModel.clearUndoHistory();
+    await workbook.context.save();
+  };
+  const request: Correxit.Unlocker['request'] = async (
+    workbook, purpose, credentials
+  ) => {
+    try {
+      return await unlocker.request(workbook, purpose, credentials);
+    } catch (error) {
+      void showErrorMessage(...Error.interpret(error, trans));
+      return null;
+    }
+  };
   const block = (rubric: Rubric.Unlocked, id: string) => new Set([
     id,
     ...Object.keys(rubric.cells),
@@ -522,7 +536,7 @@ export function commands(
     isVisible: () => commands.isEnabled(CommandIDs.convert),
     label: trans.__('Convert to a workbook assignment...'),
     execute: async (args: Partial<Credentials>) => {
-      const { workbook } = await reify(args);
+      const { workbook } = await reify({ path: args.path });
       if (!workbook) return;
 
       const notebook = workbook.context.model.sharedModel;
@@ -547,11 +561,8 @@ If conversion fails, Correxit restores the original notebook.`
         if (!button.accept) return;
       }
 
-      const passphrase = await input.text({
-        title: trans.__('Enter a passphrase'),
-        label: trans.__('Enter a passphrase for this workbook')
-      });
-      if (!passphrase) return;
+      const choice = await request(workbook, 'create', args);
+      if (!choice?.secret) return;
 
       const snapshot = workbook.context.model.toJSON() as INotebookContent;
       const overlay = document.createElement('div');
@@ -565,7 +576,7 @@ If conversion fails, Correxit restores the original notebook.`
 
       let report: string[] | null;
       try {
-        await Workbook.convert(workbook, passphrase, unlocker);
+        await Workbook.convert(workbook, choice.secret, unlocker);
         report = await nbgrader.convert(workbook, trans);
       } catch (error) {
         Workbook.restore(workbook, snapshot);
@@ -953,7 +964,7 @@ If conversion fails, Correxit restores the original notebook.`
     caption: trans.__('Deletes Correxit metadata, keeps notebook content'),
     label: trans.__('Revert to notebook...'),
     execute: async (args: Partial<Credentials>) => {
-      const { workbook } = await reify(args);
+      const { workbook } = await reify({ path: args.path });
       if (!workbook) return;
 
       const notebook = workbook.context.model.sharedModel;
@@ -961,12 +972,10 @@ If conversion fails, Correxit restores the original notebook.`
         cell => security.encrypted(cell.getSource())
       );
       if (encrypted) {
-        const passphrase = args.key ?? await input.text({
-          title: trans.__('Recover encrypted cells'),
-          label: trans.__('Enter a passphrase to attempt decryption')
-        });
-        if (passphrase) {
-          const recovered = await Workbook.recover(workbook, passphrase);
+        const choice = await request(workbook, 'recover', args);
+        if (!choice) return;
+        if (choice.secret) {
+          const recovered = await Workbook.recover(workbook, choice.secret);
           if (!recovered) {
             const { button } = await showDialog({
               title: trans.__('Recovery failed'),
@@ -974,14 +983,6 @@ If conversion fails, Correxit restores the original notebook.`
             });
             if (!button.accept) return;
           }
-        } else {
-          const { button } = await showDialog({
-            title: trans.__('Revert to notebook'),
-            body: trans.__(
-              'Encrypted cells were detected. Reset without recovering?'
-            )
-          });
-          if (!button.accept) return;
         }
       } else {
         const title = trans.__('Revert to notebook');
@@ -990,7 +991,7 @@ If conversion fails, Correxit restores the original notebook.`
         if (!button.accept) return;
       }
       await Workbook.reset(workbook);
-      await commands.execute(CommandIDs.save, { ...args, undo: false });
+      await save(workbook, false);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.reweight, {
@@ -1013,11 +1014,7 @@ If conversion fails, Correxit restores the original notebook.`
         console.warn('save failed for (handle, workbook)', handle, workbook);
         return;
       }
-      if (args.undo === false) {
-        const notebook = workbook.context.model.sharedModel;
-        notebook.clearUndoHistory();
-      }
-      await workbook.context.save();
+      await save(workbook, args.undo !== false);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.share, {
@@ -1064,7 +1061,7 @@ If conversion fails, Correxit restores the original notebook.`
     isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
-      const { rubric, workbook } = await reify(args);
+      const { rubric, workbook } = await reify({ path: args.path });
       if (!rubric) return;
 
       const identifier = Workbook.identifier(workbook);
@@ -1073,45 +1070,17 @@ If conversion fails, Correxit restores the original notebook.`
         try {
           const receipt = await submitter(workbook, identifier);
           await Workbook.acknowledge(workbook, receipt);
-          await commands.execute(CommandIDs.save, { ...args, undo: false });
+          await save(workbook, false);
         } catch (error) {
           showErrorMessage(...Error.interpret(error, trans));
         }
         return;
       }
 
-      const title = trans.__('Submit assignment');
-      const body = trans.__(
-`Would you like to set a passphrase to revise your submission later?
-Or do you just want to seal and submit? This document will be locked.`
-      );
-      const { button: { accept, actions } } = await showDialog({
-        title,
-        body,
-        buttons: [
-          Dialog.cancelButton({ label: trans.__('Cancel') }),
-          Dialog.okButton({
-            className: 'jp-mod-styled correxit-dialog-revert',
-            label: trans.__('Submit without passphrase')
-          }),
-          Dialog.okButton({
-            className: 'jp-mod-styled',
-            label: trans.__('Set passphrase'),
-            actions: ['passphrase']
-          })
-        ]
-      });
-      if (!accept) return;
-
-      const passphrase = actions.includes('passphrase')
-        ? await input.text({
-            title: trans.__('Set a submission passphrase'),
-            label: trans.__('Enter a passphrase to seal your submission')
-          })
-        : null;
-      if (actions.includes('passphrase') && !passphrase) return;
+      const choice = await request(workbook, 'submit', args);
+      if (!choice) return;
       try {
-        const recipients = await Workbook.recipients(workbook, passphrase);
+        const recipients = await Workbook.recipients(workbook, choice.secret);
         await Workbook.submit(workbook, recipients);
         try {
           const receipt = await submitter(workbook, identifier);
@@ -1119,10 +1088,10 @@ Or do you just want to seal and submit? This document will be locked.`
         } catch (error) {
           const reason = Error.reason(error);
           const message = `Submission sealed but receipt failed: ${reason}`;
-          await commands.execute(CommandIDs.save, { ...args, undo: false });
+          await save(workbook, false);
           throw new Error.Plugin(message);
         }
-        await commands.execute(CommandIDs.save, { ...args, undo: false });
+        await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }
@@ -1139,22 +1108,19 @@ Or do you just want to seal and submit? This document will be locked.`
     isVisible: () => commands.isEnabled(CommandIDs.revise),
     label: trans.__('Revise submission...'),
     execute: async (args: Partial<Credentials>) => {
-      const { rubric, workbook } = await reify(args);
+      const { rubric, workbook } = await reify({ path: args.path });
       if (!rubric?.locked) return;
 
-      const passphrase = await input.text({
-        title: trans.__('Enter your submission passphrase'),
-        label: trans.__('Enter the passphrase you used when submitting')
-      });
-      if (!passphrase) return;
+      const choice = await request(workbook, 'revise', args);
+      if (!choice?.secret) return;
 
       try {
-        const secret = await security.keygen(passphrase, rubric.id);
+        const secret = await security.derive(choice.secret, rubric.id);
         const armored = await security.decrypt(
           rubric.assignment.keys.private.assignee!, secret
         );
         await Workbook.revise(workbook, await security.parse(armored));
-        await commands.execute(CommandIDs.save, { ...args, undo: false });
+        await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }
@@ -1172,7 +1138,7 @@ Or do you just want to seal and submit? This document will be locked.`
     usage: `
 The command execute args type is \`Partial<Workbook.Credentials>\`
 
-If no passphrase or key is provided, the command invokes a user prompt dialog.
+The configured Unlocker supplies credentials, prompting by default.
 The returned promise never rejects. The command invokes an error message dialog
 if unlock fails. It returns a promise that resolves to either null or if
 successful, an unlocked rubric.
