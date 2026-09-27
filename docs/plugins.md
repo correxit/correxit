@@ -204,12 +204,12 @@ type Secret =
   | { key: null; passphrase: string };
 
 type Unlocker = {
-  store(id: string, key: string): Promise<void>;
   request(
     workbook: Workbook,
     purpose: 'create' | 'submit' | 'revise' | 'recover',
     credentials: Partial<Workbook.Credentials> | null
   ): Promise<{ secret: Secret | null } | null>;
+  store(id: string, key: string): Promise<void>;
   unlock(
     workbook: Workbook,
     credentials: Partial<Workbook.Credentials & { silent: boolean }> | null

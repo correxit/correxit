@@ -12,12 +12,6 @@ type Secrets = {
 };
 
 export namespace Unlocker {
-  export async function store(id: string, key: string, secrets: Secrets) {
-    const { manager, token } = secrets;
-    const secret = { namespace: Correxit.UNLOCKER, id, value: key };
-    await manager.set(token, Correxit.UNLOCKER, id, secret);
-  }
-
   /** Acquire credentials without opening the rubric or changing the workbook. */
   export async function request(
     workbook: Workbook,
@@ -65,6 +59,13 @@ export namespace Unlocker {
       )
     });
     return accepted ? { secret: null } : null;
+  }
+
+  /** Store a secret key associated with an id. */
+  export async function store(id: string, key: string, secrets: Secrets) {
+    const { manager, token } = secrets;
+    const secret = { namespace: Correxit.UNLOCKER, id, value: key };
+    await manager.set(token, Correxit.UNLOCKER, id, secret);
   }
 
   /**
