@@ -66,6 +66,10 @@ using the original tag; do not move the tag or recreate the release.
 
 ## Versioning
 
+For 2.1.0, requiring `Unlocker.request` is an intentional exception to strict
+SemVer while Correxit has no known external plugin consumers. Custom unlockers
+must implement it; the workbook-format compatibility guarantee still applies.
+
 Numbered website snapshots, such as `/2.0.0/`, remain fixed. The domain root
 serves the newest stable homepage directly, with links to its versioned guides
 and demo. `/latest/` redirects to that version. Backports and retries do not
