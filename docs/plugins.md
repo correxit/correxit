@@ -219,12 +219,12 @@ type Unlocker = {
 
 `request` acquires credentials without changing the workbook:
 
-| Purpose   | Credential | Use                                                 |
-| --------- | ---------- | --------------------------------------------------- |
+| Purpose   | Credential | Use                                                  |
+| --------- | ---------- | ---------------------------------------------------- |
 | `create`  | Author     | Create a workbook; no rubric exists yet              |
 | `submit`  | Student    | Protect the student's private key for later revision |
-| `revise`  | Student    | Reopen answers while leaving the rubric locked      |
-| `recover` | Either     | Recover encrypted cells; metadata may be invalid    |
+| `revise`  | Student    | Reopen answers while leaving the rubric locked       |
+| `recover` | Either     | Recover encrypted cells; metadata may be invalid     |
 
 `Secret`, exported by `correxit`, accepts a 256-bit key as 64 lowercase hex
 characters or a passphrase from which Correxit derives a key using the rubric
