@@ -206,8 +206,8 @@ class ModeSelector extends ReactWidget {
       },
       {
         value: 'collect',
-        label: trans.__('Collect'),
-        tooltip: trans.__('Collect certified workbook grades')
+        label: trans.__('Sync'),
+        tooltip: trans.__('Save and sync certified workbook grades')
       }
     ];
     const action = () => this.go(mode, overwrite, submitted);
