@@ -36,16 +36,25 @@ secret references, the roster, and sealed submission sources.
 
 Plaintext keys are **never written to notebook metadata, settings JSON, or
 assignment files**. They enter via user input or a configured `Unlocker`.
-`Rubric.Unlocked` carries the PBKDF2 key; `Rubric.Locked` has `key: null`.
+`Rubric.Unlocked` carries the symmetric key; `Rubric.Locked` has `key: null`.
 Notebook metadata stores only locked rubrics.
 
 The shipped secrets-manager connector is in-memory. Deployments may configure
 a different secrets connector or `Unlocker`; that is an intentional key custody
 choice made by the deployment, not a hidden Correxit write path.
 
+The `Unlocker` also acquires credentials for creation, submission, revision,
+and forensic recovery. A hosted provider can supply generated keys directly,
+without user passphrases. Author keys and student revision keys have separate
+purposes: student credentials must never unlock the rubric or enter the author
+cache. Hosted stores must authorize access independently of notebook-supplied
+identifiers and scope student credentials by rubric and assignee. Creation
+awaits author-key storage; a hosted provider must persist student credentials
+before allowing submission to proceed.
+
 The author's PGP private key is stored in
 `assignment.keys.private.author`, encrypted with the same
-PBKDF2-derived symmetric key that encrypts the roster. `unlock`
+symmetric key that encrypts the roster. `unlock`
 recovers it into local scope, uses it, and discards it before
 returning.
 
@@ -168,10 +177,10 @@ external system.
   cannot enumerate the roster.
 - **Answerable cells:** Store a SHA-256 digest of the expected
   output, not the output itself. One-way.
-- **Author PGP private key:** Encrypted with the PBKDF2 key at
+- **Author PGP private key:** Encrypted with the author key at
   authoring time. Stored in `assignment.keys.private.author`.
 - **Student PGP private key:** Encrypted with the student's own
-  PBKDF2 key (derived from their passphrase). Stored in
+  key (derived from their passphrase or supplied by the `Unlocker`). Stored in
   `assignment.keys.private.assignee`. Null for fire-and-forget
   submissions.
 
@@ -193,7 +202,8 @@ external system.
 
 1. **Authoring** (`Workbook.convert`): `security.keypair()` generates
    a Curve25519 PGP keypair. The public key is stored in cleartext.
-   The private key is encrypted with the PBKDF2 key before storage.
+   The private key is encrypted with the supplied or derived author key
+   before storage.
 
 2. **Propagation** (`propagator.ts`): No changes. Keys travel in
    assignment metadata, copied to each student notebook. The `seal`
@@ -203,13 +213,14 @@ external system.
    is sealed to `[keys.public.author]`. Cells are sorted by id.
    The seal hash is computed and stored. The workbook is frozen.
 
-4. **Submit, with passphrase** (`commands.ts: submit`): Student
-   generates their own keypair. Their private key is encrypted
-   with their PBKDF2 key. Cells are sealed to both
+4. **Submit, with revision access** (`commands.ts: submit`): The
+   `Unlocker` supplies student credentials, prompting for a passphrase by
+   default. Correxit generates a student keypair and encrypts its private key
+   with the supplied or derived key. Cells are sealed to both
    `[keys.public.author, keys.public.assignee]`.
 
-5. **Revise** (`commands.ts: revise`, `Workbook.revise`): Student
-   enters a passphrase, derives a key, decrypts their PGP private key,
+5. **Revise** (`commands.ts: revise`, `Workbook.revise`): The `Unlocker`
+   acquires student credentials to decrypt their PGP private key,
    unseals all cells, clears `seal`, `submission`, `submitted`, and
    student key fields, then defrosts the notebook.
 
@@ -320,15 +331,16 @@ Since MACs hash stringified JSON, field presence must stay stable.
 
 ## Key Representation
 
-The PBKDF2-derived key is a 256-bit value stored as a 64-character lowercase
-hex string. `hmac` decodes this to 32 raw bytes before importing it as HMAC
+The supplied or PBKDF2-derived key is a 256-bit value stored as a 64-character
+lowercase hex string. `hmac` decodes this to 32 raw bytes before importing it as HMAC
 key material. The same hex string is used as-is for the openpgp symmetric
 password.
 
 ## Assignee Key Lifecycle
 
 Assignee key fields start as null from propagation and remain null unless the
-student chooses "Set passphrase" at submit time. `Rubric.unseal()` clears them
+`Unlocker` provides student credentials at submit time (the default provider's
+"Set passphrase" choice). `Rubric.unseal()` clears them
 back to null on revise. Fire-and-forget submissions therefore never offer a
 revise option.
 

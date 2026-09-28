@@ -199,7 +199,16 @@ workbook via the identifier, and return the server's receipt.
 ## `Correxit.Unlocker`
 
 ```typescript
+type Secret =
+  | { key: string; passphrase: null }
+  | { key: null; passphrase: string };
+
 type Unlocker = {
+  request(
+    workbook: Workbook,
+    purpose: 'create' | 'submit' | 'revise' | 'recover',
+    credentials: Partial<Workbook.Credentials> | null
+  ): Promise<{ secret: Secret | null } | null>;
   store(id: string, key: string): Promise<void>;
   unlock(
     workbook: Workbook,
@@ -208,17 +217,35 @@ type Unlocker = {
 };
 ```
 
-Manages the rubric key lifecycle. `store` persists a key for a rubric id in
-memory only. `unlock` attempts to unlock a workbook, optionally prompting for
-credentials.
+`request` acquires credentials without changing the workbook:
 
-The default implementation uses JupyterLab `SecretsManager`. Institutional
-deployments may replace it with an HSM-backed or vault-backed provider.
+| Purpose   | Credential | Use                                                  |
+| --------- | ---------- | ---------------------------------------------------- |
+| `create`  | Author     | Create a workbook; no rubric exists yet              |
+| `submit`  | Student    | Protect the student's private key for later revision |
+| `revise`  | Student    | Reopen answers while leaving the rubric locked       |
+| `recover` | Either     | Recover encrypted cells; metadata may be invalid     |
 
-Correxit does not store rubric keys in notebook metadata, settings JSON, or
-assignment files. The configured `Unlocker` is the key-custody boundary. The
-bundled secrets-manager connector is in-memory; a persistent connector is a
-deployment choice.
+`Secret`, exported by `correxit`, accepts a 256-bit key as 64 lowercase hex
+characters or a passphrase from which Correxit derives a key using the rubric
+id as salt.
+
+- `null` cancels the operation.
+- `{ secret: null }` submits without revision access or skips decryption on recovery.
+  Creation and revision require a secret.
+- Throw to report a failure. Commands display the error and stop without
+  falling back to passphrase prompts.
+
+`store` records an author key by rubric id. Conversion awaits it before
+committing the new rubric. Student credentials do not pass through `store`.
+`unlock` authenticates and unlocks the author-side rubric.
+
+The default provider uses passphrase prompts and an in-memory `SecretsManager`.
+Hosted providers can supply keys directly throughout the lifecycle. Correxit
+never writes plaintext keys to notebook metadata, settings, or assignment files;
+external credential storage and access control belong to the provider.
+
+Existing custom unlockers must implement `request` alongside `store` and `unlock`.
 
 ---
 

@@ -81,7 +81,7 @@ const phase = (
     if (assignment.seal !== null) {
       return {
         kind: trans.__('Sealed submission'),
-        note: trans.__('Revision needs the submission passphrase.'),
+        note: trans.__('Revision requires access to this submission.'),
         tone: 'submitted'
       };
     }
@@ -174,7 +174,7 @@ const step = (
   }
   if (assignment.submission !== null && assignment.seal !== null) {
     return {
-      body: trans.__('Use the submission passphrase to revise.'),
+      body: trans.__('Reopen your submission to revise it.'),
       command: revise
     };
   }

@@ -452,6 +452,10 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
             );
             return {
               store: () => Promise.resolve(),
+              request: () =>
+                Promise.reject(
+                  new Correxit.Error.Plugin('Secrets manager token unavailable')
+                ),
               unlock: () =>
                 Promise.reject(
                   new Correxit.Error.Plugin('Secrets manager token unavailable')
@@ -468,6 +472,8 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
           return {
             store: (id: string, key: string) =>
               Unlocker.store(id, key, secrets),
+            request: (workbook, purpose, credentials) =>
+              Unlocker.request(workbook, purpose, credentials, trans),
             unlock: async (workbook, credentials) =>
               Unlocker.unlock(workbook, credentials, secrets, trans)
           } as Correxit.Unlocker;

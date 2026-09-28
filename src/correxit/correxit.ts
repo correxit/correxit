@@ -5,6 +5,7 @@ import { commands as COMMANDS, CommandIDs as COMMAND_IDS } from './commands';
 import * as description from './description';
 import * as error from './error';
 import { Icons as ICONS } from './icons';
+import type { Secret } from './security';
 
 /** Tokens and contracts for composing Correxit JupyterLab plugins. */
 export namespace Correxit {
@@ -64,15 +65,30 @@ export namespace Correxit {
   ) => Promise<string | null>;
 
   export type Unlocker = {
-    /** Store the key for a given rubric id. */
+    /** Store an author key for a given rubric id. */
     store(id: string, key: string): Promise<void>;
 
-    /** Unlock a given workbook with the given credentials. */
+    /**
+     * Acquire credentials without changing the workbook. Null cancels;
+     * { secret: null } submits without revision access or skips recovery.
+     * Throw on denied access or failed custody; commands stop on failure.
+     */
+    request(
+      workbook: Workbook,
+      purpose: Unlocker.Purpose,
+      credentials: Partial<Workbook.Credentials> | null
+    ): Promise<{ secret: Secret | null } | null>;
+
+    /** Authenticate and unlock the author-side rubric. */
     unlock(
       workbook: Workbook,
       credentials: Partial<Workbook.Credentials & { silent: boolean }> | null
     ): Promise<Rubric.Unlocked | null>;
   };
+
+  export namespace Unlocker {
+    export type Purpose = 'create' | 'submit' | 'revise' | 'recover';
+  }
 
   export const COLLECTOR = 'correxit:collector';
 
