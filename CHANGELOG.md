@@ -1,3 +1,15 @@
+# 2.1.0
+
+<!-- START GENERATED CHANGELOG: 2.1.0 -->
+
+## What's Changed
+* feat: upgraded managed passphrase options by @afshin in https://github.com/correxit/correxit/pull/97
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v2.0.2...v2.1.0
+
+<!-- END GENERATED CHANGELOG: 2.1.0 -->
+
 # 2.0.2
 
 ### Release tooling
