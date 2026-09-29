@@ -1,7 +1,7 @@
 site_name: Correxit
 site_description: A kernel-agnostic Jupyter extension for grading notebooks.
 site_url: https://correx.it/
-repo_name: correxit/correxit
+repo_name: correxit
 repo_url: https://github.com/correxit/correxit
 
 docs_dir: site/_docs
