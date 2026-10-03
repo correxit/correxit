@@ -2,7 +2,7 @@
 
 This guide is for the person writing the assignment. It explains how to
 turn a Jupyter notebook into a Correxit workbook that can be distributed,
-completed by students, and graded, all without a backend.
+completed by students, and graded, with or without a backend.
 
 Everything a student receives is contained in a single `.ipynb` file.
 Everything the grader needs is too. There is no database, no server, no
