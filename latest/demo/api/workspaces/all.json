@@ -1,0 +1,134 @@
+{
+  "correxit-demo": {
+    "data": {
+      "docmanager:recents": {
+        "closed": [
+          {
+            "contentType": "file",
+            "factory": "Editor",
+            "path": "README.md",
+            "root": ""
+          }
+        ],
+        "opened": [
+          {
+            "contentType": "directory",
+            "path": "",
+            "root": ""
+          },
+          {
+            "contentType": "notebook",
+            "factory": "Notebook",
+            "path": "chinook.ipynb",
+            "root": ""
+          },
+          {
+            "contentType": "file",
+            "factory": "Markdown Preview",
+            "path": "README.md",
+            "root": ""
+          }
+        ]
+      },
+      "file-browser-filebrowser:columns": {
+        "sizes": {
+          "file_size": null,
+          "is_selected": 18,
+          "last_modified": 86.5,
+          "name": 139.5
+        }
+      },
+      "layout-restorer:data": {
+        "down": {
+          "size": 0,
+          "widgets": []
+        },
+        "left": {
+          "collapsed": true,
+          "visible": true,
+          "widgetStates": {
+            "jp-running-sessions": {
+              "expansionStates": [
+                false,
+                false,
+                false,
+                false
+              ],
+              "sizes": [
+                0.25,
+                0.25,
+                0.25,
+                0.25
+              ]
+            }
+          },
+          "widgets": [
+            "filebrowser",
+            "running-sessions",
+            "@jupyterlab/toc:plugin"
+          ]
+        },
+        "main": {
+          "current": "notebook:chinook.ipynb",
+          "dock": {
+            "children": [
+              {
+                "currentIndex": 0,
+                "type": "tab-area",
+                "widgets": [
+                  "markdownviewer-widget:README.md"
+                ]
+              },
+              {
+                "currentIndex": 0,
+                "type": "tab-area",
+                "widgets": [
+                  "notebook:chinook.ipynb"
+                ]
+              }
+            ],
+            "orientation": "horizontal",
+            "sizes": [
+              0.35526315789473684,
+              0.6447368421052632
+            ],
+            "type": "split-area"
+          }
+        },
+        "relativeSizes": [
+          0,
+          0.7642209398186315,
+          0.23577906018136852
+        ],
+        "right": {
+          "collapsed": false,
+          "current": "correxit-sidebar",
+          "visible": true,
+          "widgetStates": {},
+          "widgets": [
+            "jp-property-inspector",
+            "correxit-sidebar"
+          ]
+        },
+        "top": {
+          "simpleVisibility": true
+        }
+      },
+      "markdownviewer-widget:README.md": {
+        "data": {
+          "factory": "Markdown Preview",
+          "path": "README.md"
+        }
+      },
+      "notebook:chinook.ipynb": {
+        "data": {
+          "factory": "Notebook",
+          "path": "chinook.ipynb"
+        }
+      }
+    },
+    "metadata": {
+      "id": "correxit-demo"
+    }
+  }
+}
