@@ -8,7 +8,7 @@ from mkdocs.plugins import event_priority
 
 @event_priority(100)
 def on_config(config, **_kwargs):
-    # Mike's latest alias redirects HTML only; images need the numbered URL.
+    # Sharing images use each build's assets, including refreshed latest docs.
     version = os.environ.get("MIKE_DOCS_VERSION", "")
     config.extra["image"] = urljoin(
         config.site_url, f"{version}/assets/correxit.png".lstrip("/")
@@ -35,7 +35,11 @@ def on_post_build(config, **_kwargs):
     _remove(demo)
 
     lite = root / "lite" / "_output"
-    if os.environ.get("MIKE_DOCS_VERSION"):
+    version = os.environ.get("MIKE_DOCS_VERSION")
+    # snapshot.py supplies the stable demo when refreshing latest documentation.
+    if version == "latest":
+        return
+    if version:
         copytree(lite, demo, symlinks=False)
     else:
         demo.symlink_to(lite, target_is_directory=True)

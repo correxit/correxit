@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
-from shutil import copyfile, copytree
+from shutil import copyfile, copytree, rmtree
 from subprocess import CalledProcessError, STDOUT, check_output
 import sys
 from tempfile import TemporaryDirectory
@@ -166,42 +166,90 @@ class Snapshots(unittest.TestCase):
             self.publish()
         self.assertFalse((self.root / "site/_pages").exists())
 
-    def test_homepage_refresh_preserves_releases_and_survives_retries(self):
+    def test_documentation_refresh_preserves_releases_and_survives_retries(self):
         self.publish()
-        snapshots = ["gh-pages:1.0.0", "gh-pages:latest", "gh-pages:versions.json"]
+        self.write("package.json", '{"version": "1.0.1"}')
+        self.write("lite/_output/index.html", "Stable demo\n")
+        (self.root / "lite/_output/index.html").chmod(0o755)
+        self.publish()
+        snapshots = ["gh-pages:1.0.0", "gh-pages:1.0.1", "gh-pages:versions.json"]
         original = self.run_command("git", "rev-parse", *snapshots)
         output = self.root / "site/_pages"
         self.write("package.json", '{"version": "1.1.0"}')
         self.write("site/_docs/index.md", '# Refreshed\n\n[Demo](demo/index.html)\n')
-        # A homepage refresh does not need a local demo build.
-        (self.root / "lite/_output/index.html").unlink()
-        self.run_command("mkdocs", "build", "--strict")
-        self.publish("--homepage")
-        page = self.assert_homepage("1.0.0", "Refreshed")
-        self.assertIn('href="1.0.0/demo/"', page)
+        self.write("site/_docs/guide.md", "# Updated guide\n")
+        self.write("site/_docs/extra.md", "# Temporary guide\n")
+        # Documentation refreshes reuse the stable demo without a local build.
+        rmtree(self.root / "lite/_output")
+        self.publish("--refresh")
+        page = self.assert_homepage("latest", "Refreshed")
+        self.assertIn('href="latest/demo/"', page)
+        guide = (output / "latest/guide/index.html").read_text()
+        self.assertIn("Updated guide", guide)
+        self.assertIn(
+            'rel="canonical" href="https://example.invalid/latest/guide/"', guide
+        )
+        self.assertNotIn('http-equiv="refresh"', guide)
+        self.assertIn("Refreshed", (output / "latest/index.html").read_text())
+        self.assertIn(
+            "Updated guide", (output / "latest/search/search_index.json").read_text()
+        )
+        for href in re.findall(r'\b(?:href|src)="([^"]+)"', guide):
+            if not re.match(r"(?:[a-z][a-z\d+.-]*:|/|#)", href, re.I):
+                target = output / "latest/guide" / urlsplit(href).path
+                self.assertTrue(target.exists(), href)
+        demo = self.run_command("git", "rev-parse", "gh-pages:1.0.1/demo")
+        self.assertEqual(
+            self.run_command("git", "rev-parse", "gh-pages:latest/demo"), demo
+        )
+        self.assertEqual((output / "latest/demo/index.html").read_text(), "Stable demo\n")
         image = re.search(r'property="og:image" content="([^"]+)"', page)[1]
         self.assertTrue((output / urlsplit(image).path.lstrip("/")).is_file())
         self.assertFalse((output / "1.1.0").exists())
         self.assertEqual(self.run_command("git", "rev-parse", *snapshots), original)
+        self.assertFalse(any(path.is_symlink() for path in output.rglob("*")))
 
+        (self.root / "site/_docs/extra.md").unlink()
+        self.publish("--refresh")
+        self.assertFalse((output / "latest/extra").exists())
+        self.assertNotIn(
+            "Temporary guide", (output / "latest/search/search_index.json").read_text()
+        )
+        page = self.assert_homepage("latest", "Refreshed")
+        refreshed = self.run_command("git", "rev-parse", "gh-pages:latest")
         previous = self.run_command("git", "rev-parse", "gh-pages")
-        self.publish("--homepage")
+        self.publish("--refresh")
         self.assertEqual(self.run_command("git", "rev-parse", "gh-pages"), previous)
+        self.write("package.json", '{"version": "1.0.1"}')
+        self.publish()
         self.write("package.json", '{"version": "1.0.0"}')
         self.publish()
-        self.assertEqual(self.assert_homepage("1.0.0", "Refreshed"), page)
+        self.assertEqual(self.assert_homepage("latest", "Refreshed"), page)
+        self.assertEqual(
+            self.run_command("git", "rev-parse", "gh-pages:latest"), refreshed
+        )
 
+        (self.root / "lite/_output").mkdir()
+        self.write("lite/_output/index.html", "Backport demo\n")
         self.write("package.json", '{"version": "0.9.1"}')
         self.publish()
-        self.assertEqual(self.assert_homepage("1.0.0", "Refreshed"), page)
+        self.assertEqual(self.assert_homepage("latest", "Refreshed"), page)
+        self.assertEqual(
+            self.run_command("git", "rev-parse", "gh-pages:latest"), refreshed
+        )
         self.write("package.json", '{"version": "1.1.0"}')
         self.write("site/_docs/index.md", "# New release\n")
         self.publish()
         self.assert_homepage("1.1.0", "New release")
+        self.assertIn("1.1.0/", (output / "latest/index.html").read_text())
+        self.assertEqual(
+            self.run_command("git", "rev-parse", *snapshots[:2]).splitlines(),
+            original.splitlines()[:2],
+        )
 
-    def test_homepage_refresh_requires_an_existing_release(self):
+    def test_documentation_refresh_requires_an_existing_release(self):
         with self.assertRaises(CalledProcessError):
-            self.publish("--homepage")
+            self.publish("--refresh")
         self.assertFalse((self.root / "site/_pages").exists())
 
 

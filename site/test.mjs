@@ -158,23 +158,28 @@ test(
     const { version } = versions.find(({ aliases }) =>
       aliases.includes('latest')
     );
+    const latest = await readFile(
+      path.join(directory, 'latest', 'index.html'),
+      'utf8'
+    );
+    const route = /http-equiv="refresh"/i.test(latest) ? version : 'latest';
     const page = await readFile(path.join(directory, 'index.html'), 'utf8');
     assert.doesNotMatch(page, /http-equiv="refresh"/i);
     assert.match(page, /rel="canonical" href="https:\/\/correx\.it\/"/);
     const meta = metadata(page);
     // Historical snapshots may predate sharing metadata; a refresh must add it.
-    if (meta['og:url'] || process.env.CORREXIT_HOMEPAGE) {
+    if (meta['og:url'] || process.env.CORREXIT_SITE_REFRESH) {
       assert.equal(meta['og:url'], 'https://correx.it/');
       await access(path.join(directory, new URL(meta['og:image']).pathname));
     }
-    assert.ok(page.includes(`href="${version}/authoring/"`));
+    assert.ok(page.includes(`href="${route}/authoring/"`));
     assert.ok(
-      page.includes(`href="${version}/demo/notebooks/?path=chinook.ipynb"`)
+      page.includes(`href="${route}/demo/notebooks/?path=chinook.ipynb"`)
     );
     const config = JSON.parse(
       page.match(/<script id="__config"[^>]*>(.*?)<\/script>/)[1]
     );
-    assert.equal(config.base, `${version}/`);
+    assert.equal(config.base, `${route}/`);
     const references = [...page.matchAll(/(?:href|src)="([^"]+)"/g)]
       .map(([, href]) => href)
       .concat(config.search)
@@ -195,12 +200,23 @@ test(
 );
 
 test('the demo opens Chinook in Jupyter Notebook', async () => {
+  const versions = process.env.CORREXIT_SITE_REFRESH
+    ? JSON.parse(
+        await readFile(path.join(path.dirname(output), 'versions.json'), 'utf8')
+      )
+    : [];
+  const version = versions.find(({ aliases }) => aliases.includes('latest'));
+  const directory = version
+    ? path.join(path.dirname(output), version.version, 'demo', 'files')
+    : path.join(root, 'lite', 'files');
   const instructions = (
-    await readFile(path.join(root, 'lite', 'files', 'README.md'), 'utf8')
+    await readFile(path.join(directory, 'README.md'), 'utf8')
   ).trim();
   const notebooks = await Promise.all(
     [
-      path.join(root, 'examples', 'chinook.ipynb'),
+      version
+        ? path.join(directory, 'chinook.ipynb')
+        : path.join(root, 'examples', 'chinook.ipynb'),
       path.join(output, 'demo', 'files', 'chinook.ipynb')
     ].map(async source => JSON.parse(await readFile(source, 'utf8')))
   );

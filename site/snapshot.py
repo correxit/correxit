@@ -1,4 +1,4 @@
-"""Preserve release snapshots and allow independent homepage refreshes."""
+"""Preserve release snapshots and refresh the homepage and latest documentation."""
 
 from argparse import ArgumentParser
 import json
@@ -19,8 +19,7 @@ def homepage(version, page=None):
         page = check_output(["git", "show", f"gh-pages:{version}/index.html"], text=True)
 
     canonical = re.search(r'<link rel="canonical" href="([^"]*)"', page)[1]
-    if not current:
-        canonical = urljoin(canonical, "../")
+    canonical = urljoin(canonical, "../")
 
     def resolve(value):
         assets = current and value.split("/")[0] in {"assets", "css", "js"}
@@ -60,26 +59,44 @@ def homepage(version, page=None):
     )
 
 
+def extract(tree, output):
+    output.mkdir()
+    with TemporaryFile() as archive:
+        check_call(["git", "archive", tree], stdout=archive)
+        archive.seek(0)
+        check_call(["tar", "-x", "-C", str(output)], stdin=archive)
+
+
 def refresh(version):
     source = Path("site/_output")
-    page = homepage(version, (source / "index.html").read_text())
+    check_call(
+        ["mkdocs", "build", "--strict"],
+        env={**os.environ, "MIKE_DOCS_VERSION": "latest"},
+    )
+    extract(f"gh-pages:{version}/demo", source / "demo")
+    page = homepage("latest", (source / "index.html").read_text())
     try:
-        with Commit("gh-pages", "Refresh homepage from main") as commit:
-            commit.delete_files(["_home"])
+        with Commit(
+            "gh-pages", "Refresh homepage and latest documentation from main"
+        ) as commit:
+            commit.delete_files(["_home", "latest"])
             commit.add_file(FileInfo("index.html", page))
-            for directory in ["assets", "css", "js"]:
-                for path in sorted((source / directory).rglob("*")):
-                    if path.is_file():
-                        commit.add_file(
-                            FileInfo(
-                                Path("_home") / path.relative_to(source), path.read_bytes()
-                            )
-                        )
+            for path in sorted(source.rglob("*")):
+                if path.is_file():
+                    relative = path.relative_to(source)
+                    file = FileInfo(
+                        Path("latest") / relative,
+                        path.read_bytes(),
+                        mode=path.stat().st_mode,
+                    )
+                    commit.add_file(file)
+                    if relative.parts[0] in {"assets", "css", "js"}:
+                        commit.add_file(file.copy("_home", "latest"))
     except GitEmptyCommit:
         pass
 
 
-def snapshot(home=False):
+def snapshot(current=False):
     root = Path(__file__).resolve().parent.parent
     os.chdir(root)
     version = json.loads(Path("package.json").read_text())["version"]
@@ -91,32 +108,33 @@ def snapshot(home=False):
     previous = next(
         (item["version"] for item in versions if "latest" in item["aliases"]), None
     )
-    if not home and not any(item["version"] == version for item in versions):
+    if not current and not any(item["version"] == version for item in versions):
         check_call(["mike", "deploy", version])
 
     stable = [
         item
         for item in {
-            *([] if home else [version]),
+            *([] if current else [version]),
             *(item["version"] for item in versions),
         }
         if re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", item)
     ]
     # A backport release or retry must not move latest to an older version.
-    if home and not stable:
-        raise ValueError("Publish a stable release before refreshing the homepage")
+    if current and not stable:
+        raise ValueError("Publish a stable release before refreshing the documentation")
     latest = max(
         stable, key=lambda item: tuple(map(int, item.split("."))), default=version
     )
-    if home:
+    if current:
         refresh(latest)
     else:
-        check_call(["mike", "alias", "--update-aliases", latest, "latest"])
+        if previous != latest:
+            check_call(["mike", "alias", "--update-aliases", latest, "latest"])
         try:
             page = check_output(["git", "show", "gh-pages:index.html"], text=True)
         except CalledProcessError:
             page = ""
-        # Retries and backports must also preserve an independently refreshed home.
+        # Retries and backports preserve independently refreshed documentation.
         if previous != latest or not page or 'http-equiv="refresh"' in page:
             with NamedTemporaryFile(mode="w", suffix=".html") as template:
                 # Render stored text literally, including any Jinja syntax.
@@ -131,25 +149,16 @@ def snapshot(home=False):
     if any(line.startswith("120000 ") for line in tree.splitlines()):
         raise ValueError("The published website contains symbolic links")
 
-    output.mkdir()
-    with TemporaryFile() as archive:
-        check_call(["git", "archive", "gh-pages"], stdout=archive)
-        archive.seek(0)
-        check_call(["tar", "-x", "-C", str(output)], stdin=archive)
+    extract("gh-pages", output)
 
     try:
         check_call(
-            [
-                "node",
-                "--test",
-                *(["--test-name-pattern=the published root"] if home else []),
-                "site/test.mjs",
-            ],
+            ["node", "--test", "site/test.mjs"],
             env={
                 **os.environ,
-                "MIKE_DOCS_VERSION": latest if home else version,
-                "CORREXIT_SITE_OUTPUT": str(output / (latest if home else version)),
-                "CORREXIT_HOMEPAGE": "1" if home else "",
+                "MIKE_DOCS_VERSION": "latest" if current else version,
+                "CORREXIT_SITE_OUTPUT": str(output / ("latest" if current else version)),
+                "CORREXIT_SITE_REFRESH": "1" if current else "",
             },
         )
     except CalledProcessError:
@@ -160,6 +169,8 @@ def snapshot(home=False):
 if __name__ == "__main__":
     parser = ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--homepage", action="store_true", help="Refresh only the root homepage"
+        "--refresh",
+        action="store_true",
+        help="Refresh the homepage and latest documentation",
     )
-    snapshot(home=parser.parse_args().homepage)
+    snapshot(current=parser.parse_args().refresh)
