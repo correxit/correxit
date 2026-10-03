@@ -189,7 +189,7 @@ jobs:
 
     - name: Upload Playwright Test report
       if: always()
-      uses: actions/upload-artifact
+      uses: actions/upload-artifact@v4
       with:
         name: correxit-playwright-tests
         path: |
