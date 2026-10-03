@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Leave empty to refresh the homepage from main, or enter a stable release tag to retry
+        description: Leave empty to refresh the homepage and latest docs from main, or enter a stable release tag to retry
         required: false
         type: string
 
@@ -103,10 +103,12 @@ jobs:
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
-          # Retrying an old tag still uses the workflow's homepage preservation rules.
+          # Retrying an old tag still uses the workflow's documentation preservation rules.
           git show "$WORKFLOW_SHA:site/snapshot.py" > site/snapshot.py
+          git show "$WORKFLOW_SHA:site/hooks.py" > site/hooks.py
+          git show "$WORKFLOW_SHA:site/test.mjs" > site/test.mjs
           if [ -z "$RELEASE_TAG" ]; then
-            pixi run python site/snapshot.py --homepage
+            pixi run python site/snapshot.py --refresh
           else
             pixi run python site/snapshot.py
           fi

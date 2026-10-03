@@ -71,21 +71,23 @@ SemVer while Correxit has no known external plugin consumers. Custom unlockers
 must implement it; the workbook-format compatibility guarantee still applies.
 
 Numbered website snapshots, such as `/2.0.0/`, remain fixed. The domain root
-serves the newest stable homepage directly, with links to its versioned guides
-and demo. `/latest/` redirects to that version. Backports and retries do not
-move the homepage or `latest` backwards.
+serves the newest stable homepage directly, with links to its guides and demo.
+`/latest/` initially redirects to that version and can serve refreshed
+documentation between releases. Backports and retries preserve refreshed
+documentation and do not move the homepage or `latest` backwards.
 
-## Update the homepage without a release
+## Update the documentation without a release
 
 Merge the page changes to `main` and wait for CI to pass. Open **Publish website
 → Run workflow**, select `main`, and leave `tag` empty.
 
-This publishes the current homepage, sharing metadata, and theme assets without
-publishing npm or PyPI packages or rebuilding JupyterLite. The homepage's guides,
-search, and demo continue to use the newest stable release. A stable website
-snapshot must already exist. Numbered snapshots and `/latest/` are unchanged.
-Retries and backports preserve the refreshed homepage; the next newer stable
-release replaces it with that release's homepage.
+This publishes the current homepage and `/latest/` guides, API reference, search,
+sharing metadata, and theme assets without publishing npm or PyPI packages or
+rebuilding JupyterLite. The demo is copied from the newest stable website release.
+The homepage links to the refreshed documentation at `/latest/`. A stable website
+snapshot must already exist, and numbered snapshots remain fixed. Retries and
+backports preserve the refreshed documentation; the next newer stable release
+replaces it with that release's homepage and guides.
 
 ## Workbook format
 
