@@ -646,11 +646,11 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<Cell & Credentials & CellToolbar>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric)
-        return { resolved: false, score: Rubric.Score.UNSCORED, spec: null };
+        return { resolved: false, score: Rubric.Score.UNSCORED, spec: null, verified: false };
 
       const id = state.cell(args);
       if (args[Rubric.Cell.TOOLBAR] && !id)
-        return { resolved: true, score: Rubric.Score.UNSCORED, spec: null };
+        return { resolved: true, score: Rubric.Score.UNSCORED, spec: null, verified: false };
 
       const result = await Workbook.correct(workbook, id);
     if (Workbook.headless(workbook)) return result;
