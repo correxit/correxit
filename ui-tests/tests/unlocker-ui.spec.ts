@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { setup } from './utils';
+import { cleanup, setup } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -69,10 +69,21 @@ test('a hosted unlocker supports the full lifecycle without passphrases', async 
         )
       );
       await Workbook.assign(workbook, {
-        assignee: 'student@example.com',
         roster: ['student@example.com']
       });
-      await Workbook.lock(workbook);
+      const stream = await app.commands.execute('correxit:propagate');
+      let path = '';
+      let directory = '';
+      for await (const [, emission] of stream) {
+        if (emission.type === 'mkdir') directory = emission.slots[0];
+        if (emission.type === 'saved') path = emission.slots[0];
+      }
+      const contents = app.serviceManager.contents;
+      const issued = await contents.get(path, {
+        type: 'notebook',
+        content: true
+      });
+      Workbook.restore(workbook, issued.content);
       await app.commands.execute('correxit:unlock');
       const unlocked = !Workbook.open(workbook).locked;
       await Workbook.lock(workbook);
@@ -120,6 +131,7 @@ test('a hosted unlocker supports the full lifecycle without passphrases', async 
       recovery = student;
       await app.commands.execute('correxit:reset');
       return {
+        issued: { directory, paths: [path] },
         saved,
         unlocked,
         encrypted,
@@ -171,6 +183,7 @@ test('a hosted unlocker supports the full lifecycle without passphrases', async 
   expect(result.recovered).toBe('student answer');
   expect(result.reference).toBe(true);
   expect(result.reset).toBe(true);
+  await cleanup(page, result.issued);
   await expect(page.locator('.jp-Dialog')).toHaveCount(0);
   await dispose();
 });
@@ -334,13 +347,19 @@ test('the default unlocker derives separate author and student credentials', asy
     const created = Workbook.open(workbook);
     await Workbook.update(
       workbook,
-      Rubric.add(created, {
-        id: 'answer',
-        is: 'reviewable',
-        points: 1,
-        references: null,
-        payload: null
-      })
+      Rubric.add(
+        {
+          ...created,
+          contents: [{ id: 'answer', type: 'code', digest: null }]
+        },
+        {
+          id: 'answer',
+          is: 'reviewable',
+          points: 1,
+          references: null,
+          payload: null
+        }
+      )
     );
     await Workbook.assign(workbook, {
       assignee: 'student@example.com',

@@ -135,7 +135,282 @@ describe('Assignment', () => {
     expect(prepared.notebook.cells[2].source).toBe(
       'ENC[KEY<passphrase:rubric-id>]:print("secret")'
     );
-    expect(security.encrypt).not.toHaveBeenCalled();
+    expect(security.encrypt).not.toHaveBeenCalledWith(
+      'print("secret")',
+      rubric.key
+    );
+  });
+
+  describe('issued contents', () => {
+    const issued = async (secret = true) => {
+      const { notebook, rubric } = await configured();
+      if (!secret)
+        notebook.metadata.correxit = await Rubric.lock(
+          Rubric.toggle(rubric, 'reference')
+        );
+      const assigned = await Assignment.assign({
+        assignee: 'alice@example.com',
+        notebook,
+        key: rubric.key,
+        passphrase: null
+      });
+      const metadata = assigned.notebook.metadata.correxit as Rubric.Locked;
+      return {
+        notebook: assigned.notebook,
+        rubric: await Rubric.unlock(metadata, rubric.key)
+      };
+    };
+
+    it.each([undefined, null, '', 42])(
+      'rejects invalid template cell IDs (%p) before issuing an assignment',
+      async id => {
+        const { notebook, rubric } = await configured();
+        Object.assign(notebook.cells[0], { id });
+        const before = JSON.stringify(notebook);
+        jest.clearAllMocks();
+
+        await expect(
+          Assignment.assign({
+            assignee: 'alice@example.com',
+            notebook,
+            key: rubric.key,
+            passphrase: null
+          })
+        ).rejects.toThrow('invalid cell id');
+        expect(security.sign).not.toHaveBeenCalled();
+        expect(JSON.stringify(notebook)).toBe(before);
+      }
+    );
+
+    it('rejects duplicate cell IDs before issuing an assignment', async () => {
+      const { notebook, rubric } = await configured();
+      notebook.cells[0].id = 'answer';
+      const before = JSON.stringify(notebook);
+      jest.clearAllMocks();
+
+      await expect(
+        Assignment.assign({
+          assignee: 'alice@example.com',
+          notebook,
+          key: rubric.key,
+          passphrase: null
+        })
+      ).rejects.toThrow('duplicate cell ids');
+      expect(security.sign).not.toHaveBeenCalled();
+      expect(JSON.stringify(notebook)).toBe(before);
+    });
+
+    it('binds cell identities, types, order, and fixed sources without exposing plaintext hashes', async () => {
+      const { notebook, rubric } = await issued();
+      expect(rubric.cxtformat).toBe(Rubric.CXTFORMAT);
+      expect(rubric.contents?.map(({ id, type }) => ({ id, type }))).toEqual([
+        { id: 'intro', type: 'markdown' },
+        { id: 'answer', type: 'code' },
+        { id: 'reference', type: 'code' }
+      ]);
+      expect(
+        rubric.contents?.find(({ id }) => id === 'answer')?.digest
+      ).toBeNull();
+      expect(
+        rubric.contents?.find(({ id }) => id === 'reference')?.digest
+      ).toMatch(/^HMAC</);
+      await expect(
+        Assignment.authenticate(notebook, rubric)
+      ).resolves.toBeUndefined();
+    });
+
+    it('permits student answers and extra working cells', async () => {
+      const { notebook, rubric } = await issued();
+      notebook.cells[1].source = 'print("my answer")';
+      notebook.cells.splice(1, 0, {
+        id: 'scratch',
+        cell_type: 'code',
+        metadata: {},
+        execution_count: null,
+        outputs: [],
+        source: 'scratch = 1'
+      });
+      await expect(
+        Assignment.authenticate(notebook, rubric)
+      ).resolves.toBeUndefined();
+    });
+
+    it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+      'authenticates fixed sources with the cell ID %s',
+      async id => {
+        const { notebook, rubric } = await configured();
+        notebook.cells[0].id = id;
+        const assigned = await Assignment.assign({
+          assignee: 'alice@example.com',
+          notebook,
+          key: rubric.key,
+          passphrase: null
+        });
+        const metadata = assigned.notebook.metadata.correxit as Rubric.Locked;
+        const unlocked = await Rubric.unlock(metadata, rubric.key);
+        expect(
+          unlocked.contents?.find(entry => entry.id === id)?.digest
+        ).toMatch(/^HMAC</);
+        await expect(
+          Assignment.authenticate(assigned.notebook, unlocked)
+        ).resolves.toBeUndefined();
+
+        assigned.notebook.cells[0].source = 'changed';
+        await expect(
+          Assignment.authenticate(assigned.notebook, unlocked)
+        ).rejects.toThrow('contents mismatch');
+      }
+    );
+
+    it.each([undefined, null, '', 42])(
+      'rejects invalid issued cell IDs (%p) before authenticating sources',
+      async id => {
+        const { notebook, rubric } = await issued();
+        Object.assign(notebook.cells[0], { id });
+        jest.clearAllMocks();
+
+        await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow(
+          'invalid cell id'
+        );
+        expect(security.decrypt).not.toHaveBeenCalled();
+      }
+    );
+
+    it('rejects missing IDs on extra working cells', async () => {
+      const { notebook, rubric } = await issued();
+      notebook.cells.push({
+        cell_type: 'code',
+        metadata: {},
+        execution_count: null,
+        outputs: [],
+        source: 'scratch = 1'
+      });
+
+      await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow(
+        'invalid cell id'
+      );
+    });
+
+    it.each([true, false])(
+      'rejects substituted reference sources (secret=%s)',
+      async secret => {
+        const { notebook, rubric } = await issued(secret);
+        notebook.cells[2].source = 'pass';
+        await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow(
+          'contents mismatch'
+        );
+      }
+    );
+
+    it('rejects a different valid ciphertext encrypted with the same key', async () => {
+      const { notebook, rubric } = await issued();
+      notebook.cells[2].source = await security.encrypt('pass', rubric.key);
+      await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow(
+        'contents mismatch'
+      );
+    });
+
+    it('accepts authentic decrypted references after an author-side save', async () => {
+      const { notebook, rubric } = await issued();
+      notebook.cells[2].source = 'print("secret")';
+      notebook.cells[2].cell_type = 'code';
+      await expect(
+        Assignment.authenticate(notebook, rubric)
+      ).resolves.toBeUndefined();
+    });
+
+    it('authenticates commitments after notebook writers reorder object properties', async () => {
+      const { notebook, rubric } = await issued();
+      const contents = rubric.contents!.map(({ id, type, digest }) => ({
+        type,
+        digest,
+        id
+      }));
+      const reordered = { ...rubric, contents };
+      await expect(
+        Assignment.authenticate(notebook, reordered)
+      ).resolves.toBeUndefined();
+      expect(
+        await Rubric.Assignment.issue({
+          assignment: reordered.assignment,
+          notebook,
+          rubric: reordered
+        })
+      ).toBe(
+        await Rubric.Assignment.issue({
+          assignment: rubric.assignment,
+          notebook,
+          rubric
+        })
+      );
+    });
+
+    it.each([
+      [
+        'scaffolding',
+        (notebook: INotebookContent) => {
+          notebook.cells[0].source = 'changed';
+        }
+      ],
+      [
+        'type',
+        (notebook: INotebookContent) => {
+          notebook.cells[1].cell_type = 'raw';
+        }
+      ],
+      [
+        'order',
+        (notebook: INotebookContent) => {
+          notebook.cells.reverse();
+        }
+      ],
+      [
+        'missing cell',
+        (notebook: INotebookContent) => {
+          notebook.cells.pop();
+        }
+      ],
+      [
+        'duplicate id',
+        (notebook: INotebookContent) => {
+          notebook.cells.push(notebook.cells[1]);
+        }
+      ]
+    ])('rejects altered %s', async (_, mutate) => {
+      const { notebook, rubric } = await issued();
+      (mutate as (notebook: INotebookContent) => void)(notebook);
+      await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow();
+    });
+
+    it('rejects stripped commitments and format downgrades before authenticating sources', async () => {
+      const { notebook, rubric } = await issued();
+      const stripped = { ...rubric, contents: null };
+      const downgraded = { ...rubric, cxtformat: 1 } as any;
+      await expect(Assignment.authenticate(notebook, stripped)).rejects.toThrow(
+        'mac mismatch'
+      );
+      await expect(
+        Assignment.authenticate(notebook, downgraded)
+      ).rejects.toThrow('unsupported cxtformat');
+    });
+
+    it('rejects draft-format templates before issuing assignments', async () => {
+      const { notebook, rubric } = await configured();
+      notebook.metadata.correxit = {
+        ...(notebook.metadata.correxit as Rubric.Locked),
+        cxtformat: 1
+      } as any;
+      const draft = JSON.stringify(notebook);
+      await expect(
+        Assignment.assign({
+          assignee: 'alice@example.com',
+          notebook,
+          key: rubric.key,
+          passphrase: null
+        })
+      ).rejects.toThrow('unsupported cxtformat');
+      expect(JSON.stringify(notebook)).toBe(draft);
+    });
   });
 
   it('surfaces resource filenames for the caller to distribute', async () => {

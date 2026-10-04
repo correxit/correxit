@@ -61,6 +61,86 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
   await dispose();
 });
 
+test('correction without a rubric returns an unverified result', async ({
+  page
+}) => {
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  try {
+    const result = await page.evaluate(async () => {
+      const app = (window as any).jupyterapp;
+      const notebook = app.shell.currentWidget.context.model.sharedModel;
+      const before = JSON.stringify(notebook.toJSON());
+      const grade = await app.commands.execute('correxit:correct');
+      return { grade, unchanged: JSON.stringify(notebook.toJSON()) === before };
+    });
+
+    expect(result.grade).toMatchObject({
+      resolved: false,
+      score: { status: 'unscored', points: -1, possible: -1 },
+      spec: null,
+      verified: false
+    });
+    expect(result.unchanged).toBe(true);
+  } finally {
+    await dispose();
+  }
+});
+
+test('toolbar correction without a cell returns an unverified result', async ({
+  page
+}) => {
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  try {
+    await page.evaluate(async () => {
+      const { Workbook, Rubric } = (window as any).__correxit__;
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const rubric = Rubric.create();
+      await Workbook.update(panel, {
+        ...rubric,
+        key: 'secret',
+        assignment: {
+          ...rubric.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      });
+    });
+    const result = await page.evaluate(async () => {
+      const { Rubric } = (window as any).__correxit__;
+      const app = (window as any).jupyterapp;
+      const panel = app.shell.currentWidget;
+      const notebook = panel.context.model.sharedModel;
+      // JupyterLab replaces the last removed cell on the next animation frame.
+      while (notebook.cells.length) notebook.deleteCell(0);
+      const active = panel.content.activeCell?.model.id ?? null;
+      const before = JSON.stringify(notebook.toJSON());
+      const grade = await app.commands.execute('correxit:correct', {
+        [Rubric.Cell.TOOLBAR]: true
+      });
+      return {
+        active,
+        grade,
+        unchanged: JSON.stringify(notebook.toJSON()) === before
+      };
+    });
+
+    expect(result.active).toBeNull();
+    expect(result.grade).toMatchObject({
+      resolved: true,
+      score: { status: 'unscored', points: -1, possible: -1 },
+      spec: null,
+      verified: false
+    });
+    expect(result.unchanged).toBe(true);
+  } finally {
+    await dispose();
+  }
+});
+
 test('launch expands the Correxit sidebar', async ({ page }) => {
   const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
 

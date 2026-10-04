@@ -13,7 +13,7 @@ Cryptographic primitives use `window.crypto` and `openpgp.js`.
 - Student reads the roster:
   roster encryption (`openpgp`, AES-256).
 - Student alters authored assignment state:
-  assignment MAC (keyed SHA-256).
+  assignment MAC and authenticated issued contents (keyed SHA-256).
 - Student edits cells after submission:
   workbook locking and freezing.
 - Peer reads answers from file:
@@ -70,7 +70,8 @@ re-injects them into composite settings on later loads.
 ### Rubric MAC
 
 Authenticates the mutable author-controlled grading state:
-`rubric.cxtformat`, `rubric.id`, rubric `cells`, rubric `references`, assignment
+`rubric.cxtformat`, `rubric.id`, rubric `cells`, rubric `references`, format-2
+`rubric.contents`, assignment
 `assignee`, `expiration`, `id`, `issue`, `issuer`, `keys`
 (author components only), `name`, `overdue`, `penalty`,
 `resources`, `report` (interventions + scores, sorted), and
@@ -93,12 +94,74 @@ key. The MAC proves that the broader authored assignment state still matches
 the secret key held by the author side of Correxit.
 
 **Authenticated:** `rubric.cxtformat`, `rubric.id`, `cells`, `references`,
+format-2 `contents`,
 `assignee`, `expiration`, `id`, `issue`, `issuer`, `keys` (author only), `name`,
 `overdue`, `penalty`, `resources`, `report`, `roster`.
 
 **Not authenticated:** `certification`, `collected`, `distribution`, `seal`,
 `submission`, `submitted`. These change after signing or are set by the
 student (who does not have the symmetric key).
+
+### Issued Contents
+
+Format 2 records an ordered `contents` array when issuing a workbook. Each
+entry contains `{ id, type, digest }`. The digest is null for a rubric cell,
+whose source is the student's answer. For every other issued cell, including
+visible references, secret references, instructions, and setup code, it is:
+
+```
+digest = HMAC-SHA-256(JSON.stringify([rubric.id, id, type, source]), key)
+```
+
+Secret references are represented by their decrypted source and code type.
+Re-encryption therefore does not change their commitment. Keyed commitments
+avoid exposing plaintext hashes of easily guessed secret sources. The entire
+array is authenticated by the rubric MAC and included in the issue digest.
+Unissued author templates use `contents: null`.
+
+Issuance and authentication require unique, non-empty string IDs on every
+notebook cell, including added working cells. Invalid IDs are rejected before
+building or checking the manifest; they are never coerced into identities.
+
+Rubric cells, references, scores, and interventions use own entries when
+looking up IDs. Graded cells and references reject `__proto__` because
+JupyterLab's metadata copier cannot preserve that entry.
+
+Grading and collection require the issued cells to retain their identities,
+types, relative order, and fixed sources. Students may edit rubric cell sources
+and add working cells; added cells are not authenticated instructor content.
+Missing or duplicated issued cells, substituted ciphertexts, altered visible
+references, and changed setup code fail authentication.
+
+Unlock prepares all decrypted replacements, authenticates the prospective
+plaintext notebook, and only then writes them. An assigned workbook cannot
+silently repair away missing cells or references. Forensic recovery is explicit
+and does not confer grading authority.
+
+Symmetric decryption rejects malformed PGP messages. A plaintext reference is
+accepted only when it matches its authenticated commitment, supporting an
+author-side save of an unlocked workbook without accepting substituted tests.
+
+### Grade Provenance
+
+Parsing metadata is not authentication. Scanning reads notebook identity and
+workflow metadata without acquiring credentials, and cannot produce trusted
+scores. Batch grading authenticates the rubric and issued contents before
+either executing cells or reusing a stored report, including reports awaiting
+manual review. Certification alone is an unsigned workflow marker and cannot
+skip an ungraded submission.
+
+Student and unassigned author previews can return unverified scores for local
+feedback. They cannot supply certified grades, CSV scores, or collection.
+
+`Workbook.Grade` discriminates in-memory results with `verified: true | false`.
+`Workbook.Certified` requires a verified grade. This provenance is never read
+from notebook metadata. CSV exports use only verified command results; scanned
+reports and failed authentication produce blank points, possible points,
+certification, and collection fields, with `resolved=false`. To export existing
+certified scores, run batch grading first; authenticated cached reports do not
+re-execute the notebook. Collection independently authenticates before calling
+the configured collector.
 
 ### Submission Time and Late Policy
 
@@ -137,9 +200,11 @@ Each propagated workbook carries two additional assignment fields:
 - `issuer`: a cleartext PGP signature over that digest made with the
   author key
 
-These fields stay stable after later author-side edits. They answer a
-different question from the MAC: whether the student started from the authentic
-issued workbook.
+These fields stay stable after later author-side edits. The distribution path
+can recompute the whole blank-slate digest before handing it to a student.
+Grading cannot recompute that whole digest after answers change. It verifies
+the rubric MAC and the separate format-2 contents commitments instead; checking
+the stored issue signature alone is not proof of current reference sources.
 
 ### Seal Integrity
 
@@ -224,18 +289,16 @@ external system.
    unseals all cells, clears `seal`, `submission`, `submitted`, and
    student key fields, then defrosts the notebook.
 
-6. **Grading** (`Workbook.unlock`): Validates metadata first so a tampered
-   workbook never gets plaintext written. If `assignment.seal` is non-null, it
-   decrypts the author PGP private key in local scope, verifies the seal hash
-   when all rubric cells are present, unseals each cell, and clears `seal`
-   because the cells are now plaintext. Finally, it decrypts reference cells.
+6. **Grading** (`Workbook.unlock`): Authenticates metadata first. If
+   `assignment.seal` is non-null, it decrypts the author PGP private key in local
+   scope, verifies the seal hash, and prepares unsealed rubric cells. It also
+   prepares decrypted references and authenticates the complete prospective
+   contents before writing any replacement. Only then is `seal` cleared.
 
-If rubric cells are missing from a sealed notebook, headless unlock and revise
-hard-fail. In a live headed notebook, Correxit warns and unseals the cells that
-remain so the secret holder can repair the file. That repair path is not seal
-authentication and must not be used as grading or collection authority.
-`Workbook.recover` remains the explicit forensic escape hatch for damaged
-workbooks.
+Missing issued cells or references fail assigned format-2 unlock in both live
+and headless notebooks. `Workbook.recover` remains the explicit forensic escape
+hatch for damaged workbooks. Student revision can still recover remaining cells
+in a live notebook, but that repair is not grading or collection authority.
 
 ### Payload Binding
 
@@ -306,9 +369,9 @@ re-encrypting and comparing.
 4. `freeze()` - set cells to non-editable
 
 A workbook cannot be collected without a non-null `certification`.
-Corrector may display locked certified metadata while scanning, but it does not
-trust that metadata for grade skipping or collection until the workbook has
-been unlocked and authenticated with the rubric key.
+Corrector can scan locked metadata, but scores require authenticated command
+results. Grade skipping, score export, and collection never trust a certification
+timestamp or stored report merely because it was parsed successfully.
 
 ### Verification
 
@@ -324,6 +387,13 @@ The required `cxtformat` discriminator identifies the persisted Correxit
 metadata format. It is authenticated by both the assignment issue digest and
 the rubric MAC. Missing and unknown formats are rejected before their contents
 are interpreted.
+
+Format 2 is the only supported format. Format 1 was a draft with no usage in
+the wild and is superseded. Its authenticated terms did not bind issued
+reference sources, so it cannot supply the current security guarantees.
+Readers reject it rather than infer missing commitments from notebook contents.
+There is no automatic migration or legacy reader. The bundled example uses
+format 2. Package and workbook-format versions are independent.
 
 All optional fields use `Type | null`, never `Type?`. This keeps
 `JSON.stringify` deterministic: `null` is serialized, `undefined` is omitted.
@@ -364,4 +434,7 @@ keys therefore cannot leak across assignments.
 
 4. **Grading executes student code.** Batch grading runs submitted notebooks in
    Jupyter kernels. Use an isolated grading Jupyter environment for adversarial
-   submissions.
+   submissions and trusted kernel specifications. Source authentication does
+   not sandbox student code or guarantee honest execution in a shared kernel.
+   Additional working cells, outputs, cell metadata, kernel selection, and
+   supporting resource-file contents are outside the issued-source commitment.

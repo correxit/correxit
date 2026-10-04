@@ -8,7 +8,6 @@ export function generate(
   workbooks: readonly Scanned[],
   grades: ReadonlyMap<string, { grade: Grade }>
 ): string {
-  const { summary } = Rubric.Assignment;
   const identity = ['assignee', 'assignment', 'expiration', 'title', 'rubric'];
   const resolution = ['issue', 'points', 'possible'];
   const lifecycle = [
@@ -24,22 +23,21 @@ export function generate(
   const rows = reified.map(workbook => {
     const rubric = Workbook.open(workbook as Headless, true);
     const path = workbook.context.path;
-    const grade = grades.get(path)?.grade ?? null;
+    const result = grades.get(path)?.grade;
+    const grade = result?.verified ? result : null;
     const assignee = rubric?.assignment.assignee || '';
     const assignment = rubric?.assignment.id || '';
     const title = rubric?.assignment.name || '';
     const issue = rubric?.assignment.issue || '';
-    const total = rubric
-      ? summary(rubric.assignment.report, rubric.assignment)
-      : null;
-    const { points, possible, status } =
-      grade?.score ?? total ?? Rubric.Score.UNSCORED;
+    const { points, possible, status } = grade?.score ?? Rubric.Score.UNSCORED;
     const expiration = rubric?.assignment.expiration ?? null;
     const distribution = rubric?.assignment.distribution ?? null;
     const submission = rubric?.assignment.submission ?? null;
     const submitted = rubric?.assignment.submitted ?? null;
-    const certification = rubric?.assignment.certification ?? null;
-    const collected = rubric?.assignment.collected ?? null;
+    const certification = grade
+      ? (rubric?.assignment.certification ?? null)
+      : null;
+    const collected = grade ? (rubric?.assignment.collected ?? null) : null;
     const resolved = grade?.resolved ?? false;
     const unscored = status === 'unscored';
     return [

@@ -47,6 +47,12 @@ into a gradable workbook.
   workbooks, optionally unlock them, and batch-grade them, with configurable
   concurrency and a per-workbook timeout to handle hung kernels.
 
+New assignments use `cxtformat: 2`, authenticating fixed cell sources and the
+issued cells' types and relative order. Grading, cached-score reuse, CSV scores,
+and collection require authentication. Format 1 was a draft with no usage in the
+wild; format 2 supersedes it and is the only supported format. See
+[SECURITY](docs/security.md) for the contract.
+
 This video shows an example, a SQL (`xeus-sql`) Jupyter notebook that loads the
 Chinook database in SQLite and runs some queries and renders a Vega graph of the
 genres and media types tables. The user converts the notebook into a workbook
@@ -79,6 +85,10 @@ The host application supplies the notebook JSON, passphrase or derived key, and
 final distribution step. Correxit keeps those secrets in memory for this pure
 notebook transformation; it does not add a backend authority or trusted third
 party. See `examples/assign-one.mjs` for a minimal script.
+
+Every cell must have a unique, non-empty string ID before issuance. Missing or
+invalid IDs are rejected; the caller must establish stable cell identities
+before calling `Assignment.assign`.
 
 ## Install
 

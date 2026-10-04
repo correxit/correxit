@@ -244,6 +244,10 @@ test('the demo opens Chinook in Jupyter Notebook', async () => {
   assert.match(home, /href="demo\/notebooks\/?\?path=chinook\.ipynb"/);
   assert.match(notebook, /id="jupyter-lite-main"/);
   assert.match(notebook, /config-utils\.js/);
+  assert.equal(
+    notebooks[1].metadata.correxit.cxtformat,
+    notebooks[0].metadata.correxit.cxtformat
+  );
   notebooks.forEach(notebook => {
     const [welcome] = notebook.cells;
     assert.equal(welcome.cell_type, 'markdown');

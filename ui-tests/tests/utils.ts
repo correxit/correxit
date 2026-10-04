@@ -208,27 +208,36 @@ export async function close(page: any): Promise<void> {
   await shutdown(page);
 }
 
-/** PGP key pair for test workbooks. */
+/** PGP author fixture; the private key is encrypted with password 'secret'. */
 export const keys = {
   private: {
     assignee: null,
-    author: `-----BEGIN PGP PRIVATE KEY BLOCK-----
+    author: `-----BEGIN PGP MESSAGE-----
 
-xUkEacHOthuPhWm48+9MCY4ZoB5zaJ8TCL0BFAnEwrq2vsC+NTL6EgDjg6P4
-JzjqjCIqEGS8Fljrm2FRMpbWiOpUK0TnIETO1g+6zQ1jb3JyZXhpdC10ZXN0
-wsAPBBMbCgCFBYJpwc62AwsJBwkQ/+VpzxueGnhFFAAAAAAAHAAgc2FsdEBu
-b3RhdGlvbnMub3BlbnBncGpzLm9yZ7aeKcxlxXAmARYftBEDMKuRQYKOg+mi
-UNWWvS5pYKcDBRUKCA4MBBYAAgECGQECmwMCHgEWIQRwUHQWg+0lDFYSIKj/
-5WnPG54aeAAAwjLPzmdRtiPAQG4qh7YcqTxABlF/i6mcuUNsQvG79Vkcbgud
-48ZND/OAA3qRMBHeYvEI2EO0zcY4TvGjusPeGNQFx0kEacHOthmr6un0sKA9
-X4aGqEOxqYXCkcUuYSxJoSj3QI47TNOWYwAIuAZB5UGbE5vjq7JFdu682Hnl
-jhYm3Vce+dJFbxnudxBqwroEGBsKAHAFgmnBzrYJEP/lac8bnhp4RRQAAAAA
-ABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmeDvNANjX21V+sInrrh
-T7QjHE6/sBEVbi2IVTWRo3ft/wKbDBYhBHBQdBaD7SUMVhIgqP/lac8bnhp4
-AADxaOwzJYh0FXQdc4Y5Vj8oSkixYJTh1YKqdnzbdcL9bjoEpwFbocEVhiil
-wuHeBt2QJmRrZohWA1uC36BzzqaMqQk=
-=3rAl
------END PGP PRIVATE KEY BLOCK-----`
+wy4ECQMITnq1Mhlbifjg9mIyY8Cb+2TDG4Q1VUqA71isIG+ZDMMsSG23Suwc
+sUqN0sLPAR1aHTYwJj+Ogq+N4iLiahtQ+3p7WOD1PR8g87Ac+dIOzvLieo8m
+aqOaA5qgVWhUYAfKKiDZ2iKo8RacR7cYcL7Nj8ALmX8jnZ3DdPzXs3UyxDOP
+zfG50RihYMWLZEzVbBa7fhYDbU0tViYy/9tq+f82Eiz2BZs17L6O1wEkrRP9
+rccoAruPoEW81wT6aH3RHYehVt0v2P+Tp2vkGdGkxGs4qxzkX5fvsQeYMt7S
+D14Uu7PyZpDj8sveFxj+VjI4Iv62npiKcKQGLy6rczaTrYDsWzG/MPtk1wGV
+Pr52l+2cuiOUtJngGqCZ0+3FzD5ZrnK0lrOlG7IJMkkyNfQrvKENrIlA00gI
+JPFGS8gPpMJNo5WUkVK3PKJBDsNUdSAvixaa5ng81nxt/UFYP/0cQ/1G/y06
+dcQs5Iki9xXOakRI6C8ZlNfup+UE8nPWIG1IDO9tGt+pBn9U8gE2YNnXzz4p
+Tgwbt6ZubSXeVI4WgFzbKh7nVC0l5s+PnQwStgJaPfoqJz2NP298eu5syfV/
+f6ZlCtyz7Tnxoog/L2bKpHKe3F01DWpPfCcQwZYSad5m8rUHBg71Xs0XkQW7
+6hY0TT1N698s1w26xpIfUimEExCTy72yhVyy5BX1hi+DnIQLkiUUWImtmnDK
+OtQ+m00R3OwaHEXgJ7v62eeNvD5Q255TASgBuob/4xHNOA5JSQQ9BvIKKYNh
+W5z59A89cTutA0eaOeisLqY/cAUjtB6DVXJAafA4d5veb30Jy77dcsjY4TBM
+NKa1HDDezfw92TYhxIO8/FuCNsL69+8dU/ObdHtIRZcMBwE11Dx+l4S8IwbI
+WioDRoOkbEK55Iwt31q93TTjuDOjkjwFWgVtQqQpAg5Q/HTh/VM1MF7IewWH
+Z3P2C28hbTqbH237K6IWhaz2bzBNTNk7LX4T0MsOjtnSQ/1JSa0gdTCLFd11
+U2k922Jf5NeHTMNHCNWfIlzL+tVMSbu7Kx+sgCjimisXGPbGpppXgZ8FC7U0
+TnJuOzyFecsSAk/xtv1U8q3XqgvEhGLiuLnR5F86qaL5OizB2WKuLkeLWKWw
+kYifZ4mMv1+oYJVt/9P4ECm6r/pTPd5pOTMOebRPHtdl607yIH9EOdwEN12Z
+jp5keD8PPQjgEGR3INfevHQOzBj7zcyOk4aIoNyH5PZYDcux2Cs7ydpb/5PG
+X+veFeTd8zfZiCG9mbvttdI=
+=1w3y
+-----END PGP MESSAGE-----`
   },
   public: {
     assignee: null,

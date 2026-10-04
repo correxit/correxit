@@ -39,7 +39,8 @@ export const Body: React.FC<{
     reference: trans.__('Selected cell is a reference cell.'),
     reviewable: trans.__('Cell is manually reviewed.')
   };
-  const hint = get(rubric, id)?.is ?? (id in rubric.references && 'reference');
+  const hint =
+    get(rubric, id)?.is ?? (Rubric.Reference.get(rubric, id) && 'reference');
   return (
     <section
       aria-label={trans.__('Cell controls')}

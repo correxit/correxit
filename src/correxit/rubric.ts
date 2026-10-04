@@ -19,7 +19,7 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 /** Immutable assignment, cell, reference, and scoring data. */
 export namespace Rubric {
   /** Current persisted Correxit metadata format. */
-  export const CXTFORMAT = 1 as const;
+  export const CXTFORMAT = 2 as const;
 
   /** Assignment integrity, lifecycle, and grading metadata. */
   export type Assignment = Readonly<{
@@ -48,11 +48,29 @@ export namespace Rubric {
   export type Base = Readonly<{
     assignment: Assignment;
     cells: Readonly<{ [id: string]: Cell }>;
-    cxtformat: typeof CXTFORMAT;
     id: string;
     references: Readonly<{ [referent: string]: Cell.Reference; }>;
     revised: number;
+  }> & Format;
+
+  export type Format = Readonly<{
+    cxtformat: typeof CXTFORMAT;
+    contents: Content[] | null;
   }>;
+
+  /** Issued cell order, types, and keyed source commitments. */
+  export type Content = Readonly<{
+    id: string;
+    type: INotebookContent['cells'][number]['cell_type'];
+    digest: string | null;
+  }>;
+
+  export namespace Content {
+    /** Stable fields and property order across notebook serialization. */
+    export function terms({ digest, id, type }: Content): Content {
+      return { digest, id, type };
+    }
+  }
 
   /** Cell grading configuration. */
   export type Cell = Readonly<{
@@ -241,7 +259,7 @@ export namespace Rubric {
     ): Promise<Score> {
       const cell = get(rubric, id);
       const given = outputs.get(id);
-      const intervention = rubric.assignment.report.interventions[id];
+      const intervention = Score.get(rubric.assignment.report.interventions, id);
       if (!cell)
         return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
@@ -321,17 +339,22 @@ export namespace Rubric {
   export type Locked = Base & Readonly<{ key: null; locked: true; }>;
 
   export namespace Reference {
+    /** @returns the reference for `id`, or `null`. */
+    export function get(rubric: Rubric, id: string): Cell.Reference | null {
+      return own(rubric.references, id);
+    }
+
     /** @returns a rubric with a reference's points updated. */
     export function reweight(
       rubric: Unlocked,
       referent: string,
       points: number
     ): Unlocked {
-      const reference = rubric.references[referent];
+      const reference = get(rubric, referent);
       if (!reference)
         throw new Error.Invalid(`reweight: reference ${referent} not found`);
 
-      const cell = get(rubric, reference.cell);
+      const cell = Rubric.get(rubric, reference.cell);
       if (!cell || cell.is !== 'correctable')
         throw new Error.Invalid(`reweight: cell ${reference.cell} invalid`);
 
@@ -342,7 +365,7 @@ export namespace Rubric {
       const updated = { ...reference, points };
       const total = cell.references.reduce(
         (sum, id) =>
-          sum + (id === referent ? points : rubric.references[id].points), 0
+          sum + (id === referent ? points : get(rubric, id)!.points), 0
       );
       const cells = {
         ...rubric.cells,
@@ -389,10 +412,9 @@ export namespace Rubric {
       roster: string[];
     }>;
     cells: Readonly<{ [id: string]: Cell }>;
-    cxtformat: typeof CXTFORMAT;
     id: string;
     references: Readonly<{ [referent: string]: Cell.Reference; }>;
-  }>;
+  }> & Format;
 
   export type Timestamp = number | null;
 
@@ -568,7 +590,7 @@ export namespace Rubric {
         'assignee' | 'expiration' | 'id' | 'name' | 'overdue' | 'penalty'
       >;
       notebook: INotebookContent;
-      rubric: Pick<Base, 'cells' | 'cxtformat' | 'id' | 'references'>;
+      rubric: Pick<Base, 'cells' | 'id' | 'references'> & Format;
     }): Promise<string> {
       const sources = notebook.cells
         .map(({ id, source, cell_type }) => [
@@ -594,7 +616,8 @@ export namespace Rubric {
         penalty: assignment.penalty,
         references,
         rubric: rubric.id,
-        sources
+        sources,
+        contents: rubric.contents?.map(Content.terms) ?? null
       }));
     }
 
@@ -623,7 +646,7 @@ export namespace Rubric {
         | 'penalty'
       >;
       notebook: INotebookContent;
-      rubric: Pick<Base, 'cells' | 'cxtformat' | 'id' | 'references'>;
+      rubric: Pick<Base, 'cells' | 'id' | 'references'> & Format;
     }): Promise<boolean> {
       if (!assignment.issue || !assignment.issuer) return false;
       const verified = await security.verify(
@@ -790,6 +813,14 @@ export namespace Rubric {
       status: 'unscored'
     });
 
+    /** @returns an own score or intervention for `id`, or `null`. */
+    export function get(
+      scores: Readonly<{ [id: string]: Score }>,
+      id: string
+    ): Score | null {
+      return own(scores, id);
+    }
+
     /** @returns a copy of a cell's score that has been manually updated. */
     export function intervene(
       id: string,
@@ -824,7 +855,7 @@ export namespace Rubric {
     ): Score | null {
       const { Report } = Assignment;
       const { interventions, scores } = { ...Report.empty(), ...report };
-      return interventions[id] ?? scores[id] ?? null;
+      return get(interventions, id) ?? get(scores, id);
     }
   }
 
@@ -846,7 +877,8 @@ export namespace Rubric {
     cell: Cell,
     references: Cell.Reference[] = []
   ): Unlocked {
-    if (has(rubric, cell.id) || cell.id in rubric.references)
+    identifiers([cell.id, ...references.map(({ referent }) => referent)]);
+    if (has(rubric, cell.id) || Reference.get(rubric, cell.id))
       throw new Error.Invalid(`add error, cell id ${cell.id} already exists`);
     for (const reference of references) {
       const { cell: target, referent } = reference;
@@ -855,12 +887,12 @@ export namespace Rubric {
           `add error, reference ${referent} has wrong cell`
         );
       }
-      if (referent in rubric.references) {
+      if (Reference.get(rubric, referent)) {
         throw new Error.Invalid(
           `add error, reference ${referent} already exists`
         );
       }
-      if (referent in rubric.cells) {
+      if (has(rubric, referent)) {
         throw new Error.Invalid(
           `add error, reference ${referent} collides with cell`
         );
@@ -966,7 +998,7 @@ export namespace Rubric {
     const encoded = revised.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
     return {
-      assignment, cells: {}, cxtformat: CXTFORMAT, id,
+      assignment, cells: {}, cxtformat: CXTFORMAT, contents: null, id,
       locked: false, references: {}, revised
     };
   }
@@ -1010,7 +1042,7 @@ export namespace Rubric {
     rubric: Unlocked,
     referent: string
   ): Unlocked {
-    const reference = rubric.references[referent];
+    const reference = Reference.get(rubric, referent);
     if (!reference) {
       throw new Error.Invalid(
         `dereference error, reference ${referent} not found`
@@ -1031,7 +1063,7 @@ export namespace Rubric {
     const assignment = { ...rubric.assignment, report: blank };
     const { [referent]: _, ...references } = rubric.references;
     const points = cell.is === 'correctable'
-      ? remaining.reduce((sum, id) => sum + references[id].points, 0)
+      ? remaining.reduce((sum, id) => sum + own(references, id)!.points, 0)
       : cell.points;
     const cells = {
       ...rubric.cells,
@@ -1050,7 +1082,7 @@ export namespace Rubric {
 
   /** @returns the cell for `id`, or `null`. */
   export function get(rubric: Rubric, id: string): Cell | null {
-    return rubric.cells[id] || null;
+    return own(rubric.cells, id);
   }
 
   /** @returns whether a rubric has a cell with the given id. */
@@ -1060,6 +1092,8 @@ export namespace Rubric {
 
   /** @returns the given rubric, locked. */
   export async function lock(rubric: Rubric): Promise<Locked> {
+    identifiers(Object.keys(rubric.cells).concat(Object.keys(rubric.references),
+      Object.keys(rubric.assignment.report.scores), Object.keys(rubric.assignment.report.interventions)));
     if (rubric.locked) return rubric;
 
     const blank = { ...rubric.assignment, mac: '' };
@@ -1069,14 +1103,14 @@ export namespace Rubric {
     await Rubric.validate(signed);
 
     const locked = true;
-    const { cells, cxtformat, id, key, references } = signed;
+    const { key } = signed;
     const serialized = JSON.stringify(signed.assignment.roster);
     const roster = [await security.encrypt(serialized, key)];
     const assignment = { ...signed.assignment, roster };
     const revised = Date.now();
     return {
-      assignment, cells, cxtformat, id,
-      key: null, locked, references, revised
+      ...signed, assignment,
+      key: null, locked, revised
     };
   }
 
@@ -1088,7 +1122,7 @@ export namespace Rubric {
   /** @returns a normalized locked rubric or throws. */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
     const {
-      assignment, cells, cxtformat, id, key, locked, references, revised
+      assignment, cells, contents, cxtformat, id, key, locked, references, revised
     } = rubric;
     const object = (value: unknown): value is object =>
       typeof value === 'object' && value !== null;
@@ -1101,6 +1135,19 @@ export namespace Rubric {
       ) ?? null;
     if (cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');
+    if (contents !== null) {
+      if (!Array.isArray(contents))
+        throw new Error.Invalid('invalid rubric, missing contents');
+      const invalid = contents.some(entry =>
+        !record(entry) ||
+        typeof entry.id !== 'string' || !entry.id ||
+        typeof entry.type !== 'string' ||
+        !['code', 'markdown', 'raw'].includes(entry.type) ||
+        (entry.digest !== null && (typeof entry.digest !== 'string' || !entry.digest))
+      );
+      if (invalid || new Set(contents.map(({ id }) => id)).size !== contents.length)
+        throw new Error.Invalid('invalid rubric, invalid contents');
+    }
     if (!revised) throw new Error.Invalid('invalid rubric, missing revised');
     if (typeof id !== 'string' || !id)
       throw new Error.Invalid('invalid rubric, missing id');
@@ -1155,9 +1202,11 @@ export namespace Rubric {
       (!record(kernel) || !record(kernel.resources))
     )
       throw new Error.Invalid('invalid rubric, invalid kernel spec');
+    identifiers(Object.keys(cells).concat(Object.keys(references),
+      Object.keys(scores), Object.keys(interventions)));
     return {
       assignment: assignment as Assignment,
-      cells, cxtformat, id, key, locked, references, revised
+      cells, contents, cxtformat, id, key, locked, references, revised
     };
   }
 
@@ -1165,7 +1214,7 @@ export namespace Rubric {
   export function pending({ assignment, cells }: Rubric): boolean {
     const { report: { interventions } } = assignment;
     return Object.values(cells)
-      .some(({ id, is }) => is === 'reviewable' && !interventions[id]);
+      .some(({ id, is }) => is === 'reviewable' && !Score.get(interventions, id));
   }
 
   /** Provision a locked rubric with assignee keys for sealed submission. */
@@ -1187,12 +1236,13 @@ export namespace Rubric {
       throw new Error.Invalid(`refer error, cell ${id} is ${cell.is}`);
 
     const { referent } = reference;
-    if (referent in rubric.references) {
+    identifiers([referent]);
+    if (Reference.get(rubric, referent)) {
       throw new Error.Invalid(
         `refer error, reference ${referent} already exists`
       );
     }
-    if (referent in rubric.cells)
+    if (has(rubric, referent))
       throw new Error.Invalid(`refer error, reference ${referent} collides`);
 
     const assignment = {
@@ -1203,7 +1253,7 @@ export namespace Rubric {
     const references = { ...rubric.references, [referent]: bound };
     const local = [...cell.references, referent];
     const points = cell.is === 'correctable'
-      ? local.reduce((sum, id) => sum + references[id].points, 0)
+      ? local.reduce((sum, id) => sum + own(references, id)!.points, 0)
       : cell.points;
     const cells = {
       ...rubric.cells,
@@ -1260,7 +1310,8 @@ export namespace Rubric {
       cells: cells(rubric.cells),
       cxtformat: rubric.cxtformat,
       id: rubric.id,
-      references: references(rubric.references)
+      references: references(rubric.references),
+      contents: rubric.contents?.map(Content.terms) ?? null
     };
   }
 
@@ -1277,7 +1328,7 @@ export namespace Rubric {
 
   /** @returns a rubric with a reference's secret flag toggled. */
   export function toggle(rubric: Unlocked, referent: string): Unlocked {
-    const reference = rubric.references[referent];
+    const reference = Reference.get(rubric, referent);
     if (!reference)
       throw new Error.Invalid(`toggle: reference ${referent} not found`);
 
@@ -1292,14 +1343,12 @@ export namespace Rubric {
 
   /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
-    const {
-      cells, cxtformat, id, references, assignment: { roster: [block] }
-    } = rubric;
+    const { assignment: { roster: [block] } } = rubric;
     const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
     const assignment = { ...rubric.assignment, roster };
     const revised = Date.now();
     const unlocked: Unlocked = {
-      assignment, cells, cxtformat, id, key, locked: false, references, revised
+      ...rubric, assignment, key, locked: false, revised
     };
     await Rubric.validate(unlocked);
     return unlocked;
@@ -1324,6 +1373,8 @@ export namespace Rubric {
   export async function validate(rubric: Unlocked): Promise<void> {
     if (rubric.cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');
+    identifiers(Object.keys(rubric.cells).concat(Object.keys(rubric.references),
+      Object.keys(rubric.assignment.report.scores), Object.keys(rubric.assignment.report.interventions)));
     const { assignment, key } = rubric;
     await Assignment.validate(assignment);
     if (!assignment.mac) return;
@@ -1331,6 +1382,15 @@ export namespace Rubric {
     throw new Error.Mismatch('mac mismatch');
   }
 }
+
+const own = <Value>(values: Readonly<{ [id: string]: Value }>, id: string): Value | null =>
+  Object.prototype.hasOwnProperty.call(values, id) ? values[id] : null;
+
+/** JupyterLab's metadata copier cannot preserve an own `__proto__` entry. */
+const identifiers = (ids: string[]): void => {
+  if (ids.includes('__proto__'))
+    throw new Error.Invalid('invalid rubric, unsupported id __proto__');
+};
 
 const cell = (cell: Rubric.Cell): Rubric.Cell => {
   const { id, is, payload, points } = cell;

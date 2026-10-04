@@ -35,6 +35,12 @@ Cells that are not part of the rubric (markdown, setup code, boilerplate)
 become read-only after distribution. Students can only edit the cells
 you explicitly mark for grading.
 
+Issued workbooks authenticate those fixed sources, including shared references
+and setup code, as well as the issued cells' types and relative order. Students
+can add working cells and edit their answers. Grading rejects changes to fixed
+sources, cell identities, types, or relative order, as well as missing issued
+cells. Locking is a UI aid; authentication detects direct file edits.
+
 ## Converting a notebook
 
 Open any Jupyter notebook and click **Convert to a workbook assignment…**

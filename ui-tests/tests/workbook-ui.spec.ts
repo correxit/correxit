@@ -179,7 +179,6 @@ test('unlock keeps the manual roster plaintext in the sidebar', async ({
       }
     }))(Rubric.create());
     const rubric = await Rubric.assign(base, {
-      assignee,
       roster: [assignee]
     });
     await Workbook.update(panel, rubric);
@@ -1092,6 +1091,7 @@ test('certify docks a late workbook by penalty percentage', async ({
         (r => ({
           ...r,
           key: 'secret',
+          contents: [{ id: 'cell', type: 'code', digest: null }],
           assignment: {
             ...r.assignment,
             keys: {
@@ -1165,6 +1165,7 @@ test('certify rejects an overdue rejected workbook', async ({ page }) => {
         (r => ({
           ...r,
           key: 'secret',
+          contents: [{ id: 'cell', type: 'code', digest: null }],
           assignment: {
             ...r.assignment,
             keys: {
@@ -1331,7 +1332,7 @@ test('revise rejects tampered sealed cells', async ({ page }) => {
   await dispose();
 });
 
-test('headed unlock repairs a sealed notebook with missing cells', async ({
+test('headed unlock rejects missing issued cells without writing decrypted answers', async ({
   page
 }) => {
   const { dispose } = await setup(page, [
@@ -1363,6 +1364,13 @@ test('headed unlock repairs a sealed notebook with missing cells', async ({
       references: null,
       payload: null
     });
+    rubric = {
+      ...rubric,
+      contents: [
+        { id: 'a', type: 'code', digest: null },
+        { id: 'b', type: 'code', digest: null }
+      ]
+    };
     await Workbook.update(workbook, rubric);
     await Workbook.assign(workbook, {
       assignee: 'student@example.com',
@@ -1378,25 +1386,23 @@ test('headed unlock repairs a sealed notebook with missing cells', async ({
     const notebook = panel.context.model.sharedModel;
     notebook.deleteCell(1);
 
-    const unlocked = await Workbook.unlock(workbook, key);
-    const cell = notebook.cells[0].toJSON();
-    const metadata = notebook.getMetadata('correxit');
+    const before = JSON.stringify(notebook.toJSON());
+    let message = '';
+    try {
+      await Workbook.unlock(workbook, key);
+    } catch (error) {
+      message = String(error);
+    }
     return {
-      count: notebook.cells.length,
-      locked: unlocked.locked,
-      seal: unlocked.assignment.seal,
-      source: cell.source,
-      stored: metadata?.assignment?.seal ?? null,
-      type: cell.cell_type
+      message,
+      unchanged: before === JSON.stringify(notebook.toJSON()),
+      locked: Workbook.open(workbook).locked
     };
   });
 
-  expect(result.count).toBe(1);
-  expect(result.locked).toBe(false);
-  expect(result.seal).toBeNull();
-  expect(result.stored).toBeNull();
-  expect(result.source).toBe('x = 1');
-  expect(result.type).toBe('code');
+  expect(result.message).toContain('contents mismatch');
+  expect(result.unchanged).toBe(true);
+  expect(result.locked).toBe(true);
   await dispose();
 });
 

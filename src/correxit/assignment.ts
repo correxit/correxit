@@ -127,17 +127,19 @@ export namespace Assignment {
       mac: '',
       seal: null
     };
+    const contents = await content(notebook, { ...metadata, key, locked: false });
+    const format = { cxtformat: Rubric.CXTFORMAT, contents };
     const digest = await Rubric.Assignment.issue({
       assignment: blank,
       notebook,
-      rubric: metadata
+      rubric: { ...metadata, ...format }
     });
     const issuer = await Rubric.Assignment.issuer(digest, author);
     const assignment = { ...blank, issue: digest, issuer };
     const unlocked: Rubric.Unlocked = {
       assignment,
       cells: metadata.cells,
-      cxtformat: metadata.cxtformat,
+      ...format,
       id: metadata.id,
       key,
       locked: false,
@@ -152,6 +154,7 @@ export namespace Assignment {
       ...signed.assignment,
       roster: [encrypted]
     };
+    Object.assign(metadata, { cxtformat: unlocked.cxtformat, contents });
     metadata.revised = Date.now();
     return {
       identifier: {
@@ -173,6 +176,7 @@ export namespace Assignment {
     audit(source, rubric);
     const encrypted: string[] = [];
     const notebook = copy(source);
+    notebook.metadata['correxit'] = await Rubric.lock(rubric);
     for (const reference of Object.values(rubric.references)) {
       if (!reference.secret) continue;
       await encrypt(notebook, reference.referent, rubric.key);
@@ -186,6 +190,22 @@ export namespace Assignment {
     return { encrypted, notebook };
   }
 
+  /** Authenticate issued grading contents without treating student answers as fixed. */
+  export async function authenticate(
+    notebook: INotebookContent,
+    rubric: Rubric.Unlocked
+  ): Promise<void> {
+    if (!rubric.assignment.assignee) return;
+    await Rubric.validate(rubric);
+    if (!rubric.contents)
+      throw new Error.Mismatch('assignment contents are unauthenticated');
+    const ids = new Set(rubric.contents.map(({ id }) => id));
+    const current = await content(notebook, rubric, ids);
+    if (JSON.stringify(current.map(Rubric.Content.terms)) !==
+      JSON.stringify(rubric.contents.map(Rubric.Content.terms)))
+      throw new Error.Mismatch('assignment contents mismatch');
+  }
+
   /** Stamp the distribution timestamp on a serialized notebook. */
   export function stamp(
     notebook: INotebookContent,
@@ -197,13 +217,42 @@ export namespace Assignment {
   }
 }
 
+/** Sources remain private even when their possible values are easy to guess. */
+async function content(
+  notebook: INotebookContent,
+  rubric: Rubric.Unlocked,
+  subset: ReadonlySet<string> | null = null
+): Promise<Rubric.Content[]> {
+  if (notebook.cells.some(({ id }) => typeof id !== 'string' || !id))
+    throw new Error.Mismatch('invalid cell id');
+  const ids = notebook.cells.map(cell => String(cell.id));
+  if (new Set(ids).size !== ids.length)
+    throw new Error.Mismatch('duplicate cell ids');
+  const cells = subset
+    ? notebook.cells.filter(cell => subset.has(String(cell.id)))
+    : notebook.cells;
+  return Promise.all(cells.map(async cell => {
+    const id = String(cell.id);
+    const reference = Rubric.Reference.get(rubric, id);
+    const encrypted = reference?.secret && security.encrypted(text(cell));
+    const source = encrypted
+      ? await security.decrypt(text(cell), rubric.key)
+      : text(cell);
+    const type = encrypted ? 'code' : cell.cell_type;
+    const digest = Rubric.has(rubric, id) ? null : await security.hmac(
+      JSON.stringify([rubric.id, id, type, source]), rubric.key
+    );
+    return { id, type, digest };
+  }));
+}
+
 function audit(notebook: INotebookContent, rubric: Rubric.Unlocked): void {
-  const types = Object.fromEntries(
+  const types = new Map(
     notebook.cells.map(cell => [String(cell.id ?? ''), cell.cell_type])
   );
-  const executable = (id: string) => types[id] === 'code' || types[id] === 'raw';
+  const executable = (id: string) => types.get(id) === 'code' || types.get(id) === 'raw';
   const missing = Object.values(rubric.cells).filter(cell => {
-    if (cell.is === 'reviewable') return !(cell.id in types);
+    if (cell.is === 'reviewable') return !types.has(cell.id);
     if (cell.is === 'answerable' && !cell.payload.length) return true;
     return !executable(cell.id);
   });

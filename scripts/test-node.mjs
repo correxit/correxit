@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { Assignment, Rubric } from 'correxit/node';
 import * as openpgp from 'openpgp';
 
@@ -144,5 +145,44 @@ assert.equal(reference.cell_type, 'raw');
 assert.equal(reference.metadata.editable, false);
 assert.equal(reference.metadata.jupyter.source_hidden, true);
 assert.match(reference.source, /^-----BEGIN PGP MESSAGE-----/);
+
+for (const id of [undefined, null, '', 42]) {
+  const invalid = structuredClone(notebook);
+  invalid.cells[0].id = id;
+  const before = structuredClone(invalid);
+  await assert.rejects(
+    Assignment.assign({
+      assignee: 'bob@example.com',
+      notebook: invalid,
+      key,
+      passphrase: null
+    }),
+    /invalid cell id/
+  );
+  assert.deepEqual(invalid, before);
+}
+
+const template = JSON.parse(await readFile('examples/chinook.ipynb', 'utf8'));
+const sample = Rubric.normalize(template.metadata.correxit);
+const secret = await keygen('xsql', sample.id);
+const author = await Rubric.unlock(sample, secret);
+assert.equal(sample.cxtformat, Rubric.CXTFORMAT);
+assert.equal(author.contents, null);
+assert.equal(author.assignment.assignee, '');
+assert.deepEqual(author.assignment.resources, ['chinook.db']);
+
+const issued = await Assignment.assign({
+  assignee: 'student@example.com',
+  notebook: template,
+  key: null,
+  passphrase: 'xsql'
+});
+const rubric = await Rubric.unlock(
+  Rubric.normalize(issued.notebook.metadata.correxit),
+  secret
+);
+assert.equal(rubric.contents.length, template.cells.length);
+assert.equal(issued.encrypted.length, 3);
+await Assignment.authenticate(issued.notebook, rubric);
 
 console.log('Node runtime assignment smoke test passed');

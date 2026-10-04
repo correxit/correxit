@@ -429,7 +429,7 @@ export function commands(
 
       const code = cell.cell_type === 'code';
       if (!code) return args.is === 'reviewable';
-      return !(id in rubric.references);
+      return !Rubric.Reference.get(rubric, id);
     },
     isToggled: (args: Partial<Cell>) => {
       const id = state.cell(args);
@@ -646,11 +646,11 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<Cell & Credentials & CellToolbar>) => {
       const { rubric, workbook } = await reify(args);
       if (!rubric)
-        return { resolved: false, score: Rubric.Score.UNSCORED, spec: null };
+        return { resolved: false, score: Rubric.Score.UNSCORED, spec: null, verified: false };
 
       const id = state.cell(args);
       if (args[Rubric.Cell.TOOLBAR] && !id)
-        return { resolved: true, score: Rubric.Score.UNSCORED, spec: null };
+        return { resolved: true, score: Rubric.Score.UNSCORED, spec: null, verified: false };
 
       const result = await Workbook.correct(workbook, id);
     if (Workbook.headless(workbook)) return result;
@@ -672,7 +672,7 @@ If conversion fails, Correxit restores the original notebook.`
       const rubric = open(state.workbook());
       if (!rubric || rubric.locked) return false;
       if (rubric.assignment.assignee) return false;
-      return !!args.referent && args.referent in rubric.references;
+      return !!args.referent && !!Rubric.Reference.get(rubric, args.referent);
     },
     isVisible: args =>
       commands.isEnabled(CommandIDs.dereference, args),
@@ -920,11 +920,8 @@ If conversion fails, Correxit restores the original notebook.`
 
       const { is } = Rubric.get(rubric, id) ?? {};
       if (!is || is !== 'comparable' && is !== 'correctable') return;
-      if (
-        referent === id ||
-        referent in rubric.references ||
-        referent in rubric.cells
-      ) return;
+      if (Rubric.has(rubric, referent)) return;
+      if (referent === id || Rubric.Reference.get(rubric, referent)) return;
       const reference = { cell: id, referent, points: 1, secret: true };
       await Workbook.refer(workbook, id, reference);
 
@@ -1022,7 +1019,7 @@ If conversion fails, Correxit restores the original notebook.`
       if (!commands.isEnabled(CommandIDs.share, args)) return undefined;
       const rubric = open(state.workbook())!;
       const id = state.cell(args);
-      const reference = rubric.references[id];
+      const reference = Rubric.Reference.get(rubric, id)!;
       return reference.secret ? Icons.secret : Icons.shared;
     },
     isEnabled: (args: Partial<Cell & CellToolbar>) => {
@@ -1030,14 +1027,14 @@ If conversion fails, Correxit restores the original notebook.`
       const rubric = open(state.workbook());
       if (!id || !rubric || rubric.locked || rubric.assignment.assignee)
         return false;
-      return id in rubric.references;
+      return !!Rubric.Reference.get(rubric, id);
     },
     isVisible: args => commands.isEnabled(CommandIDs.share, args),
     label: (args: Partial<Cell & CellToolbar>) => {
       if (!commands.isEnabled(CommandIDs.share, args)) return '';
       const rubric = open(state.workbook())!;
       const id = state.cell(args);
-      const reference = rubric.references[id];
+      const reference = Rubric.Reference.get(rubric, id)!;
       return reference.secret
         ? trans.__('Mode: secret')
         : trans.__('Mode: shared');

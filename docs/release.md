@@ -68,7 +68,13 @@ using the original tag; do not move the tag or recreate the release.
 
 For 2.1.0, requiring `Unlocker.request` is an intentional exception to strict
 SemVer while Correxit has no known external plugin consumers. Custom unlockers
-must implement it; the workbook-format compatibility guarantee still applies.
+must implement it; that release retained workbook-format compatibility.
+
+For 2.2.0, superseding the unused draft workbook format and requiring
+`Workbook.Grade.verified` are intentional exceptions to strict SemVer. Format 1
+never had usage in the wild; format 2 is the only supported format. Custom
+integrations must follow the authenticated grade-result contract in
+[PLUGINS](plugins.md).
 
 Numbered website snapshots, such as `/2.0.0/`, remain fixed. The domain root
 serves the newest stable homepage directly, with links to its guides and demo.
@@ -91,12 +97,21 @@ replaces it with that release's homepage and guides.
 
 ## Workbook format
 
-Correxit 1.x treated `cxtformat: 1` as provisional. Workbooks produced during
-that period may require re-creation. Correxit 2.0 freezes the format-1 contract.
-Thereafter, incompatible persisted-format changes require a new `cxtformat`,
-while readers for supported earlier formats are retained. Package versions and
+`cxtformat: 1` was a draft with no usage in the wild. Although Correxit 2.0
+described it as frozen, format 2 supersedes it to authenticate issued contents.
+Format 1 is rejected; no legacy reader or migration path is retained. The
+bundled Chinook workbook has been authenticated and re-signed as format 2.
+See [SECURITY](security.md) for the supported contract.
+
+Future incompatible persisted-format changes require a new `cxtformat` and an
+explicit compatibility policy for existing workbooks. Package versions and
 workbook-format versions are independent. Changes to authenticated terms, such
 as the assignment MAC or issue digest surfaces, are persisted-format changes.
+
+When releasing this change, call out the workbook-format transition and the
+CSV contract: exports from scanning alone leave scores blank; authenticated
+batch grading can reuse valid reports without kernel execution. Package
+version selection remains separate from `cxtformat`.
 
 ## Local packaging
 

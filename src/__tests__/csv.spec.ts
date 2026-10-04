@@ -18,12 +18,7 @@ import { Workbook } from '../correxit/workbook';
 import { generate } from '../corrector/csv';
 import type { Scanned } from '../corrector/commands';
 
-type Grade = {
-  path: string;
-  resolved: boolean;
-  score: Rubric.Score;
-  spec: null;
-};
+type Grade = Workbook.Grade;
 type Headless = { content: null; context: { path: string } };
 
 const BOM = '\uFEFF';
@@ -54,6 +49,7 @@ const rubric = (overrides: Partial<Rubric.Unlocked> = {}): Rubric.Unlocked => ({
   key: 'k',
   locked: false,
   references: {},
+  contents: null,
   revised: 0,
   ...overrides,
   cxtformat: Rubric.CXTFORMAT
@@ -66,7 +62,7 @@ const hollow = (path: string): Scanned =>
   ({ hollow: true, context: { path } }) as Scanned;
 
 function grade(path: string, score: Rubric.Score, resolved = true): Grade {
-  return { path, resolved, score, spec: null };
+  return { path, resolved, score, spec: null, verified: true };
 }
 
 const parse = (output: string) => {
@@ -171,7 +167,7 @@ describe('csv', () => {
     expect(row[13]).toBe('true');
   });
 
-  it('falls back to rubric summary when no grade exists', () => {
+  it('does not export a scanned report without authenticated grade provenance', () => {
     const wb = workbook('hw/carol.ipynb');
     const scores: Record<string, Rubric.Score> = {
       'cell-1': {
@@ -190,8 +186,29 @@ describe('csv', () => {
     );
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     const [, row] = rows;
-    expect(row[6]).toBe('3');
-    expect(row[7]).toBe('5');
+    expect(row[6]).toBe('');
+    expect(row[7]).toBe('');
+  });
+
+  it('ignores unverified results even when they claim to be resolved', () => {
+    const wb = workbook('forged.ipynb');
+    const forged: Grade = {
+      ...grade('forged.ipynb', {
+        ...Rubric.Score.CORRECT,
+        points: 10,
+        possible: 10
+      }),
+      verified: false
+    };
+    const rows = parse(
+      generate(
+        [wb as unknown as Scanned],
+        new Map([['forged.ipynb', { grade: forged }]])
+      )
+    );
+    expect(rows[1][6]).toBe('');
+    expect(rows[1][7]).toBe('');
+    expect(rows[1][13]).toBe('false');
   });
 
   it('escapes commas in fields', () => {
@@ -270,9 +287,9 @@ describe('csv', () => {
     const rows = parse(generate([wb as unknown as Scanned], new Map()));
     const [, row] = rows;
     expect(row[9]).not.toBe('');
-    expect(row[11]).not.toBe('');
+    expect(row[11]).toBe('');
     expect(row[10]).toBe('sub-xyz');
-    expect(row[12]).toBe('receipt-abc');
+    expect(row[12]).toBe('');
   });
 
   it('handles multiple workbooks mixing hollow and reified', () => {

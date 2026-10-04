@@ -81,8 +81,15 @@ the key `correxit`. A Correxit `Workbook` is a Jupyter notebook that has a
 
 The required `cxtformat` field identifies the persisted Correxit metadata
 format independently of the Correxit package version. New workbooks use
-`cxtformat: 1`; missing and unknown formats fail closed and are never silently
-rewritten when opened.
+`cxtformat: 2`, with an authenticated `contents` manifest for issued cell types,
+relative order, and keyed commitments to fixed sources. Rubric cell sources
+remain editable. Secret references are checked as plaintext, so encryption's
+randomness does not affect their identity.
+
+Format 1 was a draft with no usage in the wild. Format 2 supersedes it and is
+the only supported format. Missing, draft, and unknown formats fail closed;
+opening or scanning never migrates metadata. See [SECURITY](security.md) for
+the serialization contract.
 
 A rubric is immutable. Each mutation returns a new instance (with a new
 `revised` timestamp) via functions in `rubric.ts`.
@@ -138,6 +145,13 @@ states, enabling the compiler to enforce correctness:
 
 This eliminates classes of runtime errors by making invalid states
 unrepresentable.
+
+`Workbook.Grade` also discriminates command results with `verified: true |
+false`. Only authenticated grading or collection produces verified scores;
+`Workbook.Certified` requires that provenance. The flag lives in memory, not in
+notebook metadata. Scanning and parsing cannot manufacture it. Batch cache
+reuse follows authentication inside the same bounded grading action, and CSV
+exports consume verified results instead of falling back to scanned reports.
 
 ## Asynchronous patterns
 

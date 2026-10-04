@@ -60,7 +60,8 @@ const certified = (
       path: 'test.ipynb',
       resolved: true,
       score: { ...Rubric.Score.CORRECT, points, possible },
-      spec: null
+      spec: null,
+      verified: true
     },
     identifier: {
       assignee,

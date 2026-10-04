@@ -19,7 +19,7 @@
       }
     },
     "mac": "assignment-mac",
-    "name": "Format 1 assignment",
+    "name": "Format 2 assignment",
     "overdue": "dock",
     "penalty": 10,
     "report": {
@@ -93,8 +93,24 @@
       "references": null
     }
   },
-  "cxtformat": 1,
-  "id": "wb-format-1",
+  "cxtformat": 2,
+  "contents": [
+    { "id": "answer", "type": "code", "digest": null },
+    { "id": "compare", "type": "code", "digest": null },
+    {
+      "id": "compare-reference",
+      "type": "code",
+      "digest": "compare-commitment"
+    },
+    { "id": "correct", "type": "code", "digest": null },
+    {
+      "id": "correct-reference",
+      "type": "code",
+      "digest": "correct-commitment"
+    },
+    { "id": "review", "type": "code", "digest": null }
+  ],
+  "id": "wb-format-2",
   "key": null,
   "locked": true,
   "references": {

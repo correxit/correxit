@@ -1,7 +1,7 @@
 declare const require: any;
 jest.mock('../correxit/security', () => require('./mocks/security'));
 import { Rubric } from '../correxit/rubric';
-const format = require('./fixtures/cxtformat-1-metadata.json');
+const format = require('./fixtures/cxtformat-2-metadata.json');
 
 describe('Rubric', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -38,6 +38,26 @@ describe('Rubric', () => {
       expect(Rubric.create().cxtformat).toBe(Rubric.CXTFORMAT);
     });
 
+    it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+      'looks up only own rubric cells for %s',
+      id => {
+        const rubric = create();
+        expect(Rubric.get(rubric, id)).toBeNull();
+        expect(Rubric.has(rubric, id)).toBe(false);
+
+        const cell: Rubric.Cell = {
+          id,
+          is: 'reviewable',
+          payload: null,
+          points: 1,
+          references: null
+        };
+        const configured = { ...rubric, cells: { [id]: cell } };
+        expect(Rubric.get(configured, id)).toBe(cell);
+        expect(Rubric.has(configured, id)).toBe(true);
+      }
+    );
+
     it('locks and unlocks data symmetrically', async () => {
       const id = 'test-cell';
       const cell: Rubric.Cell = {
@@ -56,6 +76,104 @@ describe('Rubric', () => {
       expect(unlocked.locked).toBe(false);
       expect(Rubric.get(unlocked, id)!.payload).toEqual(['42']);
     });
+
+    it.each(['constructor', 'toString', 'hasOwnProperty'])(
+      'allows actual rubric cells and references named %s',
+      id => {
+        const cell: Rubric.Cell = {
+          id,
+          is: 'reviewable',
+          payload: null,
+          points: 1,
+          references: null
+        };
+        expect(Rubric.get(Rubric.add(create(), cell), id)).toEqual(cell);
+
+        const reference = {
+          cell: 'answer',
+          referent: id,
+          points: 1,
+          secret: true
+        };
+        const rubric = Rubric.add(
+          create(),
+          {
+            id: 'answer',
+            is: 'correctable',
+            payload: null,
+            points: 1,
+            references: [id]
+          },
+          [reference]
+        );
+        expect(rubric.references[id]).toEqual(reference);
+        expect(() => Rubric.toggle(create(), id)).toThrow('not found');
+      }
+    );
+
+    it('rejects __proto__ cells and references before saving', async () => {
+      const id = '__proto__';
+      const cell: Rubric.Cell = {
+        id,
+        is: 'reviewable',
+        payload: null,
+        points: 1,
+        references: null
+      };
+      const reference = {
+        cell: 'answer',
+        referent: id,
+        points: 1,
+        secret: true
+      };
+      const answer: Rubric.Cell = {
+        id: 'answer',
+        is: 'correctable',
+        payload: null,
+        points: 0,
+        references: []
+      };
+      expect(() => Rubric.add(create(), cell)).toThrow(
+        'unsupported id __proto__'
+      );
+      expect(() => Rubric.add(create(), answer, [reference])).toThrow(
+        'unsupported id __proto__'
+      );
+      expect(() =>
+        Rubric.refer(Rubric.add(create(), answer), answer.id, reference)
+      ).toThrow('unsupported id __proto__');
+      await expect(
+        Rubric.lock({ ...create(), cells: { [id]: cell } })
+      ).rejects.toThrow('unsupported id __proto__');
+    });
+
+    it.each(['cells', 'references', 'scores', 'interventions'])(
+      'rejects __proto__ in persisted %s',
+      async field => {
+        const rubric = create();
+        const metadata = JSON.parse(JSON.stringify(format));
+        const entries = { ['__proto__']: { id: '__proto__' } };
+        const invalid =
+          field === 'cells' || field === 'references'
+            ? { ...rubric, [field]: entries }
+            : {
+                ...rubric,
+                assignment: {
+                  ...rubric.assignment,
+                  report: { ...rubric.assignment.report, [field]: entries }
+                }
+              };
+        if (field === 'cells' || field === 'references')
+          metadata[field] = entries;
+        else metadata.assignment.report[field] = entries;
+        expect(() => Rubric.normalize(metadata)).toThrow(
+          'unsupported id __proto__'
+        );
+        await expect(
+          Rubric.validate(invalid as Rubric.Unlocked)
+        ).rejects.toThrow('unsupported id __proto__');
+      }
+    );
 
     it('decrypts roster on unlock', async () => {
       const assignee = 'student@example.com';
@@ -241,13 +359,53 @@ describe('Rubric', () => {
       expect(normalized.id).toBeDefined();
     });
 
-    it('normalizes golden format-1 metadata without completing it', () => {
+    it('normalizes golden format-2 metadata without completing it', () => {
       const metadata = JSON.parse(JSON.stringify(format));
       expect(Rubric.normalize(metadata)).toEqual(metadata);
     });
 
+    it('retains the exact MAC surface and property order', () => {
+      const rubric = Rubric.normalize(format);
+      const terms = Rubric.terms(rubric);
+      expect(Object.keys(terms)).toEqual([
+        'assignment',
+        'cells',
+        'cxtformat',
+        'id',
+        'references',
+        'contents'
+      ]);
+      expect(terms.contents).toEqual(rubric.contents);
+    });
+
+    it('requires explicit contents in format 2', async () => {
+      const rubric = await Rubric.lock(create());
+      const { contents, ...missing } = rubric;
+      expect(contents).toBeNull();
+      expect(() => Rubric.normalize(missing)).toThrow('missing contents');
+      expect(() =>
+        Rubric.normalize({ ...rubric, contents: undefined } as any)
+      ).toThrow('missing contents');
+    });
+
+    it.each([
+      [null],
+      [{}],
+      [{ id: 'cell', type: 'code' }],
+      [{ id: 'cell', type: 'unknown', digest: null }],
+      [
+        { id: 'cell', type: 'code', digest: null },
+        { id: 'cell', type: 'code', digest: null }
+      ]
+    ])('rejects malformed content entries: %j', async (...contents) => {
+      const rubric = await Rubric.lock(create());
+      expect(() => Rubric.normalize({ ...rubric, contents } as any)).toThrow(
+        'invalid contents'
+      );
+    });
+
     it.each(Object.keys(format.assignment))(
-      'rejects format-1 metadata missing assignment.%s',
+      'rejects metadata missing assignment.%s',
       field => {
         const metadata = JSON.parse(JSON.stringify(format));
         delete metadata.assignment[field];
@@ -256,7 +414,7 @@ describe('Rubric', () => {
     );
 
     it.each(Object.keys(format.assignment))(
-      'rejects format-1 metadata with undefined assignment.%s',
+      'rejects metadata with undefined assignment.%s',
       field => {
         const metadata = JSON.parse(JSON.stringify(format));
         metadata.assignment[field] = undefined;
@@ -275,7 +433,7 @@ describe('Rubric', () => {
         (metadata: any) =>
           (metadata.assignment.keys.public.assignee = undefined)
       ]
-    ])('rejects format-1 metadata with undefined %s', (_, corrupt) => {
+    ])('rejects metadata with undefined %s', (_, corrupt) => {
       const metadata = JSON.parse(JSON.stringify(format));
       corrupt(metadata);
       expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
@@ -299,7 +457,7 @@ describe('Rubric', () => {
         'kernel resources',
         (metadata: any) => delete metadata.assignment.report.kernel.resources
       ]
-    ])('rejects format-1 metadata missing %s', (_, corrupt) => {
+    ])('rejects metadata missing %s', (_, corrupt) => {
       const metadata = JSON.parse(JSON.stringify(format));
       corrupt(metadata);
       expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
@@ -329,7 +487,7 @@ describe('Rubric', () => {
         'kernel resources',
         (metadata: any) => (metadata.assignment.report.kernel.resources = [])
       ]
-    ])('rejects malformed format-1 %s container', (_, corrupt) => {
+    ])('rejects malformed %s container', (_, corrupt) => {
       const metadata = JSON.parse(JSON.stringify(format));
       corrupt(metadata);
       expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
@@ -337,7 +495,8 @@ describe('Rubric', () => {
 
     it.each([
       ['missing', undefined],
-      ['unknown', 2]
+      ['draft', 1],
+      ['unknown', 3]
     ])('rejects cxtformat when %s', async (_, cxtformat) => {
       const rubric = await Rubric.lock(create());
       expect(() => Rubric.normalize({ ...rubric, cxtformat } as any)).toThrow(
@@ -407,6 +566,47 @@ describe('Rubric', () => {
       };
       expect(Rubric.pending(resolved)).toBe(false);
     });
+
+    it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+      'requires an own intervention before resolving reviewable cell %s',
+      async id => {
+        const cell: Rubric.Cell = {
+          id,
+          is: 'reviewable',
+          payload: null,
+          points: 1,
+          references: null
+        };
+        const rubric = { ...create(), cells: { [id]: cell } };
+        expect(Rubric.pending(rubric)).toBe(true);
+        await expect(Rubric.Cell.score(rubric, id, new Map())).resolves.toEqual(
+          {
+            ...Rubric.Score.UNSCORED,
+            code: 'intervene',
+            id,
+            possible: 1
+          }
+        );
+
+        const intervention = Rubric.Score.intervene(id, {
+          comment: 'Reviewed',
+          points: 1,
+          possible: 1
+        });
+        const assignment = {
+          ...rubric.assignment,
+          report: {
+            ...rubric.assignment.report,
+            interventions: { [id]: intervention }
+          }
+        };
+        const reviewed = { ...rubric, assignment };
+        expect(Rubric.pending(reviewed)).toBe(false);
+        await expect(
+          Rubric.Cell.score(reviewed, id, new Map())
+        ).resolves.toEqual(intervention);
+      }
+    );
   });
 
   describe('Assignment Flow', () => {
@@ -522,7 +722,7 @@ describe('Rubric', () => {
         assignee,
         roster: [assignee]
       });
-      const tampered = { ...rubric, cxtformat: 2 } as any;
+      const tampered = { ...rubric, cxtformat: 3 } as any;
       await expect(Rubric.validate(tampered)).rejects.toThrow(
         'unsupported cxtformat'
       );
@@ -649,7 +849,7 @@ describe('Rubric', () => {
         notebook,
         rubric
       });
-      const future = { ...rubric, cxtformat: 2 } as any;
+      const future = { ...rubric, cxtformat: 3 } as any;
       const changed = await Rubric.Assignment.issue({
         assignment: future.assignment,
         notebook,
@@ -1343,6 +1543,23 @@ describe('Rubric', () => {
   });
 
   describe('Rubric.Score', () => {
+    it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+      'resolves only own scores and interventions for %s',
+      id => {
+        const empty = Rubric.Assignment.Report.empty();
+        expect(Rubric.Score.resolve(empty, id)).toBeNull();
+        const score = { ...Rubric.Score.CORRECT, id };
+        const report = { ...empty, scores: { [id]: score } };
+        expect(Rubric.Score.resolve(report, id)).toBe(score);
+        expect(Rubric.Assignment.summary(report)).toEqual(score);
+
+        const intervention = { ...Rubric.Score.INCORRECT, id };
+        const reviewed = { ...report, interventions: { [id]: intervention } };
+        expect(Rubric.Score.resolve(reviewed, id)).toBe(intervention);
+        expect(Rubric.Assignment.summary(reviewed)).toEqual(intervention);
+      }
+    );
+
     it('creates manual intervention score', () => {
       const intervention = Rubric.Score.intervene('c1', {
         comment: 'manual override',
