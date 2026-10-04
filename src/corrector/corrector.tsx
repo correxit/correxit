@@ -175,7 +175,7 @@ const history = (workbook: Scanned, trans: TranslationBundle): string => {
 const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
   if (grade === 'pending') return 'pending';
   if (!grade.resolved) return 'failed';
-  if (workbook.hollow) return 'scanned';
+  if (workbook.hollow || !grade.verified) return 'scanned';
 
   const rubric = open(workbook);
   if (!rubric) return 'scanned';
@@ -257,14 +257,13 @@ const resolve = (
   if (collated.has(path)) return collated.get(path)!.grade;
   if (workbook.hollow || !graded) return 'pending';
 
-  const rubric = open(workbook);
-  const report = rubric?.assignment.report;
-  const summary =
-    report && rubric
-      ? Rubric.Assignment.summary(report, rubric.assignment)
-      : null;
-  const score = summary || Rubric.Score.UNSCORED;
-  return { path, resolved: true, score, spec: report?.kernel ?? null };
+  return {
+    path,
+    resolved: true,
+    score: Rubric.Score.UNSCORED,
+    spec: null,
+    verified: false
+  };
 };
 
 /** @returns the at-a-glance status of a workbook in the corrector. */
@@ -276,6 +275,7 @@ const status = (
 ) => {
   if (phase === 'failed')
     return graded ? trans.__('failed') : trans.__('retrying');
+  if (!grade.verified) return trans.__('unverified');
 
   const { points, possible, status } = grade.score;
   const unscored = status === 'unscored';
@@ -496,7 +496,10 @@ const Row: React.FC<{
     <Line {...{ className, path, walk }}>
       <Notebook {...{ active, commands, trans, workbook }} />
       <Assignee {...{ workbook }} />
-      <Breakdown {...{ active, commands, failed, trans, workbook }} />
+      <Breakdown
+        {...{ active, commands, failed, trans, workbook }}
+        verified={!pending && grade.verified}
+      />
       <Kernel {...{ spec }} />
       <Status {...{ grade, graded, phase, title, trans }} />
     </Line>
@@ -509,14 +512,17 @@ const Breakdown: React.FC<{
   failed: boolean;
   trans: TranslationBundle;
   workbook: Workbook.Headless;
-}> = ({ active, commands, failed, trans, workbook }) => {
+  verified: boolean;
+}> = ({ active, commands, failed, trans, workbook, verified }) => {
   if (failed) return <td className="correxit-corrector-breakdown" />;
 
   const rubric = open(workbook);
   if (!rubric) return <td className="correxit-corrector-breakdown" />;
 
   const { cells } = rubric;
-  const { report } = rubric.assignment;
+  const report = verified
+    ? rubric.assignment.report
+    : Rubric.Assignment.Report.empty();
   const breakdown = workbook.context.model.sharedModel.cells
     .map(cell => cell.id)
     .filter(id => id in cells);

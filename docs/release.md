@@ -98,6 +98,20 @@ while readers for supported earlier formats are retained. Package versions and
 workbook-format versions are independent. Changes to authenticated terms, such
 as the assignment MAC or issue digest surfaces, are persisted-format changes.
 
+Format 2 adds authenticated issued contents. Format-1 metadata readers and
+cryptographic surfaces remain supported. Existing unassigned author templates
+upgrade after authentication when unlocked or issued. Existing format-1
+submissions remain readable and recoverable, but cannot supply trusted grades
+without an instructor-controlled original: their files contain no reference
+source commitments to verify. This boundary cannot be removed by a silent
+migration or by trusting a certification timestamp. See [SECURITY](security.md)
+for recovery guidance.
+
+When releasing this change, call out the workbook-format transition and the
+CSV contract: exports from scanning alone leave scores blank; authenticated
+batch grading can reuse valid reports without kernel execution. Package
+version selection remains separate from `cxtformat`.
+
 ## Local packaging
 
 To inspect package archives without publishing:

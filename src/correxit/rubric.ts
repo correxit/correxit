@@ -19,7 +19,7 @@ export type Rubric = Rubric.Locked | Rubric.Unlocked;
 /** Immutable assignment, cell, reference, and scoring data. */
 export namespace Rubric {
   /** Current persisted Correxit metadata format. */
-  export const CXTFORMAT = 1 as const;
+  export const CXTFORMAT = 2 as const;
 
   /** Assignment integrity, lifecycle, and grading metadata. */
   export type Assignment = Readonly<{
@@ -48,11 +48,31 @@ export namespace Rubric {
   export type Base = Readonly<{
     assignment: Assignment;
     cells: Readonly<{ [id: string]: Cell }>;
-    cxtformat: typeof CXTFORMAT;
     id: string;
     references: Readonly<{ [referent: string]: Cell.Reference; }>;
     revised: number;
+  }> & Format;
+
+  export type Format = Readonly<{
+    cxtformat: 1;
+  }> | Readonly<{
+    cxtformat: typeof CXTFORMAT;
+    contents: Content[] | null;
   }>;
+
+  /** Issued cell order, types, and keyed source commitments. */
+  export type Content = Readonly<{
+    id: string;
+    type: INotebookContent['cells'][number]['cell_type'];
+    digest: string | null;
+  }>;
+
+  export namespace Content {
+    /** Stable fields and property order across notebook serialization. */
+    export function terms({ digest, id, type }: Content): Content {
+      return { digest, id, type };
+    }
+  }
 
   /** Cell grading configuration. */
   export type Cell = Readonly<{
@@ -389,10 +409,9 @@ export namespace Rubric {
       roster: string[];
     }>;
     cells: Readonly<{ [id: string]: Cell }>;
-    cxtformat: typeof CXTFORMAT;
     id: string;
     references: Readonly<{ [referent: string]: Cell.Reference; }>;
-  }>;
+  }> & Format;
 
   export type Timestamp = number | null;
 
@@ -568,7 +587,7 @@ export namespace Rubric {
         'assignee' | 'expiration' | 'id' | 'name' | 'overdue' | 'penalty'
       >;
       notebook: INotebookContent;
-      rubric: Pick<Base, 'cells' | 'cxtformat' | 'id' | 'references'>;
+      rubric: Pick<Base, 'cells' | 'id' | 'references'> & Format;
     }): Promise<string> {
       const sources = notebook.cells
         .map(({ id, source, cell_type }) => [
@@ -594,7 +613,10 @@ export namespace Rubric {
         penalty: assignment.penalty,
         references,
         rubric: rubric.id,
-        sources
+        sources,
+        ...(rubric.cxtformat === CXTFORMAT
+          ? { contents: rubric.contents?.map(Content.terms) ?? null }
+          : {})
       }));
     }
 
@@ -623,7 +645,7 @@ export namespace Rubric {
         | 'penalty'
       >;
       notebook: INotebookContent;
-      rubric: Pick<Base, 'cells' | 'cxtformat' | 'id' | 'references'>;
+      rubric: Pick<Base, 'cells' | 'id' | 'references'> & Format;
     }): Promise<boolean> {
       if (!assignment.issue || !assignment.issuer) return false;
       const verified = await security.verify(
@@ -960,13 +982,13 @@ export namespace Rubric {
    * @returns an unlocked rubric with the `key` field omitted. The client needs
    * to add a `key` field to use the rubric.
    */
-  export function create(): Omit<Unlocked, 'key'> {
+  export function create(): Omit<Extract<Unlocked, { cxtformat: 2 }>, 'key'> {
     const revised = Date.now();
     const assignment = { ...Assignment.empty() };
     const encoded = revised.toString(36);
     const id = `wb${encoded}${crypto.randomUUID().split('-').shift()}`;
     return {
-      assignment, cells: {}, cxtformat: CXTFORMAT, id,
+      assignment, cells: {}, cxtformat: CXTFORMAT, contents: null, id,
       locked: false, references: {}, revised
     };
   }
@@ -1069,14 +1091,14 @@ export namespace Rubric {
     await Rubric.validate(signed);
 
     const locked = true;
-    const { cells, cxtformat, id, key, references } = signed;
+    const { key } = signed;
     const serialized = JSON.stringify(signed.assignment.roster);
     const roster = [await security.encrypt(serialized, key)];
     const assignment = { ...signed.assignment, roster };
     const revised = Date.now();
     return {
-      assignment, cells, cxtformat, id,
-      key: null, locked, references, revised
+      ...signed, assignment,
+      key: null, locked, revised
     };
   }
 
@@ -1099,8 +1121,22 @@ export namespace Rubric {
         !Object.prototype.hasOwnProperty.call(value, field) ||
         (value as { [key: string]: unknown })[field] === undefined
       ) ?? null;
-    if (cxtformat !== CXTFORMAT)
+    if (cxtformat !== 1 && cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');
+    const contents = 'contents' in rubric ? rubric.contents : undefined;
+    if (cxtformat === CXTFORMAT && contents !== null) {
+      if (!Array.isArray(contents))
+        throw new Error.Invalid('invalid rubric, missing contents');
+      const invalid = contents.some(entry =>
+        !record(entry) ||
+        typeof entry.id !== 'string' || !entry.id ||
+        typeof entry.type !== 'string' ||
+        !['code', 'markdown', 'raw'].includes(entry.type) ||
+        (entry.digest !== null && (typeof entry.digest !== 'string' || !entry.digest))
+      );
+      if (invalid || new Set(contents.map(({ id }) => id)).size !== contents.length)
+        throw new Error.Invalid('invalid rubric, invalid contents');
+    }
     if (!revised) throw new Error.Invalid('invalid rubric, missing revised');
     if (typeof id !== 'string' || !id)
       throw new Error.Invalid('invalid rubric, missing id');
@@ -1157,7 +1193,8 @@ export namespace Rubric {
       throw new Error.Invalid('invalid rubric, invalid kernel spec');
     return {
       assignment: assignment as Assignment,
-      cells, cxtformat, id, key, locked, references, revised
+      cells, id, key, locked, references, revised,
+      ...(cxtformat === 1 ? { cxtformat } : { cxtformat, contents: contents! })
     };
   }
 
@@ -1255,13 +1292,20 @@ export namespace Rubric {
   }
 
   export function terms(rubric: Rubric): Terms {
-    return {
+    const terms = {
       assignment: authored(rubric.assignment),
       cells: cells(rubric.cells),
       cxtformat: rubric.cxtformat,
       id: rubric.id,
       references: references(rubric.references)
     };
+    return rubric.cxtformat === 1
+      ? { ...terms, cxtformat: rubric.cxtformat }
+      : {
+        ...terms,
+        cxtformat: rubric.cxtformat,
+        contents: rubric.contents?.map(Content.terms) ?? null
+      };
   }
 
   /** @returns a formatted rendition of a rubric timestamp. */
@@ -1292,14 +1336,12 @@ export namespace Rubric {
 
   /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
-    const {
-      cells, cxtformat, id, references, assignment: { roster: [block] }
-    } = rubric;
+    const { assignment: { roster: [block] } } = rubric;
     const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
     const assignment = { ...rubric.assignment, roster };
     const revised = Date.now();
     const unlocked: Unlocked = {
-      assignment, cells, cxtformat, id, key, locked: false, references, revised
+      ...rubric, assignment, key, locked: false, revised
     };
     await Rubric.validate(unlocked);
     return unlocked;
@@ -1322,13 +1364,24 @@ export namespace Rubric {
   }
 
   export async function validate(rubric: Unlocked): Promise<void> {
-    if (rubric.cxtformat !== CXTFORMAT)
+    if (rubric.cxtformat !== 1 && rubric.cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');
     const { assignment, key } = rubric;
     await Assignment.validate(assignment);
     if (!assignment.mac) return;
     if (assignment.mac === await mac(rubric, key)) return;
     throw new Error.Mismatch('mac mismatch');
+  }
+
+  /** Upgrade an authenticated author template; submitted contents cannot be inferred. */
+  export async function upgrade(rubric: Unlocked): Promise<Unlocked> {
+    if (rubric.cxtformat === CXTFORMAT) return rubric;
+    if (rubric.assignment.assignee)
+      throw new Error.Mismatch('format-1 assignment requires an instructor-controlled original');
+    return sign(
+      { ...rubric, cxtformat: CXTFORMAT, contents: null },
+      rubric.assignment.report
+    );
   }
 }
 

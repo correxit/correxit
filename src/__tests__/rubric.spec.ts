@@ -246,6 +246,49 @@ describe('Rubric', () => {
       expect(Rubric.normalize(metadata)).toEqual(metadata);
     });
 
+    it('retains the exact format-1 MAC surface and property order', () => {
+      const rubric = Rubric.normalize(format);
+      const terms = Rubric.terms(rubric);
+      expect(Object.keys(terms)).toEqual([
+        'assignment',
+        'cells',
+        'cxtformat',
+        'id',
+        'references'
+      ]);
+      expect(terms).not.toHaveProperty('contents');
+      expect(rubric).not.toHaveProperty('contents');
+    });
+
+    it('requires explicit contents in format 2', async () => {
+      const rubric = await Rubric.lock(create());
+      const { contents, ...missing } = rubric as Extract<
+        Rubric.Locked,
+        { cxtformat: 2 }
+      >;
+      expect(contents).toBeNull();
+      expect(() => Rubric.normalize(missing)).toThrow('missing contents');
+      expect(() =>
+        Rubric.normalize({ ...rubric, contents: undefined } as any)
+      ).toThrow('missing contents');
+    });
+
+    it.each([
+      [null],
+      [{}],
+      [{ id: 'cell', type: 'code' }],
+      [{ id: 'cell', type: 'unknown', digest: null }],
+      [
+        { id: 'cell', type: 'code', digest: null },
+        { id: 'cell', type: 'code', digest: null }
+      ]
+    ])('rejects malformed content entries: %j', async (...contents) => {
+      const rubric = await Rubric.lock(create());
+      expect(() => Rubric.normalize({ ...rubric, contents } as any)).toThrow(
+        'invalid contents'
+      );
+    });
+
     it.each(Object.keys(format.assignment))(
       'rejects format-1 metadata missing assignment.%s',
       field => {
@@ -337,7 +380,7 @@ describe('Rubric', () => {
 
     it.each([
       ['missing', undefined],
-      ['unknown', 2]
+      ['unknown', 3]
     ])('rejects cxtformat when %s', async (_, cxtformat) => {
       const rubric = await Rubric.lock(create());
       expect(() => Rubric.normalize({ ...rubric, cxtformat } as any)).toThrow(
@@ -522,7 +565,7 @@ describe('Rubric', () => {
         assignee,
         roster: [assignee]
       });
-      const tampered = { ...rubric, cxtformat: 2 } as any;
+      const tampered = { ...rubric, cxtformat: 3 } as any;
       await expect(Rubric.validate(tampered)).rejects.toThrow(
         'unsupported cxtformat'
       );
@@ -649,7 +692,7 @@ describe('Rubric', () => {
         notebook,
         rubric
       });
-      const future = { ...rubric, cxtformat: 2 } as any;
+      const future = { ...rubric, cxtformat: 3 } as any;
       const changed = await Rubric.Assignment.issue({
         assignment: future.assignment,
         notebook,

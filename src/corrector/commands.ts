@@ -8,7 +8,7 @@ import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { Contents, ServiceManager } from '@jupyterlab/services';
-import { Correxit, Rubric, Workbook } from '..';
+import { Assignment, Correxit, Rubric, Workbook } from '..';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import { Corrector, Reviewer } from '.';
@@ -101,8 +101,13 @@ export function commands(
           throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
 
         const actions: Actions = {
-          correct: workbook => correct(workbook, handle, fetch, manager, trans),
-          exclude: workbook => exclude(workbook, overwrite),
+          correct: workbook =>
+            correct(workbook, handle, overwrite, {
+              fetch,
+              manager,
+              trans,
+              unlocker
+            }),
           recover
         };
         const cap = kernels.cap();
@@ -173,8 +178,17 @@ export function commands(
         const handle = normalize(credentials as Partial<Credentials>);
         if (!handle) throw new Error.Invalid('collect error, bad handle');
         return (async function* () {
-          for await (const workbook of scanner({ commands }, handle)) {
-            if (!(await authenticated(workbook, handle, unlocker))) continue;
+          let prompted = false;
+          const scan = { path: handle.path, unlock: false };
+          for await (const workbook of scanner({ commands }, scan)) {
+            const verified = await authenticated(
+              workbook,
+              handle,
+              unlocker,
+              auth || prompted
+            );
+            prompted = true;
+            if (!verified) continue;
             await Workbook.lock(workbook);
 
             const certified = precertified(workbook);
@@ -404,12 +418,20 @@ export function commands(
 async function authenticated(
   workbook: Headless,
   handle: Credentials,
-  unlocker: Correxit.Unlocker
+  unlocker: Correxit.Unlocker,
+  silent: boolean
 ): Promise<boolean> {
   const { path } = workbook.context;
   try {
-    const credentials = { ...handle, path, silent: true };
-    return !!(await unlocker.unlock(workbook, credentials));
+    const credentials = { ...handle, path, silent };
+    await unlocker.unlock(workbook, credentials);
+    const rubric = open(workbook);
+    if (!rubric || rubric.locked) return false;
+    await Assignment.authenticate(
+      workbook.context.model.sharedModel.toJSON(),
+      rubric
+    );
+    return true;
   } catch {
     return false;
   }
@@ -418,11 +440,34 @@ async function authenticated(
 async function correct(
   workbook: Headless,
   handle: Credentials,
-  fetch: (handle: Credentials, silent?: boolean) => Promise<unknown>,
-  manager: ServiceManager.IManager,
-  trans: IRenderMime.TranslationBundle
+  overwrite: boolean,
+  {
+    fetch,
+    manager,
+    trans,
+    unlocker
+  }: {
+    fetch: (handle: Credentials, silent?: boolean) => Promise<unknown>;
+    manager: ServiceManager.IManager;
+    trans: IRenderMime.TranslationBundle;
+    unlocker: Correxit.Unlocker;
+  }
 ): Promise<Certified> {
   const { path } = workbook.context;
+  const silent = !!(handle.key || handle.passphrase);
+  const unlocked = await unlocker.unlock(workbook, { ...handle, path, silent });
+  const rubric = open(workbook);
+  if (!unlocked || !rubric || rubric.locked)
+    throw new Correxit.Error.Certify('grade error: authentication failed');
+  await Assignment.authenticate(
+    workbook.context.model.sharedModel.toJSON(),
+    rubric
+  );
+  const cached = exclude(workbook, overwrite);
+  if (cached) {
+    await Workbook.lock(workbook);
+    return cached;
+  }
   const dir = PathExt.dirname(path) || '.';
   const notebook = workbook.context.model.toJSON() as INotebookContent;
   const resources = open(workbook)?.assignment.resources ?? null;
@@ -461,7 +506,7 @@ async function correct(
 
 function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const rubric = open(workbook);
-  if (!rubric || overwrite) return null;
+  if (!rubric || rubric.locked || overwrite) return null;
 
   const path = workbook.context.path;
   const { assignment } = rubric;
@@ -473,17 +518,21 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   if (!Workbook.Identifier.assigned(identifier)) return null;
 
   const grade = (spec: Grade['spec']): Certified => ({
-    grade: { path, resolved: true, score: summary, spec },
+    grade: { path, resolved: true, score: summary, spec, verified: true },
     identifier,
     workbook
   });
-  if (assignment.certification) return grade(report.kernel);
-
   const { scores } = report;
   const ids = Object.keys(rubric.cells);
   const scored =
     ids.length > 0 && ids.every(id => scores[id] && !unexecuted(scores[id]));
   if (!scored) return null;
+  if (
+    assignment.certification &&
+    !Rubric.pending(rubric) &&
+    summary.status !== 'unscored'
+  )
+    return grade(report.kernel);
 
   return Rubric.pending(rubric) ? grade(report.kernel) : null;
 }
@@ -505,6 +554,8 @@ async function grade(
   }
 
   const grade = await Workbook.correct(workbook);
+  if (!grade.verified)
+    throw new Correxit.Error.Certify('grade error: authentication failed');
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier))
     throw new Correxit.Error.Certify('grade error: unassigned');
@@ -540,7 +591,13 @@ function precertified(workbook: Headless): Certified | null {
   )
     return null;
 
-  const grade: Grade = { path, resolved: true, score: summary, spec: kernel };
+  const grade: Workbook.Grade.Verified = {
+    path,
+    resolved: true,
+    score: summary,
+    spec: kernel,
+    verified: true
+  };
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
   return { grade, identifier, workbook };
@@ -551,7 +608,8 @@ function recover(workbook: Headless): Failed {
     path: workbook.context.path,
     resolved: false,
     score: { ...Rubric.Score.UNSCORED },
-    spec: null
+    spec: null,
+    verified: false
   };
   return { ok: false, grade, workbook };
 }

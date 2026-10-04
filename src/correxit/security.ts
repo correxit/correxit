@@ -19,12 +19,7 @@ export async function derive(
 }
 
 export async function decrypt(text: string, password: string): Promise<string> {
-  let message;
-  try {
-    message = await pgp.readMessage({ armoredMessage: text });
-  } catch {
-    return text;
-  }
+  const message = await pgp.readMessage({ armoredMessage: text });
   return (await pgp.decrypt({ message, passwords: [password] })).data;
 }
 

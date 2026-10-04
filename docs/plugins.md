@@ -176,7 +176,7 @@ not recorded.
 ```typescript
 // Workbook.Certified
 type Certified = {
-  grade: Workbook.Grade;
+  grade: Workbook.Grade.Verified;
   identifier: Workbook.Identifier.Assigned;
   workbook: Workbook;
 };
@@ -184,11 +184,20 @@ type Certified = {
 // Workbook.Grade
 type Grade = {
   path: string; // workbook file path
-  resolved: boolean; // true if all reviewable cells were reviewed
+  resolved: boolean; // automated scoring resolved; manual review may still be pending
   score: Rubric.Score; // final score summary
   spec: KernelSpec.ISpecModel | null; // kernel used for correction
-};
+} & ({ verified: true } | { verified: false });
+
+type Verified = Grade & { verified: true };
 ```
+
+Verified grades carry in-memory provenance from authenticated rubric and issued
+contents checks. The normal collection command authenticates before calling the
+collector; a parsed report or certification timestamp is not a grade authority.
+Plugins should consume these command results rather than constructing verified
+grades from notebook metadata. The source-integrity contract requires format 2;
+see [SECURITY](security.md) for format-1 recovery and template upgrade guidance.
 
 The default implementation returns a content-addressed digest receipt. A
 server-backed collector would POST the grade to the gradebook, correlate the

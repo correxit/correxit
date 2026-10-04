@@ -7,7 +7,6 @@ type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 type Actions = {
   correct: (workbook: Headless) => Promise<Certified>;
-  exclude: (workbook: Headless) => Certified | null;
   recover: (workbook: Headless) => Result.Failed;
 };
 
@@ -23,7 +22,8 @@ const grade = (workbook: Headless): Certified =>
       path: workbook.context.path,
       resolved: true,
       score: { status: 'unscored' },
-      spec: null
+      spec: null,
+      verified: true
     },
     identifier: {
       assignee: 'a',
@@ -41,7 +41,8 @@ const failed = (workbook: Headless): Result.Failed => ({
     path: workbook.context.path,
     resolved: false,
     score: { status: 'unscored' } as Grade['score'],
-    spec: null
+    spec: null,
+    verified: false
   },
   workbook
 });
@@ -56,9 +57,8 @@ const source = async function* (paths: string[]): AsyncGenerator<Headless> {
 
 const actions = (
   correct: (workbook: Headless) => Promise<Certified>,
-  recover: (workbook: Headless) => Result.Failed,
-  exclude: (workbook: Headless) => Certified | null = () => null
-): Actions => ({ correct, exclude, recover });
+  recover: (workbook: Headless) => Result.Failed
+): Actions => ({ correct, recover });
 
 describe('grader', () => {
   it('yields nothing for an empty scan', async () => {
@@ -313,26 +313,5 @@ describe('grader', () => {
     expect(
       report(collected.find(c => report(c).path === 'b.ipynb')!).resolved
     ).toBe(false);
-  });
-
-  it('emits skipped workbooks immediately without grading them', async () => {
-    const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb'];
-    const collected: string[] = [];
-    const correct = jest.fn(async (workbook: Headless) => grade(workbook));
-    const recover = jest.fn((workbook: Headless) => failed(workbook));
-    const skip = jest.fn((workbook: Headless) =>
-      workbook.context.path === 'a.ipynb' ? grade(workbook) : null
-    );
-
-    const stream = grader(source(paths), actions(correct, recover, skip), 2);
-    for await (const graded of stream) {
-      collected.push(report(graded).path);
-    }
-
-    expect(collected).toContain('a.ipynb');
-    expect(correct).toHaveBeenCalledTimes(2);
-    expect(correct).not.toHaveBeenCalledWith(
-      expect.objectContaining({ context: { path: 'a.ipynb' } })
-    );
   });
 });

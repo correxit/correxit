@@ -47,6 +47,13 @@ into a gradable workbook.
   workbooks, optionally unlock them, and batch-grade them, with configurable
   concurrency and a per-workbook timeout to handle hung kernels.
 
+New assignments use `cxtformat: 2`, authenticating fixed cell sources and the
+issued cells' types and relative order. Grading, cached-score reuse, CSV scores,
+and collection require authentication. Format-1 metadata remains readable;
+author templates upgrade after authentication, while existing submissions need
+an instructor-controlled original before they can supply trusted grades. See
+[SECURITY](docs/security.md) for the contract and recovery guidance.
+
 This video shows an example, a SQL (`xeus-sql`) Jupyter notebook that loads the
 Chinook database in SQLite and runs some queries and renders a Vega graph of the
 genres and media types tables. The user converts the notebook into a workbook

@@ -10,7 +10,7 @@ import {
 import { KernelSpec } from '@jupyterlab/services';
 import { findIndex, range } from '@lumino/algorithm';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { Correxit, Rubric } from '.';
+import { Assignment, Correxit, Rubric } from '.';
 import * as certificate from './certificate';
 import * as Error from './error';
 import * as kernels from './kernels';
@@ -42,7 +42,7 @@ export namespace Workbook {
   }
 
   export type Certified = {
-    grade: Workbook.Grade;
+    grade: Workbook.Grade.Verified;
     identifier: Workbook.Identifier.Assigned;
     workbook: Workbook;
   };
@@ -72,9 +72,11 @@ export namespace Workbook {
     resolved: boolean;
     score: Rubric.Score;
     spec: KernelSpec.ISpecModel | null;
-  };
+  } & ({ verified: true } | { verified: false });
 
   export namespace Grade {
+    /** Provenance exists only in memory, never in student-supplied metadata. */
+    export type Verified = Grade & { verified: true };
     export type Verbose = Grade & { outputs: Rubric.Outputs; };
   }
 
@@ -139,7 +141,9 @@ export namespace Workbook {
       if (!key || index === -1) throw new Error.Decrypt('decrypt error');
 
       const cell = notebook.cells[index];
-      const source = await security.decrypt(cell.getSource(), key);
+      const source = security.encrypted(cell.getSource())
+        ? await security.decrypt(cell.getSource(), key)
+        : cell.getSource();
       const jupyter = { ...(cell.getMetadata('jupyter') as any || {}) };
       delete jupyter['source_hidden'];
 
@@ -549,6 +553,7 @@ export namespace Workbook {
   ): Promise<Certified> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error.Certify('certify error');
+    await Assignment.authenticate(workbook.context.model.sharedModel.toJSON(), rubric);
 
     if (Rubric.pending(rubric))
       throw new Error.Certify('certify error: pending review');
@@ -571,11 +576,11 @@ export namespace Workbook {
       );
       const resolved = !ungraded && score.status !== 'unscored';
       const { path } = workbook.context;
-      grade = { path, resolved, score, spec: report.kernel };
+      grade = { path, resolved, score, spec: report.kernel, verified: true };
     } else {
       grade = await correct(workbook);
     }
-    if (!grade.resolved) {
+    if (!grade.verified || !grade.resolved) {
       throw new Error.Certify(
         `certify error: unresolved: (${grade.score.status})`
       );
@@ -599,7 +604,9 @@ export namespace Workbook {
     try {
       const opened = open(workbook)!;
       const key = await security.derive(credentials, opened.id);
-      const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
+      const rubric = await Rubric.upgrade(
+        opened.locked ? await Rubric.unlock(opened, key) : opened
+      );
       return update(workbook, rubric);
     } catch (error) {
       if (error !== Correxit.NO_CORREXIT_METADATA) throw error;
@@ -659,7 +666,7 @@ export namespace Workbook {
     if (!opened) {
       const score: Rubric.Score =
         { ...Rubric.Score.UNSCORED, code: 'missing-rubric' };
-      return expand({ path, resolved: false, score, spec: null }, empty);
+      return expand({ path, resolved: false, score, spec: null, verified: false }, empty);
     }
 
     // Re-audit to get the repaired rubric: headed workbooks remove
@@ -667,10 +674,13 @@ export namespace Workbook {
     const audited = audit(workbook, opened);
     if (!audited.ok) {
       const score = { ...Rubric.Score.UNSCORED, comment: audited.error };
-      return expand({ path, resolved: false, score, spec: null }, empty);
+      return expand({ path, resolved: false, score, spec: null, verified: false }, empty);
     }
 
     const rubric = audited.rubric;
+    if (!rubric.locked)
+      await Assignment.authenticate(workbook.context.model.sharedModel.toJSON(), rubric);
+    const verified = !rubric.locked && !!rubric.assignment.assignee;
     const reviewable = ({ is }: Rubric.Cell) => is === 'reviewable';
     const cells = Object.values(rubric.cells);
     const target = id ? Rubric.get(rubric, id) : null;
@@ -683,7 +693,7 @@ export namespace Workbook {
     if (!result) {
       const score: Rubric.Score =
         { ...Rubric.Score.UNSCORED, code: 'error-execute' };
-      return expand({ path, resolved: false, score, spec: null }, empty);
+      return expand({ path, resolved: false, score, spec: null, verified: false }, empty);
     }
 
     const { score, summary } = Rubric.Assignment;
@@ -710,7 +720,7 @@ export namespace Workbook {
       : !cells.some(missing) && !cells.some(unresolved);
     if (resolved && !rubric.locked)
       await update(workbook, await Rubric.sign(rubric, report));
-    return expand({ path, resolved, score: final, spec }, outputs);
+    return expand({ path, resolved, score: final, spec, verified }, outputs);
   }
 
    /**
@@ -739,7 +749,8 @@ export namespace Workbook {
   /** Decrypts workbook content. */
   export async function decrypt(
     workbook: Workbook,
-    rubric: Rubric.Unlocked
+    rubric: Rubric.Unlocked,
+    sealed: Cell.Prepared[] = []
   ) {
     const audited = Workbook.audit(workbook, rubric);
     if (!audited.ok)
@@ -747,9 +758,17 @@ export namespace Workbook {
 
     const { key, references } = audited.rubric as Rubric.Unlocked;
     const secrets = Object.values(references).filter(({ secret }) => secret);
-    const prepared = await Promise.all(
+    const prepared = [...sealed, ...await Promise.all(
       secrets.map(({ referent }) => Cell.decrypt(workbook, referent, key))
+    )];
+    const notebook = workbook.context.model.sharedModel.toJSON();
+    const replacements = new Map(
+      prepared.map(({ index, replacement }) => [index, replacement])
     );
+    const cells = notebook.cells.map((cell, index) =>
+      replacements.get(index) ?? cell
+    );
+    await Assignment.authenticate({ ...notebook, cells }, rubric);
     transact(workbook, prepared);
     defrost(workbook);
     // Keep the original rubric. Decrypt should not persist audit repairs.
@@ -1156,10 +1175,14 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric) throw new Error.Unlock('unlock error');
-    if (!rubric.locked) return rubric;
+    if (!rubric.locked) {
+      await Assignment.authenticate(workbook.context.model.sharedModel.toJSON(), rubric);
+      return rubric;
+    }
 
-    let unlocked = await Rubric.unlock(rubric, key);
+    let unlocked = await Rubric.upgrade(await Rubric.unlock(rubric, key));
     const { assignment } = rubric;
+    let prepared: Cell.Prepared[] = [];
     if (assignment.seal) {
       const armored = await security.decrypt(
         assignment.keys.private.author, key
@@ -1169,10 +1192,9 @@ export namespace Workbook {
 
       // Unseal each rubric cell present in the notebook.
       const { assignee } = assignment;
-      const prepared = await Promise.all(
+      prepared = await Promise.all(
         present.map(id => Cell.unseal(workbook, id, assignee, author))
       );
-      transact(workbook, prepared);
 
       // Clear the seal: cells are now plaintext, so the hash would not
       // match on a subsequent unlock after save-and-reopen.
@@ -1181,7 +1203,7 @@ export namespace Workbook {
         assignment: { ...unlocked.assignment, seal: null }
       };
     }
-    return decrypt(workbook, unlocked);
+    return decrypt(workbook, unlocked, prepared);
   }
 
   /** @returns whether a workbook's assignment is started or not. */

@@ -9,7 +9,6 @@ type Settled =
 
 export type Actions = {
   correct: (workbook: Headless) => Promise<Certified>;
-  exclude: (workbook: Headless) => Certified | null;
   recover: (workbook: Headless) => Result.Failed;
 };
 
@@ -25,9 +24,7 @@ export namespace Result {
  *
  * @param scanner - Cold async iterable of headless workbooks to grade.
  * @param actions - Functions orchestrated by the grader.
- *   - `correct`: async grading function.
- *   - `exclude`: synchronous fast path that returns a certified result when the
- *     workbook should be emitted immediately without grading.
+ *   - `correct`: authenticate, then reuse a trusted report or execute grading.
  *   - `recover`: fallback result for failures after retries.
  * @param cap - Maximum number of workbooks being graded simultaneously.
  *   Values less than 1 are clamped to 1.
@@ -100,11 +97,6 @@ export async function* grade(
   };
 
   for await (const workbook of scanner) {
-    const cached = actions.exclude(workbook);
-    if (cached) {
-      yield { ok: true, certified: cached };
-      continue;
-    }
     while (inflight >= max) {
       const result = await emit();
       if (result) yield result;

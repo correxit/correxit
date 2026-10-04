@@ -49,7 +49,7 @@ export namespace Assignment {
     const source = copy(options.notebook);
     const locked = rubric(source);
     const key = await secret(options, locked.id);
-    const unlocked = await Rubric.unlock(locked, key);
+    const unlocked = await Rubric.upgrade(await Rubric.unlock(locked, key));
     const roster = enroll(
       options.roster ?? unlocked.assignment.roster,
       options.assignee
@@ -127,17 +127,19 @@ export namespace Assignment {
       mac: '',
       seal: null
     };
+    const contents = await content(notebook, { ...metadata, key, locked: false });
+    const format = { cxtformat: Rubric.CXTFORMAT, contents };
     const digest = await Rubric.Assignment.issue({
       assignment: blank,
       notebook,
-      rubric: metadata
+      rubric: { ...metadata, ...format }
     });
     const issuer = await Rubric.Assignment.issuer(digest, author);
     const assignment = { ...blank, issue: digest, issuer };
     const unlocked: Rubric.Unlocked = {
       assignment,
       cells: metadata.cells,
-      cxtformat: metadata.cxtformat,
+      ...format,
       id: metadata.id,
       key,
       locked: false,
@@ -152,6 +154,7 @@ export namespace Assignment {
       ...signed.assignment,
       roster: [encrypted]
     };
+    Object.assign(metadata, { cxtformat: unlocked.cxtformat, contents });
     metadata.revised = Date.now();
     return {
       identifier: {
@@ -171,8 +174,10 @@ export namespace Assignment {
     rubric: Rubric.Unlocked
   ): Promise<Prepared> {
     audit(source, rubric);
+    rubric = await Rubric.upgrade(rubric);
     const encrypted: string[] = [];
     const notebook = copy(source);
+    notebook.metadata['correxit'] = await Rubric.lock(rubric);
     for (const reference of Object.values(rubric.references)) {
       if (!reference.secret) continue;
       await encrypt(notebook, reference.referent, rubric.key);
@@ -186,6 +191,24 @@ export namespace Assignment {
     return { encrypted, notebook };
   }
 
+  /** Authenticate issued grading contents without treating student answers as fixed. */
+  export async function authenticate(
+    notebook: INotebookContent,
+    rubric: Rubric.Unlocked
+  ): Promise<void> {
+    if (!rubric.assignment.assignee) return;
+    await Rubric.validate(rubric);
+    if (rubric.cxtformat !== Rubric.CXTFORMAT || !rubric.contents)
+      {throw new Error.Mismatch(
+        'assignment contents are unauthenticated; use an instructor-controlled original'
+      );}
+    const ids = new Set(rubric.contents.map(({ id }) => id));
+    const current = await content(notebook, rubric, ids);
+    if (JSON.stringify(current.map(Rubric.Content.terms)) !==
+      JSON.stringify(rubric.contents.map(Rubric.Content.terms)))
+      throw new Error.Mismatch('assignment contents mismatch');
+  }
+
   /** Stamp the distribution timestamp on a serialized notebook. */
   export function stamp(
     notebook: INotebookContent,
@@ -195,6 +218,33 @@ export namespace Assignment {
     metadata.assignment = { ...metadata.assignment, distribution };
     metadata.revised = Date.now();
   }
+}
+
+/** Sources remain private even when their possible values are easy to guess. */
+async function content(
+  notebook: INotebookContent,
+  rubric: Rubric.Unlocked,
+  subset: ReadonlySet<string> | null = null
+): Promise<Rubric.Content[]> {
+  const ids = notebook.cells.map(cell => String(cell.id));
+  if (new Set(ids).size !== ids.length)
+    throw new Error.Mismatch('duplicate cell ids');
+  const cells = subset
+    ? notebook.cells.filter(cell => subset.has(String(cell.id)))
+    : notebook.cells;
+  return Promise.all(cells.map(async cell => {
+    const id = String(cell.id);
+    const reference = rubric.references[id];
+    const encrypted = reference?.secret && security.encrypted(text(cell));
+    const source = encrypted
+      ? await security.decrypt(text(cell), rubric.key)
+      : text(cell);
+    const type = encrypted ? 'code' : cell.cell_type;
+    const digest = Rubric.has(rubric, id) ? null : await security.hmac(
+      JSON.stringify([rubric.id, id, type, source]), rubric.key
+    );
+    return { id, type, digest };
+  }));
 }
 
 function audit(notebook: INotebookContent, rubric: Rubric.Unlocked): void {

@@ -135,7 +135,209 @@ describe('Assignment', () => {
     expect(prepared.notebook.cells[2].source).toBe(
       'ENC[KEY<passphrase:rubric-id>]:print("secret")'
     );
-    expect(security.encrypt).not.toHaveBeenCalled();
+    expect(security.encrypt).not.toHaveBeenCalledWith(
+      'print("secret")',
+      rubric.key
+    );
+  });
+
+  describe('issued contents', () => {
+    const issued = async (secret = true) => {
+      const { notebook, rubric } = await configured();
+      if (!secret)
+        notebook.metadata.correxit = await Rubric.lock(
+          Rubric.toggle(rubric, 'reference')
+        );
+      const assigned = await Assignment.assign({
+        assignee: 'alice@example.com',
+        notebook,
+        key: rubric.key,
+        passphrase: null
+      });
+      const metadata = assigned.notebook.metadata.correxit as Rubric.Locked;
+      return {
+        notebook: assigned.notebook,
+        rubric: await Rubric.unlock(metadata, rubric.key)
+      };
+    };
+
+    it('binds cell identities, types, order, and fixed sources without exposing plaintext hashes', async () => {
+      const { notebook, rubric } = await issued();
+      expect(rubric.cxtformat).toBe(Rubric.CXTFORMAT);
+      if (rubric.cxtformat !== Rubric.CXTFORMAT)
+        throw new Error('wrong format');
+      expect(rubric.contents?.map(({ id, type }) => ({ id, type }))).toEqual([
+        { id: 'intro', type: 'markdown' },
+        { id: 'answer', type: 'code' },
+        { id: 'reference', type: 'code' }
+      ]);
+      expect(
+        rubric.contents?.find(({ id }) => id === 'answer')?.digest
+      ).toBeNull();
+      expect(
+        rubric.contents?.find(({ id }) => id === 'reference')?.digest
+      ).toMatch(/^HMAC</);
+      await expect(
+        Assignment.authenticate(notebook, rubric)
+      ).resolves.toBeUndefined();
+    });
+
+    it('permits student answers and extra working cells', async () => {
+      const { notebook, rubric } = await issued();
+      notebook.cells[1].source = 'print("my answer")';
+      notebook.cells.splice(1, 0, {
+        id: 'scratch',
+        cell_type: 'code',
+        metadata: {},
+        execution_count: null,
+        outputs: [],
+        source: 'scratch = 1'
+      });
+      await expect(
+        Assignment.authenticate(notebook, rubric)
+      ).resolves.toBeUndefined();
+    });
+
+    it.each([true, false])(
+      'rejects substituted reference sources (secret=%s)',
+      async secret => {
+        const { notebook, rubric } = await issued(secret);
+        notebook.cells[2].source = 'pass';
+        await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow(
+          'contents mismatch'
+        );
+      }
+    );
+
+    it('rejects a different valid ciphertext encrypted with the same key', async () => {
+      const { notebook, rubric } = await issued();
+      notebook.cells[2].source = await security.encrypt('pass', rubric.key);
+      await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow(
+        'contents mismatch'
+      );
+    });
+
+    it('accepts authentic decrypted references after an author-side save', async () => {
+      const { notebook, rubric } = await issued();
+      notebook.cells[2].source = 'print("secret")';
+      notebook.cells[2].cell_type = 'code';
+      await expect(
+        Assignment.authenticate(notebook, rubric)
+      ).resolves.toBeUndefined();
+    });
+
+    it('authenticates commitments after notebook writers reorder object properties', async () => {
+      const { notebook, rubric } = await issued();
+      if (rubric.cxtformat !== Rubric.CXTFORMAT)
+        throw new Error('wrong format');
+      const contents = rubric.contents!.map(({ id, type, digest }) => ({
+        type,
+        digest,
+        id
+      }));
+      const reordered = { ...rubric, contents };
+      await expect(
+        Assignment.authenticate(notebook, reordered)
+      ).resolves.toBeUndefined();
+      expect(
+        await Rubric.Assignment.issue({
+          assignment: reordered.assignment,
+          notebook,
+          rubric: reordered
+        })
+      ).toBe(
+        await Rubric.Assignment.issue({
+          assignment: rubric.assignment,
+          notebook,
+          rubric
+        })
+      );
+    });
+
+    it.each([
+      [
+        'scaffolding',
+        (notebook: INotebookContent) => {
+          notebook.cells[0].source = 'changed';
+        }
+      ],
+      [
+        'type',
+        (notebook: INotebookContent) => {
+          notebook.cells[1].cell_type = 'raw';
+        }
+      ],
+      [
+        'order',
+        (notebook: INotebookContent) => {
+          notebook.cells.reverse();
+        }
+      ],
+      [
+        'missing cell',
+        (notebook: INotebookContent) => {
+          notebook.cells.pop();
+        }
+      ],
+      [
+        'duplicate id',
+        (notebook: INotebookContent) => {
+          notebook.cells.push(notebook.cells[1]);
+        }
+      ]
+    ])('rejects altered %s', async (_, mutate) => {
+      const { notebook, rubric } = await issued();
+      (mutate as (notebook: INotebookContent) => void)(notebook);
+      await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow();
+    });
+
+    it('rejects stripped commitments and format downgrades before authenticating sources', async () => {
+      const { notebook, rubric } = await issued();
+      const stripped = { ...rubric, contents: null };
+      const downgraded = { ...rubric, cxtformat: 1 } as Rubric.Unlocked;
+      await expect(Assignment.authenticate(notebook, stripped)).rejects.toThrow(
+        'mac mismatch'
+      );
+      await expect(
+        Assignment.authenticate(notebook, downgraded)
+      ).rejects.toThrow('mac mismatch');
+    });
+
+    it('upgrades authenticated format-1 author templates when issuing new assignments', async () => {
+      const { notebook, rubric } = await configured();
+      const legacy = { ...rubric, cxtformat: 1 } as Rubric.Unlocked;
+      notebook.metadata.correxit = await Rubric.lock(legacy);
+      const assigned = await Assignment.assign({
+        assignee: 'alice@example.com',
+        notebook,
+        key: rubric.key,
+        passphrase: null
+      });
+      const metadata = assigned.notebook.metadata.correxit as Rubric.Locked;
+      expect(metadata.cxtformat).toBe(Rubric.CXTFORMAT);
+      await expect(
+        Assignment.authenticate(
+          assigned.notebook,
+          await Rubric.unlock(metadata, rubric.key)
+        )
+      ).resolves.toBeUndefined();
+    });
+
+    it('cannot manufacture commitments from an existing format-1 assignment', async () => {
+      const { notebook, rubric } = await configured();
+      const legacy = await Rubric.assign(
+        { ...rubric, cxtformat: 1 },
+        {
+          assignee: 'alice@example.com'
+        }
+      );
+      await expect(Assignment.authenticate(notebook, legacy)).rejects.toThrow(
+        'instructor-controlled original'
+      );
+      await expect(Rubric.upgrade(legacy)).rejects.toThrow(
+        'instructor-controlled original'
+      );
+    });
   });
 
   it('surfaces resource filenames for the caller to distribute', async () => {
