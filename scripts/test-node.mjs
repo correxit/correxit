@@ -146,6 +146,22 @@ assert.equal(reference.metadata.editable, false);
 assert.equal(reference.metadata.jupyter.source_hidden, true);
 assert.match(reference.source, /^-----BEGIN PGP MESSAGE-----/);
 
+for (const id of [undefined, null, '', 42]) {
+  const invalid = structuredClone(notebook);
+  invalid.cells[0].id = id;
+  const before = structuredClone(invalid);
+  await assert.rejects(
+    Assignment.assign({
+      assignee: 'bob@example.com',
+      notebook: invalid,
+      key,
+      passphrase: null
+    }),
+    /invalid cell id/
+  );
+  assert.deepEqual(invalid, before);
+}
+
 const template = JSON.parse(await readFile('examples/chinook.ipynb', 'utf8'));
 const sample = Rubric.normalize(template.metadata.correxit);
 const secret = await keygen('xsql', sample.id);

@@ -161,6 +161,45 @@ describe('Assignment', () => {
       };
     };
 
+    it.each([undefined, null, '', 42])(
+      'rejects invalid template cell IDs (%p) before issuing an assignment',
+      async id => {
+        const { notebook, rubric } = await configured();
+        Object.assign(notebook.cells[0], { id });
+        const before = JSON.stringify(notebook);
+        jest.clearAllMocks();
+
+        await expect(
+          Assignment.assign({
+            assignee: 'alice@example.com',
+            notebook,
+            key: rubric.key,
+            passphrase: null
+          })
+        ).rejects.toThrow('invalid cell id');
+        expect(security.sign).not.toHaveBeenCalled();
+        expect(JSON.stringify(notebook)).toBe(before);
+      }
+    );
+
+    it('rejects duplicate cell IDs before issuing an assignment', async () => {
+      const { notebook, rubric } = await configured();
+      notebook.cells[0].id = 'answer';
+      const before = JSON.stringify(notebook);
+      jest.clearAllMocks();
+
+      await expect(
+        Assignment.assign({
+          assignee: 'alice@example.com',
+          notebook,
+          key: rubric.key,
+          passphrase: null
+        })
+      ).rejects.toThrow('duplicate cell ids');
+      expect(security.sign).not.toHaveBeenCalled();
+      expect(JSON.stringify(notebook)).toBe(before);
+    });
+
     it('binds cell identities, types, order, and fixed sources without exposing plaintext hashes', async () => {
       const { notebook, rubric } = await issued();
       expect(rubric.cxtformat).toBe(Rubric.CXTFORMAT);
@@ -194,6 +233,35 @@ describe('Assignment', () => {
       await expect(
         Assignment.authenticate(notebook, rubric)
       ).resolves.toBeUndefined();
+    });
+
+    it.each([undefined, null, '', 42])(
+      'rejects invalid issued cell IDs (%p) before authenticating sources',
+      async id => {
+        const { notebook, rubric } = await issued();
+        Object.assign(notebook.cells[0], { id });
+        jest.clearAllMocks();
+
+        await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow(
+          'invalid cell id'
+        );
+        expect(security.decrypt).not.toHaveBeenCalled();
+      }
+    );
+
+    it('rejects missing IDs on extra working cells', async () => {
+      const { notebook, rubric } = await issued();
+      notebook.cells.push({
+        cell_type: 'code',
+        metadata: {},
+        execution_count: null,
+        outputs: [],
+        source: 'scratch = 1'
+      });
+
+      await expect(Assignment.authenticate(notebook, rubric)).rejects.toThrow(
+        'invalid cell id'
+      );
     });
 
     it.each([true, false])(

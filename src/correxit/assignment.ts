@@ -223,6 +223,8 @@ async function content(
   rubric: Rubric.Unlocked,
   subset: ReadonlySet<string> | null = null
 ): Promise<Rubric.Content[]> {
+  if (notebook.cells.some(({ id }) => typeof id !== 'string' || !id))
+    throw new Error.Mismatch('invalid cell id');
   const ids = notebook.cells.map(cell => String(cell.id));
   if (new Set(ids).size !== ids.length)
     throw new Error.Mismatch('duplicate cell ids');

@@ -119,6 +119,10 @@ avoid exposing plaintext hashes of easily guessed secret sources. The entire
 array is authenticated by the rubric MAC and included in the issue digest.
 Unissued author templates use `contents: null`.
 
+Issuance and authentication require unique, non-empty string IDs on every
+notebook cell, including added working cells. Invalid IDs are rejected before
+building or checking the manifest; they are never coerced into identities.
+
 Grading and collection require the issued cells to retain their identities,
 types, relative order, and fixed sources. Students may edit rubric cell sources
 and add working cells; added cells are not authenticated instructor content.

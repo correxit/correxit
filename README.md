@@ -86,6 +86,10 @@ final distribution step. Correxit keeps those secrets in memory for this pure
 notebook transformation; it does not add a backend authority or trusted third
 party. See `examples/assign-one.mjs` for a minimal script.
 
+Every cell must have a unique, non-empty string ID before issuance. Missing or
+invalid IDs are rejected; the caller must establish stable cell identities
+before calling `Assignment.assign`.
+
 ## Install
 
 To install the extension, execute:
