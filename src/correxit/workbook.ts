@@ -329,9 +329,9 @@ export namespace Workbook {
 
     const ids = sequence(rubric);
     const { cells } = workbook.context.model.sharedModel;
-    const indices = Object.fromEntries(cells.map(cell => [cell.id, cell]));
-    const present = ids.filter(id => id in indices);
-    const missing = ids.filter(id => !(id in indices));
+    const indices = new Map(cells.map(cell => [cell.id, cell]));
+    const present = ids.filter(id => indices.has(id));
+    const missing = ids.filter(id => !indices.has(id));
     if (missing.length) {
       if (headless(workbook))
         throw new Error.Unseal(`${action} seal error: missing cells`);
@@ -339,7 +339,7 @@ export namespace Workbook {
       return present;
     }
 
-    const ciphertexts = present.map(id => indices[id].getSource());
+    const ciphertexts = present.map(id => indices.get(id)!.getSource());
     const hash = await digest(ciphertexts);
     if (hash !== seal)
       throw new Error.Mismatch('seal mismatch: ciphertexts tampered');
@@ -473,20 +473,19 @@ export namespace Workbook {
     if (!rubric) return { ok: false, error: 'null rubric', rubric };
     if (rubric.locked) return { ok: true, rubric };
     const notebook = workbook.context.model.sharedModel;
-    const types = Object.fromEntries(
+    const types = new Map(
       notebook.cells.map(cell => [cell.id, cell.cell_type])
     );
     const orphaned: string[] = [];
     const dangling: { cell: Rubric.Cell; reason: string; }[] = [];
     const executable = (id: string) =>
-      types[id] === 'code' || types[id] === 'raw';
-    for (const id in rubric.cells) {
-      const cell = rubric.cells[id];
+      types.get(id) === 'code' || types.get(id) === 'raw';
+    for (const [id, cell] of Object.entries(rubric.cells)) {
       const { is, payload } = cell;
-      const present = is === 'reviewable' ? id in types : executable(id);
+      const present = is === 'reviewable' ? types.has(id) : executable(id);
       const valid = is === 'answerable' ? !!payload.length : true;
       if (!present || !valid) {
-        const reason = id in types ? 'invalid cell' : 'unknown cell';
+        const reason = types.has(id) ? 'invalid cell' : 'unknown cell';
         dangling.push({ cell: { ...cell }, reason });
         continue;
       }
@@ -569,11 +568,10 @@ export namespace Workbook {
       const { report } = rubric.assignment;
       const score = Rubric.Assignment.summary(report, rubric.assignment);
       const cells = Object.values(rubric.cells);
-      const ungraded = cells.some(cell =>
-        cell.is !== 'reviewable' &&
-        (!report.scores[cell.id] ||
-          report.scores[cell.id].status === 'unscored')
-      );
+      const ungraded = cells.some(cell => {
+        const score = Rubric.Score.get(report.scores, cell.id);
+        return cell.is !== 'reviewable' && (!score || score.status === 'unscored');
+      });
       const resolved = !ungraded && score.status !== 'unscored';
       const { path } = workbook.context;
       grade = { path, resolved, score, spec: report.kernel, verified: true };
@@ -700,7 +698,9 @@ export namespace Workbook {
     const scored = Object.entries(report.scores);
     scored.forEach(([id, score]) => state.cache(workbook, id, score));
 
-    const final = id ? report.scores[id] : summary(report, rubric.assignment);
+    const final = id
+      ? Rubric.Score.get(report.scores, id) ?? { ...Rubric.Score.UNSCORED, id }
+      : summary(report, rubric.assignment);
     const missing = ({ id, is, references }: Rubric.Cell) => {
       if (is === 'reviewable') return false;
       return !outputs.has(id) ||
@@ -710,7 +710,7 @@ export namespace Workbook {
           : false);
     };
     const unresolved = (cell: Rubric.Cell) => {
-      const { status } = report.scores[cell.id] || {};
+      const { status } = Rubric.Score.get(report.scores, cell.id) || {};
       return cell.is !== 'reviewable' && (!status || status === 'unscored');
     };
     const resolved = id
@@ -738,7 +738,7 @@ export namespace Workbook {
     if (!rubric || rubric.locked) return null;
 
     const { report: kept } = rubric.assignment;
-    const score = kept.scores[id] ?? { ...Rubric.Score.UNSCORED, id };
+    const score = Rubric.Score.get(kept.scores, id) ?? { ...Rubric.Score.UNSCORED, id };
     const scores = { ...kept.scores, [id]: { ...score, comment } };
     const signed = await Rubric.sign(rubric, { ...kept, scores });
     return update(workbook, signed);
@@ -897,11 +897,11 @@ export namespace Workbook {
     if (!rubric || rubric.locked) return null;
 
     const { report: kept } = rubric.assignment;
-    const interventions = { ...kept.interventions };
-    if (intervention) interventions[id] = intervention;
-    else delete interventions[id];
-
-    const report = { ...kept, interventions };
+    const { [id]: _, ...interventions } = kept.interventions;
+    const report = {
+      ...kept,
+      interventions: intervention ? { ...interventions, [id]: intervention } : interventions
+    };
     return update(workbook, await Rubric.sign(rubric, report));
   }
 
@@ -1104,7 +1104,7 @@ export namespace Workbook {
     if (!rubric || rubric.locked)
       throw new Error.Invalid('reweight error, invalid rubric');
 
-    const updated = id in rubric.references
+    const updated = Rubric.Reference.get(rubric, id)
       ? Rubric.Reference.reweight(rubric, id, points)
       : Rubric.Cell.reweight(rubric, id, points);
     return update(workbook, updated);

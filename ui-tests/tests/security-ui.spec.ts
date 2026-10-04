@@ -5,9 +5,9 @@ test.use({ autoGoto: false });
 const key = 'ac'.repeat(32);
 
 /** Issue with real encrypted author credentials and seal the student's wrong answer. */
-async function issue(page: any, secret = true) {
+async function issue(page: any, secret = true, review: string | null = null) {
   return page.evaluate(
-    async ({ key, secret }: any) => {
+    async ({ key, secret, review }: any) => {
       const { Rubric, Workbook } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
@@ -26,7 +26,15 @@ async function issue(page: any, secret = true) {
       await Workbook.update(
         panel,
         Rubric.add(
-          created,
+          review
+            ? Rubric.add(created, {
+                id: review,
+                is: 'reviewable',
+                payload: null,
+                points: 1,
+                references: null
+              })
+            : created,
           {
             id: 'answer',
             is: 'correctable',
@@ -72,7 +80,7 @@ async function issue(page: any, secret = true) {
       workbook.context.dispose();
       return { directory, paths };
     },
-    { key, secret }
+    { key, secret, review }
   );
 }
 
@@ -362,6 +370,176 @@ for (const id of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
         score: { status: 'unscored' }
       });
       expect(await collect(page, issued.directory)).toBe(0);
+    } finally {
+      await cleanup(page, issued);
+      await fixture.dispose();
+    }
+  });
+}
+
+test('rejects __proto__ as a rubric cell before writing notebook metadata', async ({
+  page
+}) => {
+  const fixture = await setup(page, [
+    ...cells,
+    {
+      id: '__proto__',
+      type: 'markdown',
+      source: 'An explanation needing manual review.'
+    }
+  ]);
+  try {
+    await expect(issue(page, true, '__proto__')).rejects.toThrow(
+      'unsupported id __proto__'
+    );
+    expect(
+      await page.evaluate(() => {
+        const workbook = (window as any).jupyterapp.shell.currentWidget;
+        return Object.keys(
+          workbook.context.model.sharedModel.getMetadata('correxit').cells
+        );
+      })
+    ).toEqual([]);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+for (const id of ['constructor', 'toString', 'hasOwnProperty']) {
+  test(`requires a real intervention before certifying or collecting cell ${id}`, async ({
+    page
+  }) => {
+    const fixture = await setup(page, [
+      ...cells,
+      { id, type: 'markdown', source: 'An explanation needing manual review.' }
+    ]);
+    const issued = await issue(page, true, id);
+    try {
+      await cd(page, '.');
+      const partial = await page.evaluate(
+        async ({ path, key, id }: any) => {
+          const { Rubric, Workbook } = (window as any).__correxit__;
+          const app = (window as any).jupyterapp;
+          const workbook = await app.commands.execute('correxit:fetch', {
+            path,
+            unlock: false
+          });
+          try {
+            await Workbook.unlock(workbook, key);
+            await Workbook.correct(workbook, 'answer');
+            const rubric = Workbook.open(workbook);
+            const pending = Rubric.pending(rubric);
+            const scored = Object.prototype.hasOwnProperty.call(
+              rubric.assignment.report.scores,
+              id
+            );
+            let error = '';
+            try {
+              await Workbook.certify(
+                workbook,
+                { __: (text: string) => text },
+                true
+              );
+            } catch (caught) {
+              error = String(caught);
+            }
+            await Workbook.lock(workbook);
+            await workbook.context.save();
+            return { pending, scored, error };
+          } finally {
+            workbook.context.dispose();
+          }
+        },
+        { path: issued.paths[0], key, id }
+      );
+      expect(partial.pending).toBe(true);
+      expect(partial.scored).toBe(false);
+      expect(partial.error).toContain('pending review');
+
+      // A student can change this unsigned marker, but cannot create a review.
+      await page.evaluate(async (path: string) => {
+        const contents = (window as any).jupyterapp.serviceManager.contents;
+        const file = await contents.get(path, {
+          type: 'notebook',
+          content: true
+        });
+        file.content.metadata.correxit.assignment.certification = Date.now();
+        await contents.save(path, { ...file, content: file.content });
+      }, issued.paths[0]);
+      const grades = await batch(page, issued.directory);
+      expect(grades).toHaveLength(1);
+      expect(grades[0]).toMatchObject({
+        verified: true,
+        score: { points: 0, possible: 2 }
+      });
+      expect(await collect(page, issued.directory)).toBe(0);
+
+      const reviewed = await page.evaluate(
+        async ({ path, key, id }: any) => {
+          const { Rubric, Workbook } = (window as any).__correxit__;
+          const app = (window as any).jupyterapp;
+          const workbook = await app.commands.execute('correxit:fetch', {
+            path,
+            unlock: false
+          });
+          try {
+            await Workbook.unlock(workbook, key);
+            const before = Workbook.open(workbook);
+            const pending = Rubric.pending(before);
+            const score = Rubric.Score.get(before.assignment.report.scores, id);
+            const intervention = Rubric.Score.intervene(id, {
+              comment: 'Reviewed',
+              points: 1,
+              possible: 1
+            });
+            await Workbook.intervene(workbook, id, intervention);
+            await Workbook.comment(workbook, id, 'Feedback');
+            const certified = await Workbook.certify(
+              workbook,
+              { __: (text: string) => text },
+              true
+            );
+            await workbook.context.save();
+            return { pending, score, grade: certified.grade };
+          } finally {
+            workbook.context.dispose();
+          }
+        },
+        { path: issued.paths[0], key, id }
+      );
+      expect(reviewed.pending).toBe(true);
+      expect(reviewed.score).toMatchObject({
+        id,
+        status: 'unscored',
+        possible: 1
+      });
+      expect(reviewed.grade).toMatchObject({
+        verified: true,
+        resolved: true,
+        score: { points: 1, possible: 2 }
+      });
+      const intervention = await page.evaluate(
+        async ({ path, id }: any) => {
+          const contents = (window as any).jupyterapp.serviceManager.contents;
+          const file = await contents.get(path, {
+            type: 'notebook',
+            content: true
+          });
+          const interventions =
+            file.content.metadata.correxit.assignment.report.interventions;
+          return Object.prototype.hasOwnProperty.call(interventions, id)
+            ? interventions[id]
+            : null;
+        },
+        { path: issued.paths[0], id }
+      );
+      expect(intervention).toMatchObject({
+        id,
+        points: 1,
+        possible: 1,
+        comment: 'Reviewed'
+      });
+      expect(await collect(page, issued.directory)).toBe(1);
     } finally {
       await cleanup(page, issued);
       await fixture.dispose();

@@ -525,7 +525,7 @@ const Breakdown: React.FC<{
     : Rubric.Assignment.Report.empty();
   const breakdown = workbook.context.model.sharedModel.cells
     .map(cell => cell.id)
-    .filter(id => id in cells);
+    .filter(id => Rubric.has(rubric, id));
   const computed = (id: string) =>
     Rubric.Score.resolve(report, id) ?? Rubric.Score.UNSCORED;
   const status = (id: string) => {

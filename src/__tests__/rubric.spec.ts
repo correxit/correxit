@@ -77,6 +77,104 @@ describe('Rubric', () => {
       expect(Rubric.get(unlocked, id)!.payload).toEqual(['42']);
     });
 
+    it.each(['constructor', 'toString', 'hasOwnProperty'])(
+      'allows actual rubric cells and references named %s',
+      id => {
+        const cell: Rubric.Cell = {
+          id,
+          is: 'reviewable',
+          payload: null,
+          points: 1,
+          references: null
+        };
+        expect(Rubric.get(Rubric.add(create(), cell), id)).toEqual(cell);
+
+        const reference = {
+          cell: 'answer',
+          referent: id,
+          points: 1,
+          secret: true
+        };
+        const rubric = Rubric.add(
+          create(),
+          {
+            id: 'answer',
+            is: 'correctable',
+            payload: null,
+            points: 1,
+            references: [id]
+          },
+          [reference]
+        );
+        expect(rubric.references[id]).toEqual(reference);
+        expect(() => Rubric.toggle(create(), id)).toThrow('not found');
+      }
+    );
+
+    it('rejects __proto__ cells and references before saving', async () => {
+      const id = '__proto__';
+      const cell: Rubric.Cell = {
+        id,
+        is: 'reviewable',
+        payload: null,
+        points: 1,
+        references: null
+      };
+      const reference = {
+        cell: 'answer',
+        referent: id,
+        points: 1,
+        secret: true
+      };
+      const answer: Rubric.Cell = {
+        id: 'answer',
+        is: 'correctable',
+        payload: null,
+        points: 0,
+        references: []
+      };
+      expect(() => Rubric.add(create(), cell)).toThrow(
+        'unsupported id __proto__'
+      );
+      expect(() => Rubric.add(create(), answer, [reference])).toThrow(
+        'unsupported id __proto__'
+      );
+      expect(() =>
+        Rubric.refer(Rubric.add(create(), answer), answer.id, reference)
+      ).toThrow('unsupported id __proto__');
+      await expect(
+        Rubric.lock({ ...create(), cells: { [id]: cell } })
+      ).rejects.toThrow('unsupported id __proto__');
+    });
+
+    it.each(['cells', 'references', 'scores', 'interventions'])(
+      'rejects __proto__ in persisted %s',
+      async field => {
+        const rubric = create();
+        const metadata = JSON.parse(JSON.stringify(format));
+        const entries = { ['__proto__']: { id: '__proto__' } };
+        const invalid =
+          field === 'cells' || field === 'references'
+            ? { ...rubric, [field]: entries }
+            : {
+                ...rubric,
+                assignment: {
+                  ...rubric.assignment,
+                  report: { ...rubric.assignment.report, [field]: entries }
+                }
+              };
+        if (field === 'cells' || field === 'references')
+          metadata[field] = entries;
+        else metadata.assignment.report[field] = entries;
+        expect(() => Rubric.normalize(metadata)).toThrow(
+          'unsupported id __proto__'
+        );
+        await expect(
+          Rubric.validate(invalid as Rubric.Unlocked)
+        ).rejects.toThrow('unsupported id __proto__');
+      }
+    );
+
     it('decrypts roster on unlock', async () => {
       const assignee = 'student@example.com';
       const roster = [assignee, 'peer@example.com'];
@@ -468,6 +566,47 @@ describe('Rubric', () => {
       };
       expect(Rubric.pending(resolved)).toBe(false);
     });
+
+    it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+      'requires an own intervention before resolving reviewable cell %s',
+      async id => {
+        const cell: Rubric.Cell = {
+          id,
+          is: 'reviewable',
+          payload: null,
+          points: 1,
+          references: null
+        };
+        const rubric = { ...create(), cells: { [id]: cell } };
+        expect(Rubric.pending(rubric)).toBe(true);
+        await expect(Rubric.Cell.score(rubric, id, new Map())).resolves.toEqual(
+          {
+            ...Rubric.Score.UNSCORED,
+            code: 'intervene',
+            id,
+            possible: 1
+          }
+        );
+
+        const intervention = Rubric.Score.intervene(id, {
+          comment: 'Reviewed',
+          points: 1,
+          possible: 1
+        });
+        const assignment = {
+          ...rubric.assignment,
+          report: {
+            ...rubric.assignment.report,
+            interventions: { [id]: intervention }
+          }
+        };
+        const reviewed = { ...rubric, assignment };
+        expect(Rubric.pending(reviewed)).toBe(false);
+        await expect(
+          Rubric.Cell.score(reviewed, id, new Map())
+        ).resolves.toEqual(intervention);
+      }
+    );
   });
 
   describe('Assignment Flow', () => {
@@ -1404,6 +1543,23 @@ describe('Rubric', () => {
   });
 
   describe('Rubric.Score', () => {
+    it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+      'resolves only own scores and interventions for %s',
+      id => {
+        const empty = Rubric.Assignment.Report.empty();
+        expect(Rubric.Score.resolve(empty, id)).toBeNull();
+        const score = { ...Rubric.Score.CORRECT, id };
+        const report = { ...empty, scores: { [id]: score } };
+        expect(Rubric.Score.resolve(report, id)).toBe(score);
+        expect(Rubric.Assignment.summary(report)).toEqual(score);
+
+        const intervention = { ...Rubric.Score.INCORRECT, id };
+        const reviewed = { ...report, interventions: { [id]: intervention } };
+        expect(Rubric.Score.resolve(reviewed, id)).toBe(intervention);
+        expect(Rubric.Assignment.summary(reviewed)).toEqual(intervention);
+      }
+    );
+
     it('creates manual intervention score', () => {
       const intervention = Rubric.Score.intervene('c1', {
         comment: 'manual override',

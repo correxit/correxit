@@ -525,7 +525,11 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const { scores } = report;
   const ids = Object.keys(rubric.cells);
   const scored =
-    ids.length > 0 && ids.every(id => scores[id] && !unexecuted(scores[id]));
+    ids.length > 0 &&
+    ids.every(id => {
+      const score = Rubric.Score.get(scores, id);
+      return score && !unexecuted(score);
+    });
   if (!scored) return null;
   if (
     assignment.certification &&
@@ -577,7 +581,8 @@ function precertified(workbook: Headless): Certified | null {
   if (Rubric.Assignment.rejected(assignment)) return null;
 
   const path = workbook.context.path;
-  const incomplete = Object.keys(cells).some(id => !scores[id]);
+  const nonexistent = (id: string) => !Rubric.Score.get(scores, id);
+  const incomplete = Object.keys(cells).some(nonexistent);
   const partial = Object.values(scores).some(unexecuted);
   const uncertified = !assignment.certification;
   const summary = Rubric.Assignment.summary(assignment.report, assignment);

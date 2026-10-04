@@ -88,8 +88,8 @@ const instructions = (
   for (let i = index - 1; i >= 0 && block.length < span; i--) {
     const preceding = cells[i];
     if (preceding.cell_type !== 'markdown') break;
-    if (preceding.id in rubric.cells) break;
-    if (preceding.id in rubric.references) break;
+    if (Rubric.has(rubric, preceding.id)) break;
+    if (Rubric.Reference.get(rubric, preceding.id)) break;
 
     const source = preceding.getSource();
     if (!source.trim()) break;
@@ -140,7 +140,7 @@ export function Reviewer(props: Reviewer.Props) {
     if (!workbook || !rubric) return [];
     return workbook.context.model.sharedModel.cells
       .map(cell => cell.id)
-      .filter(id => id in rubric.cells);
+      .filter(id => Rubric.has(rubric, id));
   }, [workbook, rubric]);
   useEffect(() => {
     props.on.workbook(workbook);
@@ -204,7 +204,7 @@ export function Reviewer(props: Reviewer.Props) {
   ref.current = navigate;
   useEffect(() => props.on.navigate(ref), [props.on]);
 
-  const cell = rubric && cursor ? rubric.cells[cursor.cell] : null;
+  const cell = rubric && cursor ? Rubric.get(rubric, cursor.cell) : null;
   const id = cursor?.cell;
   const model = useMemo<Shared | null>(() => {
     if (!workbook || !id) return null;

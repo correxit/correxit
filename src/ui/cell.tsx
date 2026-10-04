@@ -27,7 +27,10 @@ export const Score: React.FC<{
   const cached = state.report(workbook, id);
   const persisted = Rubric.Score.resolve(rubric.assignment.report, id);
   const report = rubric.locked ? (cached ?? persisted) : (persisted ?? cached);
-  const intervened = !!rubric.assignment.report.interventions[id];
+  const intervened = !!Rubric.Score.get(
+    rubric.assignment.report.interventions,
+    id
+  );
   const scored: number | '' =
     report && report.status !== 'unscored' ? report.points : '';
   const seed = {

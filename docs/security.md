@@ -123,6 +123,10 @@ Issuance and authentication require unique, non-empty string IDs on every
 notebook cell, including added working cells. Invalid IDs are rejected before
 building or checking the manifest; they are never coerced into identities.
 
+Rubric cells, references, scores, and interventions use own entries when
+looking up IDs. Graded cells and references reject `__proto__` because
+JupyterLab's metadata copier cannot preserve that entry.
+
 Grading and collection require the issued cells to retain their identities,
 types, relative order, and fixed sources. Students may edit rubric cell sources
 and add working cells; added cells are not authenticated instructor content.

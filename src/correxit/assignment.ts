@@ -233,7 +233,7 @@ async function content(
     : notebook.cells;
   return Promise.all(cells.map(async cell => {
     const id = String(cell.id);
-    const reference = rubric.references[id];
+    const reference = Rubric.Reference.get(rubric, id);
     const encrypted = reference?.secret && security.encrypted(text(cell));
     const source = encrypted
       ? await security.decrypt(text(cell), rubric.key)
@@ -247,12 +247,12 @@ async function content(
 }
 
 function audit(notebook: INotebookContent, rubric: Rubric.Unlocked): void {
-  const types = Object.fromEntries(
+  const types = new Map(
     notebook.cells.map(cell => [String(cell.id ?? ''), cell.cell_type])
   );
-  const executable = (id: string) => types[id] === 'code' || types[id] === 'raw';
+  const executable = (id: string) => types.get(id) === 'code' || types.get(id) === 'raw';
   const missing = Object.values(rubric.cells).filter(cell => {
-    if (cell.is === 'reviewable') return !(cell.id in types);
+    if (cell.is === 'reviewable') return !types.has(cell.id);
     if (cell.is === 'answerable' && !cell.payload.length) return true;
     return !executable(cell.id);
   });

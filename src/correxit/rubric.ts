@@ -259,7 +259,7 @@ export namespace Rubric {
     ): Promise<Score> {
       const cell = get(rubric, id);
       const given = outputs.get(id);
-      const intervention = rubric.assignment.report.interventions[id];
+      const intervention = Score.get(rubric.assignment.report.interventions, id);
       if (!cell)
         return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
@@ -339,17 +339,22 @@ export namespace Rubric {
   export type Locked = Base & Readonly<{ key: null; locked: true; }>;
 
   export namespace Reference {
+    /** @returns the reference for `id`, or `null`. */
+    export function get(rubric: Rubric, id: string): Cell.Reference | null {
+      return own(rubric.references, id);
+    }
+
     /** @returns a rubric with a reference's points updated. */
     export function reweight(
       rubric: Unlocked,
       referent: string,
       points: number
     ): Unlocked {
-      const reference = rubric.references[referent];
+      const reference = get(rubric, referent);
       if (!reference)
         throw new Error.Invalid(`reweight: reference ${referent} not found`);
 
-      const cell = get(rubric, reference.cell);
+      const cell = Rubric.get(rubric, reference.cell);
       if (!cell || cell.is !== 'correctable')
         throw new Error.Invalid(`reweight: cell ${reference.cell} invalid`);
 
@@ -360,7 +365,7 @@ export namespace Rubric {
       const updated = { ...reference, points };
       const total = cell.references.reduce(
         (sum, id) =>
-          sum + (id === referent ? points : rubric.references[id].points), 0
+          sum + (id === referent ? points : get(rubric, id)!.points), 0
       );
       const cells = {
         ...rubric.cells,
@@ -808,6 +813,14 @@ export namespace Rubric {
       status: 'unscored'
     });
 
+    /** @returns an own score or intervention for `id`, or `null`. */
+    export function get(
+      scores: Readonly<{ [id: string]: Score }>,
+      id: string
+    ): Score | null {
+      return own(scores, id);
+    }
+
     /** @returns a copy of a cell's score that has been manually updated. */
     export function intervene(
       id: string,
@@ -842,7 +855,7 @@ export namespace Rubric {
     ): Score | null {
       const { Report } = Assignment;
       const { interventions, scores } = { ...Report.empty(), ...report };
-      return interventions[id] ?? scores[id] ?? null;
+      return get(interventions, id) ?? get(scores, id);
     }
   }
 
@@ -864,7 +877,8 @@ export namespace Rubric {
     cell: Cell,
     references: Cell.Reference[] = []
   ): Unlocked {
-    if (has(rubric, cell.id) || cell.id in rubric.references)
+    identifiers([cell.id, ...references.map(({ referent }) => referent)]);
+    if (has(rubric, cell.id) || Reference.get(rubric, cell.id))
       throw new Error.Invalid(`add error, cell id ${cell.id} already exists`);
     for (const reference of references) {
       const { cell: target, referent } = reference;
@@ -873,12 +887,12 @@ export namespace Rubric {
           `add error, reference ${referent} has wrong cell`
         );
       }
-      if (referent in rubric.references) {
+      if (Reference.get(rubric, referent)) {
         throw new Error.Invalid(
           `add error, reference ${referent} already exists`
         );
       }
-      if (referent in rubric.cells) {
+      if (has(rubric, referent)) {
         throw new Error.Invalid(
           `add error, reference ${referent} collides with cell`
         );
@@ -1028,7 +1042,7 @@ export namespace Rubric {
     rubric: Unlocked,
     referent: string
   ): Unlocked {
-    const reference = rubric.references[referent];
+    const reference = Reference.get(rubric, referent);
     if (!reference) {
       throw new Error.Invalid(
         `dereference error, reference ${referent} not found`
@@ -1049,7 +1063,7 @@ export namespace Rubric {
     const assignment = { ...rubric.assignment, report: blank };
     const { [referent]: _, ...references } = rubric.references;
     const points = cell.is === 'correctable'
-      ? remaining.reduce((sum, id) => sum + references[id].points, 0)
+      ? remaining.reduce((sum, id) => sum + own(references, id)!.points, 0)
       : cell.points;
     const cells = {
       ...rubric.cells,
@@ -1068,9 +1082,7 @@ export namespace Rubric {
 
   /** @returns the cell for `id`, or `null`. */
   export function get(rubric: Rubric, id: string): Cell | null {
-    return Object.prototype.hasOwnProperty.call(rubric.cells, id)
-      ? rubric.cells[id]
-      : null;
+    return own(rubric.cells, id);
   }
 
   /** @returns whether a rubric has a cell with the given id. */
@@ -1080,6 +1092,8 @@ export namespace Rubric {
 
   /** @returns the given rubric, locked. */
   export async function lock(rubric: Rubric): Promise<Locked> {
+    identifiers(Object.keys(rubric.cells).concat(Object.keys(rubric.references),
+      Object.keys(rubric.assignment.report.scores), Object.keys(rubric.assignment.report.interventions)));
     if (rubric.locked) return rubric;
 
     const blank = { ...rubric.assignment, mac: '' };
@@ -1188,6 +1202,8 @@ export namespace Rubric {
       (!record(kernel) || !record(kernel.resources))
     )
       throw new Error.Invalid('invalid rubric, invalid kernel spec');
+    identifiers(Object.keys(cells).concat(Object.keys(references),
+      Object.keys(scores), Object.keys(interventions)));
     return {
       assignment: assignment as Assignment,
       cells, contents, cxtformat, id, key, locked, references, revised
@@ -1198,7 +1214,7 @@ export namespace Rubric {
   export function pending({ assignment, cells }: Rubric): boolean {
     const { report: { interventions } } = assignment;
     return Object.values(cells)
-      .some(({ id, is }) => is === 'reviewable' && !interventions[id]);
+      .some(({ id, is }) => is === 'reviewable' && !Score.get(interventions, id));
   }
 
   /** Provision a locked rubric with assignee keys for sealed submission. */
@@ -1220,12 +1236,13 @@ export namespace Rubric {
       throw new Error.Invalid(`refer error, cell ${id} is ${cell.is}`);
 
     const { referent } = reference;
-    if (referent in rubric.references) {
+    identifiers([referent]);
+    if (Reference.get(rubric, referent)) {
       throw new Error.Invalid(
         `refer error, reference ${referent} already exists`
       );
     }
-    if (referent in rubric.cells)
+    if (has(rubric, referent))
       throw new Error.Invalid(`refer error, reference ${referent} collides`);
 
     const assignment = {
@@ -1236,7 +1253,7 @@ export namespace Rubric {
     const references = { ...rubric.references, [referent]: bound };
     const local = [...cell.references, referent];
     const points = cell.is === 'correctable'
-      ? local.reduce((sum, id) => sum + references[id].points, 0)
+      ? local.reduce((sum, id) => sum + own(references, id)!.points, 0)
       : cell.points;
     const cells = {
       ...rubric.cells,
@@ -1311,7 +1328,7 @@ export namespace Rubric {
 
   /** @returns a rubric with a reference's secret flag toggled. */
   export function toggle(rubric: Unlocked, referent: string): Unlocked {
-    const reference = rubric.references[referent];
+    const reference = Reference.get(rubric, referent);
     if (!reference)
       throw new Error.Invalid(`toggle: reference ${referent} not found`);
 
@@ -1356,6 +1373,8 @@ export namespace Rubric {
   export async function validate(rubric: Unlocked): Promise<void> {
     if (rubric.cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');
+    identifiers(Object.keys(rubric.cells).concat(Object.keys(rubric.references),
+      Object.keys(rubric.assignment.report.scores), Object.keys(rubric.assignment.report.interventions)));
     const { assignment, key } = rubric;
     await Assignment.validate(assignment);
     if (!assignment.mac) return;
@@ -1363,6 +1382,15 @@ export namespace Rubric {
     throw new Error.Mismatch('mac mismatch');
   }
 }
+
+const own = <Value>(values: Readonly<{ [id: string]: Value }>, id: string): Value | null =>
+  Object.prototype.hasOwnProperty.call(values, id) ? values[id] : null;
+
+/** JupyterLab's metadata copier cannot preserve an own `__proto__` entry. */
+const identifiers = (ids: string[]): void => {
+  if (ids.includes('__proto__'))
+    throw new Error.Invalid('invalid rubric, unsupported id __proto__');
+};
 
 const cell = (cell: Rubric.Cell): Rubric.Cell => {
   const { id, is, payload, points } = cell;

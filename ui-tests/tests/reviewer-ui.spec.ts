@@ -212,33 +212,35 @@ async function status(page: Page, id: string) {
   }, id);
 }
 
-test('reviewer saves intervention and auto-certifies via UI', async ({
-  page
-}) => {
-  const { dispose } = await setup(page, [{ id: 'manual', source: 'pass' }]);
-  const propagated = await prepare(page);
-  await cd(page, '.');
-  await batch(page, propagated.directory);
-  await launch(page, propagated.directory);
+for (const id of ['manual', 'constructor', 'toString', 'hasOwnProperty']) {
+  test(`reviewer saves intervention and auto-certifies cell ${id} via UI`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [{ id, source: 'pass' }]);
+    const propagated = await prepare(page, { cells: [{ id }] });
+    await cd(page, '.');
+    await batch(page, propagated.directory);
+    await launch(page, propagated.directory);
 
-  await page.getByLabel('Reviewer comment').fill('Almost correct');
-  await score(page).fill('4');
-  await page.getByTitle('Pass and advance to next cell').click();
+    await page.getByLabel('Reviewer comment').fill('Almost correct');
+    await score(page).fill('4');
+    await page.getByTitle('Pass and advance to next cell').click();
 
-  await expect
-    .poll(() => saved(page, propagated.paths[0]))
-    .toEqual({
-      certification: true,
-      comment: 'Almost correct',
-      locked: true,
-      points: 4,
-      status: 'partial'
-    });
+    await expect
+      .poll(() => saved(page, propagated.paths[0], id))
+      .toEqual({
+        certification: true,
+        comment: 'Almost correct',
+        locked: true,
+        points: 4,
+        status: 'partial'
+      });
 
-  await close(page);
-  await cleanup(page, propagated);
-  await dispose();
-});
+    await close(page);
+    await cleanup(page, propagated);
+    await dispose();
+  });
+}
 
 test('reviewer clears stored outputs when run result is empty', async ({
   page

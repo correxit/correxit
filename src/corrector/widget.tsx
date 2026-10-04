@@ -400,7 +400,7 @@ function ReviewerInfo({ trans }: { trans: IRenderMime.TranslationBundle }) {
 
   const rows = workbook.context.model.sharedModel.cells
     .map(cell => cell.id)
-    .filter(id => id in rubric.cells);
+    .filter(id => Rubric.has(rubric, id));
   const index = rows.indexOf(cursor.cell);
   if (index < 0) return null;
 
@@ -439,7 +439,7 @@ function ScoreBadge(props: {
   }
 
   const { interventions } = { ...Rubric.Assignment.Report.empty(), ...report };
-  const manual = cell in interventions;
+  const manual = !!Rubric.Score.get(interventions, cell);
   const source = manual ? trans.__('Manual') : trans.__('Auto');
   const status = score.status;
   const className = [
