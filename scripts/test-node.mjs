@@ -146,9 +146,7 @@ assert.equal(reference.metadata.editable, false);
 assert.equal(reference.metadata.jupyter.source_hidden, true);
 assert.match(reference.source, /^-----BEGIN PGP MESSAGE-----/);
 
-const template = JSON.parse(
-  await readFile(new URL('../examples/chinook.ipynb', import.meta.url), 'utf8')
-);
+const template = JSON.parse(await readFile('examples/chinook.ipynb', 'utf8'));
 const sample = Rubric.normalize(template.metadata.correxit);
 const secret = await keygen('xsql', sample.id);
 const author = await Rubric.unlock(sample, secret);

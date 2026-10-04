@@ -37,9 +37,9 @@ you explicitly mark for grading.
 
 Issued workbooks authenticate those fixed sources, including shared references
 and setup code, as well as the issued cells' types and relative order. Students
-can add working cells and edit their answers, but changing, removing, or moving
-an issued cell causes grading to reject the workbook. Locking is a UI aid;
-authentication is what detects direct file edits.
+can add working cells and edit their answers. Grading rejects changes to fixed
+sources, cell identities, types, or relative order, as well as missing issued
+cells. Locking is a UI aid; authentication detects direct file edits.
 
 ## Converting a notebook
 
