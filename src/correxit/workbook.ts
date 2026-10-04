@@ -604,9 +604,7 @@ export namespace Workbook {
     try {
       const opened = open(workbook)!;
       const key = await security.derive(credentials, opened.id);
-      const rubric = await Rubric.upgrade(
-        opened.locked ? await Rubric.unlock(opened, key) : opened
-      );
+      const rubric = opened.locked ? await Rubric.unlock(opened, key) : opened;
       return update(workbook, rubric);
     } catch (error) {
       if (error !== Correxit.NO_CORREXIT_METADATA) throw error;
@@ -1180,7 +1178,7 @@ export namespace Workbook {
       return rubric;
     }
 
-    let unlocked = await Rubric.upgrade(await Rubric.unlock(rubric, key));
+    let unlocked = await Rubric.unlock(rubric, key);
     const { assignment } = rubric;
     let prepared: Cell.Prepared[] = [];
     if (assignment.seal) {

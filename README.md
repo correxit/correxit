@@ -49,10 +49,9 @@ into a gradable workbook.
 
 New assignments use `cxtformat: 2`, authenticating fixed cell sources and the
 issued cells' types and relative order. Grading, cached-score reuse, CSV scores,
-and collection require authentication. Format-1 metadata remains readable;
-author templates upgrade after authentication, while existing submissions need
-an instructor-controlled original before they can supply trusted grades. See
-[SECURITY](docs/security.md) for the contract and recovery guidance.
+and collection require authentication. Format 1 was a draft with no usage in the
+wild; format 2 supersedes it and is the only supported format. See
+[SECURITY](docs/security.md) for the contract.
 
 This video shows an example, a SQL (`xeus-sql`) Jupyter notebook that loads the
 Chinook database in SQLite and runs some queries and renders a Vega graph of the

@@ -380,18 +380,12 @@ metadata format. It is authenticated by both the assignment issue digest and
 the rubric MAC. Missing and unknown formats are rejected before their contents
 are interpreted.
 
-New workbooks use format 2. Format-1 metadata remains readable with its original
-MAC and issue-digest surfaces unchanged. An authenticated, unassigned format-1
-author template upgrades when unlocked or issued. Existing format-1 assignments
-have no contents commitments and cannot be automatically promoted to trusted
-grading, cached grades, exports, or collection. This is a deliberate security
-boundary: authenticating their metadata cannot establish their reference sources.
-
-For old submissions, recover answers with the author credentials and transfer
-them into a freshly issued workbook from an instructor-controlled original.
-Do not convert the submitted scaffold itself into a trusted new template.
-Recovery and scanning remain available without changing the old persisted
-format. Package and workbook-format versions are independent.
+Format 2 is the only supported format. Format 1 was a draft with no usage in
+the wild and is superseded. Its authenticated terms did not bind issued
+reference sources, so it cannot supply the current security guarantees.
+Readers reject it rather than infer missing commitments from notebook contents.
+There is no automatic migration or legacy reader. The bundled example uses
+format 2. Package and workbook-format versions are independent.
 
 All optional fields use `Type | null`, never `Type?`. This keeps
 `JSON.stringify` deterministic: `null` is serialized, `undefined` is omitted.

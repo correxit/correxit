@@ -54,8 +54,6 @@ export namespace Rubric {
   }> & Format;
 
   export type Format = Readonly<{
-    cxtformat: 1;
-  }> | Readonly<{
     cxtformat: typeof CXTFORMAT;
     contents: Content[] | null;
   }>;
@@ -614,9 +612,7 @@ export namespace Rubric {
         references,
         rubric: rubric.id,
         sources,
-        ...(rubric.cxtformat === CXTFORMAT
-          ? { contents: rubric.contents?.map(Content.terms) ?? null }
-          : {})
+        contents: rubric.contents?.map(Content.terms) ?? null
       }));
     }
 
@@ -982,7 +978,7 @@ export namespace Rubric {
    * @returns an unlocked rubric with the `key` field omitted. The client needs
    * to add a `key` field to use the rubric.
    */
-  export function create(): Omit<Extract<Unlocked, { cxtformat: 2 }>, 'key'> {
+  export function create(): Omit<Unlocked, 'key'> {
     const revised = Date.now();
     const assignment = { ...Assignment.empty() };
     const encoded = revised.toString(36);
@@ -1110,7 +1106,7 @@ export namespace Rubric {
   /** @returns a normalized locked rubric or throws. */
   export function normalize(rubric: Partial<Locked> = {}): Locked {
     const {
-      assignment, cells, cxtformat, id, key, locked, references, revised
+      assignment, cells, contents, cxtformat, id, key, locked, references, revised
     } = rubric;
     const object = (value: unknown): value is object =>
       typeof value === 'object' && value !== null;
@@ -1121,10 +1117,9 @@ export namespace Rubric {
         !Object.prototype.hasOwnProperty.call(value, field) ||
         (value as { [key: string]: unknown })[field] === undefined
       ) ?? null;
-    if (cxtformat !== 1 && cxtformat !== CXTFORMAT)
+    if (cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');
-    const contents = 'contents' in rubric ? rubric.contents : undefined;
-    if (cxtformat === CXTFORMAT && contents !== null) {
+    if (contents !== null) {
       if (!Array.isArray(contents))
         throw new Error.Invalid('invalid rubric, missing contents');
       const invalid = contents.some(entry =>
@@ -1193,8 +1188,7 @@ export namespace Rubric {
       throw new Error.Invalid('invalid rubric, invalid kernel spec');
     return {
       assignment: assignment as Assignment,
-      cells, id, key, locked, references, revised,
-      ...(cxtformat === 1 ? { cxtformat } : { cxtformat, contents: contents! })
+      cells, contents, cxtformat, id, key, locked, references, revised
     };
   }
 
@@ -1292,20 +1286,14 @@ export namespace Rubric {
   }
 
   export function terms(rubric: Rubric): Terms {
-    const terms = {
+    return {
       assignment: authored(rubric.assignment),
       cells: cells(rubric.cells),
       cxtformat: rubric.cxtformat,
       id: rubric.id,
-      references: references(rubric.references)
+      references: references(rubric.references),
+      contents: rubric.contents?.map(Content.terms) ?? null
     };
-    return rubric.cxtformat === 1
-      ? { ...terms, cxtformat: rubric.cxtformat }
-      : {
-        ...terms,
-        cxtformat: rubric.cxtformat,
-        contents: rubric.contents?.map(Content.terms) ?? null
-      };
   }
 
   /** @returns a formatted rendition of a rubric timestamp. */
@@ -1364,24 +1352,13 @@ export namespace Rubric {
   }
 
   export async function validate(rubric: Unlocked): Promise<void> {
-    if (rubric.cxtformat !== 1 && rubric.cxtformat !== CXTFORMAT)
+    if (rubric.cxtformat !== CXTFORMAT)
       throw new Error.Invalid('invalid rubric, unsupported cxtformat');
     const { assignment, key } = rubric;
     await Assignment.validate(assignment);
     if (!assignment.mac) return;
     if (assignment.mac === await mac(rubric, key)) return;
     throw new Error.Mismatch('mac mismatch');
-  }
-
-  /** Upgrade an authenticated author template; submitted contents cannot be inferred. */
-  export async function upgrade(rubric: Unlocked): Promise<Unlocked> {
-    if (rubric.cxtformat === CXTFORMAT) return rubric;
-    if (rubric.assignment.assignee)
-      throw new Error.Mismatch('format-1 assignment requires an instructor-controlled original');
-    return sign(
-      { ...rubric, cxtformat: CXTFORMAT, contents: null },
-      rubric.assignment.report
-    );
   }
 }
 

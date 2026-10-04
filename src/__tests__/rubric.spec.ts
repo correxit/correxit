@@ -1,7 +1,7 @@
 declare const require: any;
 jest.mock('../correxit/security', () => require('./mocks/security'));
 import { Rubric } from '../correxit/rubric';
-const format = require('./fixtures/cxtformat-1-metadata.json');
+const format = require('./fixtures/cxtformat-2-metadata.json');
 
 describe('Rubric', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -241,12 +241,12 @@ describe('Rubric', () => {
       expect(normalized.id).toBeDefined();
     });
 
-    it('normalizes golden format-1 metadata without completing it', () => {
+    it('normalizes golden format-2 metadata without completing it', () => {
       const metadata = JSON.parse(JSON.stringify(format));
       expect(Rubric.normalize(metadata)).toEqual(metadata);
     });
 
-    it('retains the exact format-1 MAC surface and property order', () => {
+    it('retains the exact MAC surface and property order', () => {
       const rubric = Rubric.normalize(format);
       const terms = Rubric.terms(rubric);
       expect(Object.keys(terms)).toEqual([
@@ -254,18 +254,15 @@ describe('Rubric', () => {
         'cells',
         'cxtformat',
         'id',
-        'references'
+        'references',
+        'contents'
       ]);
-      expect(terms).not.toHaveProperty('contents');
-      expect(rubric).not.toHaveProperty('contents');
+      expect(terms.contents).toEqual(rubric.contents);
     });
 
     it('requires explicit contents in format 2', async () => {
       const rubric = await Rubric.lock(create());
-      const { contents, ...missing } = rubric as Extract<
-        Rubric.Locked,
-        { cxtformat: 2 }
-      >;
+      const { contents, ...missing } = rubric;
       expect(contents).toBeNull();
       expect(() => Rubric.normalize(missing)).toThrow('missing contents');
       expect(() =>
@@ -290,7 +287,7 @@ describe('Rubric', () => {
     });
 
     it.each(Object.keys(format.assignment))(
-      'rejects format-1 metadata missing assignment.%s',
+      'rejects metadata missing assignment.%s',
       field => {
         const metadata = JSON.parse(JSON.stringify(format));
         delete metadata.assignment[field];
@@ -299,7 +296,7 @@ describe('Rubric', () => {
     );
 
     it.each(Object.keys(format.assignment))(
-      'rejects format-1 metadata with undefined assignment.%s',
+      'rejects metadata with undefined assignment.%s',
       field => {
         const metadata = JSON.parse(JSON.stringify(format));
         metadata.assignment[field] = undefined;
@@ -318,7 +315,7 @@ describe('Rubric', () => {
         (metadata: any) =>
           (metadata.assignment.keys.public.assignee = undefined)
       ]
-    ])('rejects format-1 metadata with undefined %s', (_, corrupt) => {
+    ])('rejects metadata with undefined %s', (_, corrupt) => {
       const metadata = JSON.parse(JSON.stringify(format));
       corrupt(metadata);
       expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
@@ -342,7 +339,7 @@ describe('Rubric', () => {
         'kernel resources',
         (metadata: any) => delete metadata.assignment.report.kernel.resources
       ]
-    ])('rejects format-1 metadata missing %s', (_, corrupt) => {
+    ])('rejects metadata missing %s', (_, corrupt) => {
       const metadata = JSON.parse(JSON.stringify(format));
       corrupt(metadata);
       expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
@@ -372,7 +369,7 @@ describe('Rubric', () => {
         'kernel resources',
         (metadata: any) => (metadata.assignment.report.kernel.resources = [])
       ]
-    ])('rejects malformed format-1 %s container', (_, corrupt) => {
+    ])('rejects malformed %s container', (_, corrupt) => {
       const metadata = JSON.parse(JSON.stringify(format));
       corrupt(metadata);
       expect(() => Rubric.normalize(metadata)).toThrow('invalid rubric');
@@ -380,6 +377,7 @@ describe('Rubric', () => {
 
     it.each([
       ['missing', undefined],
+      ['draft', 1],
       ['unknown', 3]
     ])('rejects cxtformat when %s', async (_, cxtformat) => {
       const rubric = await Rubric.lock(create());

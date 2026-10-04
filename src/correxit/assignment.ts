@@ -49,7 +49,7 @@ export namespace Assignment {
     const source = copy(options.notebook);
     const locked = rubric(source);
     const key = await secret(options, locked.id);
-    const unlocked = await Rubric.upgrade(await Rubric.unlock(locked, key));
+    const unlocked = await Rubric.unlock(locked, key);
     const roster = enroll(
       options.roster ?? unlocked.assignment.roster,
       options.assignee
@@ -174,7 +174,6 @@ export namespace Assignment {
     rubric: Rubric.Unlocked
   ): Promise<Prepared> {
     audit(source, rubric);
-    rubric = await Rubric.upgrade(rubric);
     const encrypted: string[] = [];
     const notebook = copy(source);
     notebook.metadata['correxit'] = await Rubric.lock(rubric);
@@ -198,10 +197,8 @@ export namespace Assignment {
   ): Promise<void> {
     if (!rubric.assignment.assignee) return;
     await Rubric.validate(rubric);
-    if (rubric.cxtformat !== Rubric.CXTFORMAT || !rubric.contents)
-      {throw new Error.Mismatch(
-        'assignment contents are unauthenticated; use an instructor-controlled original'
-      );}
+    if (!rubric.contents)
+      throw new Error.Mismatch('assignment contents are unauthenticated');
     const ids = new Set(rubric.contents.map(({ id }) => id));
     const current = await content(notebook, rubric, ids);
     if (JSON.stringify(current.map(Rubric.Content.terms)) !==

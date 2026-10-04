@@ -164,8 +164,6 @@ describe('Assignment', () => {
     it('binds cell identities, types, order, and fixed sources without exposing plaintext hashes', async () => {
       const { notebook, rubric } = await issued();
       expect(rubric.cxtformat).toBe(Rubric.CXTFORMAT);
-      if (rubric.cxtformat !== Rubric.CXTFORMAT)
-        throw new Error('wrong format');
       expect(rubric.contents?.map(({ id, type }) => ({ id, type }))).toEqual([
         { id: 'intro', type: 'markdown' },
         { id: 'answer', type: 'code' },
@@ -228,8 +226,6 @@ describe('Assignment', () => {
 
     it('authenticates commitments after notebook writers reorder object properties', async () => {
       const { notebook, rubric } = await issued();
-      if (rubric.cxtformat !== Rubric.CXTFORMAT)
-        throw new Error('wrong format');
       const contents = rubric.contents!.map(({ id, type, digest }) => ({
         type,
         digest,
@@ -294,49 +290,31 @@ describe('Assignment', () => {
     it('rejects stripped commitments and format downgrades before authenticating sources', async () => {
       const { notebook, rubric } = await issued();
       const stripped = { ...rubric, contents: null };
-      const downgraded = { ...rubric, cxtformat: 1 } as Rubric.Unlocked;
+      const downgraded = { ...rubric, cxtformat: 1 } as any;
       await expect(Assignment.authenticate(notebook, stripped)).rejects.toThrow(
         'mac mismatch'
       );
       await expect(
         Assignment.authenticate(notebook, downgraded)
-      ).rejects.toThrow('mac mismatch');
+      ).rejects.toThrow('unsupported cxtformat');
     });
 
-    it('upgrades authenticated format-1 author templates when issuing new assignments', async () => {
+    it('rejects draft-format templates before issuing assignments', async () => {
       const { notebook, rubric } = await configured();
-      const legacy = { ...rubric, cxtformat: 1 } as Rubric.Unlocked;
-      notebook.metadata.correxit = await Rubric.lock(legacy);
-      const assigned = await Assignment.assign({
-        assignee: 'alice@example.com',
-        notebook,
-        key: rubric.key,
-        passphrase: null
-      });
-      const metadata = assigned.notebook.metadata.correxit as Rubric.Locked;
-      expect(metadata.cxtformat).toBe(Rubric.CXTFORMAT);
+      notebook.metadata.correxit = {
+        ...(notebook.metadata.correxit as Rubric.Locked),
+        cxtformat: 1
+      } as any;
+      const draft = JSON.stringify(notebook);
       await expect(
-        Assignment.authenticate(
-          assigned.notebook,
-          await Rubric.unlock(metadata, rubric.key)
-        )
-      ).resolves.toBeUndefined();
-    });
-
-    it('cannot manufacture commitments from an existing format-1 assignment', async () => {
-      const { notebook, rubric } = await configured();
-      const legacy = await Rubric.assign(
-        { ...rubric, cxtformat: 1 },
-        {
-          assignee: 'alice@example.com'
-        }
-      );
-      await expect(Assignment.authenticate(notebook, legacy)).rejects.toThrow(
-        'instructor-controlled original'
-      );
-      await expect(Rubric.upgrade(legacy)).rejects.toThrow(
-        'instructor-controlled original'
-      );
+        Assignment.assign({
+          assignee: 'alice@example.com',
+          notebook,
+          key: rubric.key,
+          passphrase: null
+        })
+      ).rejects.toThrow('unsupported cxtformat');
+      expect(JSON.stringify(notebook)).toBe(draft);
     });
   });
 

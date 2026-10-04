@@ -86,11 +86,10 @@ relative order, and keyed commitments to fixed sources. Rubric cell sources
 remain editable. Secret references are checked as plaintext, so encryption's
 randomness does not affect their identity.
 
-Format-1 readers retain the original authenticated terms. Opening or scanning
-never upgrades metadata. An authenticated, unassigned author template can
-upgrade when unlocked or issued; existing format-1 submissions require an
-instructor-controlled original before grading. Missing and unknown formats
-fail closed. See [SECURITY](security.md) for the migration boundary.
+Format 1 was a draft with no usage in the wild. Format 2 supersedes it and is
+the only supported format. Missing, draft, and unknown formats fail closed;
+opening or scanning never migrates metadata. See [SECURITY](security.md) for
+the serialization contract.
 
 A rubric is immutable. Each mutation returns a new instance (with a new
 `revised` timestamp) via functions in `rubric.ts`.

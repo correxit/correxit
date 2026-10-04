@@ -197,7 +197,7 @@ contents checks. The normal collection command authenticates before calling the
 collector; a parsed report or certification timestamp is not a grade authority.
 Plugins should consume these command results rather than constructing verified
 grades from notebook metadata. The source-integrity contract requires format 2;
-see [SECURITY](security.md) for format-1 recovery and template upgrade guidance.
+see [SECURITY](security.md) for the serialization and authentication contract.
 
 The default implementation returns a content-addressed digest receipt. A
 server-backed collector would POST the grade to the gradebook, correlate the

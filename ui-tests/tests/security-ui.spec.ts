@@ -153,53 +153,40 @@ const cells = [
   { id: 'other', source: 'pass' }
 ];
 
-test('legacy author templates upgrade; legacy assignments remain readable but cannot be trusted', async ({
+test('rejects draft-format metadata without rewriting the notebook', async ({
   page
 }) => {
   const fixture = await setup(page, [{ id: 'answer', source: 'answer = 42' }]);
   try {
     const result = await page.evaluate(async (key: string) => {
-      const { Rubric, Workbook } = (window as any).__correxit__;
+      const { Workbook } = (window as any).__correxit__;
       const panel = (window as any).jupyterapp.shell.currentWidget;
-      const created = await Workbook.convert(
+      await Workbook.convert(
         panel,
         { key, passphrase: null },
         { store: async () => {} }
       );
-      const { contents, ...base } = created;
-      const legacy = await Rubric.assign(
-        { ...base, cxtformat: 1 },
-        { roster: ['student@example.com'] }
-      );
-      await Workbook.update(panel, legacy);
       await Workbook.lock(panel);
-      const upgraded = await Workbook.unlock(panel, key);
-      const assigned = await Rubric.assign(legacy, {
-        assignee: 'student@example.com'
-      });
-      await Workbook.update(panel, assigned);
-      await Workbook.lock(panel);
-      const readable = Workbook.open(panel).cxtformat;
-      const before = JSON.stringify(panel.context.model.sharedModel.toJSON());
+      const notebook = panel.context.model.sharedModel;
+      const { contents, ...metadata } = notebook.getMetadata('correxit');
+      notebook.setMetadata('correxit', { ...metadata, cxtformat: 1 });
+      const fresh = { content: panel.content, context: panel.context };
+      const opened = Workbook.open(fresh, true);
+      const before = JSON.stringify(notebook.toJSON());
       let rejected = false;
       try {
-        await Workbook.unlock(panel, key);
+        await Workbook.unlock(fresh, key);
       } catch {
         rejected = true;
       }
       return {
-        upgraded: upgraded.cxtformat,
-        contents: upgraded.contents,
-        readable,
+        opened,
         rejected,
-        unchanged:
-          before === JSON.stringify(panel.context.model.sharedModel.toJSON())
+        unchanged: before === JSON.stringify(notebook.toJSON())
       };
     }, key);
     expect(result).toEqual({
-      upgraded: 2,
-      contents: null,
-      readable: 1,
+      opened: null,
       rejected: true,
       unchanged: true
     });
