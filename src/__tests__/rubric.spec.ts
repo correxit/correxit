@@ -38,6 +38,26 @@ describe('Rubric', () => {
       expect(Rubric.create().cxtformat).toBe(Rubric.CXTFORMAT);
     });
 
+    it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+      'looks up only own rubric cells for %s',
+      id => {
+        const rubric = create();
+        expect(Rubric.get(rubric, id)).toBeNull();
+        expect(Rubric.has(rubric, id)).toBe(false);
+
+        const cell: Rubric.Cell = {
+          id,
+          is: 'reviewable',
+          payload: null,
+          points: 1,
+          references: null
+        };
+        const configured = { ...rubric, cells: { [id]: cell } };
+        expect(Rubric.get(configured, id)).toBe(cell);
+        expect(Rubric.has(configured, id)).toBe(true);
+      }
+    );
+
     it('locks and unlocks data symmetrically', async () => {
       const id = 'test-cell';
       const cell: Rubric.Cell = {

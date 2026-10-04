@@ -235,6 +235,33 @@ describe('Assignment', () => {
       ).resolves.toBeUndefined();
     });
 
+    it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+      'authenticates fixed sources with the cell ID %s',
+      async id => {
+        const { notebook, rubric } = await configured();
+        notebook.cells[0].id = id;
+        const assigned = await Assignment.assign({
+          assignee: 'alice@example.com',
+          notebook,
+          key: rubric.key,
+          passphrase: null
+        });
+        const metadata = assigned.notebook.metadata.correxit as Rubric.Locked;
+        const unlocked = await Rubric.unlock(metadata, rubric.key);
+        expect(
+          unlocked.contents?.find(entry => entry.id === id)?.digest
+        ).toMatch(/^HMAC</);
+        await expect(
+          Assignment.authenticate(assigned.notebook, unlocked)
+        ).resolves.toBeUndefined();
+
+        assigned.notebook.cells[0].source = 'changed';
+        await expect(
+          Assignment.authenticate(assigned.notebook, unlocked)
+        ).rejects.toThrow('contents mismatch');
+      }
+    );
+
     it.each([undefined, null, '', 42])(
       'rejects invalid issued cell IDs (%p) before authenticating sources',
       async id => {

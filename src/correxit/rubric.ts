@@ -1068,7 +1068,9 @@ export namespace Rubric {
 
   /** @returns the cell for `id`, or `null`. */
   export function get(rubric: Rubric, id: string): Cell | null {
-    return rubric.cells[id] || null;
+    return Object.prototype.hasOwnProperty.call(rubric.cells, id)
+      ? rubric.cells[id]
+      : null;
   }
 
   /** @returns whether a rubric has a cell with the given id. */

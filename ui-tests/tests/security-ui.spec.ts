@@ -307,6 +307,68 @@ test('authentic submissions grade and collect; authenticated cached reports skip
   }
 });
 
+for (const id of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+  test(`authenticates fixed cell ${id} before grading and cached-report reuse`, async ({
+    page
+  }) => {
+    const fixture = await setup(
+      page,
+      cells.map(cell => (cell.id === 'setup' ? { ...cell, id } : cell))
+    );
+    const issued = await issue(page);
+    try {
+      await cd(page, '.');
+      const digest = await page.evaluate(
+        async ({ path, id }: any) => {
+          const contents = (window as any).jupyterapp.serviceManager.contents;
+          const file = await contents.get(path, {
+            type: 'notebook',
+            content: true
+          });
+          return file.content.metadata.correxit.contents.find(
+            (entry: any) => entry.id === id
+          ).digest;
+        },
+        { path: issued.paths[0], id }
+      );
+      expect(digest).toMatch(/^[a-f0-9]{64}$/);
+      const authentic = await batch(page, issued.directory);
+      expect(authentic).toHaveLength(1);
+      expect(authentic[0]).toMatchObject({
+        verified: true,
+        resolved: true,
+        score: { points: 0, possible: 1 }
+      });
+      expect(authentic[0].certification).not.toBeNull();
+
+      await page.evaluate(
+        async ({ path, id }: any) => {
+          const contents = (window as any).jupyterapp.serviceManager.contents;
+          const file = await contents.get(path, {
+            type: 'notebook',
+            content: true
+          });
+          file.content.cells.find((cell: any) => cell.id === id).source =
+            'threshold = 0';
+          await contents.save(path, { ...file, content: file.content });
+        },
+        { path: issued.paths[0], id }
+      );
+      const tampered = await batch(page, issued.directory);
+      expect(tampered).toHaveLength(1);
+      expect(tampered[0]).toMatchObject({
+        verified: false,
+        resolved: false,
+        score: { status: 'unscored' }
+      });
+      expect(await collect(page, issued.directory)).toBe(0);
+    } finally {
+      await cleanup(page, issued);
+      await fixture.dispose();
+    }
+  });
+}
+
 for (const attack of [
   'plaintext',
   'ciphertext',
