@@ -1,1 +1,0 @@
-{"display_name": "SQLite (xsqlite)", "argv": ["xeus/correxit/bin/xsqlite.js", "-f", "{connection_file}"], "language": "sqlite", "metadata": {}, "kernel_protocol_version": "5.6.0", "resources": {"logo-32x32": "xeus/correxit/xsqlite/logo-32x32.png", "logo-64x64": "xeus/correxit/xsqlite/logo-64x64.png"}}
