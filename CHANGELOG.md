@@ -1,3 +1,17 @@
+# 2.2.0
+
+<!-- START GENERATED CHANGELOG: 2.2.0 -->
+
+## What's Changed
+* docs: minor language update by @afshin in https://github.com/correxit/correxit/pull/99
+* chore: unpin upload action and re-test by @afshin in https://github.com/correxit/correxit/pull/100
+* fix: security audit issues, unprotected reference cells, caching by @afshin in https://github.com/correxit/correxit/pull/101
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v2.1.0...v2.2.0
+
+<!-- END GENERATED CHANGELOG: 2.2.0 -->
+
 # 2.1.0
 
 <!-- START GENERATED CHANGELOG: 2.1.0 -->
