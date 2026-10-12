@@ -1152,6 +1152,89 @@ test('certify docks a late workbook by penalty percentage', async ({
   await dispose();
 });
 
+test('unlock removes the old score report before recertification', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+
+  const result = await page.evaluate(async () => {
+    const { Workbook, Rubric } = (window as any).__correxit__;
+    const panel = (window as any).jupyterapp.shell.currentWidget;
+    const workbook = { content: panel.content, context: panel.context };
+    const notebook = panel.context.model.sharedModel;
+    const reports = () =>
+      notebook.cells
+        .filter((cell: any) => cell.id === 'correxit-workbook-certificate')
+        .map((cell: any) => cell.getSource());
+
+    const rubric = await Rubric.assign(
+      Rubric.add(
+        (r => ({
+          ...r,
+          key: 'secret',
+          contents: [{ id: 'cell', type: 'code', digest: null }],
+          assignment: {
+            ...r.assignment,
+            keys: {
+              private: { assignee: null, author: 'priv' },
+              public: { assignee: null, author: 'pub' }
+            }
+          }
+        }))(Rubric.create()),
+        {
+          id: 'cell',
+          is: 'reviewable',
+          payload: null,
+          points: 2,
+          references: null
+        }
+      ),
+      {
+        assignee: 'student@example.com',
+        roster: ['student@example.com']
+      }
+    );
+    await Workbook.update(workbook, rubric);
+    await Workbook.intervene(
+      workbook,
+      'cell',
+      Rubric.Score.intervene('cell', {
+        comment: 'Original feedback',
+        points: 2,
+        possible: 2
+      })
+    );
+
+    const trans = { __: (message: string) => message } as any;
+    await Workbook.certify(workbook, trans, true);
+    const original = reports();
+
+    await Workbook.unlock(workbook, 'secret');
+    const cleared = reports();
+    await Workbook.intervene(
+      workbook,
+      'cell',
+      Rubric.Score.intervene('cell', {
+        comment: 'Revised feedback',
+        points: 1,
+        possible: 2
+      })
+    );
+    await Workbook.certify(workbook, trans, true);
+    return { original, cleared, revised: reports() };
+  });
+
+  expect(result.original).toHaveLength(1);
+  expect(result.original[0]).toContain('Original feedback');
+  expect(result.original[0]).toContain('2 / 2');
+  expect(result.cleared).toHaveLength(0);
+  expect(result.revised).toHaveLength(1);
+  expect(result.revised[0]).toContain('Revised feedback');
+  expect(result.revised[0]).toContain('1 / 2');
+  expect(result.revised[0]).not.toContain('Original feedback');
+  await dispose();
+});
+
 test('certify rejects an overdue rejected workbook', async ({ page }) => {
   const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
 

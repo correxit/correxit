@@ -251,6 +251,7 @@ export namespace Workbook {
 
   const quiet = true;
   const defrost = (workbook: Workbook) => {
+    certificate.remove(workbook);
     const notebook = workbook.context.model.sharedModel;
     for (const cell of notebook.cells) {
       const jupyter = cell.getMetadata('jupyter') as any;

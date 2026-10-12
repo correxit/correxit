@@ -8,6 +8,13 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 const ID = 'correxit-workbook-certificate';
 const { has, timestamp } = Rubric;
 
+/** Remove the score report when a certified workbook becomes editable. */
+export function remove(workbook: Workbook): void {
+  const notebook = workbook.context.model.sharedModel;
+  const index = notebook.cells.findIndex(cell => cell.id === ID);
+  if (index !== -1) notebook.deleteCell(index);
+}
+
 /** Append or replace the score report cell in a certified workbook. */
 export function render(
   workbook: Workbook,
