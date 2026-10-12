@@ -1,3 +1,15 @@
+# 2.2.1
+
+<!-- START GENERATED CHANGELOG: 2.2.1 -->
+
+## What's Changed
+* fix: clear report if a certified workbook is unlocked by @afshin in https://github.com/correxit/correxit/pull/103
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v2.2.0...v2.2.1
+
+<!-- END GENERATED CHANGELOG: 2.2.1 -->
+
 # 2.2.0
 
 <!-- START GENERATED CHANGELOG: 2.2.0 -->
