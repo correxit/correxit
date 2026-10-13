@@ -1,7 +1,7 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 
 type Assignment = Rubric.Assignment;
@@ -21,23 +21,25 @@ const { assign, enroll, resource, track } = Correxit.CommandIDs;
 const { Equal } = Rubric.Assignment;
 const enrolled = new WeakMap<Workbook, Enrolled>();
 const identify = ({ id, name }: Registration) => id || name;
-const blank = (assignment: Assignment): Assignment => ({
-  ...assignment,
+const blank: Partial<Draft.Fields> = {
   assignee: '',
   expiration: null,
   id: null,
   name: '',
   overdue: null,
   penalty: null,
-  roster: []
-});
-const equal = Equal.assignment;
-const freeze = (assignment: Assignment, active: Registration): Assignment => ({
-  ...assignment,
-  ...active,
-  assignee: active.roster.includes(assignment.assignee)
-    ? assignment.assignee
-    : '',
+  roster: ''
+};
+const freeze = ({
+  expiration,
+  id,
+  name,
+  roster
+}: Registration): Partial<Draft.Fields> => ({
+  expiration,
+  id,
+  name,
+  roster: roster.join('\n'),
   overdue: null,
   penalty: null
 });
@@ -58,8 +60,8 @@ const split = (value: string) =>
         .filter(Boolean)
     )
   );
-const same = (x: string[], y: string[]) =>
-  x.length === y.length && x.every((record, i) => record === y[i]);
+const same = (x: unknown, y: unknown) =>
+  JSON.stringify(x) === JSON.stringify(y);
 
 const count = ({ roster }: Assignment, trans: TranslationBundle) =>
   trans.__('%1 entries', roster.length);
@@ -89,48 +91,126 @@ const option = (registration: Registration) => (
 );
 
 namespace Draft {
+  const keys = [
+    'assignee',
+    'expiration',
+    'id',
+    'name',
+    'overdue',
+    'penalty',
+    'resources',
+    'roster'
+  ] as const;
+  type Changes = Partial<Pick<Assignment, (typeof keys)[number]>>;
+  export type Fields = Omit<Required<Changes>, 'roster'> & { roster: string };
+  type Save = Readonly<{ version: number; changes: Changes }>;
   export type State = Readonly<{
     assignment: Assignment;
-    local: boolean;
-  }>;
+    fields: Fields;
+    version: number;
+  }> &
+    (
+      | { phase: 'ready' | 'failed'; save: null }
+      | { phase: 'saving'; save: Save }
+    );
+  const fields = (assignment: Assignment): Fields =>
+    ({
+      ...Object.fromEntries(keys.map(key => [key, assignment[key]])),
+      roster: assignment.roster.join('\n')
+    }) as Fields;
+  const value = (fields: Fields, key: (typeof keys)[number]) =>
+    key === 'roster' ? split(fields.roster) : fields[key];
+  const normalize = (fields: Fields): Fields => ({
+    ...fields,
+    assignee: split(fields.roster).includes(fields.assignee)
+      ? fields.assignee
+      : ''
+  });
 
   export function create(assignment: Assignment): State {
-    return { assignment, local: false };
+    return {
+      assignment,
+      fields: fields(assignment),
+      version: 0,
+      phase: 'ready',
+      save: null
+    };
   }
 
-  export function edit(state: State, assignment: Assignment): State {
-    return equal(state.assignment, assignment)
-      ? state
-      : { assignment, local: true };
+  export function view(state: State): Assignment {
+    return {
+      ...state.assignment,
+      ...state.fields,
+      roster: split(state.fields.roster)
+    };
   }
 
-  export function merge(
+  export function edit(state: State, update: Partial<Fields>): State {
+    const fields = normalize({ ...state.fields, ...update });
+    if (same(fields, state.fields)) return state;
+    const version = state.version + 1;
+    return state.phase === 'failed'
+      ? { ...state, fields, version, phase: 'ready', save: null }
+      : { ...state, fields, version };
+  }
+
+  export function changes(state: State): Changes {
+    const assignment = view(state);
+    return Object.fromEntries(
+      keys
+        .filter(key => !same(assignment[key], state.assignment[key]))
+        .map(key => [key, assignment[key]])
+    );
+  }
+
+  export function observe(state: State, assignment: Assignment): State {
+    if (assignment === state.assignment) return state;
+    const before = fields(state.assignment),
+      next = fields(assignment);
+    // Keep edited fields, including a reversion made while their save is pending.
+    const current = Object.fromEntries(
+      keys.map(key => {
+        const edited =
+          !same(value(state.fields, key), value(before, key)) ||
+          (state.save &&
+            Object.prototype.hasOwnProperty.call(state.save.changes, key));
+        const unchanged = same(value(state.fields, key), value(next, key));
+        return [key, edited || unchanged ? state.fields[key] : next[key]];
+      })
+    ) as Fields;
+    return { ...state, assignment, fields: normalize(current) };
+  }
+
+  export function begin(state: State): State {
+    if (state.phase !== 'ready') return state;
+    const update = changes(state);
+    return Object.keys(update).length
+      ? {
+          ...state,
+          phase: 'saving',
+          save: { version: state.version, changes: update }
+        }
+      : state;
+  }
+
+  export function complete(
     state: State,
-    mutate: (assignment: Assignment) => Assignment
+    save: Save,
+    assignment: Assignment
   ): State {
-    return edit(state, mutate(state.assignment));
+    return state.save === save
+      ? { ...observe(state, assignment), phase: 'ready', save: null }
+      : state;
   }
 
-  export function persist(
-    state: State,
-    assignment: Assignment,
-    locked: boolean
-  ): boolean {
-    return state.local && !locked && !equal(state.assignment, assignment);
-  }
-
-  export function sync(
-    state: State,
-    assignment: Assignment,
-    written: Assignment | null
-  ): State {
-    return equal(state.assignment, assignment)
-      ? state.local
-        ? { ...state, local: false }
-        : state
-      : state.local && written && equal(written, assignment)
-        ? state
-        : { assignment, local: false };
+  export function fail(state: State, save: Save): State {
+    return state.save === save
+      ? {
+          ...state,
+          phase: state.version === save.version ? 'failed' : 'ready',
+          save: null
+        }
+      : state;
   }
 }
 
@@ -140,20 +220,31 @@ export const Assignment: React.FC<{
   workbook: Workbook;
 }> = ({ commands, trans, workbook }) => {
   const rubric = Workbook.open(workbook, true)!;
+  return (
+    <Editor
+      key={`${workbook.context.path}:${rubric.id}`}
+      {...{ commands, trans, workbook, rubric }}
+    />
+  );
+};
+
+const Editor: React.FC<{
+  commands: CommandRegistry;
+  trans: TranslationBundle;
+  workbook: Workbook;
+  rubric: Rubric;
+}> = ({ commands, trans, workbook, rubric }) => {
   const { locked } = rubric;
   const [state, setState] = useState(() => Draft.create(rubric.assignment));
   const [registered, setRegistered] = useState<Registered>(null);
   const [overwrite, setOverwrite] = useState(false);
   const [pending, setPending] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const written = useRef<Assignment | null>(null);
-  const { assignment, local } = state;
+  const assignment = locked ? rubric.assignment : Draft.view(state);
+  const { save } = state;
   const cached = rubric.id;
-  const edit = (assignment: Assignment) =>
-    setState(current => Draft.edit(current, assignment));
-  const merge = (mutate: (assignment: Assignment) => Assignment) =>
-    setState(current => Draft.merge(current, mutate));
+  const edit = (update: Partial<Draft.Fields>) =>
+    setState(current => Draft.edit(current, update));
   const pick = (next: string | null) =>
     setSelected(current => (current === next ? current : next));
   useEffect(() => {
@@ -179,12 +270,12 @@ export const Assignment: React.FC<{
     void request();
   }, [cached, commands, workbook]);
   useEffect(() => {
-    const next = rubric.assignment;
-    const saved = written.current;
-    // An earlier save acknowledges its own draft, not edits made since then.
-    setState(current => Draft.sync(current, next, saved));
-    if (saved && equal(saved, next)) written.current = null;
-  }, [rubric.assignment]);
+    setState(current =>
+      locked
+        ? Draft.create(rubric.assignment)
+        : Draft.observe(current, rubric.assignment)
+    );
+  }, [locked, rubric.assignment]);
   useEffect(() => {
     if (locked) return;
 
@@ -196,7 +287,7 @@ export const Assignment: React.FC<{
     }
     if (!roster.length) {
       pick(null);
-      merge(blank);
+      edit(blank);
       return;
     }
 
@@ -208,32 +299,45 @@ export const Assignment: React.FC<{
           (roster.length === 1 ? roster[0] : null);
     if (!matched) {
       if (selected !== '') pick(null);
-      merge(blank);
+      edit(blank);
       return;
     }
     pick(identify(matched));
-    merge(current => freeze(current, matched));
+    edit(freeze(matched));
   }, [locked, registered, rubric.assignment.id, selected]);
   useEffect(() => {
-    if (saving) return;
-    const dirty = Draft.persist(
-      { assignment, local },
-      rubric.assignment,
-      locked
-    );
-    if (!dirty || (written.current && equal(written.current, assignment)))
+    if (
+      locked ||
+      state.phase !== 'ready' ||
+      !Object.keys(Draft.changes(state)).length
+    )
       return;
-
-    const delay = window.setTimeout(() => {
-      written.current = assignment;
-      setSaving(true);
-      void commands
-        .execute(assign, assignment)
-        .catch(_ => {})
-        .finally(() => setSaving(false));
-    }, DELAY);
+    const delay = window.setTimeout(() => setState(Draft.begin), DELAY);
     return () => window.clearTimeout(delay);
-  }, [assignment, commands, local, locked, rubric.assignment, saving]);
+  }, [locked, state]);
+  useEffect(() => {
+    if (!save) return;
+    let canceled = false;
+    void commands
+      .execute(assign, {
+        ...save.changes,
+        path: workbook.context.path,
+        rubric: cached
+      })
+      .then((assignment: Assignment | null) => {
+        if (canceled) return;
+        const latest = assignment && Workbook.open(workbook, true);
+        setState(current =>
+          latest?.id === cached && !latest.locked
+            ? Draft.complete(current, save, latest.assignment)
+            : Draft.fail(current, save)
+        );
+      })
+      .catch(() => {
+        if (!canceled) setState(current => Draft.fail(current, save));
+      });
+    return () => void (canceled = true);
+  }, [cached, commands, save, workbook]);
 
   const all =
     courses(registered) ??
@@ -248,7 +352,10 @@ export const Assignment: React.FC<{
       <div className="correxit-assignment-controls">
         {manual ? (
           <>
-            <Roster {...{ assignment, edit, locked, trans }} />
+            <Roster
+              {...{ assignment, edit, locked, trans }}
+              value={state.fields.roster}
+            />
             <Assignee {...{ assignment, edit, locked, trans }} />
           </>
         ) : (
@@ -336,7 +443,7 @@ const Facts: React.FC<{
 
 const Assignee: React.FC<{
   assignment: Assignment;
-  edit: (assignment: Assignment) => void;
+  edit: (update: Partial<Draft.Fields>) => void;
   locked: boolean;
   trans: TranslationBundle;
 }> = ({ assignment, edit, locked, trans }) => {
@@ -367,9 +474,7 @@ const Assignee: React.FC<{
           disabled={!roster.length}
           id={id}
           name="correxit-assignment-assignee"
-          onChange={({ target: { value } }) =>
-            edit({ ...assignment, assignee: value })
-          }
+          onChange={({ target: { value } }) => edit({ assignee: value })}
           value={assignee}
         >
           <option value="">
@@ -388,7 +493,7 @@ const Assignee: React.FC<{
 
 const Expiration: React.FC<{
   assignment: Assignment;
-  edit: (assignment: Assignment) => void;
+  edit: (update: Partial<Draft.Fields>) => void;
   locked: boolean;
   trans: TranslationBundle;
 }> = ({ assignment, edit, locked, trans }) => {
@@ -418,7 +523,6 @@ const Expiration: React.FC<{
   const update = (value: string) => {
     const expiration = value ? new Date(value).getTime() : null;
     edit({
-      ...assignment,
       expiration,
       overdue: expiration === null ? null : assignment.overdue,
       penalty: expiration === null ? null : assignment.penalty
@@ -444,7 +548,7 @@ const Expiration: React.FC<{
 
 const Overdue: React.FC<{
   assignment: Assignment;
-  edit: (assignment: Assignment) => void;
+  edit: (update: Partial<Draft.Fields>) => void;
   locked: boolean;
   trans: TranslationBundle;
 }> = ({ assignment, edit, locked, trans }) => {
@@ -471,7 +575,6 @@ const Overdue: React.FC<{
 
   const update = (overdue: Exclude<Assignment['overdue'], null>) => {
     edit({
-      ...assignment,
       overdue,
       penalty: overdue === 'dock' ? (assignment.penalty ?? 10) : null
     });
@@ -482,7 +585,7 @@ const Overdue: React.FC<{
     const parsed = Number(value);
     if (!Number.isInteger(parsed)) return;
     const penalty = Math.max(0, Math.min(100, parsed));
-    edit({ ...assignment, overdue: 'dock', penalty });
+    edit({ overdue: 'dock', penalty });
   };
   const reset = () => setText(String(assignment.penalty ?? 10));
   return (
@@ -530,27 +633,14 @@ const Overdue: React.FC<{
 
 const Roster: React.FC<{
   assignment: Assignment;
-  edit: (assignment: Assignment) => void;
+  edit: (update: Partial<Draft.Fields>) => void;
   locked: boolean;
   trans: TranslationBundle;
-}> = ({ assignment, edit, locked, trans }) => {
+  value: string;
+}> = ({ assignment, edit, locked, trans, value }) => {
   const id = 'correxit-assignment-roster';
   const hint = `${id}-hint`;
   const seed = assignment.roster.join('\n');
-  const [value, setValue] = useState<string>(seed);
-  useEffect(() => {
-    setValue(value => (same(split(value), split(seed)) ? value : seed));
-  }, [seed]);
-
-  const update = (value: string) => {
-    const roster = split(value);
-    setValue(value);
-    edit({
-      ...assignment,
-      assignee: roster.includes(assignment.assignee) ? assignment.assignee : '',
-      roster
-    });
-  };
 
   if (locked) {
     const title = seed || undefined;
@@ -585,8 +675,8 @@ const Roster: React.FC<{
           id={id}
           data-lm-suppress-shortcuts="true"
           name="correxit-assignment-roster"
-          onBlur={() => setValue(assignment.roster.join('\n'))}
-          onChange={({ target: { value } }) => update(value)}
+          onBlur={() => edit({ roster: seed })}
+          onChange={({ target: { value } }) => edit({ roster: value })}
           rows={6}
           spellCheck={false}
           value={value}

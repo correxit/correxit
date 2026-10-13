@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { setup, shutdown } from './utils';
+import { notebook, setup, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -291,7 +291,15 @@ test('manual roster editing updates assignee choices live', async ({
   await dispose();
 });
 
-['typing', 'clearing', 'rejection'].forEach(mode => {
+[
+  'typing',
+  'clearing',
+  'rejection',
+  'external',
+  'receipt',
+  'signing',
+  'encryption'
+].forEach(mode => {
   test(`manual roster ${mode} handles an earlier assignment save`, async ({
     page
   }) => {
@@ -305,6 +313,11 @@ test('manual roster editing updates assignee choices live', async ({
     });
     page.on('pageerror', error => errors.push(error.message));
     const body = page.locator('body');
+    const typing = ['typing', 'external', 'signing'].includes(mode);
+    const external = ['external', 'receipt', 'signing', 'encryption'].includes(
+      mode
+    );
+    const completed = mode === 'receipt' || mode === 'encryption';
 
     try {
       await body.evaluate(async (_: Element, mode: string) => {
@@ -326,16 +339,34 @@ test('manual roster editing updates assignee choices live', async ({
         const execute = app.commands.execute.bind(app.commands);
         context.__correxit_save = {
           execute,
+          prepare: Rubric.assign,
+          encrypt: Rubric.lock,
           calls: 0,
           started: false,
+          written: false,
           finished: false,
           release: null
         };
         app.commands.execute = async (...args: any[]) => {
           const save = context.__correxit_save;
           if (args[0] === 'correxit:assign') save.calls++;
+          if (
+            ['signing', 'encryption'].includes(mode) &&
+            args[0] === 'correxit:assign'
+          ) {
+            const result = await execute(...args);
+            save.finished = true;
+            return result;
+          }
           if (args[0] === 'correxit:assign' && !save.started) {
             save.started = true;
+            if (mode === 'receipt') {
+              const result = await execute(...args);
+              save.written = true;
+              await new Promise(resolve => (save.release = resolve));
+              save.finished = true;
+              return result;
+            }
             await new Promise(resolve => (save.release = resolve));
             if (mode === 'rejection') {
               save.finished = true;
@@ -347,6 +378,26 @@ test('manual roster editing updates assignee choices live', async ({
           }
           return execute(...args);
         };
+        if (mode === 'signing') {
+          Rubric.assign = async (...args: any[]) => {
+            const save = context.__correxit_save;
+            const first = !save.started;
+            save.started = true;
+            const result = await save.prepare(...args);
+            if (first) await new Promise(resolve => (save.release = resolve));
+            return result;
+          };
+        }
+        if (mode === 'encryption') {
+          Rubric.lock = async (...args: any[]) => {
+            const save = context.__correxit_save;
+            const first = !save.started;
+            save.started = true;
+            const result = await save.encrypt(...args);
+            if (first) await new Promise(resolve => (save.release = resolve));
+            return result;
+          };
+        }
       }, mode);
 
       await page.getByRole('tab', { name: 'Correxit' }).click();
@@ -354,20 +405,37 @@ test('manual roster editing updates assignee choices live', async ({
       await expect(area).toBeVisible();
       await area.fill('alice@example.com');
       await page.waitForFunction(() => (window as any).__correxit_save.started);
+      if (mode === 'receipt') {
+        await page.waitForFunction(
+          () => (window as any).__correxit_save.written
+        );
+      }
 
-      if (mode === 'typing') {
+      if (typing) {
         await area.press('End');
         await area.press('Enter');
         await area.pressSequentially(' bob@example.com ', { delay: 20 });
         await area.press('Enter');
       } else if (mode === 'clearing') await area.fill('');
-      const value =
-        mode === 'typing'
-          ? 'alice@example.com\n bob@example.com \n'
-          : mode === 'clearing'
-            ? ''
-            : 'alice@example.com';
+      const value = typing
+        ? 'alice@example.com\n bob@example.com \n'
+        : mode === 'clearing'
+          ? ''
+          : 'alice@example.com';
       await expect(area).toHaveValue(value);
+      if (external) {
+        await body.evaluate(async () => {
+          await (window as any).__correxit_save.execute('correxit:assign', {
+            name: 'Updated assignment',
+            expiration: 1_900_000_000_000,
+            resources: ['data.csv']
+          });
+        });
+        await expect(page.locator('.correxit-assignment-facts')).toContainText(
+          'Updated assignment'
+        );
+        await expect(area).toHaveValue(value);
+      }
       // Give another debounce time to expire while the first save is blocked.
       await page.waitForTimeout(300);
       expect(
@@ -397,24 +465,63 @@ test('manual roster editing updates assignee choices live', async ({
           })
         )
         .toEqual(
-          mode === 'typing'
+          typing
             ? ['alice@example.com', 'bob@example.com']
             : mode === 'clearing'
               ? []
-              : ['bob@example.com']
+              : completed
+                ? ['alice@example.com']
+                : ['bob@example.com']
         );
       await area.blur();
       await expect(area).toHaveValue(
-        mode === 'typing'
+        typing
           ? 'alice@example.com\nbob@example.com'
           : mode === 'clearing'
             ? ''
-            : 'bob@example.com'
+            : completed
+              ? 'alice@example.com'
+              : 'bob@example.com'
       );
       await page.waitForTimeout(300);
       expect(
         await body.evaluate(() => (window as any).__correxit_save.calls)
-      ).toBe(2);
+      ).toBe(completed ? 1 : 2);
+      if (external) {
+        await expect(page.locator('.correxit-assignment-facts')).toContainText(
+          'Updated assignment'
+        );
+        const assignment = await body.evaluate(() => {
+          const context = window as any;
+          const { assignment } = context.__correxit__.Workbook.open(
+            context.jupyterapp.shell.currentWidget,
+            true
+          );
+          return {
+            name: assignment.name,
+            expiration: assignment.expiration,
+            resources: assignment.resources
+          };
+        });
+        expect(assignment).toEqual({
+          name: 'Updated assignment',
+          expiration: 1_900_000_000_000,
+          resources: ['data.csv']
+        });
+        const stored = await body.evaluate(() => {
+          const { assignment } = (
+            window as any
+          ).jupyterapp.shell.currentWidget.context.model.sharedModel.getMetadata(
+            'correxit'
+          );
+          return {
+            name: assignment.name,
+            expiration: assignment.expiration,
+            resources: assignment.resources
+          };
+        });
+        expect(stored).toEqual(assignment);
+      }
       await body.evaluate(async () => {
         await (window as any).jupyterapp.commands.execute('correxit:assign', {
           roster: ['carol@example.com']
@@ -430,10 +537,122 @@ test('manual roster editing updates assignee choices live', async ({
             context.__correxit_save.release?.();
             context.jupyterapp.commands.execute =
               context.__correxit_save.execute;
+            context.__correxit__.Rubric.assign =
+              context.__correxit_save.prepare;
+            context.__correxit__.Rubric.lock = context.__correxit_save.encrypt;
             delete context.__correxit_save;
           }
         })
         .catch(() => {});
+      await dispose();
+    }
+  });
+});
+
+['switching', 'replacement'].forEach(mode => {
+  test(`assignment ${mode} isolates an earlier save`, async ({ page }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    const body = page.locator('body');
+    const first = await body.evaluate(
+      () => (window as any).jupyterapp.shell.currentWidget.context.path
+    );
+    let second: string | null = null;
+    const initialize = (roster: string[]) =>
+      body.evaluate(async (_: Element, roster: string[]) => {
+        const context = window as any;
+        const { Workbook, Rubric } = context.__correxit__;
+        const created = Rubric.create();
+        const rubric = await Rubric.assign(
+          {
+            ...created,
+            key: 'secret',
+            assignment: {
+              ...created.assignment,
+              keys: {
+                private: { assignee: null, author: 'priv' },
+                public: { assignee: null, author: 'pub' }
+              }
+            }
+          },
+          { roster }
+        );
+        await Workbook.update(context.jupyterapp.shell.currentWidget, rubric);
+      }, roster);
+
+    try {
+      await initialize([]);
+      await body.evaluate(() => {
+        const context = window as any;
+        const app = context.jupyterapp;
+        const execute = app.commands.execute.bind(app.commands);
+        context.__correxit_save = {
+          execute,
+          started: false,
+          finished: false,
+          release: null
+        };
+        app.commands.execute = async (...args: any[]) => {
+          const save = context.__correxit_save;
+          if (args[0] === 'correxit:assign' && !save.started) {
+            save.started = true;
+            await new Promise(resolve => (save.release = resolve));
+            const result = await execute(...args);
+            save.finished = true;
+            return result;
+          }
+          return execute(...args);
+        };
+      });
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+      await area.fill('alice@example.com');
+      await page.waitForFunction(() => (window as any).__correxit_save.started);
+
+      if (mode === 'switching') second = await notebook(page);
+      await initialize(['carol@example.com']);
+      await expect(area).toHaveValue('carol@example.com');
+      await body.evaluate(() => (window as any).__correxit_save.release());
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished
+      );
+      await expect(area).toHaveValue('carol@example.com');
+      const roster = await body.evaluate((_: Element, path: string) => {
+        const context = window as any;
+        const panel = Array.from(context.jupyterapp.shell.widgets('main')).find(
+          (panel: any) => panel.context?.path === path
+        );
+        return context.__correxit__.Workbook.open(panel, true).assignment
+          .roster;
+      }, first);
+      expect(roster).toEqual([
+        mode === 'switching' ? 'alice@example.com' : 'carol@example.com'
+      ]);
+    } finally {
+      await body
+        .evaluate(() => {
+          const context = window as any;
+          if (context.__correxit_save) {
+            context.__correxit_save.release?.();
+            context.jupyterapp.commands.execute =
+              context.__correxit_save.execute;
+            delete context.__correxit_save;
+          }
+        })
+        .catch(() => {});
+      if (second) {
+        await page.notebook.close(true).catch(() => {});
+        await page.contents.deleteFile(second).catch(() => {});
+        await body
+          .evaluate(async (_: Element, path: string) => {
+            await (window as any).jupyterapp.commands.execute(
+              'docmanager:open',
+              { path }
+            );
+          }, first)
+          .catch(() => {});
+      }
       await dispose();
     }
   });

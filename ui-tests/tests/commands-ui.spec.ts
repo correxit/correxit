@@ -61,6 +61,95 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
   await dispose();
 });
 
+test('rubric-bound saves reuse open workbooks while path commands fetch headlessly', async ({
+  page
+}) => {
+  const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
+
+  try {
+    const result = await page.evaluate(async () => {
+      const { Correxit, Rubric, Workbook } = (window as any).__correxit__;
+      const app = (window as any).jupyterapp;
+      const panel = app.shell.currentWidget;
+      const created = Rubric.create();
+      await Workbook.update(panel, {
+        ...created,
+        key: 'secret',
+        assignment: {
+          ...created.assignment,
+          keys: {
+            private: { assignee: null, author: 'priv' },
+            public: { assignee: null, author: 'pub' }
+          }
+        }
+      });
+      const path = panel.context.path;
+      await app.commands.execute('correxit:assign', {
+        path,
+        rubric: created.id,
+        name: 'Open'
+      });
+      const name = Workbook.open(panel).assignment.name;
+      await app.commands.execute('correxit:save', { path, rubric: created.id });
+      const grade = await app.commands.execute('correxit:correct', { path });
+
+      const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
+      const previous = unlocker.unlock;
+      const workbooks: any[] = [];
+      unlocker.unlock = async (workbook: any, credentials: any) => {
+        workbooks.push(workbook);
+        return Workbook.unlock(workbook, credentials.key);
+      };
+      try {
+        const assignment = await app.commands.execute('correxit:assign', {
+          path,
+          rubric: created.id,
+          key: 'secret',
+          name: 'Fetched'
+        });
+        const saving = app.commands.execute('correxit:assign', {
+          path,
+          rubric: created.id,
+          name: 'Stale'
+        });
+        const replacement = Rubric.create();
+        await Promise.all([
+          saving,
+          Workbook.update(panel, {
+            ...replacement,
+            key: 'secret',
+            assignment: {
+              ...replacement.assignment,
+              name: 'Replacement',
+              keys: Workbook.open(panel).assignment.keys
+            }
+          })
+        ]);
+        return {
+          name,
+          fetched: assignment.name,
+          resolved: grade.resolved,
+          replacement: Workbook.open(panel).assignment.name,
+          headless: workbooks.map(workbook => Workbook.headless(workbook))
+        };
+      } finally {
+        unlocker.unlock = previous;
+        workbooks.forEach(workbook => workbook.context.dispose());
+      }
+    });
+
+    expect(result).toEqual({
+      name: 'Open',
+      fetched: 'Fetched',
+      resolved: true,
+      replacement: 'Replacement',
+      headless: [true]
+    });
+  } finally {
+    await dispose();
+  }
+});
+
 test('correction without a rubric returns an unverified result', async ({
   page
 }) => {

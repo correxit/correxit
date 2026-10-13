@@ -453,9 +453,15 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error.Invalid('assign error');
-    return stale(rubric.assignment, assignment)
-      ? update(workbook, await Rubric.assign(rubric, assignment))
-      : rubric;
+    if (!stale(rubric.assignment, assignment)) return rubric;
+    const assigned = await Rubric.assign(rubric, assignment);
+    const latest = open(workbook, quiet);
+    if (latest?.id !== rubric.id)
+      throw new Error.Invalid('assign error: workbook changed');
+    // Rebase the patch if another command changed the rubric while signing.
+    return latest === rubric
+      ? update(workbook, assigned)
+      : assign(workbook, assignment);
   }
 
   /**
@@ -1254,7 +1260,9 @@ export namespace Workbook {
     }
     if (!audited.ok) throw new Error.Invalid(`update error: ${audited.error}`);
     set(workbook, audited.rubric);
-    notebook.setMetadata('correxit', await Rubric.lock(audited.rubric));
+    const locked = await Rubric.lock(audited.rubric);
+    // A newer update owns persistence, even if this encryption finishes last.
+    if (get(workbook) === audited.rubric) notebook.setMetadata('correxit', locked);
     return audited.rubric;
   }
 }

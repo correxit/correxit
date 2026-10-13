@@ -164,11 +164,20 @@ export function commands(
         : [];
     });
   };
-  const reify = async (args: Partial<Credentials>): Promise<Reified> => {
+  const reify = async (
+    args: Partial<Credentials & { rubric: string }>
+  ): Promise<Reified> => {
     const handle = Workbook.Credentials.normalize(args);
-    const workbook = handle
-      ? await fetch(handle)
-      : active();
+    const panel = args.rubric && handle && !(
+      handle.key || handle.passphrase || typeof args.unlock === 'boolean'
+    )
+      ? documents.findWidget(handle.path, 'Notebook')
+      : null;
+    const workbook = panel instanceof NotebookPanel
+      ? panel
+      : handle
+        ? await fetch(handle)
+        : active();
     const rubric = open(workbook);
     return { handle, rubric, workbook } as Reified;
   };
@@ -281,10 +290,10 @@ export function commands(
     isEnabled: () => open(state.workbook())?.locked === false,
     isVisible: () => commands.isEnabled(CommandIDs.assign),
     label: trans.__('Assign workbook...'),
-    execute: async (args: Partial<Credentials & Assignment>) => {
+    execute: async (args: Partial<Credentials & Assignment & { rubric: string }>) => {
       const { rubric, workbook } = await reify(args);
-      if (!rubric) return;
-      await Workbook.assign(workbook, args);
+      if (!rubric || (args.rubric && args.rubric !== open(workbook)?.id)) return null;
+      return (await Workbook.assign(workbook, args)).assignment;
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.unassign, {
