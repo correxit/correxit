@@ -291,6 +291,154 @@ test('manual roster editing updates assignee choices live', async ({
   await dispose();
 });
 
+['typing', 'clearing', 'rejection'].forEach(mode => {
+  test(`manual roster ${mode} handles an earlier assignment save`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    const errors: string[] = [];
+    page.on('console', message => {
+      if (/Maximum update depth|Too many re-renders/.test(message.text()))
+        errors.push(message.text());
+    });
+    page.on('pageerror', error => errors.push(error.message));
+    const body = page.locator('body');
+
+    try {
+      await body.evaluate(async (_: Element, mode: string) => {
+        const context = window as any;
+        const { Workbook, Rubric } = context.__correxit__;
+        const app = context.jupyterapp;
+        const rubric = Rubric.create();
+        await Workbook.update(app.shell.currentWidget, {
+          ...rubric,
+          key: 'secret',
+          assignment: {
+            ...rubric.assignment,
+            keys: {
+              private: { assignee: null, author: 'priv' },
+              public: { assignee: null, author: 'pub' }
+            }
+          }
+        });
+        const execute = app.commands.execute.bind(app.commands);
+        context.__correxit_save = {
+          execute,
+          calls: 0,
+          started: false,
+          finished: false,
+          release: null
+        };
+        app.commands.execute = async (...args: any[]) => {
+          const save = context.__correxit_save;
+          if (args[0] === 'correxit:assign') save.calls++;
+          if (args[0] === 'correxit:assign' && !save.started) {
+            save.started = true;
+            await new Promise(resolve => (save.release = resolve));
+            if (mode === 'rejection') {
+              save.finished = true;
+              throw new Error('Assignment save rejected');
+            }
+            const result = await execute(...args);
+            save.finished = true;
+            return result;
+          }
+          return execute(...args);
+        };
+      }, mode);
+
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+      await expect(area).toBeVisible();
+      await area.fill('alice@example.com');
+      await page.waitForFunction(() => (window as any).__correxit_save.started);
+
+      if (mode === 'typing') {
+        await area.press('End');
+        await area.press('Enter');
+        await area.pressSequentially(' bob@example.com ', { delay: 20 });
+        await area.press('Enter');
+      } else if (mode === 'clearing') await area.fill('');
+      const value =
+        mode === 'typing'
+          ? 'alice@example.com\n bob@example.com \n'
+          : mode === 'clearing'
+            ? ''
+            : 'alice@example.com';
+      await expect(area).toHaveValue(value);
+      // Give another debounce time to expire while the first save is blocked.
+      await page.waitForTimeout(300);
+      expect(
+        await body.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(1);
+      await body.evaluate(() => (window as any).__correxit_save.release());
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished
+      );
+      await expect(area).toHaveValue(value);
+      if (mode === 'rejection') {
+        // A failed save must settle without silently retrying the same draft.
+        await page.waitForTimeout(300);
+        expect(
+          await body.evaluate(() => (window as any).__correxit_save.calls)
+        ).toBe(1);
+        await area.fill('bob@example.com');
+      }
+      await expect
+        .poll(() =>
+          body.evaluate(() => {
+            const context = window as any;
+            return context.__correxit__.Workbook.open(
+              context.jupyterapp.shell.currentWidget,
+              true
+            ).assignment.roster;
+          })
+        )
+        .toEqual(
+          mode === 'typing'
+            ? ['alice@example.com', 'bob@example.com']
+            : mode === 'clearing'
+              ? []
+              : ['bob@example.com']
+        );
+      await area.blur();
+      await expect(area).toHaveValue(
+        mode === 'typing'
+          ? 'alice@example.com\nbob@example.com'
+          : mode === 'clearing'
+            ? ''
+            : 'bob@example.com'
+      );
+      await page.waitForTimeout(300);
+      expect(
+        await body.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(2);
+      await body.evaluate(async () => {
+        await (window as any).jupyterapp.commands.execute('correxit:assign', {
+          roster: ['carol@example.com']
+        });
+      });
+      await expect(area).toHaveValue('carol@example.com');
+      expect(errors).toEqual([]);
+    } finally {
+      await body
+        .evaluate(() => {
+          const context = window as any;
+          if (context.__correxit_save) {
+            context.__correxit_save.release?.();
+            context.jupyterapp.commands.execute =
+              context.__correxit_save.execute;
+            delete context.__correxit_save;
+          }
+        })
+        .catch(() => {});
+      await dispose();
+    }
+  });
+});
+
 test('manual overdue policy editing updates assignment metadata', async ({
   page
 }) => {

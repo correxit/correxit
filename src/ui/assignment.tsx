@@ -1,7 +1,7 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 
 type Assignment = Rubric.Assignment;
@@ -119,12 +119,18 @@ namespace Draft {
     return state.local && !locked && !equal(state.assignment, assignment);
   }
 
-  export function sync(state: State, assignment: Assignment): State {
+  export function sync(
+    state: State,
+    assignment: Assignment,
+    written: Assignment | null
+  ): State {
     return equal(state.assignment, assignment)
       ? state.local
         ? { ...state, local: false }
         : state
-      : { assignment, local: false };
+      : state.local && written && equal(written, assignment)
+        ? state
+        : { assignment, local: false };
   }
 }
 
@@ -139,11 +145,11 @@ export const Assignment: React.FC<{
   const [registered, setRegistered] = useState<Registered>(null);
   const [overwrite, setOverwrite] = useState(false);
   const [pending, setPending] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const written = useRef<Assignment | null>(null);
   const { assignment, local } = state;
   const cached = rubric.id;
-  const keep = (next: Assignment) =>
-    setState(current => Draft.sync(current, next));
   const edit = (assignment: Assignment) =>
     setState(current => Draft.edit(current, assignment));
   const merge = (mutate: (assignment: Assignment) => Assignment) =>
@@ -172,7 +178,13 @@ export const Assignment: React.FC<{
     };
     void request();
   }, [cached, commands, workbook]);
-  useEffect(() => keep(rubric.assignment), [rubric.assignment]);
+  useEffect(() => {
+    const next = rubric.assignment;
+    const saved = written.current;
+    // An earlier save acknowledges its own draft, not edits made since then.
+    setState(current => Draft.sync(current, next, saved));
+    if (saved && equal(saved, next)) written.current = null;
+  }, [rubric.assignment]);
   useEffect(() => {
     if (locked) return;
 
@@ -203,18 +215,25 @@ export const Assignment: React.FC<{
     merge(current => freeze(current, matched));
   }, [locked, registered, rubric.assignment.id, selected]);
   useEffect(() => {
+    if (saving) return;
     const dirty = Draft.persist(
       { assignment, local },
       rubric.assignment,
       locked
     );
-    if (!dirty) return;
+    if (!dirty || (written.current && equal(written.current, assignment)))
+      return;
 
     const delay = window.setTimeout(() => {
-      void commands.execute(assign, assignment).catch(_ => {});
+      written.current = assignment;
+      setSaving(true);
+      void commands
+        .execute(assign, assignment)
+        .catch(_ => {})
+        .finally(() => setSaving(false));
     }, DELAY);
     return () => window.clearTimeout(delay);
-  }, [assignment, commands, local, locked, rubric.assignment]);
+  }, [assignment, commands, local, locked, rubric.assignment, saving]);
 
   const all =
     courses(registered) ??
@@ -520,9 +539,8 @@ const Roster: React.FC<{
   const seed = assignment.roster.join('\n');
   const [value, setValue] = useState<string>(seed);
   useEffect(() => {
-    if (same(split(value), assignment.roster)) return;
-    setValue(seed);
-  }, [assignment.roster, seed, value]);
+    setValue(value => (same(split(value), split(seed)) ? value : seed));
+  }, [seed]);
 
   const update = (value: string) => {
     const roster = split(value);
