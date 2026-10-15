@@ -258,62 +258,56 @@ test('locks then unlocks a comparable cell round-trip', async ({ page }) => {
 test('unlock keeps the manual roster plaintext in the sidebar', async ({
   page
 }) => {
-  const assignee = 'student@example.com';
+  const roster = ['alice@example.com', 'bob@example.com'];
   const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
-
-  await page.evaluate(async (assignee: string) => {
-    const { Workbook, Rubric } = (window as any).__correxit__;
-    const app = (window as any).jupyterapp;
-    const panel = app.shell.currentWidget as any;
-
-    const base = (r => ({
-      ...r,
-      key: 'secret',
-      assignment: {
-        ...r.assignment,
-        keys: {
-          private: { assignee: null, author: 'priv' },
-          public: { assignee: null, author: 'pub' }
-        }
-      }
-    }))(Rubric.create());
-    const rubric = await Rubric.assign(base, {
-      roster: [assignee]
+  try {
+    await Saves.initialize(page, { roster });
+    await page.getByRole('tab', { name: 'Correxit' }).click();
+    const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+    await expect(area).toHaveValue(roster.join('\n'));
+    await page.evaluate(async () => {
+      const { Workbook } = (window as any).__correxit__;
+      await Workbook.lock((window as any).jupyterapp.shell.currentWidget);
     });
-    await Workbook.update(panel, rubric);
-    await Workbook.lock(panel);
-    await Workbook.unlock(panel, rubric.key);
-  }, assignee);
-
-  await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        const { Workbook } = (window as any).__correxit__;
-        const app = (window as any).jupyterapp;
-        const panel = app.shell.currentWidget as any;
-        const rubric = Workbook.open(panel, true);
-        return rubric?.assignment.roster ?? null;
-      })
-    )
-    .toEqual([assignee]);
-
-  await expect
-    .poll(async () =>
-      page.evaluate(() =>
-        Array.from(
-          document.querySelectorAll(
-            'select[name="correxit-assignment-assignee"] option'
-          )
-        ).map(option => (option as HTMLOptionElement).value)
-      )
-    )
-    .toEqual(['', assignee]);
-
-  await expect
-    .poll(async () => page.locator('.correxit-sidebar').textContent())
-    .not.toContain('ENC[');
-
-  await dispose();
+    // Let the mounted editor observe the encrypted roster before unlocking.
+    await expect(page.locator('.correxit-assignment-assignee')).toContainText(
+      'Template - unassigned'
+    );
+    await expect(area).toHaveCount(0);
+    await Saves.pause(page);
+    await page.evaluate(async () => {
+      const { Workbook } = (window as any).__correxit__;
+      await Workbook.unlock(
+        (window as any).jupyterapp.shell.currentWidget,
+        'secret'
+      );
+    });
+    await expect(area).toHaveValue(roster.join('\n'));
+    await expect(
+      page.locator('select[name="correxit-assignment-assignee"] option')
+    ).toHaveText([/Template - unassigned/, ...roster]);
+    // Unlocking must not schedule a roster edit after the debounce period.
+    await page.waitForTimeout(400);
+    const result = await page.evaluate(async () => {
+      const { Workbook, Rubric } = (window as any).__correxit__;
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const stored = await Rubric.unlock(
+        panel.context.model.sharedModel.getMetadata('correxit'),
+        'secret'
+      );
+      return {
+        calls: (window as any).__correxit_save.calls,
+        rosters: [
+          Workbook.open(panel).assignment.roster,
+          stored.assignment.roster
+        ]
+      };
+    });
+    expect(result).toEqual({ calls: 0, rosters: [roster, roster] });
+  } finally {
+    await Saves.restore(page);
+    await dispose();
+  }
 });
 
 test('manual roster editing updates assignee choices live', async ({
@@ -613,6 +607,79 @@ test('manual roster saves in a second view without repeatedly assigning', async 
     await dispose();
   }
 });
+
+for (const mode of ['signing', 'encryption']) {
+  test(`assignment saves preserve changes across views during ${mode}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    try {
+      await Saves.initialize(page);
+      const shared = await page.evaluate(async () => {
+        const {
+          jupyterapp: app,
+          __correxit__: { Workbook }
+        } = window as any;
+        const first = app.shell.currentWidget;
+        await app.commands.execute('docmanager:clone');
+        const second = app.shell.currentWidget;
+        await Workbook.update(second, Workbook.open(first));
+        return first !== second && first.context === second.context;
+      });
+      expect(shared).toBe(true);
+      await Saves.pause(page, mode);
+      await page.evaluate(() => {
+        const { jupyterapp: app, __correxit_save: save } = window as any;
+        const second = app.shell.currentWidget;
+        const first = Array.from(app.shell.widgets('main')).find(
+          (panel: any) => panel !== second && panel.context === second.context
+        ) as any;
+        save.pending = app.commands.execute('correxit:assign', {
+          name: 'From first',
+          path: first.context.path,
+          view: first.content.id
+        });
+      });
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      const result = await page.evaluate(async () => {
+        const {
+          jupyterapp: app,
+          __correxit_save: save,
+          __correxit__: { Workbook, Rubric }
+        } = window as any;
+        const second = app.shell.currentWidget;
+        await app.commands.execute('correxit:assign', {
+          resources: ['new.csv'],
+          path: second.context.path,
+          view: second.content.id
+        });
+        save.release();
+        await save.pending;
+        const stored = await Rubric.unlock(
+          second.context.model.sharedModel.getMetadata('correxit'),
+          'secret'
+        );
+        const views = Array.from(app.shell.widgets('main')).filter(
+          (panel: any) => panel.context === second.context
+        );
+        return [...views.map(panel => Workbook.open(panel)), stored].map(
+          ({ assignment: { name, resources } }: any) => ({ name, resources })
+        );
+      });
+      expect(result).toEqual(
+        Array(3).fill({ name: 'From first', resources: ['new.csv'] })
+      );
+    } finally {
+      await Saves.restore(page);
+      await page.notebook.close(true).catch(() => {});
+      await dispose();
+    }
+  });
+}
 
 test('manual roster normalization retries after an assignee changes during signing', async ({
   page
@@ -2116,18 +2183,16 @@ test('recovers encrypted cells after metadata corruption', async ({ page }) => {
 
     // Corrupt metadata: delete `report` so normalize() throws.
     const metadata = notebook.getMetadata('correxit');
+    // Clear the cached rubric before loading the damaged metadata.
+    await Workbook.update(workbook, null);
     delete metadata.assignment.report;
     notebook.setMetadata('correxit', metadata);
 
-    // Fresh reference bypasses the WeakMap cache (mirrors user
-    // reopening the notebook after corruption).
-    const fresh = { content: panel.content, context: panel.context };
-
     // open() should now fail.
-    const broken = Workbook.open(fresh, true);
+    const broken = Workbook.open(workbook, true);
 
     // Recover with the original passphrase.
-    const count = await Workbook.recover(fresh, passphrase);
+    const count = await Workbook.recover(workbook, passphrase);
 
     const restored = notebook.cells[0].getSource();
     const type = notebook.cells[0].cell_type;
@@ -2190,14 +2255,13 @@ test('recovers zero cells with wrong passphrase', async ({ page }) => {
 
     // Corrupt metadata.
     const metadata = notebook.getMetadata('correxit');
+    // Clear the cached rubric before loading the damaged metadata.
+    await Workbook.update(workbook, null);
     delete metadata.assignment.report;
     notebook.setMetadata('correxit', metadata);
 
-    // Fresh reference bypasses the WeakMap cache.
-    const fresh = { content: panel.content, context: panel.context };
-
     // Try to recover with the wrong passphrase.
-    const count = await Workbook.recover(fresh, 'wrong');
+    const count = await Workbook.recover(workbook, 'wrong');
 
     return {
       count,
@@ -2248,12 +2312,12 @@ test('recovers only encrypted cells, leaves plain cells alone', async ({
 
     // Corrupt metadata.
     const metadata = notebook.getMetadata('correxit');
+    // Clear the cached rubric before loading the damaged metadata.
+    await Workbook.update(workbook, null);
     delete metadata.assignment.report;
     notebook.setMetadata('correxit', metadata);
 
-    // Fresh reference bypasses the WeakMap cache.
-    const fresh = { content: panel.content, context: panel.context };
-    const count = await Workbook.recover(fresh, 'secret');
+    const count = await Workbook.recover(workbook, 'secret');
 
     return {
       count,
@@ -2348,6 +2412,8 @@ test('recovers sealed cells using author PGP key from metadata', async ({
 
     // Save the rubric id and keys before corruption.
     const metadata = notebook.getMetadata('correxit');
+    // Clear the cached rubric before loading the damaged metadata.
+    await Workbook.update(workbook, null);
     const id = metadata.id;
     const keys = metadata.assignment.keys;
 
@@ -2359,14 +2425,11 @@ test('recovers sealed cells using author PGP key from metadata', async ({
       assignment: { keys }
     });
 
-    // Fresh reference bypasses the WeakMap cache.
-    const fresh = { content: panel.content, context: panel.context };
-
     // Confirm open() fails.
-    const broken = Workbook.open(fresh, true);
+    const broken = Workbook.open(workbook, true);
 
     // Recover: should unseal the PGP-encrypted cells.
-    const count = await Workbook.recover(fresh, passphrase);
+    const count = await Workbook.recover(workbook, passphrase);
 
     return {
       sealed,
@@ -2437,6 +2500,8 @@ test('recovery drops sealed payloads bound to the wrong cell', async ({
     notebook.cells[1].setSource(first);
 
     const metadata = notebook.getMetadata('correxit');
+    // Clear the cached rubric before loading the damaged metadata.
+    await Workbook.update(workbook, null);
     notebook.setMetadata('correxit', {
       id: metadata.id,
       assignment: {
@@ -2445,8 +2510,7 @@ test('recovery drops sealed payloads bound to the wrong cell', async ({
       }
     });
 
-    const fresh = { content: panel.content, context: panel.context };
-    const count = await Workbook.recover(fresh, passphrase);
+    const count = await Workbook.recover(workbook, passphrase);
     return {
       count,
       sources: [notebook.cells[0].getSource(), notebook.cells[1].getSource()],

@@ -266,11 +266,13 @@ export namespace Workbook {
 
   };
   const [get, set] = (pool => {
-    const get = (workbook: Workbook) => pool.get(workbook) || null;
+    // Cloned views share both the latest rubric and persistence ownership.
+    const get = (workbook: Workbook) =>
+      pool.get(workbook.context.model.sharedModel) || null;
     const set = (workbook: Workbook, rubric: Rubric | null) =>
-      pool.set(workbook, rubric).has(workbook);
+      pool.set(workbook.context.model.sharedModel, rubric);
     return [get, set];
-  })(new WeakMap<Workbook, Rubric | null>());
+  })(new WeakMap<INotebookModel['sharedModel'], Rubric | null>());
   const stale = (
     assignment: Rubric.Assignment,
     {

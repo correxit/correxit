@@ -141,6 +141,7 @@ namespace Draft {
     if (cached?.id === rubric.id) return cached;
 
     const { id } = rubric;
+    let locked = rubric.locked;
     let state = create(rubric.assignment);
     let delay: number | null = null;
     const listeners = new Set<() => void>();
@@ -203,8 +204,11 @@ namespace Draft {
         return () => void listeners.delete(listener);
       },
       edit: fields => update(edit(state, fields)),
-      observe: (assignment, locked) =>
-        update(locked ? create(assignment) : observe(state, assignment))
+      observe: (assignment, next) => {
+        const reset = locked || next;
+        locked = next;
+        update(reset ? create(assignment) : observe(state, assignment));
+      }
     };
     drafts.set(workbook, editor);
     return editor;

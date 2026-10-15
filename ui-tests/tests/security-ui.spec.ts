@@ -177,13 +177,14 @@ test('rejects draft-format metadata without rewriting the notebook', async ({
       await Workbook.lock(panel);
       const notebook = panel.context.model.sharedModel;
       const { contents, ...metadata } = notebook.getMetadata('correxit');
+      // Clear the cached rubric before loading the damaged metadata.
+      await Workbook.update(panel, null);
       notebook.setMetadata('correxit', { ...metadata, cxtformat: 1 });
-      const fresh = { content: panel.content, context: panel.context };
-      const opened = Workbook.open(fresh, true);
+      const opened = Workbook.open(panel, true);
       const before = JSON.stringify(notebook.toJSON());
       let rejected = false;
       try {
-        await Workbook.unlock(fresh, key);
+        await Workbook.unlock(panel, key);
       } catch {
         rejected = true;
       }
