@@ -46,10 +46,29 @@ namespace Saves {
         written: false,
         finished: 0,
         errors: [] as string[],
+        timeout: window.setTimeout,
+        timer: null as number | null,
         release: null as (() => void) | null
       });
       const wait = () => new Promise<void>(resolve => (save.release = resolve));
       const crypto = mode === 'signing' || mode === 'encryption';
+      if (mode === 'debounce') {
+        window.setTimeout = ((
+          callback: (...args: any[]) => void,
+          delay: number,
+          ...args: any[]
+        ) => {
+          if (delay !== 150)
+            return save.timeout.call(window, callback, delay, ...args);
+          window.setTimeout = save.timeout;
+          save.timer = save.timeout.call(window, () => {}, 60000);
+          save.release = () => {
+            window.clearTimeout(save.timer!);
+            callback(...args);
+          };
+          return save.timer;
+        }) as typeof window.setTimeout;
+      }
       if (crypto) {
         const method = mode === 'signing' ? 'assign' : 'lock';
         const original = Rubric[method];
@@ -65,7 +84,8 @@ namespace Saves {
         if (args[0] !== 'correxit:assign') return save.execute(...args);
         save.calls++;
         try {
-          if (crypto || save.started) return await save.execute(...args);
+          if (crypto || mode === 'debounce' || save.started)
+            return await save.execute(...args);
           save.started = true;
           if (mode === 'receipt') {
             const result = await save.execute(...args);
@@ -93,6 +113,8 @@ namespace Saves {
         const save = context.__correxit_save;
         if (!save) return;
         save.release?.();
+        window.setTimeout = save.timeout;
+        if (save.timer !== null) window.clearTimeout(save.timer);
         context.jupyterapp.commands.execute = save.execute;
         context.__correxit__.Rubric.assign = save.prepare;
         context.__correxit__.Rubric.lock = save.encrypt;
@@ -552,49 +574,92 @@ test('manual roster editing updates assignee choices live', async ({
   });
 });
 
-for (const [mode, edit] of [
+for (const { mode, edit, assigned } of [
   ['encryption', 'none'],
   ['receipt', 'none'],
   ['encryption', 'reversion'],
   ['receipt', 'reversion'],
-  ['encryption', 'deadline']
-]) {
-  test(`roster conflict during ${mode} with queued edit: ${edit}`, async ({
+  ['encryption', 'deadline'],
+  ['encryption', 'assignee'],
+  ['receipt', 'assignee'],
+  ['encryption', 'normalized'],
+  ['receipt', 'normalized']
+].flatMap(([mode, edit]) =>
+  (edit === 'assignee' || edit === 'normalized' ? [true] : [false, true]).map(
+    assigned => ({
+      mode,
+      edit,
+      assigned
+    })
+  )
+)) {
+  test(`roster${assigned ? ' and assignee' : ''} conflict during ${mode} with queued edit: ${edit}`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
       { id: 'cell', source: 'print(42)' }
     ]);
     const original = ['carol@example.com'];
-    const roster = edit === 'reversion' ? original : ['bob@example.com'];
+    const roster =
+      edit === 'reversion' || edit === 'normalized'
+        ? original
+        : ['bob@example.com'];
     const calls = edit === 'none' ? 1 : 2;
+    const assignee =
+      edit === 'normalized'
+        ? original[0]
+        : assigned && edit !== 'reversion' && edit !== 'assignee'
+          ? 'bob@example.com'
+          : '';
     try {
-      await Saves.initialize(page, { roster: original });
+      await Saves.initialize(page, {
+        roster: original,
+        assignee: edit === 'normalized' ? original[0] : ''
+      });
       await Saves.pause(page, mode);
       await page.getByRole('tab', { name: 'Correxit' }).click();
       const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+      const select = page.locator(
+        'select[name="correxit-assignment-assignee"]'
+      );
       await area.fill('alice@example.com');
       await page.waitForFunction(
         () => !!(window as any).__correxit_save.release
       );
       if (edit === 'reversion') await area.fill(original.join('\n'));
+      if (edit === 'normalized') {
+        await area.fill(original.join('\n'));
+        await select.selectOption('');
+        await select.selectOption(original[0]);
+      }
       const deadline = page.locator(
         'input[name="correxit-assignment-expiration"]'
       );
-      if (edit === 'deadline') await deadline.fill('2030-01-01T12:00');
-      const expiration = await deadline.evaluate((input: HTMLInputElement) =>
-        input.value ? new Date(input.value).getTime() : null
-      );
-      const before = await page.evaluate(async () => {
+      const before = await page.evaluate(async (assigned: boolean) => {
         const {
           __correxit_save: save,
           __correxit__: { Workbook },
           jupyterapp: app
         } = window as any;
-        await save.execute('correxit:assign', { roster: ['bob@example.com'] });
+        await save.execute('correxit:assign', {
+          roster: ['bob@example.com'],
+          assignee: assigned ? 'bob@example.com' : ''
+        });
         return Workbook.open(app.shell.currentWidget).assignment.roster;
-      });
+      }, assigned);
       expect(before).toEqual(['bob@example.com']);
+      await expect(select).toHaveValue(
+        edit === 'normalized' ? original[0] : ''
+      );
+      if (edit === 'assignee') {
+        // Explicitly returning to the original unassigned value is still an edit.
+        await select.selectOption('alice@example.com');
+        await select.selectOption('');
+      }
+      if (edit === 'deadline') await deadline.fill('2030-01-01T12:00');
+      const expiration = await deadline.evaluate((input: HTMLInputElement) =>
+        input.value ? new Date(input.value).getTime() : null
+      );
       await page.evaluate(() => (window as any).__correxit_save.release());
       await page.waitForFunction(
         (calls: number) => (window as any).__correxit_save.finished >= calls,
@@ -616,7 +681,8 @@ for (const [mode, edit] of [
         return {
           calls: save.calls,
           assignments: [Workbook.open(panel), stored].map(
-            ({ assignment: { roster, expiration } }: any) => ({
+            ({ assignment: { assignee, roster, expiration } }: any) => ({
+              assignee,
               roster,
               expiration
             })
@@ -625,11 +691,116 @@ for (const [mode, edit] of [
       });
       expect(result).toEqual({
         calls,
-        assignments: Array(2).fill({ roster, expiration })
+        assignments: Array(2).fill({ assignee, roster, expiration })
       });
       await expect(area).toHaveValue(roster.join('\n'));
     } finally {
       await Saves.restore(page);
+      await dispose();
+    }
+  });
+}
+
+for (const release of ['locked', 'unlocked']) {
+  test(`inactive roster draft expires while ${release} across a lock cycle`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    try {
+      await Saves.initialize(page, { roster: ['carol@example.com'] });
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+      await expect(area).toHaveValue('carol@example.com');
+      await Saves.pause(page, 'debounce');
+      await page.evaluate(() => {
+        (window as any).__correxit_save.first = (
+          window as any
+        ).jupyterapp.shell.currentWidget;
+      });
+      await area.fill('alice@example.com');
+      await page.evaluate(
+        () =>
+          new Promise(resolve =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve))
+          )
+      );
+      await area.blur();
+      await expect(area).toHaveValue('alice@example.com');
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      await page.evaluate(async () => {
+        const { jupyterapp: app, __correxit_save: held } = window as any;
+        await app.commands.execute('docmanager:clone');
+        held.second = app.shell.currentWidget;
+      });
+      await expect(area).toHaveValue('carol@example.com');
+      expect(
+        await page.evaluate(async () => {
+          const {
+            __correxit__: { Workbook },
+            __correxit_save: held
+          } = window as any;
+          await Workbook.lock(held.second);
+          return (
+            held.second !== held.first && Workbook.open(held.second).locked
+          );
+        })
+      ).toBe(true);
+      if (release === 'locked')
+        await page.evaluate(() => (window as any).__correxit_save.release());
+      await page.evaluate(async () => {
+        const {
+          __correxit__: { Workbook },
+          __correxit_save: held
+        } = window as any;
+        await Workbook.unlock(held.second, 'secret');
+      });
+      if (release === 'unlocked')
+        await page.evaluate(() => (window as any).__correxit_save.release());
+      const before = await page.evaluate(async () => {
+        const {
+          jupyterapp: app,
+          __correxit__: { Workbook },
+          __correxit_save: held
+        } = window as any;
+        const roster = Workbook.open(app.shell.currentWidget).assignment.roster;
+        app.shell.activateById(held.first.id);
+        return roster;
+      });
+      expect(before).toEqual(['carol@example.com']);
+      await expect(area).toHaveValue('carol@example.com');
+      await page.waitForTimeout(400);
+      const after = await page.evaluate(async () => {
+        const {
+          jupyterapp: app,
+          __correxit__: { Workbook, Rubric },
+          __correxit_save: held
+        } = window as any;
+        const panel = app.shell.currentWidget;
+        const stored = await Rubric.unlock(
+          panel.context.model.sharedModel.getMetadata('correxit'),
+          'secret'
+        );
+        return {
+          calls: held.calls,
+          original: panel === held.first,
+          rosters: [
+            Workbook.open(panel).assignment.roster,
+            stored.assignment.roster
+          ]
+        };
+      });
+      expect(after).toEqual({
+        calls: 0,
+        original: true,
+        rosters: Array(2).fill(['carol@example.com'])
+      });
+    } finally {
+      await Saves.restore(page);
+      await page.notebook.close(true).catch(() => {});
       await dispose();
     }
   });

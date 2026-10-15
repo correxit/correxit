@@ -114,6 +114,7 @@ namespace Draft {
     );
   type Editor = {
     id: string;
+    dispose: () => void;
     read: () => State;
     subscribe: (listener: () => void) => () => void;
     edit: (update: Partial<Fields>) => void;
@@ -125,11 +126,11 @@ namespace Draft {
       ...Object.fromEntries(keys.map(key => [key, assignment[key]])),
       roster: assignment.roster.join('\n')
     }) as Fields;
-  const normalize = (fields: Fields): Fields => ({
-    ...fields,
-    assignee: split(fields.roster).includes(fields.assignee)
-      ? fields.assignee
-      : ''
+  // Keep observed normalization out of the input history.
+  const values = (state: State): Assignment => ({
+    ...state.assignment,
+    ...state.fields,
+    roster: split(state.fields.roster)
   });
 
   export function open(
@@ -139,6 +140,7 @@ namespace Draft {
   ): Editor {
     const cached = drafts.get(workbook);
     if (cached?.id === rubric.id) return cached;
+    cached?.dispose();
 
     const { id } = rubric;
     let locked = rubric.locked;
@@ -173,11 +175,17 @@ namespace Draft {
         return update(next);
 
       const save = { version: next.version, changes: patch };
-      update({ ...next, phase: 'saving', save });
+      // Snapshot the normalized value being saved so an explicit reversion survives.
+      update({
+        ...next,
+        fields: { ...next.fields, assignee: view(next).assignee },
+        phase: 'saving',
+        save
+      });
 
       const assignment = await commands
         .execute(assign, {
-          ...save.changes,
+          ...patch,
           path: workbook.context.path,
           view: workbook.content?.id ?? null,
           rubric: id
@@ -195,18 +203,33 @@ namespace Draft {
           }
         : state;
       const observed = latest ? observe(saved, latest.assignment) : saved;
-      // A failed draft waits for an edit; newer edits still get their own save.
+      // Retry a failure only for new input or a changed normalized patch.
       update({
         ...observed,
         phase:
-          (assignment && latest) || observed.version !== save.version
+          (assignment && latest) ||
+          observed.version !== save.version ||
+          !same(changes(observed), patch)
             ? 'ready'
             : 'failed',
         save: null
       });
     };
+    const notebook = workbook.context.model.sharedModel;
+    const refresh = () => {
+      const rubric = Workbook.open(workbook, true);
+      if (!rubric || rubric.id !== id) return editor.dispose();
+      editor.observe(rubric.assignment, rubric.locked);
+    };
     const editor: Editor = {
       id,
+      dispose: () => {
+        if (delay !== null) window.clearTimeout(delay);
+        notebook.metadataChanged.disconnect(refresh);
+        workbook.context.disposed.disconnect(editor.dispose);
+        workbook.content?.disposed.disconnect(editor.dispose);
+        drafts.delete(workbook);
+      },
       read: () => state,
       subscribe: listener => {
         listeners.add(listener);
@@ -220,6 +243,10 @@ namespace Draft {
       }
     };
     drafts.set(workbook, editor);
+    // Cached drafts must observe lock transitions even while their view is inactive.
+    notebook.metadataChanged.connect(refresh);
+    workbook.context.disposed.connect(editor.dispose);
+    workbook.content?.disposed.connect(editor.dispose);
     return editor;
   }
 
@@ -234,15 +261,17 @@ namespace Draft {
   }
 
   export function view(state: State): Assignment {
+    const assignment = values(state);
     return {
-      ...state.assignment,
-      ...state.fields,
-      roster: split(state.fields.roster)
+      ...assignment,
+      assignee: assignment.roster.includes(assignment.assignee)
+        ? assignment.assignee
+        : ''
     };
   }
 
   export function edit(state: State, update: Partial<Fields>): State {
-    const fields = normalize({ ...state.fields, ...update });
+    const fields = { ...state.fields, ...update };
     if (same(fields, state.fields)) return state;
 
     const version = state.version + 1;
@@ -251,8 +280,7 @@ namespace Draft {
       : { ...state, fields, version };
   }
 
-  export function changes(state: State): Changes {
-    const assignment = view(state);
+  export function changes(state: State, assignment = view(state)): Changes {
     const patch = Object.fromEntries(
       groups
         .filter(keys =>
@@ -271,8 +299,8 @@ namespace Draft {
     if (assignment === state.assignment) return state;
 
     const next = fields(assignment);
-    const edited = { ...state.save?.changes, ...changes(state) };
-    const current = view(state);
+    const current = values(state);
+    const edited = { ...state.save?.changes, ...changes(state, current) };
 
     // Keep edited fields, including a reversion made while save is pending.
     const merged = Object.fromEntries(
@@ -284,8 +312,7 @@ namespace Draft {
       ])
     ) as Fields;
 
-    // A normalized field is a new edit, even while an earlier save is pending.
-    return edit({ ...state, assignment, fields: merged }, {});
+    return { ...state, assignment, fields: merged };
   }
 }
 
