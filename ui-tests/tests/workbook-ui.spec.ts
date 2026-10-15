@@ -552,6 +552,89 @@ test('manual roster editing updates assignee choices live', async ({
   });
 });
 
+for (const [mode, edit] of [
+  ['encryption', 'none'],
+  ['receipt', 'none'],
+  ['encryption', 'reversion'],
+  ['receipt', 'reversion'],
+  ['encryption', 'deadline']
+]) {
+  test(`roster conflict during ${mode} with queued edit: ${edit}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    const original = ['carol@example.com'];
+    const roster = edit === 'reversion' ? original : ['bob@example.com'];
+    const calls = edit === 'none' ? 1 : 2;
+    try {
+      await Saves.initialize(page, { roster: original });
+      await Saves.pause(page, mode);
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+      await area.fill('alice@example.com');
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      if (edit === 'reversion') await area.fill(original.join('\n'));
+      const deadline = page.locator(
+        'input[name="correxit-assignment-expiration"]'
+      );
+      if (edit === 'deadline') await deadline.fill('2030-01-01T12:00');
+      const expiration = await deadline.evaluate((input: HTMLInputElement) =>
+        input.value ? new Date(input.value).getTime() : null
+      );
+      const before = await page.evaluate(async () => {
+        const {
+          __correxit_save: save,
+          __correxit__: { Workbook },
+          jupyterapp: app
+        } = window as any;
+        await save.execute('correxit:assign', { roster: ['bob@example.com'] });
+        return Workbook.open(app.shell.currentWidget).assignment.roster;
+      });
+      expect(before).toEqual(['bob@example.com']);
+      await page.evaluate(() => (window as any).__correxit_save.release());
+      await page.waitForFunction(
+        (calls: number) => (window as any).__correxit_save.finished >= calls,
+        calls
+      );
+      // A completed save must not silently resubmit a superseded roster.
+      await page.waitForTimeout(400);
+      const result = await page.evaluate(async () => {
+        const {
+          __correxit_save: save,
+          __correxit__: { Workbook, Rubric },
+          jupyterapp: app
+        } = window as any;
+        const panel = app.shell.currentWidget;
+        const stored = await Rubric.unlock(
+          panel.context.model.sharedModel.getMetadata('correxit'),
+          'secret'
+        );
+        return {
+          calls: save.calls,
+          assignments: [Workbook.open(panel), stored].map(
+            ({ assignment: { roster, expiration } }: any) => ({
+              roster,
+              expiration
+            })
+          )
+        };
+      });
+      expect(result).toEqual({
+        calls,
+        assignments: Array(2).fill({ roster, expiration })
+      });
+      await expect(area).toHaveValue(roster.join('\n'));
+    } finally {
+      await Saves.restore(page);
+      await dispose();
+    }
+  });
+}
+
 test('manual roster saves in a second view without repeatedly assigning', async ({
   page
 }) => {
@@ -934,6 +1017,74 @@ test('manual roster normalization retries after an assignee changes during signi
       await dispose();
     }
   });
+});
+
+test('clearing a deadline keeps its late policy cleared during another save', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+  try {
+    await Saves.initialize(page, { expiration: 1_900_000_000_000 });
+    await Saves.pause(page);
+    await page.getByRole('tab', { name: 'Correxit' }).click();
+    await page
+      .getByRole('textbox', { name: 'Roster', exact: true })
+      .fill('alice@example.com');
+    await page.waitForFunction(() => !!(window as any).__correxit_save.release);
+    const deadline = page.locator(
+      'input[name="correxit-assignment-expiration"]'
+    );
+    await deadline.fill('');
+    await page.evaluate(async () => {
+      await (window as any).__correxit_save.execute('correxit:assign', {
+        overdue: 'dock',
+        penalty: 10
+      });
+      (window as any).__correxit_save.release();
+    });
+    await page.waitForFunction(
+      () => (window as any).__correxit_save.finished >= 2
+    );
+    const cleared = await page.evaluate(() => {
+      const {
+        __correxit__: { Workbook },
+        jupyterapp: app
+      } = window as any;
+      const panel = app.shell.currentWidget;
+      return [
+        Workbook.open(panel),
+        panel.context.model.sharedModel.getMetadata('correxit')
+      ].map(({ assignment: { expiration, overdue, penalty } }: any) => ({
+        expiration,
+        overdue,
+        penalty
+      }));
+    });
+    expect(cleared).toEqual(
+      Array(2).fill({ expiration: null, overdue: null, penalty: null })
+    );
+    await deadline.fill('2030-01-01T12:00');
+    await expect(
+      page.getByRole('combobox', { name: 'Overdue', exact: true })
+    ).toHaveValue('accept');
+    await page.waitForFunction(
+      () => (window as any).__correxit_save.finished >= 3
+    );
+    const stored = await page.evaluate(() => {
+      const panel = (window as any).jupyterapp.shell.currentWidget;
+      const { expiration, overdue, penalty } =
+        panel.context.model.sharedModel.getMetadata('correxit').assignment;
+      return { expiration, overdue, penalty };
+    });
+    expect(stored).toEqual({
+      expiration: expect.any(Number),
+      overdue: null,
+      penalty: null
+    });
+  } finally {
+    await Saves.restore(page);
+    await dispose();
+  }
 });
 
 test('manual overdue policy editing updates assignment metadata', async ({

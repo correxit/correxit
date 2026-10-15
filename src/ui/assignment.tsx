@@ -185,7 +185,16 @@ namespace Draft {
         .catch(() => null);
       if (state.save !== save) return;
       const latest = current();
-      const observed = latest ? observe(state, latest.assignment) : state;
+      // Only edits beyond the completed patch remain queued, including reversions.
+      const saved: State = assignment
+        ? {
+            ...state,
+            assignment: { ...state.assignment, ...save.changes },
+            phase: 'ready',
+            save: null
+          }
+        : state;
+      const observed = latest ? observe(saved, latest.assignment) : saved;
       // A failed draft waits for an edit; newer edits still get their own save.
       update({
         ...observed,
@@ -244,13 +253,18 @@ namespace Draft {
 
   export function changes(state: State): Changes {
     const assignment = view(state);
-    return Object.fromEntries(
+    const patch = Object.fromEntries(
       groups
         .filter(keys =>
           keys.some(key => !same(assignment[key], state.assignment[key]))
         )
         .flatMap(keys => keys.map(key => [key, assignment[key]]))
     );
+    // Clearing a deadline also clears its policy, even if it was already null.
+    return assignment.expiration === null &&
+      state.assignment.expiration !== null
+      ? { ...patch, overdue: null, penalty: null }
+      : patch;
   }
 
   export function observe(state: State, assignment: Assignment): State {
