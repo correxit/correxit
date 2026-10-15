@@ -61,7 +61,7 @@ test('commands are disabled without a workbook rubric', async ({ page }) => {
   await dispose();
 });
 
-test('rubric-bound saves reuse open workbooks while path commands fetch headlessly', async ({
+test('assignment saves target a view while path commands fetch headlessly', async ({
   page
 }) => {
   const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
@@ -84,13 +84,25 @@ test('rubric-bound saves reuse open workbooks while path commands fetch headless
         }
       });
       const path = panel.context.path;
+      const view = panel.content.id;
       await app.commands.execute('correxit:assign', {
-        path,
+        view,
         rubric: created.id,
         name: 'Open'
       });
       const name = Workbook.open(panel).assignment.name;
-      await app.commands.execute('correxit:save', { path, rubric: created.id });
+      const missing = await app.commands.execute('correxit:assign', {
+        view: 'closed-view',
+        path,
+        rubric: created.id,
+        name: 'Wrong'
+      });
+      const stale = await app.commands.execute('correxit:assign', {
+        view,
+        rubric: 'replaced-rubric',
+        name: 'Wrong'
+      });
+      await app.commands.execute('correxit:save');
       const grade = await app.commands.execute('correxit:correct', { path });
 
       const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
@@ -107,29 +119,13 @@ test('rubric-bound saves reuse open workbooks while path commands fetch headless
           key: 'secret',
           name: 'Fetched'
         });
-        const saving = app.commands.execute('correxit:assign', {
-          path,
-          rubric: created.id,
-          name: 'Stale'
-        });
-        const replacement = Rubric.create();
-        await Promise.all([
-          saving,
-          Workbook.update(panel, {
-            ...replacement,
-            key: 'secret',
-            assignment: {
-              ...replacement.assignment,
-              name: 'Replacement',
-              keys: Workbook.open(panel).assignment.keys
-            }
-          })
-        ]);
         return {
           name,
+          missing,
+          stale,
           fetched: assignment.name,
           resolved: grade.resolved,
-          replacement: Workbook.open(panel).assignment.name,
+          live: Workbook.open(panel).assignment.name,
           headless: workbooks.map(workbook => Workbook.headless(workbook))
         };
       } finally {
@@ -140,9 +136,11 @@ test('rubric-bound saves reuse open workbooks while path commands fetch headless
 
     expect(result).toEqual({
       name: 'Open',
+      missing: null,
+      stale: null,
       fetched: 'Fetched',
       resolved: true,
-      replacement: 'Replacement',
+      live: 'Open',
       headless: [true]
     });
   } finally {

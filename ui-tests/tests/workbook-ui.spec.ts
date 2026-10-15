@@ -3,6 +3,105 @@ import { setup, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
+// Keep real commands and cryptography; pause just the first save at a chosen boundary.
+namespace Saves {
+  export async function initialize(
+    page: any,
+    assignment: Record<string, unknown> = {}
+  ) {
+    await page.evaluate(async (assignment: Record<string, unknown>) => {
+      const { Workbook, Rubric } = (window as any).__correxit__;
+      const rubric = Rubric.create();
+      await Workbook.update(
+        (window as any).jupyterapp.shell.currentWidget,
+        await Rubric.assign(
+          {
+            ...rubric,
+            key: 'secret',
+            assignment: {
+              ...rubric.assignment,
+              keys: {
+                private: { assignee: null, author: 'priv' },
+                public: { assignee: null, author: 'pub' }
+              }
+            }
+          },
+          assignment
+        )
+      );
+    }, assignment);
+  }
+
+  export async function pause(page: any, mode = 'command') {
+    await page.evaluate((mode: string) => {
+      const context = window as any;
+      const { Rubric } = context.__correxit__;
+      const { commands } = context.jupyterapp;
+      const save = (context.__correxit_save = {
+        execute: commands.execute.bind(commands),
+        prepare: Rubric.assign,
+        encrypt: Rubric.lock,
+        calls: 0,
+        started: false,
+        written: false,
+        finished: 0,
+        errors: [] as string[],
+        release: null as (() => void) | null
+      });
+      const wait = () => new Promise<void>(resolve => (save.release = resolve));
+      const crypto = mode === 'signing' || mode === 'encryption';
+      if (crypto) {
+        const method = mode === 'signing' ? 'assign' : 'lock';
+        const original = Rubric[method];
+        Rubric[method] = async (...args: any[]) => {
+          const first = !save.started;
+          save.started = true;
+          const result = await original(...args);
+          if (first) await wait();
+          return result;
+        };
+      }
+      commands.execute = async (...args: any[]) => {
+        if (args[0] !== 'correxit:assign') return save.execute(...args);
+        save.calls++;
+        try {
+          if (crypto || save.started) return await save.execute(...args);
+          save.started = true;
+          if (mode === 'receipt') {
+            const result = await save.execute(...args);
+            save.written = true;
+            await wait();
+            return result;
+          }
+          await wait();
+          if (mode === 'rejection') throw new Error('Assignment save rejected');
+          return await save.execute(...args);
+        } catch (error) {
+          save.errors.push(String(error));
+          throw error;
+        } finally {
+          save.finished++;
+        }
+      };
+    }, mode);
+  }
+
+  export async function restore(page: any) {
+    await page
+      .evaluate(() => {
+        const context = window as any;
+        const save = context.__correxit_save;
+        if (!save) return;
+        save.release?.();
+        context.jupyterapp.commands.execute = save.execute;
+        context.__correxit__.Rubric.assign = save.prepare;
+        context.__correxit__.Rubric.lock = save.encrypt;
+        delete context.__correxit_save;
+      })
+      .catch(() => {});
+  }
+}
+
 test('audits and dereferences orphaned references', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'keep', source: 'answer' },
@@ -320,85 +419,8 @@ test('manual roster editing updates assignee choices live', async ({
     const completed = mode === 'receipt' || mode === 'encryption';
 
     try {
-      await body.evaluate(async (_: Element, mode: string) => {
-        const context = window as any;
-        const { Workbook, Rubric } = context.__correxit__;
-        const app = context.jupyterapp;
-        const rubric = Rubric.create();
-        await Workbook.update(app.shell.currentWidget, {
-          ...rubric,
-          key: 'secret',
-          assignment: {
-            ...rubric.assignment,
-            keys: {
-              private: { assignee: null, author: 'priv' },
-              public: { assignee: null, author: 'pub' }
-            }
-          }
-        });
-        const execute = app.commands.execute.bind(app.commands);
-        context.__correxit_save = {
-          execute,
-          prepare: Rubric.assign,
-          encrypt: Rubric.lock,
-          calls: 0,
-          started: false,
-          written: false,
-          finished: false,
-          release: null
-        };
-        app.commands.execute = async (...args: any[]) => {
-          const save = context.__correxit_save;
-          if (args[0] === 'correxit:assign') save.calls++;
-          if (
-            ['signing', 'encryption'].includes(mode) &&
-            args[0] === 'correxit:assign'
-          ) {
-            const result = await execute(...args);
-            save.finished = true;
-            return result;
-          }
-          if (args[0] === 'correxit:assign' && !save.started) {
-            save.started = true;
-            if (mode === 'receipt') {
-              const result = await execute(...args);
-              save.written = true;
-              await new Promise(resolve => (save.release = resolve));
-              save.finished = true;
-              return result;
-            }
-            await new Promise(resolve => (save.release = resolve));
-            if (mode === 'rejection') {
-              save.finished = true;
-              throw new Error('Assignment save rejected');
-            }
-            const result = await execute(...args);
-            save.finished = true;
-            return result;
-          }
-          return execute(...args);
-        };
-        if (mode === 'signing') {
-          Rubric.assign = async (...args: any[]) => {
-            const save = context.__correxit_save;
-            const first = !save.started;
-            save.started = true;
-            const result = await save.prepare(...args);
-            if (first) await new Promise(resolve => (save.release = resolve));
-            return result;
-          };
-        }
-        if (mode === 'encryption') {
-          Rubric.lock = async (...args: any[]) => {
-            const save = context.__correxit_save;
-            const first = !save.started;
-            save.started = true;
-            const result = await save.encrypt(...args);
-            if (first) await new Promise(resolve => (save.release = resolve));
-            return result;
-          };
-        }
-      }, mode);
+      await Saves.initialize(page);
+      await Saves.pause(page, mode);
 
       await page.getByRole('tab', { name: 'Correxit' }).click();
       const area = page.getByRole('textbox', { name: 'Roster', exact: true });
@@ -530,23 +552,66 @@ test('manual roster editing updates assignee choices live', async ({
       await expect(area).toHaveValue('carol@example.com');
       expect(errors).toEqual([]);
     } finally {
-      await body
-        .evaluate(() => {
-          const context = window as any;
-          if (context.__correxit_save) {
-            context.__correxit_save.release?.();
-            context.jupyterapp.commands.execute =
-              context.__correxit_save.execute;
-            context.__correxit__.Rubric.assign =
-              context.__correxit_save.prepare;
-            context.__correxit__.Rubric.lock = context.__correxit_save.encrypt;
-            delete context.__correxit_save;
-          }
-        })
-        .catch(() => {});
+      await Saves.restore(page);
       await dispose();
     }
   });
+});
+
+test('manual roster saves in a second view without repeatedly assigning', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+  try {
+    await Saves.initialize(page);
+    const shared = await page.evaluate(async () => {
+      const {
+        jupyterapp: app,
+        __correxit__: { Workbook }
+      } = window as any;
+      const first = app.shell.currentWidget;
+      await app.commands.execute('docmanager:clone');
+      const second = app.shell.currentWidget;
+      await Workbook.unlock(second, 'secret');
+      return first !== second && first.context === second.context;
+    });
+    expect(shared).toBe(true);
+    await Saves.pause(page);
+    await page.getByRole('tab', { name: 'Correxit' }).click();
+    const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+    await area.fill('alice@example.com');
+    await page.waitForFunction(() => !!(window as any).__correxit_save.release);
+    await page.evaluate(() => (window as any).__correxit_save.release());
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const {
+            jupyterapp: app,
+            __correxit__: { Workbook, Rubric }
+          } = window as any;
+          const panel = app.shell.currentWidget;
+          const stored = await Rubric.unlock(
+            panel.context.model.sharedModel.getMetadata('correxit'),
+            'secret'
+          );
+          return [
+            Workbook.open(panel).assignment.roster,
+            stored.assignment.roster
+          ];
+        })
+      )
+      .toEqual([['alice@example.com'], ['alice@example.com']]);
+    // More than one debounce period must not start another save.
+    await page.waitForTimeout(400);
+    expect(
+      await page.evaluate(() => (window as any).__correxit_save.calls)
+    ).toBe(1);
+    await expect(area).toHaveValue('alice@example.com');
+  } finally {
+    await Saves.restore(page);
+    await page.notebook.close(true).catch(() => {});
+    await dispose();
+  }
 });
 
 test('manual roster normalization retries after an assignee changes during signing', async ({
@@ -556,63 +621,11 @@ test('manual roster normalization retries after an assignee changes during signi
   const body = page.locator('body');
 
   try {
-    await body.evaluate(async () => {
-      const context = window as any;
-      const { Workbook, Rubric } = context.__correxit__;
-      const app = context.jupyterapp;
-      const rubric = Rubric.create();
-      await Workbook.update(
-        app.shell.currentWidget,
-        await Rubric.assign(
-          {
-            ...rubric,
-            key: 'secret',
-            assignment: {
-              ...rubric.assignment,
-              keys: {
-                private: { assignee: null, author: 'priv' },
-                public: { assignee: null, author: 'pub' }
-              }
-            }
-          },
-          {
-            assignee: 'alice@example.com',
-            roster: ['alice@example.com', 'bob@example.com']
-          }
-        )
-      );
-      const execute = app.commands.execute.bind(app.commands);
-      context.__correxit_save = {
-        execute,
-        prepare: Rubric.assign,
-        calls: 0,
-        finished: 0,
-        errors: [],
-        started: false,
-        release: null
-      };
-      Rubric.assign = async (...args: any[]) => {
-        const save = context.__correxit_save;
-        const first = !save.started;
-        save.started = true;
-        const result = await save.prepare(...args);
-        if (first) await new Promise(resolve => (save.release = resolve));
-        return result;
-      };
-      app.commands.execute = async (...args: any[]) => {
-        if (args[0] !== 'correxit:assign') return execute(...args);
-        const save = context.__correxit_save;
-        save.calls++;
-        try {
-          return await execute(...args);
-        } catch (error) {
-          save.errors.push(String(error));
-          throw error;
-        } finally {
-          save.finished++;
-        }
-      };
+    await Saves.initialize(page, {
+      assignee: 'alice@example.com',
+      roster: ['alice@example.com', 'bob@example.com']
     });
+    await Saves.pause(page, 'signing');
 
     await page.getByRole('tab', { name: 'Correxit' }).click();
     const area = page.getByRole('textbox', { name: 'Roster', exact: true });
@@ -674,17 +687,7 @@ test('manual roster normalization retries after an assignee changes during signi
     await expect(assignee).toHaveValue('');
     await expect(area).toHaveValue('alice@example.com');
   } finally {
-    await body
-      .evaluate(() => {
-        const context = window as any;
-        if (context.__correxit_save) {
-          context.__correxit_save.release?.();
-          context.jupyterapp.commands.execute = context.__correxit_save.execute;
-          context.__correxit__.Rubric.assign = context.__correxit_save.prepare;
-          delete context.__correxit_save;
-        }
-      })
-      .catch(() => {});
+    await Saves.restore(page);
     await dispose();
   }
 });
@@ -699,52 +702,9 @@ test('manual roster normalization retries after an assignee changes during signi
       () => (window as any).jupyterapp.shell.currentWidget.context.path
     );
     let second: string | null = null;
-    const initialize = (roster: string[]) =>
-      body.evaluate(async (_: Element, roster: string[]) => {
-        const context = window as any;
-        const { Workbook, Rubric } = context.__correxit__;
-        const created = Rubric.create();
-        const rubric = await Rubric.assign(
-          {
-            ...created,
-            key: 'secret',
-            assignment: {
-              ...created.assignment,
-              keys: {
-                private: { assignee: null, author: 'priv' },
-                public: { assignee: null, author: 'pub' }
-              }
-            }
-          },
-          { roster }
-        );
-        await Workbook.update(context.jupyterapp.shell.currentWidget, rubric);
-      }, roster);
-
     try {
-      await initialize([]);
-      await body.evaluate(() => {
-        const context = window as any;
-        const app = context.jupyterapp;
-        const execute = app.commands.execute.bind(app.commands);
-        context.__correxit_save = {
-          execute,
-          started: false,
-          finished: false,
-          release: null
-        };
-        app.commands.execute = async (...args: any[]) => {
-          const save = context.__correxit_save;
-          if (args[0] === 'correxit:assign' && !save.started) {
-            save.started = true;
-            await new Promise(resolve => (save.release = resolve));
-            const result = await execute(...args);
-            save.finished = true;
-            return result;
-          }
-          return execute(...args);
-        };
-      });
+      await Saves.initialize(page);
+      await Saves.pause(page);
       await page.getByRole('tab', { name: 'Correxit' }).click();
       const area = page.getByRole('textbox', { name: 'Roster', exact: true });
       await area.fill('alice@example.com');
@@ -776,7 +736,7 @@ test('manual roster normalization retries after an assignee changes during signi
           await (window as any).jupyterapp.shell.currentWidget.context.ready;
         });
       }
-      await initialize(['carol@example.com']);
+      await Saves.initialize(page, { roster: ['carol@example.com'] });
       await expect(area).toHaveValue('carol@example.com');
       if (mode === 'returning') {
         await body.evaluate(async (_: Element, path: string) => {
@@ -812,17 +772,7 @@ test('manual roster normalization retries after an assignee changes during signi
           : 'carol@example.com'
       );
     } finally {
-      await body
-        .evaluate(() => {
-          const context = window as any;
-          if (context.__correxit_save) {
-            context.__correxit_save.release?.();
-            context.jupyterapp.commands.execute =
-              context.__correxit_save.execute;
-            delete context.__correxit_save;
-          }
-        })
-        .catch(() => {});
+      await Saves.restore(page);
       if (second) {
         await body
           .evaluate(async (_: Element, path: string) => {
@@ -864,46 +814,12 @@ test('manual roster normalization retries after an assignee changes during signi
         : { overdue: 'reject', penalty: null };
 
     try {
-      await body.evaluate(async (_: Element, mode: string) => {
-        const context = window as any;
-        const { Workbook, Rubric } = context.__correxit__;
-        const app = context.jupyterapp;
-        const rubric = Rubric.create();
-        await Workbook.update(
-          app.shell.currentWidget,
-          await Rubric.assign(
-            {
-              ...rubric,
-              key: 'secret',
-              assignment: {
-                ...rubric.assignment,
-                keys: {
-                  private: { assignee: null, author: 'priv' },
-                  public: { assignee: null, author: 'pub' }
-                }
-              }
-            },
-            {
-              expiration: 1_900_000_000_000,
-              overdue: mode === 'penalty' ? 'dock' : 'accept',
-              penalty: mode === 'penalty' ? 10 : null
-            }
-          )
-        );
-        context.__correxit_save = {
-          prepare: Rubric.assign,
-          started: false,
-          release: null
-        };
-        Rubric.assign = async (...args: any[]) => {
-          const save = context.__correxit_save;
-          const first = !save.started;
-          save.started = true;
-          const result = await save.prepare(...args);
-          if (first) await new Promise(resolve => (save.release = resolve));
-          return result;
-        };
-      }, mode);
+      await Saves.initialize(page, {
+        expiration: 1_900_000_000_000,
+        overdue: mode === 'penalty' ? 'dock' : 'accept',
+        penalty: mode === 'penalty' ? 10 : null
+      });
+      await Saves.pause(page, 'signing');
 
       await page.getByRole('tab', { name: 'Correxit' }).click();
       const policy = page.getByRole('combobox', {
@@ -947,17 +863,7 @@ test('manual roster normalization retries after an assignee changes during signi
           { name: 'Updated assignment', ...expected }
         ]);
     } finally {
-      await body
-        .evaluate(() => {
-          const context = window as any;
-          if (context.__correxit_save) {
-            context.__correxit_save.release?.();
-            context.__correxit__.Rubric.assign =
-              context.__correxit_save.prepare;
-            delete context.__correxit_save;
-          }
-        })
-        .catch(() => {});
+      await Saves.restore(page);
       await dispose();
     }
   });

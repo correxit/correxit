@@ -97,7 +97,6 @@ namespace Draft {
     ['id'],
     ['name'],
     ['overdue', 'penalty'],
-    ['resources'],
     ['roster']
   ] as const;
   const keys = groups.flat();
@@ -126,8 +125,6 @@ namespace Draft {
       ...Object.fromEntries(keys.map(key => [key, assignment[key]])),
       roster: assignment.roster.join('\n')
     }) as Fields;
-  const value = (fields: Fields, key: (typeof keys)[number]) =>
-    key === 'roster' ? split(fields.roster) : fields[key];
   const normalize = (fields: Fields): Fields => ({
     ...fields,
     assignee: split(fields.roster).includes(fields.assignee)
@@ -169,27 +166,34 @@ namespace Draft {
     const persist = async () => {
       const rubric = current();
       if (!rubric) return;
-      const next = begin(observe(state, rubric.assignment));
-      const { save } = next;
-      update(next);
-      if (!save) return;
+      const next = observe(state, rubric.assignment);
+      const patch = changes(next);
+      if (next.phase !== 'ready' || !Object.keys(patch).length)
+        return update(next);
+
+      const save = { version: next.version, changes: patch };
+      update({ ...next, phase: 'saving', save });
 
       const assignment = await commands
         .execute(assign, {
           ...save.changes,
           path: workbook.context.path,
+          view: workbook.content?.id ?? null,
           rubric: id
         })
         .catch(() => null);
+      if (state.save !== save) return;
       const latest = current();
-      if (!latest) return update(fail(state, save));
-
-      const observed = observe(state, latest.assignment);
-      update(
-        assignment
-          ? complete(observed, save, latest.assignment)
-          : fail(observed, save)
-      );
+      const observed = latest ? observe(state, latest.assignment) : state;
+      // A failed draft waits for an edit; newer edits still get their own save.
+      update({
+        ...observed,
+        phase:
+          (assignment && latest) || observed.version !== save.version
+            ? 'ready'
+            : 'failed',
+        save: null
+      });
     };
     const editor: Editor = {
       id,
@@ -248,60 +252,22 @@ namespace Draft {
   export function observe(state: State, assignment: Assignment): State {
     if (assignment === state.assignment) return state;
 
-    const before = fields(state.assignment);
     const next = fields(assignment);
+    const edited = { ...state.save?.changes, ...changes(state) };
+    const current = view(state);
 
     // Keep edited fields, including a reversion made while save is pending.
-    const current = Object.fromEntries(
-      groups.flatMap(keys => {
-        const edited = keys.some(
-          key =>
-            !same(value(state.fields, key), value(before, key)) ||
-            (state.save &&
-              Object.prototype.hasOwnProperty.call(state.save.changes, key))
-        );
-        return keys.map(key => {
-          const unchanged = same(value(state.fields, key), value(next, key));
-          return [key, edited || unchanged ? state.fields[key] : next[key]];
-        });
-      })
+    const merged = Object.fromEntries(
+      keys.map(key => [
+        key,
+        key in edited || same(current[key], assignment[key])
+          ? state.fields[key]
+          : next[key]
+      ])
     ) as Fields;
 
     // A normalized field is a new edit, even while an earlier save is pending.
-    return edit({ ...state, assignment, fields: current }, {});
-  }
-
-  export function begin(state: State): State {
-    if (state.phase !== 'ready') return state;
-
-    const update = changes(state);
-    return Object.keys(update).length
-      ? {
-          ...state,
-          phase: 'saving',
-          save: { version: state.version, changes: update }
-        }
-      : state;
-  }
-
-  export function complete(
-    state: State,
-    save: Save,
-    assignment: Assignment
-  ): State {
-    return state.save === save
-      ? { ...observe(state, assignment), phase: 'ready', save: null }
-      : state;
-  }
-
-  export function fail(state: State, save: Save): State {
-    return state.save === save
-      ? {
-          ...state,
-          phase: state.version === save.version ? 'failed' : 'ready',
-          save: null
-        }
-      : state;
+    return edit({ ...state, assignment, fields: merged }, {});
   }
 }
 

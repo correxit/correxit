@@ -164,20 +164,11 @@ export function commands(
         : [];
     });
   };
-  const reify = async (
-    args: Partial<Credentials & { rubric: string }>
-  ): Promise<Reified> => {
+  const reify = async (args: Partial<Credentials>): Promise<Reified> => {
     const handle = Workbook.Credentials.normalize(args);
-    const panel = args.rubric && handle && !(
-      handle.key || handle.passphrase || typeof args.unlock === 'boolean'
-    )
-      ? documents.findWidget(handle.path, 'Notebook')
-      : null;
-    const workbook = panel instanceof NotebookPanel
-      ? panel
-      : handle
-        ? await fetch(handle)
-        : active();
+    const workbook = handle
+      ? await fetch(handle)
+      : active();
     const rubric = open(workbook);
     return { handle, rubric, workbook } as Reified;
   };
@@ -290,9 +281,19 @@ export function commands(
     isEnabled: () => open(state.workbook())?.locked === false,
     isVisible: () => commands.isEnabled(CommandIDs.assign),
     label: trans.__('Assign workbook...'),
-    execute: async (args: Partial<Credentials & Assignment & { rubric: string }>) => {
-      const { rubric, workbook } = await reify(args);
-      if (!rubric || (args.rubric && args.rubric !== open(workbook)?.id)) return null;
+    execute: async (args: Partial<Credentials & Assignment & {
+      rubric: string; view: string | null;
+    }>) => {
+      // Debounced edits belong to a view, even after it loses focus or is renamed.
+      const panel = args.view && find(shell.widgets('main'), widget =>
+        widget instanceof NotebookPanel && widget.content.id === args.view
+      );
+      const workbook = args.view
+        ? panel instanceof NotebookPanel ? panel : null
+        : (await reify(args)).workbook;
+      const rubric = open(workbook);
+      if (!workbook || !rubric || (args.rubric && args.rubric !== rubric.id))
+        return null;
       return (await Workbook.assign(workbook, args)).assignment;
     }
   }));
