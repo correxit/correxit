@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { notebook, setup, shutdown } from './utils';
+import { setup, shutdown } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -689,7 +689,7 @@ test('manual roster normalization retries after an assignee changes during signi
   }
 });
 
-['switching', 'replacement'].forEach(mode => {
+['switching', 'returning', 'replacement'].forEach(mode => {
   test(`assignment ${mode} isolates an earlier save`, async ({ page }) => {
     const { dispose } = await setup(page, [
       { id: 'cell', source: 'print(42)' }
@@ -749,26 +749,68 @@ test('manual roster normalization retries after an assignee changes during signi
       const area = page.getByRole('textbox', { name: 'Roster', exact: true });
       await area.fill('alice@example.com');
       await page.waitForFunction(() => (window as any).__correxit_save.started);
+      await area.fill('alice@example.com\nbob@example.com');
+      await page.waitForTimeout(300);
 
-      if (mode === 'switching') second = await notebook(page);
+      if (mode !== 'replacement') {
+        const path: string = await body.evaluate(async () => {
+          const app = (window as any).jupyterapp;
+          const file = await app.serviceManager.contents.newUntitled({
+            path: '.',
+            type: 'notebook'
+          });
+          await app.commands.execute('docmanager:open', {
+            path: file.path,
+            kernel: { name: app.serviceManager.kernelspecs.specs.default }
+          });
+          return file.path;
+        });
+        second = path;
+        await page.waitForFunction(
+          (path: string) =>
+            (window as any).jupyterapp.shell.currentWidget?.context?.path ===
+            path,
+          path
+        );
+        await body.evaluate(async () => {
+          await (window as any).jupyterapp.shell.currentWidget.context.ready;
+        });
+      }
       await initialize(['carol@example.com']);
       await expect(area).toHaveValue('carol@example.com');
+      if (mode === 'returning') {
+        await body.evaluate(async (_: Element, path: string) => {
+          await (window as any).jupyterapp.commands.execute('docmanager:open', {
+            path
+          });
+        }, first);
+        await expect(area).toHaveValue('alice@example.com\nbob@example.com');
+      }
       await body.evaluate(() => (window as any).__correxit_save.release());
       await page.waitForFunction(
         () => (window as any).__correxit_save.finished
       );
-      await expect(area).toHaveValue('carol@example.com');
-      const roster = await body.evaluate((_: Element, path: string) => {
-        const context = window as any;
-        const panel = Array.from(context.jupyterapp.shell.widgets('main')).find(
-          (panel: any) => panel.context?.path === path
+      await expect
+        .poll(() =>
+          body.evaluate((_: Element, path: string) => {
+            const context = window as any;
+            const panel = Array.from(
+              context.jupyterapp.shell.widgets('main')
+            ).find((panel: any) => panel.context?.path === path);
+            return context.__correxit__.Workbook.open(panel, true).assignment
+              .roster;
+          }, first)
+        )
+        .toEqual(
+          mode === 'replacement'
+            ? ['carol@example.com']
+            : ['alice@example.com', 'bob@example.com']
         );
-        return context.__correxit__.Workbook.open(panel, true).assignment
-          .roster;
-      }, first);
-      expect(roster).toEqual([
-        mode === 'switching' ? 'alice@example.com' : 'carol@example.com'
-      ]);
+      await expect(area).toHaveValue(
+        mode === 'returning'
+          ? 'alice@example.com\nbob@example.com'
+          : 'carol@example.com'
+      );
     } finally {
       await body
         .evaluate(() => {
@@ -782,6 +824,16 @@ test('manual roster normalization retries after an assignee changes during signi
         })
         .catch(() => {});
       if (second) {
+        await body
+          .evaluate(async (_: Element, path: string) => {
+            await (window as any).jupyterapp.commands.execute(
+              'docmanager:open',
+              {
+                path
+              }
+            );
+          }, second)
+          .catch(() => {});
         await page.notebook.close(true).catch(() => {});
         await page.contents.deleteFile(second).catch(() => {});
         await body
@@ -793,6 +845,119 @@ test('manual roster normalization retries after an assignee changes during signi
           }, first)
           .catch(() => {});
       }
+      await dispose();
+    }
+  });
+});
+
+['penalty', 'policy'].forEach(mode => {
+  test(`manual overdue ${mode} stays paired during an earlier save`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    const body = page.locator('body');
+    const expected =
+      mode === 'penalty'
+        ? { overdue: 'dock', penalty: 20 }
+        : { overdue: 'reject', penalty: null };
+
+    try {
+      await body.evaluate(async (_: Element, mode: string) => {
+        const context = window as any;
+        const { Workbook, Rubric } = context.__correxit__;
+        const app = context.jupyterapp;
+        const rubric = Rubric.create();
+        await Workbook.update(
+          app.shell.currentWidget,
+          await Rubric.assign(
+            {
+              ...rubric,
+              key: 'secret',
+              assignment: {
+                ...rubric.assignment,
+                keys: {
+                  private: { assignee: null, author: 'priv' },
+                  public: { assignee: null, author: 'pub' }
+                }
+              }
+            },
+            {
+              expiration: 1_900_000_000_000,
+              overdue: mode === 'penalty' ? 'dock' : 'accept',
+              penalty: mode === 'penalty' ? 10 : null
+            }
+          )
+        );
+        context.__correxit_save = {
+          prepare: Rubric.assign,
+          started: false,
+          release: null
+        };
+        Rubric.assign = async (...args: any[]) => {
+          const save = context.__correxit_save;
+          const first = !save.started;
+          save.started = true;
+          const result = await save.prepare(...args);
+          if (first) await new Promise(resolve => (save.release = resolve));
+          return result;
+        };
+      }, mode);
+
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const policy = page.getByRole('combobox', {
+        name: 'Overdue',
+        exact: true
+      });
+      const penalty = page.getByRole('spinbutton', {
+        name: 'Penalty',
+        exact: true
+      });
+      if (mode === 'penalty') await penalty.fill('20');
+      else await policy.selectOption('reject');
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      await body.evaluate(async (_: Element, mode: string) => {
+        await (window as any).jupyterapp.commands.execute('correxit:assign', {
+          name: 'Updated assignment',
+          overdue: mode === 'penalty' ? 'accept' : 'dock',
+          penalty: mode === 'penalty' ? null : 10
+        });
+      }, mode);
+      await expect(policy).toHaveValue(expected.overdue);
+      if (mode === 'penalty') await expect(penalty).toHaveValue('20');
+      else await expect(penalty).toBeHidden();
+      await body.evaluate(() => (window as any).__correxit_save.release());
+
+      await expect
+        .poll(() =>
+          body.evaluate(() => {
+            const context = window as any;
+            const panel = context.jupyterapp.shell.currentWidget;
+            return [
+              context.__correxit__.Workbook.open(panel, true).assignment,
+              panel.context.model.sharedModel.getMetadata('correxit').assignment
+            ].map(({ name, overdue, penalty }) => ({ name, overdue, penalty }));
+          })
+        )
+        .toEqual([
+          { name: 'Updated assignment', ...expected },
+          { name: 'Updated assignment', ...expected }
+        ]);
+    } finally {
+      await body
+        .evaluate(() => {
+          const context = window as any;
+          if (context.__correxit_save) {
+            context.__correxit_save.release?.();
+            context.__correxit__.Rubric.assign =
+              context.__correxit_save.prepare;
+            delete context.__correxit_save;
+          }
+        })
+        .catch(() => {});
       await dispose();
     }
   });

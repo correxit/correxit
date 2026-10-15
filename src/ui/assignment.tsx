@@ -1,7 +1,7 @@
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { CommandToolbarButtonComponent } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 
 type Assignment = Rubric.Assignment;
@@ -91,16 +91,16 @@ const option = (registration: Registration) => (
 );
 
 namespace Draft {
-  const keys = [
-    'assignee',
-    'expiration',
-    'id',
-    'name',
-    'overdue',
-    'penalty',
-    'resources',
-    'roster'
+  const groups = [
+    ['assignee'],
+    ['expiration'],
+    ['id'],
+    ['name'],
+    ['overdue', 'penalty'],
+    ['resources'],
+    ['roster']
   ] as const;
+  const keys = groups.flat();
   type Changes = Partial<Pick<Assignment, (typeof keys)[number]>>;
   export type Fields = Omit<Required<Changes>, 'roster'> & { roster: string };
   type Save = Readonly<{ version: number; changes: Changes }>;
@@ -113,6 +113,14 @@ namespace Draft {
       | { phase: 'ready' | 'failed'; save: null }
       | { phase: 'saving'; save: Save }
     );
+  type Editor = {
+    id: string;
+    read: () => State;
+    subscribe: (listener: () => void) => () => void;
+    edit: (update: Partial<Fields>) => void;
+    observe: (assignment: Assignment, locked: boolean) => void;
+  };
+  const drafts = new WeakMap<Workbook, Editor>();
   const fields = (assignment: Assignment): Fields =>
     ({
       ...Object.fromEntries(keys.map(key => [key, assignment[key]])),
@@ -126,6 +134,77 @@ namespace Draft {
       ? fields.assignee
       : ''
   });
+
+  export function open(
+    workbook: Workbook,
+    rubric: Rubric,
+    commands: CommandRegistry
+  ): Editor {
+    const cached = drafts.get(workbook);
+    if (cached?.id === rubric.id) return cached;
+
+    const { id } = rubric;
+    let state = create(rubric.assignment);
+    let delay: number | null = null;
+    const listeners = new Set<() => void>();
+    const current = () => {
+      if (workbook.context.isDisposed || drafts.get(workbook) !== editor)
+        return null;
+      const rubric = Workbook.open(workbook, true);
+      return rubric?.id === id && !rubric.locked ? rubric : null;
+    };
+    const update = (next: State) => {
+      if (state === next) return;
+      state = next;
+      if (delay !== null) window.clearTimeout(delay);
+      delay = null;
+      if (
+        current() &&
+        state.phase === 'ready' &&
+        Object.keys(changes(state)).length
+      )
+        delay = window.setTimeout(() => void persist(), DELAY);
+      listeners.forEach(listener => listener());
+    };
+    const persist = async () => {
+      const rubric = current();
+      if (!rubric) return;
+      const next = begin(observe(state, rubric.assignment));
+      const { save } = next;
+      update(next);
+      if (!save) return;
+
+      const assignment = await commands
+        .execute(assign, {
+          ...save.changes,
+          path: workbook.context.path,
+          rubric: id
+        })
+        .catch(() => null);
+      const latest = current();
+      if (!latest) return update(fail(state, save));
+
+      const observed = observe(state, latest.assignment);
+      update(
+        assignment
+          ? complete(observed, save, latest.assignment)
+          : fail(observed, save)
+      );
+    };
+    const editor: Editor = {
+      id,
+      read: () => state,
+      subscribe: listener => {
+        listeners.add(listener);
+        return () => void listeners.delete(listener);
+      },
+      edit: fields => update(edit(state, fields)),
+      observe: (assignment, locked) =>
+        update(locked ? create(assignment) : observe(state, assignment))
+    };
+    drafts.set(workbook, editor);
+    return editor;
+  }
 
   export function create(assignment: Assignment): State {
     return {
@@ -158,9 +237,11 @@ namespace Draft {
   export function changes(state: State): Changes {
     const assignment = view(state);
     return Object.fromEntries(
-      keys
-        .filter(key => !same(assignment[key], state.assignment[key]))
-        .map(key => [key, assignment[key]])
+      groups
+        .filter(keys =>
+          keys.some(key => !same(assignment[key], state.assignment[key]))
+        )
+        .flatMap(keys => keys.map(key => [key, assignment[key]]))
     );
   }
 
@@ -172,13 +253,17 @@ namespace Draft {
 
     // Keep edited fields, including a reversion made while save is pending.
     const current = Object.fromEntries(
-      keys.map(key => {
-        const edited =
-          !same(value(state.fields, key), value(before, key)) ||
-          (state.save &&
-            Object.prototype.hasOwnProperty.call(state.save.changes, key));
-        const unchanged = same(value(state.fields, key), value(next, key));
-        return [key, edited || unchanged ? state.fields[key] : next[key]];
+      groups.flatMap(keys => {
+        const edited = keys.some(
+          key =>
+            !same(value(state.fields, key), value(before, key)) ||
+            (state.save &&
+              Object.prototype.hasOwnProperty.call(state.save.changes, key))
+        );
+        return keys.map(key => {
+          const unchanged = same(value(state.fields, key), value(next, key));
+          return [key, edited || unchanged ? state.fields[key] : next[key]];
+        });
       })
     ) as Fields;
 
@@ -241,16 +326,15 @@ const Editor: React.FC<{
   rubric: Rubric;
 }> = ({ commands, trans, workbook, rubric }) => {
   const { locked } = rubric;
-  const [state, setState] = useState(() => Draft.create(rubric.assignment));
+  const draft = Draft.open(workbook, rubric, commands);
+  const state = useSyncExternalStore(draft.subscribe, draft.read);
   const [registered, setRegistered] = useState<Registered>(null);
   const [overwrite, setOverwrite] = useState(false);
   const [pending, setPending] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const assignment = locked ? rubric.assignment : Draft.view(state);
-  const { save } = state;
   const cached = rubric.id;
-  const edit = (update: Partial<Draft.Fields>) =>
-    setState(current => Draft.edit(current, update));
+  const { edit } = draft;
   const pick = (next: string | null) =>
     setSelected(current => (current === next ? current : next));
   useEffect(() => {
@@ -276,12 +360,8 @@ const Editor: React.FC<{
     void request();
   }, [cached, commands, workbook]);
   useEffect(() => {
-    setState(current =>
-      locked
-        ? Draft.create(rubric.assignment)
-        : Draft.observe(current, rubric.assignment)
-    );
-  }, [locked, rubric.assignment]);
+    draft.observe(rubric.assignment, locked);
+  }, [draft, locked, rubric.assignment]);
   useEffect(() => {
     if (locked) return;
 
@@ -310,42 +390,7 @@ const Editor: React.FC<{
     }
     pick(identify(matched));
     edit(freeze(matched));
-  }, [locked, registered, rubric.assignment.id, selected]);
-  useEffect(() => {
-    if (
-      locked ||
-      state.phase !== 'ready' ||
-      !Object.keys(Draft.changes(state)).length
-    )
-      return;
-    const delay = window.setTimeout(() => setState(Draft.begin), DELAY);
-    return () => window.clearTimeout(delay);
-  }, [locked, state]);
-  useEffect(() => {
-    if (!save) return;
-
-    let canceled = false;
-    void commands
-      .execute(assign, {
-        ...save.changes,
-        path: workbook.context.path,
-        rubric: cached
-      })
-      .then((assignment: Assignment | null) => {
-        if (canceled) return;
-
-        const latest = assignment && Workbook.open(workbook, true);
-        setState(current =>
-          latest?.id === cached && !latest.locked
-            ? Draft.complete(current, save, latest.assignment)
-            : Draft.fail(current, save)
-        );
-      })
-      .catch(() => {
-        if (!canceled) setState(current => Draft.fail(current, save));
-      });
-    return () => void (canceled = true);
-  }, [cached, commands, save, workbook]);
+  }, [edit, locked, registered, rubric.assignment.id, selected]);
 
   const all =
     courses(registered) ??
