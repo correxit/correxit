@@ -549,6 +549,146 @@ test('manual roster editing updates assignee choices live', async ({
   });
 });
 
+test('manual roster normalization retries after an assignee changes during signing', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
+  const body = page.locator('body');
+
+  try {
+    await body.evaluate(async () => {
+      const context = window as any;
+      const { Workbook, Rubric } = context.__correxit__;
+      const app = context.jupyterapp;
+      const rubric = Rubric.create();
+      await Workbook.update(
+        app.shell.currentWidget,
+        await Rubric.assign(
+          {
+            ...rubric,
+            key: 'secret',
+            assignment: {
+              ...rubric.assignment,
+              keys: {
+                private: { assignee: null, author: 'priv' },
+                public: { assignee: null, author: 'pub' }
+              }
+            }
+          },
+          {
+            assignee: 'alice@example.com',
+            roster: ['alice@example.com', 'bob@example.com']
+          }
+        )
+      );
+      const execute = app.commands.execute.bind(app.commands);
+      context.__correxit_save = {
+        execute,
+        prepare: Rubric.assign,
+        calls: 0,
+        finished: 0,
+        errors: [],
+        started: false,
+        release: null
+      };
+      Rubric.assign = async (...args: any[]) => {
+        const save = context.__correxit_save;
+        const first = !save.started;
+        save.started = true;
+        const result = await save.prepare(...args);
+        if (first) await new Promise(resolve => (save.release = resolve));
+        return result;
+      };
+      app.commands.execute = async (...args: any[]) => {
+        if (args[0] !== 'correxit:assign') return execute(...args);
+        const save = context.__correxit_save;
+        save.calls++;
+        try {
+          return await execute(...args);
+        } catch (error) {
+          save.errors.push(String(error));
+          throw error;
+        } finally {
+          save.finished++;
+        }
+      };
+    });
+
+    await page.getByRole('tab', { name: 'Correxit' }).click();
+    const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+    const assignee = page.locator(
+      'select[name="correxit-assignment-assignee"]'
+    );
+    await expect(assignee).toHaveValue('alice@example.com');
+    await area.fill('alice@example.com');
+    await page.waitForFunction(() => !!(window as any).__correxit_save.release);
+
+    await body.evaluate(async () => {
+      await (window as any).__correxit_save.execute('correxit:assign', {
+        assignee: 'bob@example.com'
+      });
+    });
+    // Observe the normalized draft before the roster-only save is rebased.
+    await expect(assignee).toHaveValue('');
+    await expect(area).toHaveValue('alice@example.com');
+    await body.evaluate(() => (window as any).__correxit_save.release());
+
+    const expected = { assignee: '', roster: ['alice@example.com'] };
+    await expect
+      .poll(() =>
+        body.evaluate(() => {
+          const context = window as any;
+          const { assignment } = context.__correxit__.Workbook.open(
+            context.jupyterapp.shell.currentWidget,
+            true
+          );
+          return { assignee: assignment.assignee, roster: assignment.roster };
+        })
+      )
+      .toEqual(expected);
+    await page.waitForFunction(
+      () => (window as any).__correxit_save.finished === 2
+    );
+    const stored = await body.evaluate(async () => {
+      const context = window as any;
+      const metadata =
+        context.jupyterapp.shell.currentWidget.context.model.sharedModel.getMetadata(
+          'correxit'
+        );
+      const { assignment } = await context.__correxit__.Rubric.unlock(
+        metadata,
+        'secret'
+      );
+      return { assignee: assignment.assignee, roster: assignment.roster };
+    });
+    expect(stored).toEqual(expected);
+    expect(
+      await body.evaluate(() => {
+        const { calls, errors } = (window as any).__correxit_save;
+        return { calls, errors };
+      })
+    ).toEqual({
+      calls: 2,
+      errors: [expect.stringContaining('assignee does not exist in roster')]
+    });
+    await expect(assignee).toHaveValue('');
+    await expect(area).toHaveValue('alice@example.com');
+  } finally {
+    await body
+      .evaluate(() => {
+        const context = window as any;
+        if (context.__correxit_save) {
+          context.__correxit_save.release?.();
+          context.jupyterapp.commands.execute = context.__correxit_save.execute;
+          context.__correxit__.Rubric.assign = context.__correxit_save.prepare;
+          delete context.__correxit_save;
+        }
+      })
+      .catch(() => {});
+    await dispose();
+  }
+});
+
 ['switching', 'replacement'].forEach(mode => {
   test(`assignment ${mode} isolates an earlier save`, async ({ page }) => {
     const { dispose } = await setup(page, [

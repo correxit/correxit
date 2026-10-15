@@ -148,6 +148,7 @@ namespace Draft {
   export function edit(state: State, update: Partial<Fields>): State {
     const fields = normalize({ ...state.fields, ...update });
     if (same(fields, state.fields)) return state;
+
     const version = state.version + 1;
     return state.phase === 'failed'
       ? { ...state, fields, version, phase: 'ready', save: null }
@@ -165,9 +166,11 @@ namespace Draft {
 
   export function observe(state: State, assignment: Assignment): State {
     if (assignment === state.assignment) return state;
-    const before = fields(state.assignment),
-      next = fields(assignment);
-    // Keep edited fields, including a reversion made while their save is pending.
+
+    const before = fields(state.assignment);
+    const next = fields(assignment);
+
+    // Keep edited fields, including a reversion made while save is pending.
     const current = Object.fromEntries(
       keys.map(key => {
         const edited =
@@ -178,11 +181,14 @@ namespace Draft {
         return [key, edited || unchanged ? state.fields[key] : next[key]];
       })
     ) as Fields;
-    return { ...state, assignment, fields: normalize(current) };
+
+    // A normalized field is a new edit, even while an earlier save is pending.
+    return edit({ ...state, assignment, fields: current }, {});
   }
 
   export function begin(state: State): State {
     if (state.phase !== 'ready') return state;
+
     const update = changes(state);
     return Object.keys(update).length
       ? {
@@ -317,6 +323,7 @@ const Editor: React.FC<{
   }, [locked, state]);
   useEffect(() => {
     if (!save) return;
+
     let canceled = false;
     void commands
       .execute(assign, {
@@ -326,6 +333,7 @@ const Editor: React.FC<{
       })
       .then((assignment: Assignment | null) => {
         if (canceled) return;
+
         const latest = assignment && Workbook.open(workbook, true);
         setState(current =>
           latest?.id === cached && !latest.locked
@@ -582,8 +590,10 @@ const Overdue: React.FC<{
   const penalty = (value: string) => {
     setText(value);
     if (!value.trim()) return;
+
     const parsed = Number(value);
     if (!Number.isInteger(parsed)) return;
+
     const penalty = Math.max(0, Math.min(100, parsed));
     edit({ overdue: 'dock', penalty });
   };
