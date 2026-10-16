@@ -60,9 +60,9 @@ namespace Saves {
         ) => {
           if (delay !== 150)
             return save.timeout.call(window, callback, delay, ...args);
-          window.setTimeout = save.timeout;
           save.timer = save.timeout.call(window, () => {}, 60000);
           save.release = () => {
+            window.setTimeout = save.timeout;
             window.clearTimeout(save.timer!);
             callback(...args);
           };
@@ -1256,41 +1256,61 @@ for (const { mode, save, reversion } of ['penalty', 'policy'].flatMap(mode =>
   });
 }
 
-for (const mode of ['command', 'encryption', 'receipt']) {
-  test(`clearing a deadline keeps its late policy cleared during ${mode}`, async ({
+for (const { mode, policy } of [
+  ...['command', 'encryption', 'receipt', 'debounce'].map(mode => ({
+    mode,
+    policy: true
+  })),
+  { mode: 'debounce', policy: false }
+]) {
+  test(`clearing a deadline keeps its late policy cleared during ${mode}${policy ? '' : ' when already applied'}`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
       { id: 'cell', source: 'print(42)' }
     ]);
+    const calls = mode === 'debounce' ? 1 : 2;
     try {
       await Saves.initialize(page, { expiration: 1_900_000_000_000 });
       await Saves.pause(page, mode);
       await page.getByRole('tab', { name: 'Correxit' }).click();
-      await page
-        .getByRole('textbox', { name: 'Roster', exact: true })
-        .fill('alice@example.com');
-      await page.waitForFunction(
-        () => !!(window as any).__correxit_save.release
-      );
+      if (mode !== 'debounce') {
+        await page
+          .getByRole('textbox', { name: 'Roster', exact: true })
+          .fill('alice@example.com');
+        await page.waitForFunction(
+          () => !!(window as any).__correxit_save.release
+        );
+      }
       const deadline = page.locator(
         'input[name="correxit-assignment-expiration"]'
       );
       await deadline.fill('');
-      await page.evaluate(async (mode: string) => {
-        // Also cover losing the stored deadline before the competing policy update.
-        if (mode !== 'command')
-          await (window as any).__correxit_save.execute('correxit:assign', {
-            expiration: null
-          });
-        await (window as any).__correxit_save.execute('correxit:assign', {
-          overdue: 'dock',
-          penalty: 10
-        });
-        (window as any).__correxit_save.release();
-      }, mode);
       await page.waitForFunction(
-        () => (window as any).__correxit_save.finished >= 2
+        () => !!(window as any).__correxit_save.release
+      );
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(calls - 1);
+      await page.evaluate(
+        async ({ mode, policy }: { mode: string; policy: boolean }) => {
+          // Also cover losing the stored deadline before the competing policy update.
+          if (mode !== 'command')
+            await (window as any).__correxit_save.execute('correxit:assign', {
+              expiration: null
+            });
+          if (policy)
+            await (window as any).__correxit_save.execute('correxit:assign', {
+              overdue: 'dock',
+              penalty: 10
+            });
+          (window as any).__correxit_save.release();
+        },
+        { mode, policy }
+      );
+      await page.waitForFunction(
+        (calls: number) => (window as any).__correxit_save.finished >= calls,
+        calls
       );
       const cleared = await page.evaluate(() => {
         const {
@@ -1315,7 +1335,9 @@ for (const mode of ['command', 'encryption', 'receipt']) {
         page.getByRole('combobox', { name: 'Overdue', exact: true })
       ).toHaveValue('accept');
       await page.waitForFunction(
-        () => (window as any).__correxit_save.finished >= 3
+        (calls: number) =>
+          (window as any).__correxit_save.finished >= calls + 1,
+        calls
       );
       const stored = await page.evaluate(() => {
         const panel = (window as any).jupyterapp.shell.currentWidget;
@@ -1328,6 +1350,20 @@ for (const mode of ['command', 'encryption', 'receipt']) {
         overdue: null,
         penalty: null
       });
+      // A completed reset must allow later policy edits without resubmitting it.
+      await page.evaluate(async () => {
+        await (window as any).__correxit_save.execute('correxit:assign', {
+          overdue: 'dock',
+          penalty: 10
+        });
+      });
+      await expect(
+        page.getByRole('combobox', { name: 'Overdue', exact: true })
+      ).toHaveValue('dock');
+      await page.waitForTimeout(400);
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(calls + 1);
     } finally {
       await Saves.restore(page);
       await dispose();

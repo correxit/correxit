@@ -162,7 +162,7 @@ namespace Draft {
       if (
         current() &&
         state.phase === 'ready' &&
-        Object.keys(changes(state)).length
+        (state.queued.length || Object.keys(changes(state)).length)
       )
         delay = window.setTimeout(() => void persist(), DELAY);
       listeners.forEach(listener => listener());
@@ -171,7 +171,11 @@ namespace Draft {
       const rubric = current();
       if (!rubric) return;
       const next = observe(state, rubric.assignment);
-      const patch = changes(next);
+      const input = view(next);
+      const patch = {
+        ...changes(next, input),
+        ...Object.fromEntries(next.queued.map(key => [key, input[key]]))
+      };
       if (next.phase !== 'ready' || !Object.keys(patch).length)
         return update(next);
 
@@ -179,7 +183,8 @@ namespace Draft {
       // Snapshot the normalized value being saved so an explicit reversion survives.
       update({
         ...next,
-        fields: { ...next.fields, assignee: view(next).assignee },
+        fields: { ...next.fields, assignee: input.assignee },
+        queued: [],
         phase: 'saving',
         save
       });
@@ -207,7 +212,6 @@ namespace Draft {
       // Retry a failure only for new input or a changed normalized patch.
       update({
         ...observed,
-        queued: [],
         phase:
           (assignment && latest) ||
           observed.version !== save.version ||
@@ -286,11 +290,8 @@ namespace Draft {
     if (!changed.length) return { ...state, fields };
 
     const version = state.version + 1;
-    // Remember explicit edits during a save, even if they return to its baseline.
-    const queued =
-      state.phase === 'saving'
-        ? Array.from(new Set([...state.queued, ...changed]))
-        : state.queued;
+    // Keep explicit intent until it is included in a save, even at the baseline.
+    const queued = Array.from(new Set([...state.queued, ...changed]));
     return state.phase === 'failed'
       ? { ...state, fields, queued, version, phase: 'ready', save: null }
       : { ...state, fields, queued, version };
