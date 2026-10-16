@@ -106,6 +106,7 @@ namespace Draft {
   export type State = Readonly<{
     assignment: Assignment;
     fields: Fields;
+    queued: readonly (keyof Fields)[];
     version: number;
   }> &
     (
@@ -206,6 +207,7 @@ namespace Draft {
       // Retry a failure only for new input or a changed normalized patch.
       update({
         ...observed,
+        queued: [],
         phase:
           (assignment && latest) ||
           observed.version !== save.version ||
@@ -254,6 +256,7 @@ namespace Draft {
     return {
       assignment,
       fields: fields(assignment),
+      queued: [],
       version: 0,
       phase: 'ready',
       save: null
@@ -275,9 +278,18 @@ namespace Draft {
     if (same(fields, state.fields)) return state;
 
     const version = state.version + 1;
+    // Remember explicit edits during a save, even if they return to its baseline.
+    const queued =
+      state.phase === 'saving'
+        ? keys.filter(
+            key =>
+              state.queued.includes(key) ||
+              !same(fields[key], state.fields[key])
+          )
+        : state.queued;
     return state.phase === 'failed'
-      ? { ...state, fields, version, phase: 'ready', save: null }
-      : { ...state, fields, version };
+      ? { ...state, fields, queued, version, phase: 'ready', save: null }
+      : { ...state, fields, queued, version };
   }
 
   export function changes(state: State, assignment = view(state)): Changes {
@@ -306,7 +318,9 @@ namespace Draft {
     const merged = Object.fromEntries(
       keys.map(key => [
         key,
-        key in edited || same(current[key], assignment[key])
+        state.queued.includes(key) ||
+        key in edited ||
+        same(current[key], assignment[key])
           ? state.fields[key]
           : next[key]
       ])

@@ -574,7 +574,7 @@ test('manual roster editing updates assignee choices live', async ({
   });
 });
 
-for (const { mode, edit, assigned } of [
+for (const { mode, edit, assigned, timing } of [
   ['encryption', 'none'],
   ['receipt', 'none'],
   ['encryption', 'reversion'],
@@ -583,18 +583,21 @@ for (const { mode, edit, assigned } of [
   ['encryption', 'deadline'],
   ['encryption', 'assignee'],
   ['receipt', 'assignee'],
+  ['encryption', 'assignee', 'before'],
+  ['receipt', 'assignee', 'before'],
   ['encryption', 'normalized'],
   ['receipt', 'normalized']
-].flatMap(([mode, edit]) =>
+].flatMap(([mode, edit, timing = 'after']) =>
   (edit === 'assignee' || edit === 'normalized' ? [true] : [false, true]).map(
     assigned => ({
       mode,
       edit,
-      assigned
+      assigned,
+      timing
     })
   )
 )) {
-  test(`roster${assigned ? ' and assignee' : ''} conflict during ${mode} with queued edit: ${edit}`, async ({
+  test(`roster${assigned ? ' and assignee' : ''} conflict during ${mode} with queued edit: ${edit}${edit === 'assignee' ? ` ${timing} conflict` : ''}`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
@@ -627,6 +630,12 @@ for (const { mode, edit, assigned } of [
       await page.waitForFunction(
         () => !!(window as any).__correxit_save.release
       );
+      const revert = async () => {
+        // Explicitly returning to the original unassigned value is still an edit.
+        await select.selectOption('alice@example.com');
+        await select.selectOption('');
+      };
+      if (edit === 'assignee' && timing === 'before') await revert();
       if (edit === 'reversion') await area.fill(original.join('\n'));
       if (edit === 'normalized') {
         await area.fill(original.join('\n'));
@@ -652,11 +661,7 @@ for (const { mode, edit, assigned } of [
       await expect(select).toHaveValue(
         edit === 'normalized' ? original[0] : ''
       );
-      if (edit === 'assignee') {
-        // Explicitly returning to the original unassigned value is still an edit.
-        await select.selectOption('alice@example.com');
-        await select.selectOption('');
-      }
+      if (edit === 'assignee' && timing === 'after') await revert();
       if (edit === 'deadline') await deadline.fill('2030-01-01T12:00');
       const expiration = await deadline.evaluate((input: HTMLInputElement) =>
         input.value ? new Date(input.value).getTime() : null
@@ -695,6 +700,19 @@ for (const { mode, edit, assigned } of [
         assignments: Array(2).fill({ assignee, roster, expiration })
       });
       await expect(area).toHaveValue(roster.join('\n'));
+      if (edit === 'assignee') {
+        // Completed edits must not keep overriding subsequent assignments.
+        await page.evaluate(async () => {
+          await (window as any).__correxit_save.execute('correxit:assign', {
+            assignee: 'bob@example.com'
+          });
+        });
+        await expect(select).toHaveValue('bob@example.com');
+        await page.waitForTimeout(400);
+        expect(
+          await page.evaluate(() => (window as any).__correxit_save.calls)
+        ).toBe(calls);
+      }
     } finally {
       await Saves.restore(page);
       await dispose();
