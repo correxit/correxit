@@ -636,6 +636,127 @@ for (const outcome of [
   }
 }
 
+for (const command of ['lock', 'reset', 'remove', 'dereference']) {
+  test(`${command} reports a failed metadata write before follow-up saves`, async ({
+    page
+  }) => {
+    const { dispose } = await prepare(page, [
+      { id: 'cell', source: 'print(42)' },
+      { id: 'ref', source: 'assert True' }
+    ]);
+    try {
+      await page.evaluate(async command => {
+        const { Workbook, Rubric } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget;
+        const created = Rubric.create();
+        await Workbook.update(
+          panel,
+          Rubric.add(
+            {
+              ...created,
+              key: 'secret',
+              assignment: {
+                ...created.assignment,
+                keys: {
+                  private: { assignee: null, author: 'priv' },
+                  public: { assignee: null, author: 'pub' }
+                }
+              }
+            },
+            {
+              id: 'cell',
+              is: 'correctable',
+              payload: null,
+              points: 1,
+              references: ['ref']
+            },
+            [{ cell: 'cell', referent: 'ref', points: 1, secret: false }]
+          )
+        );
+        const notebook = panel.context.model.sharedModel;
+        const held = ((window as any).__correxit_failure = {
+          panel,
+          lock: Rubric.lock,
+          write: notebook.setMetadata,
+          remove: notebook.deleteMetadata,
+          clear: notebook.clearUndoHistory,
+          save: panel.context.save,
+          encrypted: Promise.resolve(),
+          saves: 0,
+          clears: 0,
+          failures: 0,
+          unhandled: [] as string[],
+          rejection: (event: PromiseRejectionEvent) => {
+            if (event.reason?.message !== 'Metadata write failed') return;
+            held.unhandled.push(event.reason.message);
+            event.preventDefault();
+          }
+        });
+        window.addEventListener('unhandledrejection', held.rejection);
+        Rubric.lock = (...args: any[]) => (held.encrypted = held.lock(...args));
+        const fail = () => {
+          held.failures++;
+          throw new Error('Metadata write failed');
+        };
+        notebook.setMetadata = (key: string, value: any) =>
+          key === 'correxit' ? fail() : held.write.call(notebook, key, value);
+        notebook.deleteMetadata = (key: string) =>
+          key === 'correxit' ? fail() : held.remove.call(notebook, key);
+        notebook.clearUndoHistory = () => held.clears++;
+        panel.context.save = async () => {
+          held.saves++;
+        };
+        (held as any).done = app.commands
+          .execute(`correxit:${command}`, { id: 'cell', referent: 'ref' })
+          .then(
+            () => null,
+            (error: Error) => error.message
+          );
+      }, command);
+      if (command === 'reset')
+        await page.locator('.jp-Dialog button.jp-mod-accept').click();
+      const result = await page.evaluate(async () => {
+        const held = (window as any).__correxit_failure;
+        const error = await held.done;
+        await held.encrypted;
+        await new Promise(resolve => window.setTimeout(resolve, 0));
+        const { saves, clears, failures, unhandled } = held;
+        return { error, saves, clears, failures, unhandled };
+      });
+      expect(result).toEqual({
+        error: command === 'lock' ? null : 'Metadata write failed',
+        saves: 0,
+        clears: 0,
+        failures: 1,
+        unhandled: []
+      });
+      if (command === 'lock') {
+        await expect(page.locator('.jp-Dialog')).toContainText(
+          'Metadata write failed'
+        );
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+      }
+    } finally {
+      await page
+        .evaluate(() => {
+          const held = (window as any).__correxit_failure;
+          if (!held) return;
+          const notebook = held.panel.context.model.sharedModel;
+          (window as any).__correxit__.Rubric.lock = held.lock;
+          notebook.setMetadata = held.write;
+          notebook.deleteMetadata = held.remove;
+          notebook.clearUndoHistory = held.clear;
+          held.panel.context.save = held.save;
+          window.removeEventListener('unhandledrejection', held.rejection);
+          delete (window as any).__correxit_failure;
+        })
+        .catch(() => {});
+      await dispose();
+    }
+  });
+}
+
 test('correction without a rubric returns an unverified result', async ({
   page
 }) => {

@@ -694,7 +694,7 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<{ referent: string }>) => {
       const workbook = state.workbook();
       if (!workbook || !args.referent) return;
-      Workbook.dereference(workbook, args.referent);
+      await Workbook.dereference(workbook, args.referent);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.distribute, {
@@ -959,7 +959,7 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<Cell>) => {
       const workbook = state.workbook();
       const id = state.cell(args);
-      if (workbook && id) Workbook.remove(workbook, id);
+      if (workbook && id) await Workbook.remove(workbook, id);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.reset, {

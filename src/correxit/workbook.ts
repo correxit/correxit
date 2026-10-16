@@ -817,14 +817,14 @@ export namespace Workbook {
   }
 
   /** Remove a single reference from a cell. */
-  export function dereference(
+  export async function dereference(
     workbook: Workbook,
     referent: string
-  ): void {
+  ): Promise<void> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked)
       throw new Error.Invalid('dereference error, invalid rubric');
-    update(workbook, Rubric.dereference(rubric, referent));
+    await update(workbook, Rubric.dereference(rubric, referent));
   }
 
   /** Revert a submission to draft, restoring cell editability. */
@@ -919,7 +919,7 @@ export namespace Workbook {
       secrets.map(({ referent }) => Cell.encrypt(workbook, referent, key))
     );
     transact(workbook, prepared);
-    update(workbook, locked, { ok: true, rubric: locked });
+    await update(workbook, locked, { ok: true, rubric: locked });
   }
 
   /**
@@ -1088,12 +1088,12 @@ export namespace Workbook {
   }
 
   /** Remove a cell from a workbook's rubric. */
-  export function remove(workbook: Workbook, id: string): void {
+  export async function remove(workbook: Workbook, id: string): Promise<void> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked)
       throw new Error.Invalid('remove error, invalid rubric');
 
-    update(workbook, Rubric.remove(rubric, id));
+    await update(workbook, Rubric.remove(rubric, id));
   }
 
   /**
@@ -1115,7 +1115,7 @@ export namespace Workbook {
 
   /** Reset a workbook back to a plain Jupyter notebook. */
   export async function reset(workbook: Workbook) {
-    update(workbook, null);
+    await update(workbook, null);
   }
 
   /** Revise a sealed submission: unseal cells and clear submission state. */
