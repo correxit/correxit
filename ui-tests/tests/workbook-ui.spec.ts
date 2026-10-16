@@ -1019,6 +1019,102 @@ for (const mode of ['signing', 'encryption']) {
   });
 }
 
+for (const reversion of [false, true]) {
+  test(`returning to a notebook preserves its pending registered assignment${reversion ? ' reversion' : ''}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    try {
+      await page.evaluate(() => {
+        const app = (window as any).jupyterapp;
+        const registrations = ['A', 'B'].map(id => ({
+          id,
+          name: `Assignment ${id}`,
+          expiration: null,
+          roster: []
+        }));
+        const held = ((window as any).__correxit_registration = {
+          panel: app.shell.currentWidget,
+          execute: app.commands.execute.bind(app.commands),
+          calls: []
+        });
+        app.commands.execute = (id: string, args: any) => {
+          if (id === 'correxit:enroll') return Promise.resolve(registrations);
+          if (id === 'correxit:assign') held.calls.push(args.id);
+          return held.execute(id, args);
+        };
+      });
+      await Saves.initialize(page, { id: 'A', name: 'Assignment A' });
+      await Saves.pause(page);
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const choices = page.locator('.correxit-assignment select').filter({
+        has: page.locator('option[value="B"]')
+      });
+      await expect(choices).toHaveValue('A');
+      await choices.selectOption('B');
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      if (reversion) await choices.selectOption('A');
+      await page.evaluate(async () => {
+        const inject = await (window as any).jupyterapp.commands.execute(
+          'correxit:inject'
+        );
+        inject(null);
+      });
+      await expect(page.locator('.correxit-sidebar')).toContainText(
+        'Correxit: idle'
+      );
+      await page.evaluate(async () => {
+        const { jupyterapp: app, __correxit_registration: held } =
+          window as any;
+        const inject = await app.commands.execute('correxit:inject');
+        inject(held.panel);
+      });
+      const expected = reversion ? 'A' : 'B';
+      await expect(choices).toHaveValue(expected);
+      await page.evaluate(() => (window as any).__correxit_save.release());
+      await expect
+        .poll(() =>
+          page.evaluate(() => (window as any).__correxit_save.finished)
+        )
+        .toBe(reversion ? 2 : 1);
+      const result = await page.evaluate(() => {
+        const {
+          __correxit_registration: held,
+          __correxit__: { Workbook }
+        } = window as any;
+        return {
+          calls: held.calls,
+          cached: Workbook.open(held.panel).assignment.id,
+          stored:
+            held.panel.context.model.sharedModel.getMetadata('correxit')
+              .assignment.id
+        };
+      });
+      expect(result).toEqual({
+        calls: reversion ? ['B', 'A'] : ['B'],
+        cached: expected,
+        stored: expected
+      });
+      await expect(choices).toHaveValue(expected);
+    } finally {
+      await Saves.restore(page);
+      await page
+        .evaluate(() => {
+          const held = (window as any).__correxit_registration;
+          if (!held) return;
+          (window as any).jupyterapp.commands.execute = held.execute;
+          delete (window as any).__correxit_registration;
+        })
+        .catch(() => {});
+      await dispose();
+    }
+  });
+}
+
 for (const field of ['roster', 'assignee']) {
   test(`rejected save with a queued ${field} reversion waits for new input`, async ({
     page

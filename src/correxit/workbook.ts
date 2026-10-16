@@ -9,6 +9,7 @@ import {
 } from '@jupyterlab/notebook';
 import { KernelSpec } from '@jupyterlab/services';
 import { findIndex, range } from '@lumino/algorithm';
+import { PromiseDelegate } from '@lumino/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { Assignment, Correxit, Rubric } from '.';
 import * as certificate from './certificate';
@@ -282,6 +283,7 @@ export namespace Workbook {
     rubric: Rubric | null;
     generation: number;
   }>());
+  const writes = new WeakMap<INotebookModel['sharedModel'], Promise<void>>();
   const stale = (
     assignment: Rubric.Assignment,
     {
@@ -1244,6 +1246,7 @@ export namespace Workbook {
    *
    * If the given rubric passes an audit, which may prune broken cells, it is
    * locked and written to the notebook metadata `correxit` key.
+   * Superseded updates wait for the latest metadata write, including failures.
    *
    * The audited rubric is returned.
    */
@@ -1264,17 +1267,31 @@ export namespace Workbook {
     audited = audit(workbook, rubric)
   ): Promise<Rubric | null> {
     const notebook = workbook.context.model.sharedModel;
-    if (!audited || !rubric) {
-      set(workbook, null);
-      notebook.deleteMetadata('correxit');
-      notebook.clearUndoHistory();
-      return null;
+    if (rubric && audited && !audited.ok)
+      throw new Error.Invalid(`update error: ${audited.error}`);
+    const current = rubric && audited ? audited.rubric : null;
+    const write = new PromiseDelegate<void>();
+    writes.set(notebook, write.promise);
+    try {
+      set(workbook, current);
+      if (current) {
+        const locked = await Rubric.lock(current);
+        // A newer update owns persistence, even if this encryption finishes last.
+        if (get(workbook) === current) notebook.setMetadata('correxit', locked);
+      } else {
+        notebook.deleteMetadata('correxit');
+        notebook.clearUndoHistory();
+      }
+      write.resolve();
+    } catch (error) {
+      write.reject(error);
     }
-    if (!audited.ok) throw new Error.Invalid(`update error: ${audited.error}`);
-    set(workbook, audited.rubric);
-    const locked = await Rubric.lock(audited.rubric);
-    // A newer update owns persistence, even if this encryption finishes last.
-    if (get(workbook) === audited.rubric) notebook.setMetadata('correxit', locked);
-    return audited.rubric;
+    let pending = write.promise;
+    await pending;
+    while (pending !== writes.get(notebook)) {
+      pending = writes.get(notebook)!;
+      await pending;
+    }
+    return current;
   }
 }
