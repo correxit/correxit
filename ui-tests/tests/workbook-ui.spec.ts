@@ -1272,24 +1272,27 @@ for (const outcome of ['success', 'encryption failure', 'metadata failure']) {
   });
 }
 
-for (const { mode, reversion } of ['notebook', 'clone'].flatMap(mode =>
-  [false, true].map(reversion => ({ mode, reversion }))
+for (const { mode, reversion, named } of ['notebook', 'clone'].flatMap(mode =>
+  [false, true].flatMap(reversion =>
+    [false, true].map(named => ({ mode, reversion, named }))
+  )
 )) {
-  test(`returning from a ${mode} preserves its pending registered assignment${reversion ? ' reversion' : ''}`, async ({
+  test(`returning from a ${mode} preserves its pending ${named ? 'name-only' : 'registered'} assignment${reversion ? ' reversion' : ''}`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
       { id: 'cell', source: 'print(42)' }
     ]);
+    const registrations = ['A', 'B'].map(id => ({
+      id: named ? null : id,
+      name: `Assignment ${id}`,
+      expiration: null,
+      roster: [`${id.toLowerCase()}@example.com`]
+    }));
+    const [a, b] = registrations.map(({ id, name }) => id || name);
     try {
-      await page.evaluate(() => {
+      await page.evaluate(registrations => {
         const app = (window as any).jupyterapp;
-        const registrations = ['A', 'B'].map(id => ({
-          id,
-          name: `Assignment ${id}`,
-          expiration: null,
-          roster: []
-        }));
         const held = ((window as any).__correxit_registration = {
           panel: app.shell.currentWidget,
           execute: app.commands.execute.bind(app.commands),
@@ -1298,16 +1301,16 @@ for (const { mode, reversion } of ['notebook', 'clone'].flatMap(mode =>
         });
         app.commands.execute = (id: string, args: any) => {
           if (id === 'correxit:enroll') return Promise.resolve(registrations);
-          if (id === 'correxit:assign') held.calls.push(args.id);
+          if (id === 'correxit:assign') held.calls.push(args.name);
           return held.execute(id, args);
         };
-      });
-      await Saves.initialize(page, { id: 'A', name: 'Assignment A' });
+      }, registrations);
+      await Saves.initialize(page, registrations[0]);
       await page.getByRole('tab', { name: 'Correxit' }).click();
       const choices = page.locator('.correxit-assignment select').filter({
-        has: page.locator('option[value="B"]')
+        has: page.locator(`option[value="${b}"]`)
       });
-      await expect(choices).toHaveValue('A');
+      await expect(choices).toHaveValue(a);
       if (mode === 'clone') {
         await page.evaluate(async () => {
           const { jupyterapp: app, __correxit_registration: held } =
@@ -1315,7 +1318,7 @@ for (const { mode, reversion } of ['notebook', 'clone'].flatMap(mode =>
           await app.commands.execute('docmanager:clone');
           held.clone = app.shell.currentWidget;
         });
-        await expect(choices).toHaveValue('A');
+        await expect(choices).toHaveValue(a);
         await page.evaluate(() => {
           const { jupyterapp: app, __correxit_registration: held } =
             window as any;
@@ -1323,21 +1326,21 @@ for (const { mode, reversion } of ['notebook', 'clone'].flatMap(mode =>
         });
       }
       await Saves.pause(page);
-      await choices.selectOption('B');
+      await choices.selectOption(b);
       await page.waitForFunction(
         () => !!(window as any).__correxit_save.release
       );
-      if (reversion) await choices.selectOption('A');
+      if (reversion) await choices.selectOption(a);
       if (mode === 'clone') {
         await page.evaluate(() => {
           const { jupyterapp: app, __correxit_registration: held } =
             window as any;
           app.shell.activateById(held.clone.id);
         });
-        await expect(choices).toHaveValue('A');
+        await expect(choices).toHaveValue(a);
         // The outgoing clone must not dictate the returning view's selection.
         if (reversion) {
-          await choices.selectOption('B');
+          await choices.selectOption(b);
           await page.waitForFunction(
             () => (window as any).__correxit_save.finished === 1
           );
@@ -1369,33 +1372,41 @@ for (const { mode, reversion } of ['notebook', 'clone'].flatMap(mode =>
           ? ['B', 'B', 'A']
           : ['B', 'A']
         : ['B'];
-      const expected = reversion ? 'A' : 'B';
-      await expect(choices).toHaveValue(expected);
+      const expected = registrations[reversion ? 0 : 1];
+      await expect(choices).toHaveValue(reversion ? a : b);
       await page.evaluate(() => (window as any).__correxit_save.release());
       await expect
         .poll(() =>
           page.evaluate(() => (window as any).__correxit_save.finished)
         )
         .toBe(calls.length);
-      const result = await page.evaluate(() => {
+      const result = await page.evaluate(async () => {
         const {
           __correxit_registration: held,
-          __correxit__: { Workbook }
+          __correxit__: { Workbook, Rubric }
         } = window as any;
+        const fields = ({ expiration, id, name, roster }: any) => ({
+          expiration,
+          id,
+          name,
+          roster
+        });
+        const stored = await Rubric.unlock(
+          held.panel.context.model.sharedModel.getMetadata('correxit'),
+          'secret'
+        );
         return {
           calls: held.calls,
-          cached: Workbook.open(held.panel).assignment.id,
-          stored:
-            held.panel.context.model.sharedModel.getMetadata('correxit')
-              .assignment.id
+          cached: fields(Workbook.open(held.panel).assignment),
+          stored: fields(stored.assignment)
         };
       });
       expect(result).toEqual({
-        calls,
+        calls: calls.map(id => `Assignment ${id}`),
         cached: expected,
         stored: expected
       });
-      await expect(choices).toHaveValue(expected);
+      await expect(choices).toHaveValue(reversion ? a : b);
     } finally {
       await Saves.restore(page);
       await page

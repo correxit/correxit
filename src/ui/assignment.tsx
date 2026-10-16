@@ -154,8 +154,9 @@ const Editor: React.FC<{
       ? roster.find(r => identify(r) === selected)
       : selected === ''
         ? null
-        : roster.find(record => identify(record) === assignment.id) ||
-          (roster.length === 1 ? roster[0] : null);
+        : roster.find(
+            record => identify(record) === (assignment.id || assignment.name)
+          ) || (roster.length === 1 ? roster[0] : null);
     if (!matched) {
       if (selected !== '') pick(null);
       edit(blank);
@@ -163,7 +164,7 @@ const Editor: React.FC<{
     }
     pick(identify(matched));
     edit(freeze(matched));
-  }, [assignment.id, edit, locked, registered, selected]);
+  }, [assignment.id, assignment.name, edit, locked, registered, selected]);
 
   const all =
     courses(registered) ??
