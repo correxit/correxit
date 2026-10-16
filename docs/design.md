@@ -73,6 +73,13 @@ The architecture is divided into three layers:
 components are declarative. They render state and execute commands, but never
 call model functions directly.
 
+Assignment drafts separate pure reconciliation rules (`src/ui/draft.ts`) from
+notebook observation and save scheduling (`src/ui/drafts.ts`). `SidebarWidget`
+owns the latter and prepares each editor before rendering React. React reads
+the editor with `useSyncExternalStore` and submits edits; it never creates or
+disposes notebook subscriptions. A cached draft follows its notebook view even
+while inactive, so lock transitions can discard pending edits across tab switches.
+
 ## Data model: `Rubric` (`rubric.ts`)
 
 The central data structure is the `Rubric`, stored in notebook metadata under

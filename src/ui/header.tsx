@@ -4,6 +4,7 @@ import { CommandRegistry } from '@lumino/commands';
 import React, { useEffect, useState } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
 import { Assignment } from './assignment';
+import type * as drafts from './drafts';
 import { trail } from './trail';
 
 type Tone =
@@ -209,9 +210,10 @@ const step = (
 
 export const Header: React.FC<{
   commands: CommandRegistry;
+  editor: drafts.Editor | null;
   trans: TranslationBundle;
   workbook: Workbook | null;
-}> = ({ commands, trans, workbook }) => {
+}> = ({ commands, editor, trans, workbook }) => {
   const rubric = workbook ? Workbook.open(workbook, true) : null;
   const unstarted = useUnstarted(workbook, rubric);
   if (!workbook) {
@@ -280,7 +282,9 @@ export const Header: React.FC<{
           </div>
         )}
       </div>
-      {!!rubric && <Assignment {...{ commands, trans, workbook }} />}
+      {!!rubric && editor?.id === rubric.id && (
+        <Assignment {...{ commands, editor, trans, workbook }} />
+      )}
       <div className="correxit-sidebar-next">
         <div className="correxit-sidebar-next-copy">
           <span className="correxit-sidebar-next-label">

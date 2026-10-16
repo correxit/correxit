@@ -850,6 +850,46 @@ for (const { mode, release } of ['debounce', 'signing'].flatMap(mode =>
   });
 }
 
+for (const owner of ['view', 'sidebar']) {
+  test(`disposing the ${owner} cancels its queued assignment draft`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    try {
+      await Saves.initialize(page, { roster: ['alice@example.com'] });
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+      await expect(area).toHaveValue('alice@example.com');
+      await Saves.pause(page, 'debounce');
+      await area.fill('bob@example.com');
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      await page.evaluate((owner: string) => {
+        const { jupyterapp: app, __correxit_save: held } = window as any;
+        const widget =
+          owner === 'view'
+            ? app.shell.currentWidget
+            : ['left', 'right']
+                .flatMap(area => Array.from(app.shell.widgets(area)))
+                .find((widget: any) => widget.hasClass('correxit-sidebar'));
+        if (!widget) throw new Error('Draft owner not found');
+        (widget as any).dispose();
+        held.release();
+      }, owner);
+      await page.waitForTimeout(400);
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(0);
+    } finally {
+      await Saves.restore(page);
+      await dispose();
+    }
+  });
+}
+
 test('manual roster saves in a second view without repeatedly assigning', async ({
   page
 }) => {

@@ -5,6 +5,7 @@ import React from 'react';
 import { Correxit, Workbook } from '..';
 import { Annotate } from './annotate';
 import { Body } from './body';
+import type * as drafts from './drafts';
 import { Header } from './header';
 import { SidebarWidget } from './widget';
 
@@ -13,11 +14,11 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 const { reset } = Correxit.CommandIDs;
 
 export function Sidebar(props: Sidebar.Props) {
-  const { annotate, commands, trans, workbook } = props;
+  const { annotate, commands, editor, trans, workbook } = props;
   return (
     <>
       <Annotate {...{ workbook: annotate ? workbook : null }} />
-      <Header {...{ commands, trans, workbook }} />
+      <Header {...{ commands, editor, trans, workbook }} />
       {workbook && (
         <>
           <Body {...{ commands, trans, workbook }} />
@@ -37,6 +38,7 @@ export namespace Sidebar {
   export type Props = {
     annotate: boolean;
     commands: CommandRegistry;
+    editor: drafts.Editor | null;
     trans: TranslationBundle;
     workbook: Workbook | null;
   };
