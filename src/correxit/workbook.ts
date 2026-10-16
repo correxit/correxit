@@ -265,14 +265,23 @@ export namespace Workbook {
       cell.transact(() => cell.setMetadata('editable', false));
 
   };
-  const [get, set] = (pool => {
+  const [get, set, generation] = (pool => {
     // Cloned views share both the latest rubric and persistence ownership.
     const get = (workbook: Workbook) =>
-      pool.get(workbook.context.model.sharedModel) || null;
-    const set = (workbook: Workbook, rubric: Rubric | null) =>
-      pool.set(workbook.context.model.sharedModel, rubric);
-    return [get, set];
-  })(new WeakMap<INotebookModel['sharedModel'], Rubric | null>());
+      pool.get(workbook.context.model.sharedModel)?.rubric ?? null;
+    const generation = (workbook: Workbook) =>
+      pool.get(workbook.context.model.sharedModel)?.generation ?? 0;
+    const set = (workbook: Workbook, rubric: Rubric | null) => {
+      // A lock boundary invalidates signing saves, even after unlocking again.
+      const next = generation(workbook) +
+        (get(workbook)?.locked !== rubric?.locked ? 1 : 0);
+      pool.set(workbook.context.model.sharedModel, { rubric, generation: next });
+    };
+    return [get, set, generation] as const;
+  })(new WeakMap<INotebookModel['sharedModel'], {
+    rubric: Rubric | null;
+    generation: number;
+  }>());
   const stale = (
     assignment: Rubric.Assignment,
     {
@@ -456,9 +465,10 @@ export namespace Workbook {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error.Invalid('assign error');
     if (!stale(rubric.assignment, assignment)) return rubric;
+    const started = generation(workbook);
     const assigned = await Rubric.assign(rubric, assignment);
     const latest = open(workbook, quiet);
-    if (latest?.id !== rubric.id)
+    if (latest?.id !== rubric.id || generation(workbook) !== started)
       throw new Error.Invalid('assign error: workbook changed');
     // Rebase the patch if another command changed the rubric while signing.
     return latest === rubric

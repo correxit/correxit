@@ -579,6 +579,7 @@ for (const { mode, edit, assigned } of [
   ['receipt', 'none'],
   ['encryption', 'reversion'],
   ['receipt', 'reversion'],
+  ['signing', 'reversion'],
   ['encryption', 'deadline'],
   ['encryption', 'assignee'],
   ['receipt', 'assignee'],
@@ -701,8 +702,10 @@ for (const { mode, edit, assigned } of [
   });
 }
 
-for (const release of ['locked', 'unlocked']) {
-  test(`inactive roster draft expires while ${release} across a lock cycle`, async ({
+for (const { mode, release } of ['debounce', 'signing'].flatMap(mode =>
+  ['locked', 'unlocked'].map(release => ({ mode, release }))
+)) {
+  test(`inactive roster ${mode} resumes while ${release} across a lock cycle`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
@@ -713,7 +716,7 @@ for (const release of ['locked', 'unlocked']) {
       await page.getByRole('tab', { name: 'Correxit' }).click();
       const area = page.getByRole('textbox', { name: 'Roster', exact: true });
       await expect(area).toHaveValue('carol@example.com');
-      await Saves.pause(page, 'debounce');
+      await Saves.pause(page, mode);
       await page.evaluate(() => {
         (window as any).__correxit_save.first = (
           window as any
@@ -749,8 +752,13 @@ for (const release of ['locked', 'unlocked']) {
           );
         })
       ).toBe(true);
-      if (release === 'locked')
+      if (release === 'locked') {
         await page.evaluate(() => (window as any).__correxit_save.release());
+        if (mode === 'signing')
+          await page.waitForFunction(
+            () => (window as any).__correxit_save.finished === 1
+          );
+      }
       await page.evaluate(async () => {
         const {
           __correxit__: { Workbook },
@@ -758,8 +766,13 @@ for (const release of ['locked', 'unlocked']) {
         } = window as any;
         await Workbook.unlock(held.second, 'secret');
       });
-      if (release === 'unlocked')
+      if (release === 'unlocked') {
         await page.evaluate(() => (window as any).__correxit_save.release());
+        if (mode === 'signing')
+          await page.waitForFunction(
+            () => (window as any).__correxit_save.finished === 1
+          );
+      }
       const before = await page.evaluate(async () => {
         const {
           jupyterapp: app,
@@ -786,6 +799,7 @@ for (const release of ['locked', 'unlocked']) {
         );
         return {
           calls: held.calls,
+          errors: held.errors,
           original: panel === held.first,
           rosters: [
             Workbook.open(panel).assignment.roster,
@@ -794,7 +808,9 @@ for (const release of ['locked', 'unlocked']) {
         };
       });
       expect(after).toEqual({
-        calls: 0,
+        calls: mode === 'signing' ? 1 : 0,
+        errors:
+          mode === 'signing' ? [expect.stringContaining('assign error')] : [],
         original: true,
         rosters: Array(2).fill(['carol@example.com'])
       });
