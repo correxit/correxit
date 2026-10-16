@@ -277,15 +277,19 @@ namespace Draft {
     const fields = { ...state.fields, ...update };
     if (same(fields, state.fields)) return state;
 
+    const current = values(state);
+    const next = values({ ...state, fields });
+    const changed = groups
+      .filter(keys => keys.some(key => !same(next[key], current[key])))
+      .flat();
+    // Formatting changes only the displayed text, not the input history.
+    if (!changed.length) return { ...state, fields };
+
     const version = state.version + 1;
     // Remember explicit edits during a save, even if they return to its baseline.
     const queued =
       state.phase === 'saving'
-        ? keys.filter(
-            key =>
-              state.queued.includes(key) ||
-              !same(fields[key], state.fields[key])
-          )
+        ? Array.from(new Set([...state.queued, ...changed]))
         : state.queued;
     return state.phase === 'failed'
       ? { ...state, fields, queued, version, phase: 'ready', save: null }

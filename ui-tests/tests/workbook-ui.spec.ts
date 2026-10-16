@@ -577,6 +577,8 @@ test('manual roster editing updates assignee choices live', async ({
 for (const { mode, edit, assigned, timing } of [
   ['encryption', 'none'],
   ['receipt', 'none'],
+  ['encryption', 'blur'],
+  ['receipt', 'blur'],
   ['encryption', 'reversion'],
   ['receipt', 'reversion'],
   ['signing', 'reversion'],
@@ -608,7 +610,7 @@ for (const { mode, edit, assigned, timing } of [
       edit === 'reversion' || edit === 'normalized'
         ? original
         : ['bob@example.com'];
-    const calls = edit === 'none' ? 1 : 2;
+    const calls = edit === 'none' || edit === 'blur' ? 1 : 2;
     const assignee =
       edit === 'normalized'
         ? original[0]
@@ -626,7 +628,11 @@ for (const { mode, edit, assigned, timing } of [
       const select = page.locator(
         'select[name="correxit-assignment-assignee"]'
       );
-      await area.fill('alice@example.com');
+      await area.fill(
+        edit === 'blur'
+          ? ' alice@example.com \n\nalice@example.com\n'
+          : 'alice@example.com'
+      );
       await page.waitForFunction(
         () => !!(window as any).__correxit_save.release
       );
@@ -661,6 +667,10 @@ for (const { mode, edit, assigned, timing } of [
       await expect(select).toHaveValue(
         edit === 'normalized' ? original[0] : ''
       );
+      if (edit === 'blur') {
+        await area.blur();
+        await expect(area).toHaveValue('alice@example.com');
+      }
       if (edit === 'assignee' && timing === 'after') await revert();
       if (edit === 'deadline') await deadline.fill('2030-01-01T12:00');
       const expiration = await deadline.evaluate((input: HTMLInputElement) =>
@@ -1155,8 +1165,14 @@ test('manual roster normalization retries after an assignee changes during signi
   });
 });
 
-['penalty', 'policy'].forEach(mode => {
-  test(`manual overdue ${mode} stays paired during an earlier save`, async ({
+for (const { mode, save, reversion } of ['penalty', 'policy'].flatMap(mode =>
+  ['signing', 'encryption', 'receipt'].map(save => ({
+    mode,
+    save,
+    reversion: save !== 'signing'
+  }))
+)) {
+  test(`manual overdue ${mode}${reversion ? ' reversion' : ''} stays paired during ${save}`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
@@ -1165,8 +1181,8 @@ test('manual roster normalization retries after an assignee changes during signi
     const body = page.locator('body');
     const expected =
       mode === 'penalty'
-        ? { overdue: 'dock', penalty: 20 }
-        : { overdue: 'reject', penalty: null };
+        ? { overdue: 'dock', penalty: reversion ? 10 : 20 }
+        : { overdue: reversion ? 'accept' : 'reject', penalty: null };
 
     try {
       await Saves.initialize(page, {
@@ -1174,9 +1190,17 @@ test('manual roster normalization retries after an assignee changes during signi
         overdue: mode === 'penalty' ? 'dock' : 'accept',
         penalty: mode === 'penalty' ? 10 : null
       });
-      await Saves.pause(page, 'signing');
+      await Saves.pause(page, save);
 
       await page.getByRole('tab', { name: 'Correxit' }).click();
+      if (reversion) {
+        await page
+          .getByRole('textbox', { name: 'Roster', exact: true })
+          .fill('alice@example.com');
+        await page.waitForFunction(
+          () => !!(window as any).__correxit_save.release
+        );
+      }
       const policy = page.getByRole('combobox', {
         name: 'Overdue',
         exact: true
@@ -1187,6 +1211,10 @@ test('manual roster normalization retries after an assignee changes during signi
       });
       if (mode === 'penalty') await penalty.fill('20');
       else await policy.selectOption('reject');
+      if (reversion) {
+        if (mode === 'penalty') await penalty.fill('10');
+        else await policy.selectOption('accept');
+      }
       await page.waitForFunction(
         () => !!(window as any).__correxit_save.release
       );
@@ -1198,7 +1226,8 @@ test('manual roster normalization retries after an assignee changes during signi
         });
       }, mode);
       await expect(policy).toHaveValue(expected.overdue);
-      if (mode === 'penalty') await expect(penalty).toHaveValue('20');
+      if (mode === 'penalty')
+        await expect(penalty).toHaveValue(String(expected.penalty));
       else await expect(penalty).toBeHidden();
       await body.evaluate(() => (window as any).__correxit_save.release());
 
@@ -1217,12 +1246,15 @@ test('manual roster normalization retries after an assignee changes during signi
           { name: 'Updated assignment', ...expected },
           { name: 'Updated assignment', ...expected }
         ]);
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.errors)
+      ).toEqual([]);
     } finally {
       await Saves.restore(page);
       await dispose();
     }
   });
-});
+}
 
 test('clearing a deadline keeps its late policy cleared during another save', async ({
   page
