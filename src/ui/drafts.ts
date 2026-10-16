@@ -1,10 +1,12 @@
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Rubric, Workbook } from '..';
+import { retain } from '../correxit/state';
 import { Draft } from './draft';
 
 /** The React-facing interface; lifecycle belongs to the sidebar widget. */
 export type Editor = {
   id: string;
+  key: string;
   read: () => Draft.State;
   subscribe: (listener: () => void) => () => void;
   edit: (update: Partial<Draft.Fields>) => void;
@@ -37,6 +39,7 @@ export function create(commands: CommandRegistry) {
     if (!rubric) return null;
 
     const { id } = rubric;
+    const context = Workbook.headless(workbook) ? retain(workbook) : null;
     let locked = rubric.locked;
     let state = Draft.create(rubric.assignment);
     let delay: number | null = null;
@@ -87,6 +90,7 @@ export function create(commands: CommandRegistry) {
         .execute(Correxit.CommandIDs.assign, {
           ...patch,
           path: workbook.context.path,
+          context: context?.id ?? null,
           view: workbook.content?.id ?? null,
           rubric: id
         })
@@ -123,12 +127,14 @@ export function create(commands: CommandRegistry) {
     };
     const editor: Tracked = {
       id,
+      key: workbook.content?.id ?? context!.id,
       dispose: () => {
         if (drafts.get(workbook) !== editor) return;
         if (delay !== null) window.clearTimeout(delay);
         notebook.metadataChanged.disconnect(refresh);
         workbook.context.disposed.disconnect(editor.dispose);
         workbook.content?.disposed.disconnect(editor.dispose);
+        context?.dispose();
         drafts.delete(workbook);
         listeners.clear();
       },

@@ -425,7 +425,13 @@ for (const { command, path } of [
   });
 }
 
-for (const outcome of ['success', 'encryption failure', 'metadata failure']) {
+for (const outcome of [
+  'success',
+  'encryption failure',
+  'metadata failure',
+  'older encryption failure',
+  'both encryption failures'
+]) {
   for (const order of ['oldest first', 'newest first']) {
     test(`superseded intervention awaits the latest write: ${outcome}, ${order}`, async ({
       page
@@ -495,8 +501,20 @@ for (const outcome of ['success', 'encryption failure', 'metadata failure']) {
             await new Promise<void>(resolve => {
               held.releases[index] = resolve;
             });
-            if (outcome === 'encryption failure' && index === 1)
-              throw new Error(outcome);
+            if (
+              index === 0 &&
+              ['older encryption failure', 'both encryption failures'].includes(
+                outcome
+              )
+            )
+              throw new Error('older encryption failure');
+            if (
+              index === 1 &&
+              ['encryption failure', 'both encryption failures'].includes(
+                outcome
+              )
+            )
+              throw new Error('encryption failure');
             return value;
           };
           held.intervention = app.commands
@@ -567,12 +585,17 @@ for (const outcome of ['success', 'encryption failure', 'metadata failure']) {
             disk: report(disk.content.metadata.correxit)
           };
         }, order);
-        const success = outcome === 'success';
+        const success =
+          outcome === 'success' || outcome === 'older encryption failure';
+        const error =
+          outcome === 'both encryption failures'
+            ? 'encryption failure'
+            : outcome;
         const expected = success
           ? { points: 1, comment: 'New comment' }
           : { points: null, comment: null };
         expect(result).toEqual({
-          errors: success ? [null, null] : [outcome, outcome],
+          errors: success ? [null, null] : [error, error],
           clears: success ? 1 : 0,
           saves: success ? 1 : 0,
           live: expected,

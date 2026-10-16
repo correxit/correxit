@@ -166,14 +166,14 @@ export function commands(
     });
   };
   const reify = async (
-    args: Partial<Credentials & { view: string | null }>
+    args: Partial<Credentials & { context: string | null; view: string | null }>
   ): Promise<Reified> => {
     const handle = Workbook.Credentials.normalize(args);
     // An explicit view must still exist; never fall back to its path or focus.
     const panel = args.view && find(shell.widgets('main'), widget =>
       widget instanceof NotebookPanel && widget.content.id === args.view
     );
-    const workbook = args.view
+    const workbook = args.context ? state.resolve(args.context) : args.view
       ? panel instanceof NotebookPanel ? panel : null
       : handle ? await fetch(handle) : active();
     const rubric = open(workbook);
@@ -289,7 +289,7 @@ export function commands(
     isVisible: () => commands.isEnabled(CommandIDs.assign),
     label: trans.__('Assign workbook...'),
     execute: async (args: Partial<Credentials & Assignment & {
-      rubric: string; view: string | null;
+      rubric: string; context: string | null; view: string | null;
     }>) => {
       const { workbook } = await reify(args);
       if (!workbook || workbook.context.isDisposed || workbook.content?.isDisposed)

@@ -1,7 +1,9 @@
 import { ISignal, Signal } from '@lumino/signaling';
+import { UUID } from '@lumino/coreutils';
 import { Rubric, Workbook } from '.';
 
 const signal = new Signal<object, void>({});
+const contexts = new Map<string, Workbook.Headless>();
 const guard = ({ content: notebook }: Workbook.Headed) => {
   if (notebook.notebookConfig.showEditorForReadOnlyMarkdown !== false) {
     notebook.notebookConfig = {
@@ -21,6 +23,19 @@ export const LIMIT = 500;
 
 /** Notifies that the UI needs to be refreshed. */
 export const refreshed: ISignal<object, void> = signal;
+
+/** Retain an exact headless context for the lifetime of its draft controller. */
+export function retain(workbook: Workbook.Headless) {
+  const id = UUID.uuid4();
+  contexts.set(id, workbook);
+  return { id, dispose: () => { contexts.delete(id); } };
+}
+
+/** Resolve an explicit context without falling back to its path or focus. */
+export function resolve(id: string): Workbook.Headless | null {
+  const workbook = contexts.get(id);
+  return workbook && !workbook.context.isDisposed ? workbook : null;
+}
 
 /**
  * Caches a cell score in memory.

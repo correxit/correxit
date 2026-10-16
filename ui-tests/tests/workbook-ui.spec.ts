@@ -1019,8 +1019,263 @@ for (const mode of ['signing', 'encryption']) {
   });
 }
 
-for (const reversion of [false, true]) {
-  test(`returning to a notebook preserves its pending registered assignment${reversion ? ' reversion' : ''}`, async ({
+for (const inactive of [false, true]) {
+  test(`sidebar edits retain their ${inactive ? 'inactive' : 'active'} headless context`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    try {
+      await Saves.initialize(page);
+      const initial = await page.evaluate(async () => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget;
+        await panel.context.save();
+        const headless = await app.commands.execute('correxit:fetch', {
+          path: panel.context.path
+        });
+        await Workbook.unlock(headless, 'secret');
+        const held = ((window as any).__correxit_headless = {
+          panel,
+          headless,
+          assign: Workbook.assign,
+          target: null,
+          args: null
+        });
+        Workbook.assign = async (workbook: any, args: any) => {
+          held.target = workbook;
+          held.args = args;
+          return held.assign(workbook, args);
+        };
+        const inject = await app.commands.execute('correxit:inject');
+        inject(headless);
+        return {
+          headless: Workbook.headless(headless),
+          unlocked: !Workbook.open(headless).locked
+        };
+      });
+      expect(initial).toEqual({ headless: true, unlocked: true });
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      await Saves.pause(page, 'debounce');
+      await page
+        .locator('input[name="correxit-assignment-expiration"]')
+        .fill('2030-01-01T12:00');
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      if (inactive) {
+        await page.evaluate(async () => {
+          const inject = await (window as any).jupyterapp.commands.execute(
+            'correxit:inject'
+          );
+          inject(null);
+        });
+        await expect(page.locator('.correxit-sidebar')).toContainText(
+          'Correxit: idle'
+        );
+      }
+      await page.evaluate(() => (window as any).__correxit_save.release());
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished === 1
+      );
+      const result = await page.evaluate(async () => {
+        const held = (window as any).__correxit_headless;
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const same = held.target === held.headless;
+        const expiration = Workbook.open(held.headless).assignment.expiration;
+        const stored =
+          held.headless.context.model.sharedModel.getMetadata('correxit')
+            .assignment.expiration;
+        const headed = Workbook.open(held.panel).assignment.expiration;
+        const args = held.args;
+        const error = await (window as any).__correxit_save
+          .execute('correxit:assign', {
+            path: held.headless.context.path,
+            name: 'Path-only edit'
+          })
+          .then(
+            () => null,
+            (error: Error) => String(error)
+          );
+        const fetched =
+          held.target !== held.headless && Workbook.open(held.target).locked;
+        if (held.target !== held.headless) held.target.context.dispose();
+        const unknown = await app.commands.execute('correxit:assign', {
+          ...args,
+          context: 'missing-context',
+          name: 'Wrong'
+        });
+        held.headless.context.dispose();
+        const disposed = await app.commands.execute('correxit:assign', {
+          ...args,
+          name: 'Wrong'
+        });
+        return {
+          same,
+          expiration,
+          stored,
+          headed,
+          fetched,
+          error,
+          unknown,
+          disposed,
+          errors: (window as any).__correxit_save.errors
+        };
+      });
+      expect(result).toEqual({
+        same: true,
+        expiration: expect.any(Number),
+        stored: result.expiration,
+        headed: null,
+        fetched: true,
+        error: expect.stringContaining('assign error'),
+        unknown: null,
+        disposed: null,
+        errors: []
+      });
+    } finally {
+      await Saves.restore(page);
+      await page
+        .evaluate(() => {
+          const held = (window as any).__correxit_headless;
+          if (!held) return;
+          (window as any).__correxit__.Workbook.assign = held.assign;
+          if (held.target && held.target !== held.headless)
+            held.target.context.dispose();
+          held.headless.context.dispose();
+          delete (window as any).__correxit_headless;
+        })
+        .catch(() => {});
+      await dispose();
+    }
+  });
+}
+
+for (const outcome of ['success', 'encryption failure', 'metadata failure']) {
+  test(`matching assignment waits for persistence and retries failed writes: ${outcome}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    try {
+      await Saves.initialize(page, { name: 'Original' });
+      await page.evaluate((outcome: string) => {
+        const { Rubric, Workbook } = (window as any).__correxit__;
+        const panel = (window as any).jupyterapp.shell.currentWidget;
+        const notebook = panel.context.model.sharedModel;
+        const held = ((window as any).__correxit_matching = {
+          panel,
+          assign: Rubric.assign,
+          lock: Rubric.lock,
+          write: notebook.setMetadata,
+          first: true,
+          signed: null,
+          encrypted: null,
+          finished: false
+        });
+        Rubric.assign = async (...args: any[]) => {
+          const first = held.first;
+          held.first = false;
+          const value = await held.assign(...args);
+          if (first)
+            await new Promise<void>(resolve => {
+              held.signed = resolve;
+            });
+          return value;
+        };
+        Rubric.lock = async (...args: any[]) => {
+          const value = await held.lock(...args);
+          await new Promise<void>(resolve => {
+            held.encrypted = resolve;
+          });
+          if (outcome === 'encryption failure') throw new Error(outcome);
+          return value;
+        };
+        notebook.setMetadata = (...args: any[]) => {
+          if (outcome === 'metadata failure' && args[0] === 'correxit')
+            throw new Error(outcome);
+          return held.write.apply(notebook, args);
+        };
+        held.older = Workbook.assign(panel, { name: 'Changed' })
+          .then(
+            () => null,
+            (error: Error) => error.message
+          )
+          .finally(() => {
+            held.finished = true;
+          });
+      }, outcome);
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_matching.signed
+      );
+      await page.evaluate(() => {
+        const held = (window as any).__correxit_matching;
+        held.newer = (window as any).__correxit__.Workbook.assign(held.panel, {
+          name: 'Changed'
+        }).then(
+          () => null,
+          (error: Error) => error.message
+        );
+      });
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_matching.encrypted
+      );
+      const result = await page.evaluate(async () => {
+        const held = (window as any).__correxit_matching;
+        const { Workbook, Rubric } = (window as any).__correxit__;
+        const notebook = held.panel.context.model.sharedModel;
+        held.signed();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const finishedEarly = held.finished;
+        held.encrypted();
+        const errors = await Promise.all([held.older, held.newer]);
+        const before = notebook.getMetadata('correxit').assignment.name;
+        Rubric.lock = held.lock;
+        notebook.setMetadata = held.write;
+        const retried = await Workbook.assign(held.panel, { name: 'Changed' });
+        return {
+          finishedEarly,
+          errors,
+          before,
+          retried: retried.assignment.name,
+          stored: notebook.getMetadata('correxit').assignment.name
+        };
+      });
+      expect(result).toEqual({
+        finishedEarly: false,
+        errors: outcome === 'success' ? [null, null] : [outcome, outcome],
+        before: outcome === 'success' ? 'Changed' : 'Original',
+        retried: 'Changed',
+        stored: 'Changed'
+      });
+    } finally {
+      await page
+        .evaluate(async () => {
+          const held = (window as any).__correxit_matching;
+          if (!held) return;
+          held.signed?.();
+          held.encrypted?.();
+          await Promise.allSettled([held.older, held.newer]);
+          const { Rubric } = (window as any).__correxit__;
+          Rubric.assign = held.assign;
+          Rubric.lock = held.lock;
+          held.panel.context.model.sharedModel.setMetadata = held.write;
+          delete (window as any).__correxit_matching;
+        })
+        .catch(() => {});
+      await dispose();
+    }
+  });
+}
+
+for (const { mode, reversion } of ['notebook', 'clone'].flatMap(mode =>
+  [false, true].map(reversion => ({ mode, reversion }))
+)) {
+  test(`returning from a ${mode} preserves its pending registered assignment${reversion ? ' reversion' : ''}`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
@@ -1038,7 +1293,8 @@ for (const reversion of [false, true]) {
         const held = ((window as any).__correxit_registration = {
           panel: app.shell.currentWidget,
           execute: app.commands.execute.bind(app.commands),
-          calls: []
+          calls: [],
+          clone: null
         });
         app.commands.execute = (id: string, args: any) => {
           if (id === 'correxit:enroll') return Promise.resolve(registrations);
@@ -1047,32 +1303,72 @@ for (const reversion of [false, true]) {
         };
       });
       await Saves.initialize(page, { id: 'A', name: 'Assignment A' });
-      await Saves.pause(page);
       await page.getByRole('tab', { name: 'Correxit' }).click();
       const choices = page.locator('.correxit-assignment select').filter({
         has: page.locator('option[value="B"]')
       });
       await expect(choices).toHaveValue('A');
+      if (mode === 'clone') {
+        await page.evaluate(async () => {
+          const { jupyterapp: app, __correxit_registration: held } =
+            window as any;
+          await app.commands.execute('docmanager:clone');
+          held.clone = app.shell.currentWidget;
+        });
+        await expect(choices).toHaveValue('A');
+        await page.evaluate(() => {
+          const { jupyterapp: app, __correxit_registration: held } =
+            window as any;
+          app.shell.activateById(held.panel.id);
+        });
+      }
+      await Saves.pause(page);
       await choices.selectOption('B');
       await page.waitForFunction(
         () => !!(window as any).__correxit_save.release
       );
       if (reversion) await choices.selectOption('A');
-      await page.evaluate(async () => {
-        const inject = await (window as any).jupyterapp.commands.execute(
-          'correxit:inject'
+      if (mode === 'clone') {
+        await page.evaluate(() => {
+          const { jupyterapp: app, __correxit_registration: held } =
+            window as any;
+          app.shell.activateById(held.clone.id);
+        });
+        await expect(choices).toHaveValue('A');
+        // The outgoing clone must not dictate the returning view's selection.
+        if (reversion) {
+          await choices.selectOption('B');
+          await page.waitForFunction(
+            () => (window as any).__correxit_save.finished === 1
+          );
+        }
+        await page.evaluate(() => {
+          const { jupyterapp: app, __correxit_registration: held } =
+            window as any;
+          app.shell.activateById(held.panel.id);
+        });
+      } else {
+        await page.evaluate(async () => {
+          const inject = await (window as any).jupyterapp.commands.execute(
+            'correxit:inject'
+          );
+          inject(null);
+        });
+        await expect(page.locator('.correxit-sidebar')).toContainText(
+          'Correxit: idle'
         );
-        inject(null);
-      });
-      await expect(page.locator('.correxit-sidebar')).toContainText(
-        'Correxit: idle'
-      );
-      await page.evaluate(async () => {
-        const { jupyterapp: app, __correxit_registration: held } =
-          window as any;
-        const inject = await app.commands.execute('correxit:inject');
-        inject(held.panel);
-      });
+        await page.evaluate(async () => {
+          const { jupyterapp: app, __correxit_registration: held } =
+            window as any;
+          const inject = await app.commands.execute('correxit:inject');
+          inject(held.panel);
+        });
+      }
+      const calls = reversion
+        ? mode === 'clone'
+          ? ['B', 'B', 'A']
+          : ['B', 'A']
+        : ['B'];
       const expected = reversion ? 'A' : 'B';
       await expect(choices).toHaveValue(expected);
       await page.evaluate(() => (window as any).__correxit_save.release());
@@ -1080,7 +1376,7 @@ for (const reversion of [false, true]) {
         .poll(() =>
           page.evaluate(() => (window as any).__correxit_save.finished)
         )
-        .toBe(reversion ? 2 : 1);
+        .toBe(calls.length);
       const result = await page.evaluate(() => {
         const {
           __correxit_registration: held,
@@ -1095,7 +1391,7 @@ for (const reversion of [false, true]) {
         };
       });
       expect(result).toEqual({
-        calls: reversion ? ['B', 'A'] : ['B'],
+        calls,
         cached: expected,
         stored: expected
       });
@@ -1107,6 +1403,7 @@ for (const reversion of [false, true]) {
           const held = (window as any).__correxit_registration;
           if (!held) return;
           (window as any).jupyterapp.commands.execute = held.execute;
+          held.clone?.dispose();
           delete (window as any).__correxit_registration;
         })
         .catch(() => {});

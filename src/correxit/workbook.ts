@@ -284,6 +284,22 @@ export namespace Workbook {
     generation: number;
   }>());
   const writes = new WeakMap<INotebookModel['sharedModel'], Promise<void>>();
+  const failed = new WeakSet<Promise<void>>();
+  const settled = async (
+    workbook: Workbook,
+    pending = writes.get(workbook.context.model.sharedModel)
+  ): Promise<void> => {
+    const notebook = workbook.context.model.sharedModel;
+    while (pending) {
+      try { await pending; }
+      catch (error) {
+        if (pending === writes.get(notebook)) throw error;
+      }
+      const latest = writes.get(notebook);
+      if (pending === latest) return;
+      pending = latest;
+    }
+  };
   const stale = (
     assignment: Rubric.Assignment,
     {
@@ -466,7 +482,13 @@ export namespace Workbook {
   ): Promise<Rubric.Unlocked> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error.Invalid('assign error');
-    if (!stale(rubric.assignment, assignment)) return rubric;
+    if (!stale(rubric.assignment, assignment)) {
+      const pending = writes.get(workbook.context.model.sharedModel);
+      // Matching the optimistic cache is not proof that metadata was written.
+      if (pending && failed.has(pending)) return update(workbook, rubric);
+      await settled(workbook, pending);
+      return rubric;
+    }
     const started = generation(workbook);
     const assigned = await Rubric.assign(rubric, assignment);
     const latest = open(workbook, quiet);
@@ -1284,14 +1306,10 @@ export namespace Workbook {
       }
       write.resolve();
     } catch (error) {
+      failed.add(write.promise);
       write.reject(error);
     }
-    let pending = write.promise;
-    await pending;
-    while (pending !== writes.get(notebook)) {
-      pending = writes.get(notebook)!;
-      await pending;
-    }
+    await settled(workbook, write.promise);
     return current;
   }
 }

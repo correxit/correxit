@@ -135,7 +135,10 @@ that triggers sidebar re-renders when cursor or state changes.
 Command arguments must be serializable. Synchronous command logic (`isEnabled`,
 `isVisible`) resolves the current workbook and cell via `state.workbook()` and
 `state.cell()`. Async `execute` functions use `reify()` to resolve a workbook
-by checking state and/or fetching when appropriate.
+by checking state and/or fetching when appropriate. Draft saves identify their
+originating view or a headless context retained for the draft's lifetime;
+expired identifiers never fall back to another workbook. Path-only commands
+continue to fetch a fresh headless context.
 
 Use `Workbook.open()` to retrieve the current rubric.
 

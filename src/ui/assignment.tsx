@@ -89,7 +89,7 @@ export const Assignment: React.FC<{
   const rubric = Workbook.open(workbook, true)!;
   return (
     <Editor
-      key={`${workbook.context.path}:${rubric.id}`}
+      key={`${editor.key}:${workbook.context.path}:${rubric.id}`}
       {...{ commands, editor, trans, workbook, rubric }}
     />
   );
