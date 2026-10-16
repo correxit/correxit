@@ -16,18 +16,11 @@ const same = (x: unknown, y: unknown) =>
 
 /** Pure assignment draft transitions; no notebook or React lifetime. */
 export namespace Draft {
-  const groups = [
-    ['assignee'],
-    ['expiration'],
-    ['id'],
-    ['name'],
-    ['overdue', 'penalty'],
-    ['roster']
-  ] as const;
-  const keys = groups.flat();
   type Changes = Partial<Pick<Assignment, (typeof keys)[number]>>;
-  export type Fields = Omit<Required<Changes>, 'roster'> & { roster: string };
   type Save = Readonly<{ version: number; changes: Changes }>;
+
+  export type Fields = Omit<Required<Changes>, 'roster'> & { roster: string };
+
   export type State = Readonly<{
     assignment: Assignment;
     fields: Fields;
@@ -38,17 +31,41 @@ export namespace Draft {
       | { phase: 'ready' | 'failed'; save: null }
       | { phase: 'saving'; save: Save }
     );
+
+  const groups = [
+    ['assignee'],
+    ['expiration'],
+    ['id'],
+    ['name'],
+    ['overdue', 'penalty'],
+    ['roster']
+  ] as const;
+  const keys = groups.flat();
   const fields = (assignment: Assignment): Fields =>
     ({
       ...Object.fromEntries(keys.map(key => [key, assignment[key]])),
       roster: assignment.roster.join('\n')
     }) as Fields;
-  // Keep observed normalization out of the input history.
   const values = (state: State): Assignment => ({
     ...state.assignment,
     ...state.fields,
     roster: split(state.fields.roster)
   });
+
+  export function changes(state: State, assignment = view(state)): Changes {
+    const patch = Object.fromEntries(
+      groups
+        .filter(keys =>
+          keys.some(key => !same(assignment[key], state.assignment[key]))
+        )
+        .flatMap(keys => keys.map(key => [key, assignment[key]]))
+    );
+    // Clearing a deadline also clears its policy, even if it was already null.
+    return assignment.expiration === null &&
+      state.assignment.expiration !== null
+      ? { ...patch, overdue: null, penalty: null }
+      : patch;
+  }
 
   export function create(assignment: Assignment): State {
     return {
@@ -58,16 +75,6 @@ export namespace Draft {
       version: 0,
       phase: 'ready',
       save: null
-    };
-  }
-
-  export function view(state: State): Assignment {
-    const assignment = values(state);
-    return {
-      ...assignment,
-      assignee: assignment.roster.includes(assignment.assignee)
-        ? assignment.assignee
-        : ''
     };
   }
 
@@ -91,21 +98,6 @@ export namespace Draft {
       : { ...state, fields, queued, version };
   }
 
-  export function changes(state: State, assignment = view(state)): Changes {
-    const patch = Object.fromEntries(
-      groups
-        .filter(keys =>
-          keys.some(key => !same(assignment[key], state.assignment[key]))
-        )
-        .flatMap(keys => keys.map(key => [key, assignment[key]]))
-    );
-    // Clearing a deadline also clears its policy, even if it was already null.
-    return assignment.expiration === null &&
-      state.assignment.expiration !== null
-      ? { ...patch, overdue: null, penalty: null }
-      : patch;
-  }
-
   export function observe(state: State, assignment: Assignment): State {
     if (assignment === state.assignment) return state;
 
@@ -126,5 +118,15 @@ export namespace Draft {
     ) as Fields;
 
     return { ...state, assignment, fields: merged };
+  }
+
+  export function view(state: State): Assignment {
+    const assignment = values(state);
+    return {
+      ...assignment,
+      assignee: assignment.roster.includes(assignment.assignee)
+        ? assignment.assignee
+        : ''
+    };
   }
 }
