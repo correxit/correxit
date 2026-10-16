@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { Cell, Fixture, setup } from './utils';
+import { Cell, Fixture, notebook, setup } from './utils';
 
 test.use({ autoGoto: false });
 
@@ -85,11 +85,17 @@ test('assignment saves target a view while path commands fetch headlessly', asyn
       });
       const path = panel.context.path;
       const view = panel.content.id;
-      await app.commands.execute('correxit:assign', {
-        view,
-        rubric: created.id,
-        name: 'Open'
-      });
+      await panel.context.rename(`${path}.renamed.ipynb`);
+      try {
+        await app.commands.execute('correxit:assign', {
+          view,
+          path,
+          rubric: created.id,
+          name: 'Open'
+        });
+      } finally {
+        await panel.context.rename(path);
+      }
       const name = Workbook.open(panel).assignment.name;
       const missing = await app.commands.execute('correxit:assign', {
         view: 'closed-view',
@@ -147,6 +153,277 @@ test('assignment saves target a view while path commands fetch headlessly', asyn
     await dispose();
   }
 });
+
+for (const change of ['replacement', 'closure']) {
+  test(`assignment rejects ${change} during view resolution`, async ({
+    page
+  }) => {
+    const { dispose } = await prepare(page, [{ id: 'cell', source: 'x = 1' }]);
+    try {
+      const result = await page.evaluate(async (change: string) => {
+        const { Rubric, Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const panel = app.shell.currentWidget;
+        const created = Rubric.create();
+        const original = {
+          ...created,
+          key: 'secret',
+          assignment: {
+            ...created.assignment,
+            keys: {
+              private: { assignee: null, author: 'priv' },
+              public: { assignee: null, author: 'pub' }
+            }
+          }
+        };
+        await Workbook.update(panel, original);
+        const pending = app.commands.execute('correxit:assign', {
+          view: panel.content.id,
+          path: panel.context.path,
+          rubric: created.id,
+          name: 'Stale edit'
+        });
+        // Change the target while the command awaits reification.
+        if (change === 'closure') panel.dispose();
+        else
+          await Workbook.update(panel, { ...original, id: Rubric.create().id });
+        return {
+          result: await pending,
+          name:
+            change === 'closure' ? null : Workbook.open(panel).assignment.name
+        };
+      }, change);
+      expect(result).toEqual({
+        result: null,
+        name: change === 'closure' ? null : ''
+      });
+    } finally {
+      await dispose();
+    }
+  });
+}
+
+for (const { command, path } of [
+  'certify',
+  'collect',
+  'draft',
+  'intervene',
+  'lock'
+].flatMap(command =>
+  (command === 'intervene' ? [false] : [false, true]).map(path => ({
+    command,
+    path
+  }))
+)) {
+  test(`${command} saves its resolved ${path ? 'headless' : 'open'} workbook after switching tabs`, async ({
+    page
+  }) => {
+    const { dispose } = await prepare(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    let second: string | null = null;
+    try {
+      await page.evaluate(async (command: string) => {
+        const { Rubric, Workbook } = (window as any).__correxit__;
+        const first = (window as any).jupyterapp.shell.currentWidget;
+        const created = Rubric.create();
+        const rubric = await Rubric.assign(
+          Rubric.add(
+            {
+              ...created,
+              key: 'secret',
+              contents: [{ id: 'cell', type: 'code', digest: null }],
+              assignment: {
+                ...created.assignment,
+                keys: {
+                  private: { assignee: null, author: 'priv' },
+                  public: { assignee: null, author: 'pub' }
+                }
+              }
+            },
+            {
+              id: 'cell',
+              is: 'reviewable',
+              payload: null,
+              points: 1,
+              references: null
+            }
+          ),
+          {
+            assignee: 'student@example.com',
+            roster: ['student@example.com']
+          }
+        );
+        const signed = await Rubric.sign(rubric, {
+          interventions: {
+            cell: Rubric.Score.intervene('cell', {
+              comment: '',
+              points: 1,
+              possible: 1
+            })
+          },
+          kernel: null,
+          scores: {}
+        });
+        await Workbook.update(
+          first,
+          command === 'draft'
+            ? { ...signed, assignment: { ...signed.assignment, submission: 1 } }
+            : signed
+        );
+        if (command === 'draft') await Workbook.lock(first);
+        await first.context.save();
+        (window as any).__correxit_followup = {
+          first,
+          original: Workbook[command],
+          command,
+          restores: [],
+          target: null,
+          release: null,
+          done: null,
+          finished: false,
+          saves: [],
+          clears: [],
+          expected: null
+        };
+      }, command);
+      second = await notebook(page);
+      await page.evaluate(() => {
+        const app = (window as any).jupyterapp;
+        const record = (window as any).__correxit_followup;
+        record.second = app.shell.currentWidget;
+        app.shell.activateById(record.first.id);
+      });
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (window as any).jupyterapp.commands.isEnabled('correxit:convert')
+          )
+        )
+        .toBe(false);
+      await page.evaluate(
+        ({ command, path }: { command: string; path: boolean }) => {
+          const { Rubric, Workbook } = (window as any).__correxit__;
+          const app = (window as any).jupyterapp;
+          const record = (window as any).__correxit_followup;
+          const watch = (workbook: any, label: string) => {
+            const context = workbook.context;
+            const model = context.model.sharedModel;
+            const save = context.save;
+            const clear = model.clearUndoHistory;
+            context.save = async () => {
+              record.saves.push(label);
+              return save.call(context);
+            };
+            model.clearUndoHistory = () => {
+              record.clears.push(label);
+              return clear.call(model);
+            };
+            record.restores.push(() => {
+              context.save = save;
+              model.clearUndoHistory = clear;
+            });
+          };
+          watch(record.second, 'other');
+          Workbook[command] = async (workbook: any, ...args: any[]) => {
+            record.target = workbook;
+            watch(workbook, 'source');
+            const result = await record.original(workbook, ...args);
+            record.expected =
+              workbook.context.model.sharedModel.getMetadata('correxit');
+            await new Promise<void>(resolve => {
+              record.release = resolve;
+            });
+            return result;
+          };
+          const args = path
+            ? {
+                path: record.first.context.path,
+                ...(command === 'draft' ? {} : { key: 'secret' })
+              }
+            : command === 'intervene'
+              ? {
+                  id: 'cell',
+                  intervention: Rubric.Score.intervene('cell', {
+                    comment: '',
+                    points: 0,
+                    possible: 1
+                  })
+                }
+              : {};
+          record.done = app.commands
+            .execute(`correxit:${command}`, args)
+            .finally(() => {
+              record.finished = true;
+            });
+        },
+        { command, path }
+      );
+      if (command === 'draft')
+        await page.getByRole('button', { name: 'Revert', exact: true }).click();
+      await page.waitForFunction(() => {
+        const record = (window as any).__correxit_followup;
+        return record.release || record.finished;
+      });
+      expect(
+        await page.evaluate(() => !!(window as any).__correxit_followup.release)
+      ).toBe(true);
+      await page.evaluate(() => {
+        const app = (window as any).jupyterapp;
+        app.shell.activateById((window as any).__correxit_followup.second.id);
+      });
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (window as any).jupyterapp.commands.isEnabled('correxit:convert')
+          )
+        )
+        .toBe(true);
+      const result = await page.evaluate(async () => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const record = (window as any).__correxit_followup;
+        record.saves = [];
+        record.clears = [];
+        record.release();
+        await record.done;
+        const stored = await app.serviceManager.contents.get(
+          record.first.context.path
+        );
+        return {
+          saves: record.saves,
+          clears: record.clears,
+          headless: Workbook.headless(record.target),
+          stored: stored.content.metadata.correxit,
+          expected: record.expected
+        };
+      });
+      expect(result.saves).toEqual(['source']);
+      expect(result.clears).toEqual(['source']);
+      expect(result.headless).toBe(path);
+      expect(result.stored).toEqual(result.expected);
+    } finally {
+      await page
+        .evaluate(async () => {
+          const { Workbook } = (window as any).__correxit__;
+          const app = (window as any).jupyterapp;
+          const record = (window as any).__correxit_followup;
+          if (!record) return;
+          record.release?.();
+          if (record.release) await record.done.catch(() => {});
+          Workbook[record.command] = record.original;
+          record.restores.forEach((restore: () => void) => restore());
+          if (Workbook.headless(record.target)) record.target.context.dispose();
+          record.second?.dispose();
+          app.shell.activateById(record.first.id);
+          delete (window as any).__correxit_followup;
+        })
+        .catch(() => {});
+      if (second) await page.contents.deleteFile(second).catch(() => {});
+      await dispose();
+    }
+  });
+}
 
 test('correction without a rubric returns an unverified result', async ({
   page
