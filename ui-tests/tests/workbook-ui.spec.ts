@@ -979,6 +979,82 @@ for (const mode of ['signing', 'encryption']) {
   });
 }
 
+for (const field of ['roster', 'assignee']) {
+  test(`rejected save with a queued ${field} reversion waits for new input`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    const roster = ['alice@example.com', 'bob@example.com'];
+    try {
+      await Saves.initialize(page, { roster, assignee: roster[0] });
+      await Saves.pause(page, 'debounce');
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+      const assignee = page.locator(
+        'select[name="correxit-assignment-assignee"]'
+      );
+      if (field === 'roster') {
+        await area.fill(roster[0]);
+        await area.fill(roster.join('\n'));
+        await page
+          .locator('input[name="correxit-assignment-expiration"]')
+          .fill('2030-01-01T12:00');
+      } else {
+        await assignee.selectOption(roster[1]);
+        await assignee.selectOption(roster[0]);
+        await area.fill(roster[0]);
+      }
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(0);
+      await page.evaluate(() => {
+        (window as any).__correxit__.Rubric.assign = async () => {
+          throw new Error('Assignment save rejected');
+        };
+        (window as any).__correxit_save.release();
+      });
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished >= 1
+      );
+      await page.waitForTimeout(400);
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(1);
+      await expect(area).toHaveValue(
+        field === 'roster' ? roster.join('\n') : roster[0]
+      );
+      await expect(assignee).toHaveValue(roster[0]);
+      // New input may retry the retained draft after the failure is removed.
+      await page.evaluate(() => {
+        (window as any).__correxit__.Rubric.assign = (
+          window as any
+        ).__correxit_save.prepare;
+      });
+      const next = [...roster, 'carol@example.com'];
+      await area.fill(next.join('\n'));
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const context = window as any;
+            return context.__correxit__.Workbook.open(
+              context.jupyterapp.shell.currentWidget,
+              true
+            ).assignment.roster;
+          })
+        )
+        .toEqual(next);
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(2);
+    } finally {
+      await Saves.restore(page);
+      await dispose();
+    }
+  });
+}
+
 test('manual roster normalization retries after an assignee changes during signing', async ({
   page
 }) => {

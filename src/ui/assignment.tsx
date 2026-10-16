@@ -172,8 +172,9 @@ namespace Draft {
       if (!rubric) return;
       const next = observe(state, rubric.assignment);
       const input = view(next);
+      const difference = changes(next, input);
       const patch = {
-        ...changes(next, input),
+        ...difference,
         ...Object.fromEntries(next.queued.map(key => [key, input[key]]))
       };
       if (next.phase !== 'ready' || !Object.keys(patch).length)
@@ -215,7 +216,7 @@ namespace Draft {
         phase:
           (assignment && latest) ||
           observed.version !== save.version ||
-          !same(changes(observed), patch)
+          !same(changes(observed), difference)
             ? 'ready'
             : 'failed',
         save: null
