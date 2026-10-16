@@ -1256,73 +1256,84 @@ for (const { mode, save, reversion } of ['penalty', 'policy'].flatMap(mode =>
   });
 }
 
-test('clearing a deadline keeps its late policy cleared during another save', async ({
-  page
-}) => {
-  const { dispose } = await setup(page, [{ id: 'cell', source: 'print(42)' }]);
-  try {
-    await Saves.initialize(page, { expiration: 1_900_000_000_000 });
-    await Saves.pause(page);
-    await page.getByRole('tab', { name: 'Correxit' }).click();
-    await page
-      .getByRole('textbox', { name: 'Roster', exact: true })
-      .fill('alice@example.com');
-    await page.waitForFunction(() => !!(window as any).__correxit_save.release);
-    const deadline = page.locator(
-      'input[name="correxit-assignment-expiration"]'
-    );
-    await deadline.fill('');
-    await page.evaluate(async () => {
-      await (window as any).__correxit_save.execute('correxit:assign', {
-        overdue: 'dock',
-        penalty: 10
+for (const mode of ['command', 'encryption', 'receipt']) {
+  test(`clearing a deadline keeps its late policy cleared during ${mode}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    try {
+      await Saves.initialize(page, { expiration: 1_900_000_000_000 });
+      await Saves.pause(page, mode);
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      await page
+        .getByRole('textbox', { name: 'Roster', exact: true })
+        .fill('alice@example.com');
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      const deadline = page.locator(
+        'input[name="correxit-assignment-expiration"]'
+      );
+      await deadline.fill('');
+      await page.evaluate(async (mode: string) => {
+        // Also cover losing the stored deadline before the competing policy update.
+        if (mode !== 'command')
+          await (window as any).__correxit_save.execute('correxit:assign', {
+            expiration: null
+          });
+        await (window as any).__correxit_save.execute('correxit:assign', {
+          overdue: 'dock',
+          penalty: 10
+        });
+        (window as any).__correxit_save.release();
+      }, mode);
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished >= 2
+      );
+      const cleared = await page.evaluate(() => {
+        const {
+          __correxit__: { Workbook },
+          jupyterapp: app
+        } = window as any;
+        const panel = app.shell.currentWidget;
+        return [
+          Workbook.open(panel),
+          panel.context.model.sharedModel.getMetadata('correxit')
+        ].map(({ assignment: { expiration, overdue, penalty } }: any) => ({
+          expiration,
+          overdue,
+          penalty
+        }));
       });
-      (window as any).__correxit_save.release();
-    });
-    await page.waitForFunction(
-      () => (window as any).__correxit_save.finished >= 2
-    );
-    const cleared = await page.evaluate(() => {
-      const {
-        __correxit__: { Workbook },
-        jupyterapp: app
-      } = window as any;
-      const panel = app.shell.currentWidget;
-      return [
-        Workbook.open(panel),
-        panel.context.model.sharedModel.getMetadata('correxit')
-      ].map(({ assignment: { expiration, overdue, penalty } }: any) => ({
-        expiration,
-        overdue,
-        penalty
-      }));
-    });
-    expect(cleared).toEqual(
-      Array(2).fill({ expiration: null, overdue: null, penalty: null })
-    );
-    await deadline.fill('2030-01-01T12:00');
-    await expect(
-      page.getByRole('combobox', { name: 'Overdue', exact: true })
-    ).toHaveValue('accept');
-    await page.waitForFunction(
-      () => (window as any).__correxit_save.finished >= 3
-    );
-    const stored = await page.evaluate(() => {
-      const panel = (window as any).jupyterapp.shell.currentWidget;
-      const { expiration, overdue, penalty } =
-        panel.context.model.sharedModel.getMetadata('correxit').assignment;
-      return { expiration, overdue, penalty };
-    });
-    expect(stored).toEqual({
-      expiration: expect.any(Number),
-      overdue: null,
-      penalty: null
-    });
-  } finally {
-    await Saves.restore(page);
-    await dispose();
-  }
-});
+      expect(cleared).toEqual(
+        Array(2).fill({ expiration: null, overdue: null, penalty: null })
+      );
+      await deadline.fill('2030-01-01T12:00');
+      await expect(
+        page.getByRole('combobox', { name: 'Overdue', exact: true })
+      ).toHaveValue('accept');
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished >= 3
+      );
+      const stored = await page.evaluate(() => {
+        const panel = (window as any).jupyterapp.shell.currentWidget;
+        const { expiration, overdue, penalty } =
+          panel.context.model.sharedModel.getMetadata('correxit').assignment;
+        return { expiration, overdue, penalty };
+      });
+      expect(stored).toEqual({
+        expiration: expect.any(Number),
+        overdue: null,
+        penalty: null
+      });
+    } finally {
+      await Saves.restore(page);
+      await dispose();
+    }
+  });
+}
 
 test('manual overdue policy editing updates assignment metadata', async ({
   page

@@ -279,9 +279,9 @@ namespace Draft {
 
     const current = values(state);
     const next = values({ ...state, fields });
-    const changed = groups
-      .filter(keys => keys.some(key => !same(next[key], current[key])))
-      .flat();
+    const changed = Object.keys(
+      changes({ ...state, assignment: current }, next)
+    ) as (keyof Fields)[];
     // Formatting changes only the displayed text, not the input history.
     if (!changed.length) return { ...state, fields };
 
