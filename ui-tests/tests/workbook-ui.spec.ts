@@ -1499,6 +1499,184 @@ for (const field of ['roster', 'assignee']) {
   });
 }
 
+for (const { failure, edit } of ['encryption', 'metadata'].flatMap(failure =>
+  ['none', 'continued', 'reversion'].map(edit => ({ failure, edit }))
+)) {
+  test(`failed ${failure} writes retain ${edit === 'none' ? 'unchanged drafts' : edit === 'continued' ? 'newer edits' : 'queued reversions'} through competing updates`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    const roster = ['alice@example.com', 'bob@example.com'];
+    const expected =
+      edit === 'none'
+        ? [roster[1]]
+        : edit === 'continued'
+          ? [roster[0]]
+          : roster;
+    const assigned = edit === 'none' ? '' : roster[0];
+    try {
+      await Saves.initialize(page, { roster, assignee: roster[0] });
+      await Saves.pause(page, 'encryption');
+      await page.evaluate(async (failure: string) => {
+        const {
+          jupyterapp: app,
+          __correxit_save: held,
+          __correxit__: { Rubric }
+        } = window as any;
+        held.panel = app.shell.currentWidget;
+        await app.commands.execute('docmanager:clone');
+        held.clone = app.shell.currentWidget;
+        app.shell.activateById(held.panel.id);
+        const notebook = held.panel.context.model.sharedModel;
+        held.write = notebook.setMetadata;
+        if (failure === 'metadata')
+          notebook.setMetadata = (...args: any[]) => {
+            if (args[0] === 'correxit')
+              throw new Error('Metadata write failed');
+            return held.write.apply(notebook, args);
+          };
+        const encrypt = Rubric.lock;
+        Rubric.lock = async (...args: any[]) => {
+          const result = await encrypt(...args);
+          if (failure === 'encryption') throw new Error('Encryption failed');
+          return result;
+        };
+      }, failure);
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const area = page.getByRole('textbox', { name: 'Roster', exact: true });
+      const assignee = page.locator(
+        'select[name="correxit-assignment-assignee"]'
+      );
+      await expect(area).toHaveValue(roster.join('\n'));
+      await area.fill(roster[1]);
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      if (edit !== 'none') {
+        await area.fill(expected.join('\n'));
+        await assignee.selectOption(assigned);
+      }
+      await page.evaluate(() => (window as any).__correxit_save.release());
+      const attempts = edit === 'none' ? 1 : 2;
+      await page.waitForFunction(
+        (attempts: number) =>
+          (window as any).__correxit_save.finished >= attempts,
+        attempts
+      );
+      await page.waitForTimeout(400);
+      const failed = await page.evaluate(async () => {
+        const {
+          __correxit_save: held,
+          __correxit__: { Rubric }
+        } = window as any;
+        const stored = await Rubric.unlock(
+          held.panel.context.model.sharedModel.getMetadata('correxit'),
+          'secret'
+        );
+        return {
+          calls: held.calls,
+          errors: held.errors.length,
+          roster: stored.assignment.roster
+        };
+      });
+      expect(failed).toEqual({ calls: attempts, errors: attempts, roster });
+      await expect(area).toHaveValue(expected.join('\n'));
+      await expect(assignee).toHaveValue(assigned);
+
+      // A successful competing write must not acknowledge this failed draft.
+      await page.evaluate(async () => {
+        const {
+          __correxit_save: held,
+          __correxit__: { Rubric }
+        } = window as any;
+        held.panel.context.model.sharedModel.setMetadata = held.write;
+        Rubric.lock = held.encrypt;
+        await held.execute('correxit:assign', {
+          roster: ['carol@example.com'],
+          assignee: 'carol@example.com',
+          name: 'Competing',
+          path: held.clone.context.path,
+          view: held.clone.content.id
+        });
+      });
+      await expect(area).toHaveValue(expected.join('\n'));
+      await expect(assignee).toHaveValue(assigned);
+      await expect(page.locator('.correxit-assignment-facts')).toContainText(
+        'Competing'
+      );
+      await area.fill(`${expected.join('\n')}\n`);
+      await area.blur();
+      await page.waitForTimeout(400);
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(attempts);
+
+      // An unrelated new edit retries the retained fields, including reversions.
+      await page
+        .locator('input[name="correxit-assignment-expiration"]')
+        .fill('2030-01-01T12:00');
+      await page.waitForFunction(
+        (attempts: number) =>
+          (window as any).__correxit_save.finished === attempts + 1,
+        attempts
+      );
+      const saved = await page.evaluate(async () => {
+        const {
+          __correxit_save: held,
+          __correxit__: { Rubric, Workbook }
+        } = window as any;
+        const stored = await Rubric.unlock(
+          held.panel.context.model.sharedModel.getMetadata('correxit'),
+          'secret'
+        );
+        return [Workbook.open(held.panel), stored].map(
+          ({ assignment }: any) => ({
+            roster: assignment.roster,
+            assignee: assignment.assignee,
+            name: assignment.name
+          })
+        );
+      });
+      expect(saved).toEqual(
+        Array(2).fill({
+          roster: expected,
+          assignee: assigned,
+          name: 'Competing'
+        })
+      );
+      // Success releases the retained intent so later updates can be adopted.
+      await page.evaluate(async () => {
+        const { __correxit_save: held } = window as any;
+        await held.execute('correxit:assign', {
+          roster: ['dave@example.com'],
+          assignee: 'dave@example.com',
+          path: held.clone.context.path,
+          view: held.clone.content.id
+        });
+      });
+      await expect(area).toHaveValue('dave@example.com');
+      await expect(assignee).toHaveValue('dave@example.com');
+      await page.waitForTimeout(400);
+      expect(
+        await page.evaluate(() => (window as any).__correxit_save.calls)
+      ).toBe(attempts + 1);
+    } finally {
+      await page
+        .evaluate(() => {
+          const held = (window as any).__correxit_save;
+          if (held?.write)
+            held.panel.context.model.sharedModel.setMetadata = held.write;
+          held?.clone?.dispose();
+        })
+        .catch(() => {});
+      await Saves.restore(page);
+      await dispose();
+    }
+  });
+}
+
 test('manual roster normalization retries after an assignee changes during signing', async ({
   page
 }) => {

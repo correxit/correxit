@@ -26,6 +26,8 @@ describe('Assignment drafts', () => {
   it('retains a queued reversion when the observed baseline moves', () => {
     const edited = Draft.edit(Draft.create(assignment), { assignee: 'bob' });
     const reverted = Draft.edit(edited, { assignee: 'alice' });
+    expect(Draft.changes(reverted)).toEqual({});
+    expect(Draft.patch(reverted)).toEqual({ assignee: 'alice' });
     const observed = Draft.observe(reverted, {
       ...assignment,
       assignee: 'bob'

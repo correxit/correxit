@@ -68,11 +68,7 @@ export function create(commands: CommandRegistry) {
       if (!rubric) return;
       const next = Draft.observe(state, rubric.assignment);
       const input = Draft.view(next);
-      const difference = Draft.changes(next, input);
-      const patch = {
-        ...difference,
-        ...Object.fromEntries(next.queued.map(key => [key, input[key]]))
-      };
+      const patch = Draft.patch(next);
       if (next.phase !== 'ready' || !Object.keys(patch).length)
         return update(next);
 
@@ -105,7 +101,16 @@ export function create(commands: CommandRegistry) {
             phase: 'ready',
             save: null
           }
-        : state;
+        : {
+            ...state,
+            // Failed fields remain intended; later edits keep their current values.
+            queued: Array.from(
+              new Set([
+                ...state.queued,
+                ...(Object.keys(save.changes) as (keyof Draft.Fields)[])
+              ])
+            )
+          };
       const observed = latest ? Draft.observe(saved, latest.assignment) : saved;
       // Retry a failure only for new input or a changed normalized patch.
       update({
@@ -113,7 +118,7 @@ export function create(commands: CommandRegistry) {
         phase:
           (assignment && latest) ||
           observed.version !== save.version ||
-          !same(Draft.changes(observed), difference)
+          !same(Draft.patch(observed), patch)
             ? 'ready'
             : 'failed',
         save: null

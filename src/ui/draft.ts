@@ -67,6 +67,20 @@ export namespace Draft {
       : patch;
   }
 
+  /** Include explicit intent even when the optimistic baseline already matches. */
+  export function patch(state: State): Changes {
+    const input = view(state);
+    const difference = changes(state, input);
+    return Object.fromEntries(
+      keys
+        .filter(key => key in difference || state.queued.includes(key))
+        .map(key => [
+          key,
+          state.queued.includes(key) ? input[key] : difference[key]
+        ])
+    );
+  }
+
   export function create(assignment: Assignment): State {
     return {
       assignment,
