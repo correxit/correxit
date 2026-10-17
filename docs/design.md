@@ -73,114 +73,24 @@ The architecture is divided into three layers:
 components are declarative. They render state and execute commands, but never
 call model functions directly.
 
-Assignment drafts keep edit, observation, save, acknowledgement, and retry
-transitions together in the pure model (`src/ui/draft.ts`). The controller
-(`src/ui/drafts.ts`) owns notebook subscriptions, debounce, command execution,
-and disposal. `SidebarWidget` owns the controller and prepares each editor
-before rendering React. React reads
-the editor with `useSyncExternalStore` and submits edits; it never creates or
-disposes notebook subscriptions. A cached draft follows its notebook view even
-while inactive, so lock transitions can discard pending edits across tab switches.
+### Assignment drafts
 
-### Assignment lifecycle
+Assignment editing separates pure transitions (`src/ui/draft.ts`) from the
+controller (`src/ui/drafts.ts`), which owns debounce, notebook subscriptions,
+and command execution. `SidebarWidget` owns the controllers; React reads their
+snapshots through `useSyncExternalStore` and submits edits.
 
-The editor reconciles edits made in one browser session through Correxit commands.
-Its ownership boundaries are:
+Each notebook view keeps its own draft across tab switches. Lock boundaries
+reset drafts; owner disposal or rubric replacement releases them. Each save
+records its identity and submitted fields, so its completion cannot acknowledge
+a replacement draft or discard later edits.
 
-| Owner                         | State and responsibility                                                                                                     | Lifetime                                                            |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| React editor                  | Controls and presentation; derives registration selection from the draft and submits explicit edits                          | One view/context, path, and rubric identity                         |
-| `SidebarWidget` / `drafts.ts` | One draft controller per visited workbook object; timer, subscriptions, current save snapshot, and retained headless context | Until owner disposal or rubric replacement; survives switching away |
-| `draft.ts`                    | Pure field reconciliation: observed assignment, raw input, explicit queued fields, semantic input version, and save snapshot | Owned by the controller; reset at lock boundaries                   |
-| `commands.ts`                 | Resolve the intended workbook and keep that target through asynchronous work and follow-up file saves                        | One command invocation                                              |
-| `workbook.ts`                 | Optimistic rubric cache, lock generation, and latest metadata-write promise, shared by cloned views                          | One shared notebook model                                           |
-
-The observed assignment can be ahead of persisted metadata. Raw roster text is
-kept separately from its trimmed, deduplicated value. The displayed assignee is
-normalized against that roster, without treating an automatic normalization as
-an explicit user edit. Late policy and penalty form one field group. Clearing
-a deadline explicitly clears that group, including fields already null.
-
-Registration dropdowns read the draft identity and submit edits directly on user
-selection. An explicit selection queues all registration-owned fields together,
-including an unchanged roster, deadline, or cleared late policy, so a concurrent
-save cannot mix one registration's identity with another's fields. Selecting
-"No assignment" retains the complete clearing intent. Registrar initialization
-is separate: new registrar results and unlocks
-match the current draft, default to a sole registration, or clear an unavailable
-choice. Observing another view's save does not reapply a prior dropdown selection.
-
-`ready`, `saving`, and `failed` are the only draft phases. Locking and disposal
-are lifetime boundaries rather than additional save phases. A lock reset may
-start a new draft while an older command is still settling; save identity keeps
-that older completion from acting on the new draft.
-
-| Event                                  | Transition and rule                                                                                                                                                                                                  |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Open an unlocked workbook              | Create a clean `ready` draft, or observe through the existing controller for the same rubric                                                                                                                         |
-| Change only roster formatting          | Keep the raw text; do not advance the semantic version or create intent                                                                                                                                              |
-| Edit fields                            | Advance the semantic version and retain explicitly edited groups in `queued`, even for a return to the observed baseline; `failed` becomes `ready`                                                                   |
-| Observe a workbook update              | Adopt untouched fields; preserve queued fields, fields in the pending save, and unsaved differences; observing an equal normalized roster preserves raw formatting                                                   |
-| Debounce expires in `ready`            | Re-read the originating workbook; snapshot normalized differences plus queued intent, transfer that intent into `save`, clear `queued`, and enter `saving`                                                           |
-| Edit while `saving`                    | Keep the current save snapshot unchanged; accumulate later edits separately, including reversions; do not start a second command for this controller                                                                 |
-| Save succeeds                          | Acknowledge only its submitted patch, reconcile the latest workbook, and return to `ready`; later queued edits can start another debounce                                                                            |
-| Save fails                             | Restore submitted fields to `queued`, keeping newer edits; retry if input or the full normalized patch changed, otherwise enter `failed`; later observations alone do not retry                                      |
-| Observe a lock boundary                | Reset the draft and timer; an old completion cannot acknowledge a replacement save snapshot                                                                                                                          |
-| Switch views                           | Keep each controller alive; display its draft registration by ID or, when absent, name; observing selection never queues an edit                                                                                     |
-| Dispose an owner or replace its rubric | Cancel scheduled work, disconnect subscriptions, and release retained context identity; a command already handed off may finish on its original live document, but the disposed controller cannot schedule more work |
-
-A save snapshot's identity prevents late completion from acting on a reset
-draft. The semantic version answers whether new input arrived during a failed
-attempt. The explicit queue records intent that comparing values cannot recover:
-if B is being saved and the user changes back to A, A must survive even when it
-equals the observed baseline. These serve different purposes and are not
-interchangeable dirty flags.
-
-The controller calls `Draft.begin` against the current assignment, submits its
-save snapshot through `correxit:assign`, and passes the outcome and latest
-assignment to `Draft.complete`. An old completion leaves a replacement draft
-untouched. A failed draft exposes a message and Retry action; `Draft.retry`
-resumes its retained intent without changing the input version. Substantive
-edits can also resume a failed draft, while formatting and observation alone
-cannot. The view does not own acknowledgement or retry policy.
-
-Persistence has a separate completion rule. Every mutating method that starts
-`Workbook.update()` must return or await its promise, and command callers must
-propagate that completion. A matching optimistic cache value does not prove a
-write succeeded. Superseded updates follow the latest write's success or
-failure, and failed matching assignments can retry the metadata write. Assignment
-signing rebases ordinary concurrent changes, but rejects rubric replacement or
-a changed lock generation, including a lock/unlock cycle with the same rubric ID.
-
-`Workbook.update()` returns its own audited snapshot, which may have been
-superseded by the time its promise resolves. Completion follows the document's
-latest metadata write, not proof that this invocation's snapshot remains current.
-This contract does not serialize the read/modify/sign work that callers perform
-before invoking `update`; assignment rebasing is a separate, narrower guarantee.
-
-Metadata completion does not mean the notebook file is saved to storage.
-Commands that also save the file or clear undo history do so only after the
-model operation succeeds, using the already-resolved context. Explicit view or
-retained context identifiers never fall back to the current tab or a fresh
-context. Path-only commands retain their existing fresh-headless-context behavior.
-This is not a cross-file or cross-session conflict-resolution protocol.
-
-The regression coverage follows these boundaries:
-
-| Contract                                                                     | Coverage                                                                                                                                                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Raw formatting, explicit reversions, policy groups and deadline reset intent | `src/__tests__/draft.spec.ts`; workbook roster-conflict, overdue-policy and deadline-clear matrices                                                                            |
-| One current save per draft lifetime; acknowledgement and failure/retry rules | Workbook earlier-save, rejected-save and normalization-retry cases, paused at command, signing, encryption, receipt or debounce boundaries                                     |
-| View identity, inactive locks and disposal                                   | Workbook clone, headless-context, lock-cycle, queued-disposal and rubric-replacement cases; command resolution/closure cases                                                   |
-| Registration restoration with populated rosters                              | Workbook registration matrix: returning/staying on clones and active lock cycles, IDs and name-only registrations, queued reversions and decrypted metadata                    |
-| Shared write ownership and truthful completion                               | Command superseded-intervention matrix in both completion orders; workbook matching-assignment retries; command metadata-failure cases for lock, reset, remove and dereference |
-| File-save targeting and ordinary path behavior                               | Command follow-up-save matrix checks saved contents and undo-history clearing after switching tabs; view/path resolution tests                                                 |
-
-The tests exercise controlled interleavings, not every possible event sequence.
-In particular, disposal coverage cancels queued work; it does not promise to
-abort cryptography already running. The lifecycle intentionally retains per-view
-drafts and per-document writes: serializing one editor cannot order commands
-from another view, and one document-wide draft would discard independent input.
+Drafts preserve explicit intent separately from observed state, including
+reversions to an earlier value. Roster formatting and automatic assignee
+normalization remain separate from input history. Coupled choices, such as
+late policy and penalty or a registration's fields, save together. Registrar
+initialization is separate from user selection. Failed saves retain edits for
+retry or new input, without repeatedly retrying unchanged failures.
 
 ## Data model: `Rubric` (`rubric.ts`)
 
@@ -228,9 +138,25 @@ scanning.
 ### Caching
 
 `workbook.ts` uses a `WeakMap` to cache the current `Rubric` instance, avoiding
-repeated decryption. `state.ts` maintains an in-memory `Map` of cell scores
-with FIFO eviction, the active reviewer cursor cell, and a `refreshed` signal
-that triggers sidebar re-renders when cursor or state changes.
+repeated decryption. Cloned views share this cache and metadata-write ownership.
+`state.ts` maintains an in-memory `Map` of cell scores with FIFO eviction, the
+active reviewer cursor cell, and a `refreshed` signal that triggers sidebar
+re-renders when cursor or state changes.
+
+### Persistence
+
+Workbook mutations must propagate the promise from `Workbook.update()`. The
+cache is optimistic: matching it does not prove metadata was written.
+Superseded updates follow the latest metadata write's outcome. The returned
+rubric is the invocation's audited snapshot and may already have been superseded.
+
+Assignment signing rebases ordinary concurrent changes and rejects rubric
+replacement or a lock/unlock boundary. This is narrower than serializing every
+model operation.
+
+Writing metadata and saving the notebook file are separate. Commands perform
+follow-up saves and undo-history clearing only after metadata succeeds, using
+the context they resolved at the start.
 
 ### Active workbook
 
