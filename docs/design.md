@@ -87,7 +87,7 @@ Its ownership boundaries are:
 
 | Owner                         | State and responsibility                                                                                                     | Lifetime                                                            |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| React editor                  | Controls, registration choices, presentation; reads an editor snapshot and submits field edits                               | One view/context, path, and rubric identity                         |
+| React editor                  | Controls and presentation; derives registration selection from the draft and submits explicit edits                          | One view/context, path, and rubric identity                         |
 | `SidebarWidget` / `drafts.ts` | One draft controller per visited workbook object; timer, subscriptions, current save snapshot, and retained headless context | Until owner disposal or rubric replacement; survives switching away |
 | `draft.ts`                    | Pure field reconciliation: observed assignment, raw input, explicit queued fields, semantic input version, and save snapshot | Owned by the controller; reset at lock boundaries                   |
 | `commands.ts`                 | Resolve the intended workbook and keep that target through asynchronous work and follow-up file saves                        | One command invocation                                              |
@@ -98,6 +98,11 @@ kept separately from its trimmed, deduplicated value. The displayed assignee is
 normalized against that roster, without treating an automatic normalization as
 an explicit user edit. Late policy and penalty form one field group. Clearing
 a deadline explicitly clears that group, including fields already null.
+
+Registration dropdowns read the draft identity and submit edits directly on user
+selection. Registrar initialization is separate: new registrar results and unlocks
+match the current draft, default to a sole registration, or clear an unavailable
+choice. Observing another view's save does not reapply a prior dropdown selection.
 
 `ready`, `saving`, and `failed` are the only draft phases. Locking and disposal
 are lifetime boundaries rather than additional save phases. A lock reset may
@@ -115,7 +120,7 @@ that older completion from acting on the new draft.
 | Save succeeds                          | Acknowledge only its submitted patch, reconcile the latest workbook, and return to `ready`; later queued edits can start another debounce                                                                            |
 | Save fails                             | Restore submitted fields to `queued`, keeping newer edits; retry if input or the full normalized patch changed, otherwise enter `failed`; later observations alone do not retry                                      |
 | Observe a lock boundary                | Reset the draft and timer; an old completion cannot acknowledge a replacement save snapshot                                                                                                                          |
-| Switch views                           | Keep each controller alive; remount React selection state for the incoming editor and restore registrations by ID or, when absent, name                                                                              |
+| Switch views                           | Keep each controller alive; display its draft registration by ID or, when absent, name; observing selection never queues an edit                                                                                     |
 | Dispose an owner or replace its rubric | Cancel scheduled work, disconnect subscriptions, and release retained context identity; a command already handed off may finish on its original live document, but the disposed controller cannot schedule more work |
 
 A save snapshot's identity prevents late completion from acting on a reset
@@ -147,7 +152,7 @@ The regression coverage follows these boundaries:
 | Raw formatting, explicit reversions, policy groups and deadline reset intent | `src/__tests__/draft.spec.ts`; workbook roster-conflict, overdue-policy and deadline-clear matrices                                                                            |
 | One current save per draft lifetime; acknowledgement and failure/retry rules | Workbook earlier-save, rejected-save and normalization-retry cases, paused at command, signing, encryption, receipt or debounce boundaries                                     |
 | View identity, inactive locks and disposal                                   | Workbook clone, headless-context, lock-cycle, queued-disposal and rubric-replacement cases; command resolution/closure cases                                                   |
-| Registration restoration with populated rosters                              | Workbook notebook/clone switching matrix, for IDs and name-only registrations, with and without queued reversions; verifies decrypted metadata                                 |
+| Registration restoration with populated rosters                              | Workbook registration matrix: returning/staying on clones and active lock cycles, IDs and name-only registrations, queued reversions and decrypted metadata                    |
 | Shared write ownership and truthful completion                               | Command superseded-intervention matrix in both completion orders; workbook matching-assignment retries; command metadata-failure cases for lock, reset, remove and dereference |
 | File-save targeting and ordinary path behavior                               | Command follow-up-save matrix checks saved contents and undo-history clearing after switching tabs; view/path resolution tests                                                 |
 

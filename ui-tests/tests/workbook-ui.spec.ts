@@ -1272,12 +1272,23 @@ for (const outcome of ['success', 'encryption failure', 'metadata failure']) {
   });
 }
 
-for (const { mode, reversion, named } of ['notebook', 'clone'].flatMap(mode =>
+for (const { mode, reversion, named } of [
+  'notebook',
+  'clone',
+  'untouched',
+  'lock'
+].flatMap(mode =>
   [false, true].flatMap(reversion =>
     [false, true].map(named => ({ mode, reversion, named }))
   )
 )) {
-  test(`returning from a ${mode} preserves its pending ${named ? 'name-only' : 'registered'} assignment${reversion ? ' reversion' : ''}`, async ({
+  const scenario =
+    mode === 'untouched'
+      ? 'staying on an untouched clone'
+      : mode === 'lock'
+        ? 'locking and unlocking the active editor'
+        : `returning from a ${mode}`;
+  test(`${scenario} ${mode === 'lock' ? 'discards' : 'preserves'} its pending ${named ? 'name-only' : 'registered'} assignment${reversion ? ' reversion' : ''}`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
@@ -1311,7 +1322,7 @@ for (const { mode, reversion, named } of ['notebook', 'clone'].flatMap(mode =>
         has: page.locator(`option[value="${b}"]`)
       });
       await expect(choices).toHaveValue(a);
-      if (mode === 'clone') {
+      if (mode === 'clone' || mode === 'untouched') {
         await page.evaluate(async () => {
           const { jupyterapp: app, __correxit_registration: held } =
             window as any;
@@ -1325,30 +1336,60 @@ for (const { mode, reversion, named } of ['notebook', 'clone'].flatMap(mode =>
           app.shell.activateById(held.panel.id);
         });
       }
-      await Saves.pause(page);
+      await Saves.pause(
+        page,
+        mode === 'lock' || mode === 'untouched' ? 'signing' : 'command'
+      );
       await choices.selectOption(b);
       await page.waitForFunction(
         () => !!(window as any).__correxit_save.release
       );
-      if (reversion) await choices.selectOption(a);
-      if (mode === 'clone') {
+      if (reversion) {
+        await choices.selectOption('');
+        await expect(choices).toHaveValue('');
+        await expect(page.locator('.correxit-assignment-facts')).toContainText(
+          'No assignment'
+        );
+        await choices.selectOption(a);
+      }
+      if (mode === 'clone' || mode === 'untouched') {
         await page.evaluate(() => {
           const { jupyterapp: app, __correxit_registration: held } =
             window as any;
           app.shell.activateById(held.clone.id);
         });
         await expect(choices).toHaveValue(a);
-        // The outgoing clone must not dictate the returning view's selection.
-        if (reversion) {
-          await choices.selectOption(b);
-          await page.waitForFunction(
-            () => (window as any).__correxit_save.finished === 1
-          );
+        if (mode === 'clone') {
+          // The outgoing clone must not dictate the returning view's selection.
+          if (reversion) {
+            await choices.selectOption(b);
+            await page.waitForFunction(
+              () => (window as any).__correxit_save.finished === 1
+            );
+          }
+          await page.evaluate(() => {
+            const { jupyterapp: app, __correxit_registration: held } =
+              window as any;
+            app.shell.activateById(held.panel.id);
+          });
         }
-        await page.evaluate(() => {
-          const { jupyterapp: app, __correxit_registration: held } =
-            window as any;
-          app.shell.activateById(held.panel.id);
+      } else if (mode === 'lock') {
+        await page.evaluate(async () => {
+          const {
+            __correxit__: { Workbook },
+            __correxit_registration: held
+          } = window as any;
+          await Workbook.lock(held.panel);
+        });
+        await expect(page.locator('.correxit-assignment-facts')).toContainText(
+          'Assignment A'
+        );
+        await page.evaluate(async () => {
+          const {
+            __correxit__: { Workbook },
+            __correxit_registration: held
+          } = window as any;
+          await Workbook.unlock(held.panel, 'secret');
         });
       } else {
         await page.evaluate(async () => {
@@ -1367,19 +1408,26 @@ for (const { mode, reversion, named } of ['notebook', 'clone'].flatMap(mode =>
           inject(held.panel);
         });
       }
-      const calls = reversion
-        ? mode === 'clone'
-          ? ['B', 'B', 'A']
-          : ['B', 'A']
-        : ['B'];
-      const expected = registrations[reversion ? 0 : 1];
-      await expect(choices).toHaveValue(reversion ? a : b);
+      const calls =
+        mode === 'lock'
+          ? ['B']
+          : reversion
+            ? mode === 'clone'
+              ? ['B', 'B', 'A']
+              : ['B', 'A']
+            : ['B'];
+      const expected = registrations[reversion || mode === 'lock' ? 0 : 1];
+      await expect(choices).toHaveValue(
+        reversion || mode === 'lock' || mode === 'untouched' ? a : b
+      );
       await page.evaluate(() => (window as any).__correxit_save.release());
       await expect
         .poll(() =>
           page.evaluate(() => (window as any).__correxit_save.finished)
         )
         .toBe(calls.length);
+      // Staying on a clean clone or unlocking must not queue a selection write.
+      await page.waitForTimeout(400);
       const result = await page.evaluate(async () => {
         const {
           __correxit_registration: held,
@@ -1397,16 +1445,21 @@ for (const { mode, reversion, named } of ['notebook', 'clone'].flatMap(mode =>
         );
         return {
           calls: held.calls,
+          errors: (window as any).__correxit_save.errors,
           cached: fields(Workbook.open(held.panel).assignment),
           stored: fields(stored.assignment)
         };
       });
       expect(result).toEqual({
         calls: calls.map(id => `Assignment ${id}`),
+        errors:
+          mode === 'lock'
+            ? [expect.stringContaining('assign error: workbook changed')]
+            : [],
         cached: expected,
         stored: expected
       });
-      await expect(choices).toHaveValue(reversion ? a : b);
+      await expect(choices).toHaveValue(reversion || mode === 'lock' ? a : b);
     } finally {
       await Saves.restore(page);
       await page

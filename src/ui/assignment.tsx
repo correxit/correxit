@@ -107,12 +107,9 @@ const Editor: React.FC<{
   const [registered, setRegistered] = useState<Registered>(null);
   const [overwrite, setOverwrite] = useState(false);
   const [pending, setPending] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
   const assignment = locked ? rubric.assignment : Draft.view(state);
   const cached = rubric.id;
   const { edit } = editor;
-  const pick = (next: string | null) =>
-    setSelected(current => (current === next ? current : next));
   useEffect(() => {
     const store = (next: Registered) =>
       setRegistered(current =>
@@ -138,33 +135,17 @@ const Editor: React.FC<{
   useEffect(() => {
     if (locked) return;
 
+    // Initialize from registrar changes; ordinary draft updates only affect display.
     const resolved = courses(registered);
     const roster = resolved ? flat(resolved) : null;
-    if (roster === null) {
-      pick(null);
-      return;
-    }
-    if (!roster.length) {
-      pick(null);
-      edit(blank);
-      return;
-    }
-
-    const matched = selected
-      ? roster.find(r => identify(r) === selected)
-      : selected === ''
-        ? null
-        : roster.find(
-            record => identify(record) === (assignment.id || assignment.name)
-          ) || (roster.length === 1 ? roster[0] : null);
-    if (!matched) {
-      if (selected !== '') pick(null);
-      edit(blank);
-      return;
-    }
-    pick(identify(matched));
-    edit(freeze(matched));
-  }, [assignment.id, assignment.name, edit, locked, registered, selected]);
+    if (roster === null) return;
+    const assignment = Draft.view(editor.read());
+    const matched =
+      roster.find(
+        record => identify(record) === (assignment.id || assignment.name)
+      ) || (roster.length === 1 ? roster[0] : null);
+    editor.edit(matched ? freeze(matched) : blank);
+  }, [editor, locked, registered]);
 
   const all =
     courses(registered) ??
@@ -172,6 +153,13 @@ const Editor: React.FC<{
   const roster = all ? flat(all) : null;
   const manual = roster === null;
   const multiple = !!roster && roster.length > 1;
+  const selected = roster?.find(
+    record => identify(record) === (assignment.id || assignment.name)
+  );
+  const select = (id: string) => {
+    const matched = roster?.find(record => identify(record) === id);
+    edit(matched ? freeze(matched) : blank);
+  };
   if (pending) return <div className="correxit-assignment cxt-mod-pending" />;
   return (
     <div className="correxit-assignment">
@@ -194,8 +182,8 @@ const Editor: React.FC<{
               locked,
               multiple,
               registered: roster,
-              selected,
-              setSelected,
+              selected: selected ? identify(selected) : '',
+              select,
               trans
             }}
           />
@@ -581,8 +569,8 @@ const Enrollment: React.FC<{
   locked: boolean;
   multiple: boolean;
   registered: Registration[];
-  selected: string | null;
-  setSelected: (id: string) => void;
+  selected: string;
+  select: (id: string) => void;
   trans: TranslationBundle;
 }> = props => {
   const {
@@ -593,7 +581,7 @@ const Enrollment: React.FC<{
     multiple,
     registered,
     selected,
-    setSelected,
+    select,
     trans
   } = props;
   if (!registered.length) {
@@ -620,8 +608,8 @@ const Enrollment: React.FC<{
               disabled={!!assignee}
               id="correxit-assignment-registration"
               name="correxit-assignment-registration"
-              onChange={({ target: { value } }) => setSelected(value)}
-              value={selected ?? ''}
+              onChange={({ target: { value } }) => select(value)}
+              value={selected}
             >
               <option value="">{trans.__('No assignment')}</option>
               {all.some(({ group }) => group)
