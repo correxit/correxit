@@ -21,27 +21,17 @@ export class SidebarWidget extends ReactWidget {
     void this.subscribe(monitor);
   }
 
-  protected annotate = true;
-
   readonly trans: IRenderMime.TranslationBundle;
+
+  protected active: Workbook | null = null;
+
+  protected annotate = true;
 
   protected commands: CommandRegistry;
 
   protected drafts: ReturnType<typeof drafts.create>;
 
   protected editor: drafts.Editor | null = null;
-
-  dispose() {
-    if (this.isDisposed) return;
-    this.drafts.dispose();
-    super.dispose();
-  }
-
-  protected onUpdateRequest(message: Message) {
-    // Establish notebook subscriptions before entering the React render tree.
-    this.editor = this.drafts.open(this.workbook);
-    super.onUpdateRequest(message);
-  }
 
   protected get workbook(): Workbook | null {
     return this.active;
@@ -69,6 +59,12 @@ export class SidebarWidget extends ReactWidget {
     this.update();
   }
 
+  dispose() {
+    if (this.isDisposed) return;
+    this.drafts.dispose();
+    super.dispose();
+  }
+
   protected async initialize(pending: SidebarWidget.IOptions['settings']) {
     const settings = await pending;
     if (settings) {
@@ -77,6 +73,11 @@ export class SidebarWidget extends ReactWidget {
       );
       this.annotate = !!settings.composite.annotate;
     }
+  }
+
+  protected onUpdateRequest(message: Message) {
+    this.editor = this.drafts.open(this.workbook);
+    super.onUpdateRequest(message);
   }
 
   protected render() {
@@ -96,8 +97,6 @@ export class SidebarWidget extends ReactWidget {
       this.workbook = workbook;
     }
   }
-
-  protected active: Workbook | null = null;
 }
 
 export namespace SidebarWidget {
