@@ -52,6 +52,20 @@ export namespace Draft {
     roster: split(state.fields.roster)
   });
 
+  /** Observe the workbook and snapshot the next save, if one is ready. */
+  export function begin(state: State, assignment: Assignment): State {
+    const next = observe(state, assignment);
+    if (!pending(next)) return next;
+
+    return {
+      ...next,
+      fields: { ...next.fields, assignee: view(next).assignee },
+      queued: [],
+      phase: 'saving',
+      save: { version: next.version, changes: patch(next) }
+    };
+  }
+
   export function changes(state: State, assignment = view(state)): Changes {
     const patch = Object.fromEntries(
       groups
@@ -65,6 +79,41 @@ export namespace Draft {
       state.assignment.expiration !== null
       ? { ...patch, overdue: null, penalty: null }
       : patch;
+  }
+
+  /** Acknowledge only this save; later edits and replacement drafts survive. */
+  export function complete(
+    state: State,
+    save: Save,
+    accepted: boolean,
+    assignment: Assignment | null
+  ): State {
+    if (state.save !== save) return state;
+
+    const saved: State = accepted
+      ? {
+          ...state,
+          assignment: { ...state.assignment, ...save.changes },
+          phase: 'ready',
+          save: null
+        }
+      : {
+          ...state,
+          // Failed fields remain intended; newer edits keep their current values.
+          queued: Array.from(
+            new Set([
+              ...state.queued,
+              ...(Object.keys(save.changes) as (keyof Fields)[])
+            ])
+          )
+        };
+    const observed = assignment ? observe(saved, assignment) : saved;
+    // Observations and formatting alone must not retry an unchanged failure.
+    const ready =
+      (accepted && assignment !== null) ||
+      observed.version !== save.version ||
+      !same(patch(observed), save.changes);
+    return { ...observed, phase: ready ? 'ready' : 'failed', save: null };
   }
 
   /** Include explicit intent even when the optimistic baseline already matches. */
@@ -132,6 +181,16 @@ export namespace Draft {
     ) as Fields;
 
     return { ...state, assignment, fields: merged };
+  }
+
+  /** Whether the current draft can schedule a save. */
+  export function pending(state: State): boolean {
+    return state.phase === 'ready' && Object.keys(patch(state)).length > 0;
+  }
+
+  /** Explicitly retry retained input without inventing another edit. */
+  export function retry(state: State): State {
+    return state.phase === 'failed' ? { ...state, phase: 'ready' } : state;
   }
 
   export function view(state: State): Assignment {

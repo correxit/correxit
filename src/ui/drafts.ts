@@ -10,6 +10,7 @@ export type Editor = {
   read: () => Draft.State;
   subscribe: (listener: () => void) => () => void;
   edit: (update: Partial<Draft.Fields>) => void;
+  retry: () => void;
 };
 
 type Tracked = Editor & {
@@ -18,8 +19,6 @@ type Tracked = Editor & {
 };
 
 const DELAY = 150;
-const same = (x: unknown, y: unknown) =>
-  JSON.stringify(x) === JSON.stringify(y);
 
 /** Own drafts for visited notebook views, including while they are inactive. */
 export function create(commands: CommandRegistry) {
@@ -55,74 +54,31 @@ export function create(commands: CommandRegistry) {
       state = next;
       if (delay !== null) window.clearTimeout(delay);
       delay = null;
-      if (
-        current() &&
-        state.phase === 'ready' &&
-        (state.queued.length || Object.keys(Draft.changes(state)).length)
-      )
+      if (current() && Draft.pending(state))
         delay = window.setTimeout(() => void persist(), DELAY);
       listeners.forEach(listener => listener());
     };
     const persist = async () => {
       const rubric = current();
       if (!rubric) return;
-      const next = Draft.observe(state, rubric.assignment);
-      const input = Draft.view(next);
-      const patch = Draft.patch(next);
-      if (next.phase !== 'ready' || !Object.keys(patch).length)
+      const next = Draft.begin(state, rubric.assignment);
+      if (next.phase !== 'saving' || next.save === state.save)
         return update(next);
 
-      const save = { version: next.version, changes: patch };
-      // Snapshot the normalized value being saved so an explicit reversion survives.
-      update({
-        ...next,
-        fields: { ...next.fields, assignee: input.assignee },
-        queued: [],
-        phase: 'saving',
-        save
-      });
-
-      const assignment = await commands
+      const { save } = next;
+      update(next);
+      const result = await commands
         .execute(Correxit.CommandIDs.assign, {
-          ...patch,
+          ...save.changes,
           path: workbook.context.path,
           context: context?.id ?? null,
           view: workbook.content?.id ?? null,
           rubric: id
         })
         .catch(() => null);
-      if (state.save !== save) return;
-      const latest = current();
-      // Only edits beyond the completed patch remain queued, including reversions.
-      const saved: Draft.State = assignment
-        ? {
-            ...state,
-            assignment: { ...state.assignment, ...save.changes },
-            phase: 'ready',
-            save: null
-          }
-        : {
-            ...state,
-            // Failed fields remain intended; later edits keep their current values.
-            queued: Array.from(
-              new Set([
-                ...state.queued,
-                ...(Object.keys(save.changes) as (keyof Draft.Fields)[])
-              ])
-            )
-          };
-      const observed = latest ? Draft.observe(saved, latest.assignment) : saved;
-      // Retry a failure only for new input or a changed normalized patch.
-      update({
-        ...observed,
-        phase:
-          (assignment && latest) ||
-          observed.version !== save.version ||
-          !same(Draft.patch(observed), patch)
-            ? 'ready'
-            : 'failed',
-        save: null
-      });
+      update(
+        Draft.complete(state, save, !!result, current()?.assignment ?? null)
+      );
     };
     const notebook = workbook.context.model.sharedModel;
     const refresh = () => {
@@ -149,6 +105,7 @@ export function create(commands: CommandRegistry) {
         return () => void listeners.delete(listener);
       },
       edit: fields => update(Draft.edit(state, fields)),
+      retry: () => update(Draft.retry(state)),
       observe: (assignment, next) => {
         const reset = locked || next;
         locked = next;

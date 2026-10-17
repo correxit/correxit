@@ -164,6 +164,14 @@ const Editor: React.FC<{
   return (
     <div className="correxit-assignment">
       <Facts {...{ assignment, manual, trans }} />
+      {!locked && state.phase === 'failed' && (
+        <div className="correxit-assignment-hint" role="status">
+          {trans.__('Assignment changes could not be saved.')}{' '}
+          <button onClick={editor.retry} type="button">
+            {trans.__('Retry')}
+          </button>
+        </div>
+      )}
       <div className="correxit-assignment-controls">
         {manual ? (
           <>

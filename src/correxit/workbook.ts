@@ -1269,6 +1269,9 @@ export namespace Workbook {
    * If the given rubric passes an audit, which may prune broken cells, it is
    * locked and written to the notebook metadata `correxit` key.
    * Superseded updates wait for the latest metadata write, including failures.
+   * Completion follows that write; the returned rubric is this invocation's
+   * audited snapshot and may already have been superseded. This does not save
+   * the notebook file or serialize mutations performed before calling update.
    *
    * The audited rubric is returned.
    */

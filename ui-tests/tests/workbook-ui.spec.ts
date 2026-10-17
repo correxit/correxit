@@ -1476,8 +1476,10 @@ for (const { mode, reversion, named } of [
   });
 }
 
-for (const field of ['roster', 'assignee']) {
-  test(`rejected save with a queued ${field} reversion waits for new input`, async ({
+for (const { field, retry } of ['roster', 'assignee'].flatMap(field =>
+  [false, true].map(retry => ({ field, retry }))
+)) {
+  test(`rejected save with a queued ${field} reversion waits for ${retry ? 'explicit retry' : 'new input'}`, async ({
     page
   }) => {
     const { dispose } = await setup(page, [
@@ -1523,14 +1525,30 @@ for (const field of ['roster', 'assignee']) {
         field === 'roster' ? roster.join('\n') : roster[0]
       );
       await expect(assignee).toHaveValue(roster[0]);
-      // New input may retry the retained draft after the failure is removed.
+      const notice = page.getByRole('status').filter({
+        hasText: 'Assignment changes could not be saved.'
+      });
+      await expect(notice).toBeVisible();
+      // Retry or new input can resume the retained draft after failure is removed.
       await page.evaluate(() => {
         (window as any).__correxit__.Rubric.assign = (
           window as any
         ).__correxit_save.prepare;
       });
-      const next = [...roster, 'carol@example.com'];
-      await area.fill(next.join('\n'));
+      const next = retry
+        ? field === 'roster'
+          ? roster
+          : [roster[0]]
+        : [...roster, 'carol@example.com'];
+      if (retry)
+        await notice
+          .getByRole('button', { name: 'Retry', exact: true })
+          .click();
+      else await area.fill(next.join('\n'));
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished >= 2
+      );
+      await expect(notice).toHaveCount(0);
       await expect
         .poll(() =>
           page.evaluate(() => {

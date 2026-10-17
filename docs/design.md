@@ -73,9 +73,11 @@ The architecture is divided into three layers:
 components are declarative. They render state and execute commands, but never
 call model functions directly.
 
-Assignment drafts separate pure reconciliation rules (`src/ui/draft.ts`) from
-notebook observation and save scheduling (`src/ui/drafts.ts`). `SidebarWidget`
-owns the latter and prepares each editor before rendering React. React reads
+Assignment drafts keep edit, observation, save, acknowledgement, and retry
+transitions together in the pure model (`src/ui/draft.ts`). The controller
+(`src/ui/drafts.ts`) owns notebook subscriptions, debounce, command execution,
+and disposal. `SidebarWidget` owns the controller and prepares each editor
+before rendering React. React reads
 the editor with `useSyncExternalStore` and submits edits; it never creates or
 disposes notebook subscriptions. A cached draft follows its notebook view even
 while inactive, so lock transitions can discard pending edits across tab switches.
@@ -130,6 +132,14 @@ if B is being saved and the user changes back to A, A must survive even when it
 equals the observed baseline. These serve different purposes and are not
 interchangeable dirty flags.
 
+The controller calls `Draft.begin` against the current assignment, submits its
+save snapshot through `correxit:assign`, and passes the outcome and latest
+assignment to `Draft.complete`. An old completion leaves a replacement draft
+untouched. A failed draft exposes a message and Retry action; `Draft.retry`
+resumes its retained intent without changing the input version. Substantive
+edits can also resume a failed draft, while formatting and observation alone
+cannot. The view does not own acknowledgement or retry policy.
+
 Persistence has a separate completion rule. Every mutating method that starts
 `Workbook.update()` must return or await its promise, and command callers must
 propagate that completion. A matching optimistic cache value does not prove a
@@ -137,6 +147,12 @@ write succeeded. Superseded updates follow the latest write's success or
 failure, and failed matching assignments can retry the metadata write. Assignment
 signing rebases ordinary concurrent changes, but rejects rubric replacement or
 a changed lock generation, including a lock/unlock cycle with the same rubric ID.
+
+`Workbook.update()` returns its own audited snapshot, which may have been
+superseded by the time its promise resolves. Completion follows the document's
+latest metadata write, not proof that this invocation's snapshot remains current.
+This contract does not serialize the read/modify/sign work that callers perform
+before invoking `update`; assignment rebasing is a separate, narrower guarantee.
 
 Metadata completion does not mean the notebook file is saved to storage.
 Commands that also save the file or clear undo history do so only after the
