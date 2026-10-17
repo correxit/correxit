@@ -158,7 +158,7 @@ const Editor: React.FC<{
   );
   const select = (id: string) => {
     const matched = roster?.find(record => identify(record) === id);
-    edit(matched ? freeze(matched) : blank);
+    editor.select(matched ? freeze(matched) : blank);
   };
   if (pending) return <div className="correxit-assignment cxt-mod-pending" />;
   return (

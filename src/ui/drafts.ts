@@ -10,6 +10,7 @@ export type Editor = {
   read: () => Draft.State;
   subscribe: (listener: () => void) => () => void;
   edit: (update: Partial<Draft.Fields>) => void;
+  select: (update: Partial<Draft.Fields>) => void;
   retry: () => void;
 };
 
@@ -105,6 +106,7 @@ export function create(commands: CommandRegistry) {
         return () => void listeners.delete(listener);
       },
       edit: fields => update(Draft.edit(state, fields)),
+      select: fields => update(Draft.select(state, fields)),
       retry: () => update(Draft.retry(state)),
       observe: (assignment, next) => {
         const reset = locked || next;

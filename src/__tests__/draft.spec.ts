@@ -37,6 +37,77 @@ describe('Assignment drafts', () => {
     expect(Draft.changes(observed)).toEqual({ assignee: 'alice' });
   });
 
+  it.each(['edit', 'select'] as const)(
+    '%s distinguishes registrar initialization from a complete selection',
+    method => {
+      const original = {
+        ...assignment,
+        assignee: '',
+        id: 'A',
+        name: 'Assignment A'
+      };
+      const selected = {
+        id: 'B',
+        name: 'Assignment B',
+        roster: original.roster.join('\n'),
+        expiration: original.expiration,
+        overdue: null,
+        penalty: null
+      };
+      const edited = Draft[method](Draft.create(original), selected);
+      const competing = {
+        ...original,
+        id: 'C',
+        name: 'Assignment C',
+        roster: ['carol'],
+        expiration: 1900000000000,
+        overdue: 'dock' as const,
+        penalty: 10
+      };
+      const saving = Draft.begin(edited, competing);
+      const expected =
+        method === 'select'
+          ? { ...selected, roster: original.roster }
+          : { id: selected.id, name: selected.name };
+      expect(saving.save?.changes).toEqual(expected);
+      const completed = Draft.complete(saving, saving.save!, true, {
+        ...competing,
+        ...expected
+      });
+      expect(Draft.patch(completed)).toEqual({});
+    }
+  );
+
+  it('retains a complete selection through a failed save and explicit retry', () => {
+    const selected = {
+      id: 'B',
+      name: 'Assignment B',
+      roster: assignment.roster.join('\n'),
+      expiration: assignment.expiration,
+      overdue: null,
+      penalty: null
+    };
+    const saving = Draft.begin(
+      Draft.select(Draft.create(assignment), selected),
+      assignment
+    );
+    const competing = {
+      ...assignment,
+      roster: ['carol'],
+      expiration: 1900000000000,
+      overdue: 'dock' as const,
+      penalty: 10
+    };
+    const failed = Draft.complete(saving, saving.save!, false, competing);
+    expect(failed.phase).toBe('failed');
+    const retried = Draft.select(failed, selected);
+    expect(retried.version).toBe(failed.version + 1);
+    expect(Draft.begin(retried, competing).save?.changes).toEqual({
+      ...selected,
+      roster: assignment.roster
+    });
+  });
+
   it('preserves roster and assignee reversions while a save is pending', () => {
     const pending = Draft.begin(
       Draft.edit(Draft.create(assignment), { roster: 'carol' }),

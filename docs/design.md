@@ -102,7 +102,11 @@ an explicit user edit. Late policy and penalty form one field group. Clearing
 a deadline explicitly clears that group, including fields already null.
 
 Registration dropdowns read the draft identity and submit edits directly on user
-selection. Registrar initialization is separate: new registrar results and unlocks
+selection. An explicit selection queues all registration-owned fields together,
+including an unchanged roster, deadline, or cleared late policy, so a concurrent
+save cannot mix one registration's identity with another's fields. Selecting
+"No assignment" retains the complete clearing intent. Registrar initialization
+is separate: new registrar results and unlocks
 match the current draft, default to a sole registration, or clear an unavailable
 choice. Observing another view's save does not reapply a prior dropdown selection.
 

@@ -1476,6 +1476,121 @@ for (const { mode, reversion, named } of [
   });
 }
 
+for (const { named, expiration } of [false, true].flatMap(named =>
+  [null, 1800000000000].map(expiration => ({ named, expiration }))
+)) {
+  test(`explicit ${named ? 'name-only' : 'registered'} selection preserves its full registration during competing saves: deadline=${expiration}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'cell', source: 'print(42)' }
+    ]);
+    const registrations = ['A', 'B', 'C'].map(id => ({
+      id: named ? null : id,
+      name: `Assignment ${id}`,
+      expiration: id === 'C' ? 1900000000000 : expiration,
+      roster: id === 'C' ? ['carol@example.com'] : ['alice@example.com']
+    }));
+    const [a, b, c] = registrations.map(({ id, name }) => id || name);
+    try {
+      await page.evaluate(registrations => {
+        const app = (window as any).jupyterapp;
+        const held = ((window as any).__correxit_registration = {
+          panel: app.shell.currentWidget,
+          execute: app.commands.execute.bind(app.commands),
+          clone: null
+        });
+        app.commands.execute = (id: string, args: any) =>
+          id === 'correxit:enroll'
+            ? Promise.resolve(registrations)
+            : held.execute(id, args);
+      }, registrations);
+      await Saves.initialize(page, registrations[0]);
+      await page.getByRole('tab', { name: 'Correxit' }).click();
+      const choices = page.locator('#correxit-assignment-registration');
+      await expect(choices).toHaveValue(a);
+      await page.evaluate(async () => {
+        const { jupyterapp: app, __correxit_registration: held } =
+          window as any;
+        await app.commands.execute('docmanager:clone');
+        held.clone = app.shell.currentWidget;
+      });
+      await expect(choices).toHaveValue(a);
+      await page.evaluate(() => {
+        const { jupyterapp: app, __correxit_registration: held } =
+          window as any;
+        app.shell.activateById(held.panel.id);
+      });
+      await Saves.pause(page, 'signing');
+      await choices.selectOption(b);
+      await page.waitForFunction(
+        () => !!(window as any).__correxit_save.release
+      );
+      await page.evaluate(() => {
+        const { jupyterapp: app, __correxit_registration: held } =
+          window as any;
+        app.shell.activateById(held.clone.id);
+      });
+      await expect(choices).toHaveValue(a);
+      await choices.selectOption(c);
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished === 1
+      );
+      // B must rebase its complete selection over C, including unchanged fields.
+      await page.evaluate(() => (window as any).__correxit_save.release());
+      await page.waitForFunction(
+        () => (window as any).__correxit_save.finished === 2
+      );
+      await expect(choices).toHaveValue(b);
+      await page.waitForTimeout(400);
+      const result = await page.evaluate(async () => {
+        const {
+          __correxit_registration: held,
+          __correxit_save: save,
+          __correxit__: { Workbook, Rubric }
+        } = window as any;
+        const fields = ({
+          expiration,
+          id,
+          name,
+          roster,
+          overdue,
+          penalty
+        }: any) => ({ expiration, id, name, roster, overdue, penalty });
+        const stored = await Rubric.unlock(
+          held.panel.context.model.sharedModel.getMetadata('correxit'),
+          'secret'
+        );
+        return {
+          calls: save.calls,
+          errors: save.errors,
+          cached: fields(Workbook.open(held.panel).assignment),
+          stored: fields(stored.assignment)
+        };
+      });
+      const expected = { ...registrations[1], overdue: null, penalty: null };
+      expect(result).toEqual({
+        calls: 2,
+        errors: [],
+        cached: expected,
+        stored: expected
+      });
+    } finally {
+      await Saves.restore(page);
+      await page
+        .evaluate(() => {
+          const held = (window as any).__correxit_registration;
+          if (!held) return;
+          (window as any).jupyterapp.commands.execute = held.execute;
+          held.clone?.dispose();
+          delete (window as any).__correxit_registration;
+        })
+        .catch(() => {});
+      await dispose();
+    }
+  });
+}
+
 for (const { field, retry } of ['roster', 'assignee'].flatMap(field =>
   [false, true].map(retry => ({ field, retry }))
 )) {

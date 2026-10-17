@@ -161,6 +161,18 @@ export namespace Draft {
       : { ...state, fields, queued, version };
   }
 
+  /** An explicit selection retains every supplied field, even unchanged ones. */
+  export function select(state: State, update: Partial<Fields>): State {
+    const next = retry(edit(state, update));
+    return {
+      ...next,
+      version: state.version + 1,
+      queued: Array.from(
+        new Set([...next.queued, ...(Object.keys(update) as (keyof Fields)[])])
+      )
+    };
+  }
+
   export function observe(state: State, assignment: Assignment): State {
     if (assignment === state.assignment) return state;
 
