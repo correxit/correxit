@@ -1,3 +1,15 @@
+# 2.3.0
+
+<!-- START GENERATED CHANGELOG: 2.3.0 -->
+
+## What's Changed
+* fix: preserve assignment drafts and workbook save targets by @afshin in https://github.com/correxit/correxit/pull/105
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v2.2.1...v2.3.0
+
+<!-- END GENERATED CHANGELOG: 2.3.0 -->
+
 # 2.2.1
 
 <!-- START GENERATED CHANGELOG: 2.2.1 -->
