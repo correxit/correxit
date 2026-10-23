@@ -223,29 +223,18 @@ flowchart TB
   P -. progress .-> UI
 ```
 
-**Batch grading:** the batch command iterates a grader, which iterates scanned
-workbooks. Each graded workbook is automatically certified when all cells are
-resolved. Collection is a separate step invoked per-workbook after
-certification:
+**Corrector runs:** one cold run stream lists candidate paths and interleaves
+bounded per-workbook generators. Discovery, processing, results, diagnostics,
+and completion reach the view through discriminated events. One pending source
+read competes with active job completions, so slow reads cannot hold completed
+grades back. The existing scan, batch, and collect commands adapt this same
+orchestration to their original result shapes.
 
-```mermaid
-flowchart TB
-  classDef ui fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e,stroke-width:1px
-  classDef gen fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1px
-  classDef src fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1px
-
-    UI(["useCommand"]):::ui
-    B["batch()"]:::gen
-    G["grader()"]:::gen
-    SC{{"scan()"}}:::src
-
-  UI -->|for await| B
-  B -->|for await| G
-  G -->|for await| SC
-    SC -. workbook .-> G
-    G -. grade .-> B
-    B -. "path, grade" .-> UI
-```
+Run identities route stop requests to in-memory cancellation state. Stop prevents
+new jobs and retries, then drains active operations. Runs retain source contexts
+for the table and Reviewer until explicitly released; widget disposal requests
+release after pending reads, saves, and staging cleanup settle. A new run clears
+previous verification until its own authentication succeeds.
 
 Every pipeline is pull-driven and cold. The one intentionally _hot_ async
 iterable is the `Monitor` plugin, which emits workbook changes as the user

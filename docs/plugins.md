@@ -283,6 +283,26 @@ const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
 
 ---
 
+## Corrector run commands
+
+`correxit-corrector:run` returns a cold `AsyncGenerator<Corrector.Event>`.
+Pass a unique string `run`, a directory `path`, `mode` (`scan`, `grade`, or
+`collect`), and the boolean `overwrite` and `submitted` options. Discovery,
+workbook reads, processing starts, results, safe diagnostic codes, and completion
+are separate events. Returned workbook contexts belong to the run.
+
+`correxit-corrector:stop` accepts the run identity as `run`. It prevents new jobs
+and retries, awaits active work, and retains completed results. Pass
+`release: true` when the consumer no longer needs the contexts; they are disposed
+only after active operations settle. Consumers must keep pulling the stream
+while stopping, or close its iterator to trigger cleanup. Release each run when
+finished with its results. Run identities and cancellation state stay in memory.
+
+The existing `scan`, `batch`, and `collect` commands retain their arguments and
+result shapes. Their returned contexts remain the caller's responsibility.
+
+---
+
 ## Moodle Integration
 
 Correxit includes built-in Moodle plugins for the **registrar** (assignment

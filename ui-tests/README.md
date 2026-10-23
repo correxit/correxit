@@ -210,3 +210,25 @@ cd ./ui-tests
 pixi run jlpm up "@playwright/test"
 pixi run jlpm playwright install
 ```
+
+## Compare Corrector in Lab and Lite
+
+The optional performance suite grades identical Chinook workbooks and database
+resources in Lab and Lite, using rosters of 3 and 12. Each roster runs with cold
+kernels, a warm regrade, and authenticated cached reports. Timings include
+discovery, first read, first kernel execution, first streamed and visible grade,
+total duration, and the longest browser timer gap. Results are attached as JSON;
+there are no hardware-dependent speed thresholds.
+
+```sh
+pixi run jlpm build
+pixi run jlpm link:lite
+cd ui-tests
+pixi run jlpm playwright test -c playwright.performance.config.js
+```
+
+Build Lite with `pixi run jlpm build:lite` first if `lite/_output` does not exist.
+The suite starts separate Lab and static Lite servers, exposes the Lite app only
+inside its test browser, and leaves deployment headers unchanged. Run this suite
+separately from the other browser modules. A cold-kernel run includes startup
+and staging; it is not a cold browser cache measurement for every roster.

@@ -235,17 +235,26 @@ export async function request(
   factory: NotebookModelFactory,
   manager: ServiceManager.IManager,
   unlocker: Correxit.Unlocker,
-  silent = false
+  silent = false,
+  strict = false
 ): Promise<Workbook.Headless | null> {
   const { key, passphrase, path, unlock } = handle;
   const context = new Context({ manager, factory, path });
   const workbook = { content: null, context };
-  await context.initialize(false);
+  try {
+    await context.initialize(false);
+  } catch (error) {
+    context.dispose();
+    throw error;
+  }
 
   const rubric = Workbook.open(workbook, true);
   const unauthenticated = !(key || passphrase || unlock);
   if (!rubric) {
+    const notebook = context.model.toJSON() as INotebookContent;
     context.dispose();
+    if (strict && Object.prototype.hasOwnProperty.call(notebook.metadata, 'correxit'))
+      throw new Correxit.Error.Fetch('Invalid Correxit workbook');
     return null;
   }
   if (!rubric.locked || unlock === false || unauthenticated) {

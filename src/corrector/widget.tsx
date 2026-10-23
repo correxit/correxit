@@ -8,9 +8,9 @@ import {
   Toolbar
 } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { Message } from '@lumino/messaging';
+import { UUID } from '@lumino/coreutils';
 import React from 'react';
-import { Rubric, Workbook } from '../correxit';
+import { Correxit, Rubric, Workbook } from '../correxit';
 import * as state from '../correxit/state';
 import { Boundary } from '../ui';
 import { Corrector } from '.';
@@ -20,42 +20,87 @@ import { Reviewer } from './reviewer';
 
 export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
   constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
-    super({ content: new CorrectorContent({ commands, path, trans }) });
+    super({
+      content: new CorrectorContent({ commands, path, trans }),
+      toolbar: new Toolbar({ noFocusOnClick: true })
+    });
     this.commands = commands;
     this.indicator = indicator;
     this.trans = trans;
     this.addClass('correxit-corrector-widget');
+    this.title.icon = Correxit.Icons.correxit;
+    this.identify();
+    this.initialize();
   }
 
   get path(): string {
     return this.content.path;
   }
   set path(path: string) {
-    this.content.set({ path: PathExt.normalize(path) });
+    if (!this.idle) return;
+    this.content.start({
+      path: PathExt.normalize(path),
+      mode: 'scan',
+      overwrite: false,
+      submitted: false
+    });
+    this.busy = true;
+    this.identify();
     this.selector?.reset();
     this.commands.notifyCommandChanged(Corrector.CommandIDs.cd);
   }
 
+  get idle(): boolean {
+    return !this.busy;
+  }
+
+  protected identify() {
+    this.title.label = this.trans.__(
+      'Corrector · %1',
+      this.path === '.' ? '/' : PathExt.basename(this.path) || '/'
+    );
+    this.title.caption = this.path === '.' ? '/' : this.path;
+  }
+
   dispose() {
     if (this.isDisposed) return;
+    void this.commands.execute(CommandIDs.stop, {
+      run: this.content.run,
+      release: true
+    });
     if (this.indicator && !this.indicator.isDisposed)
       this.indicator.set({ graded: true, scanned: true });
     super.dispose();
   }
 
-  protected async initialize() {
+  protected initialize() {
     const { commands, content, indicator, toolbar, trans } = this;
-    const go = (mode: Corrector.Mode, overwrite: boolean, submitted: boolean) =>
-      content.set({ key: `${Date.now()}`, mode, overwrite, submitted });
-    const selector = new ModeSelector({ go, trans });
+    const go = (
+      mode: Corrector.Mode,
+      overwrite: boolean,
+      submitted: boolean
+    ) => {
+      this.busy = true;
+      content.start({ mode, overwrite, submitted });
+      commands.notifyCommandChanged(CommandIDs.cd);
+      commands.notifyCommandChanged(CommandIDs.csv);
+    };
+    const stop = () => {
+      content.set({ stopping: true });
+      void commands.execute(CommandIDs.stop, { run: content.run });
+    };
+    const selector = new ModeSelector({ go, stop, trans });
     const notify = (updates: Corrector.Notification) => {
+      this.busy = !(updates.graded && updates.scanned);
       indicator?.set(updates);
       selector?.set(updates);
       commands.notifyCommandChanged(CommandIDs.csv);
+      commands.notifyCommandChanged(CommandIDs.cd);
     };
     const cd = new CommandToolbarButton({
       commands,
       id: Corrector.CommandIDs.cd,
+      label: '',
       noFocusOnClick: true
     });
     const csv = new CommandToolbarButton({
@@ -71,17 +116,9 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     content.set({ notify });
   }
 
-  protected onBeforeShow(msg: Message): void {
-    if (!this.initialized) {
-      this.initialized = true;
-      void this.initialize().catch(_ => {});
-    }
-    super.onBeforeShow(msg);
-  }
-
   protected commands: CommandRegistry;
   protected indicator: CorrectorStatus | null;
-  protected initialized = false;
+  protected busy = true;
   protected selector: ModeSelector | null = null;
   protected trans: IRenderMime.TranslationBundle;
 }
@@ -101,6 +138,8 @@ class CorrectorContent extends ReactWidget {
     this.props = {
       ...props,
       mode: 'scan',
+      run: UUID.uuid4(),
+      stopping: false,
       notify: () => {},
       overwrite: false,
       submitted: false
@@ -112,9 +151,19 @@ class CorrectorContent extends ReactWidget {
     return this.props.path || '';
   }
 
-  set(updates: Partial<Corrector.Props & { key?: string }>) {
-    if (updates.path !== undefined)
-      updates = { ...updates, mode: 'scan', key: `${Date.now()}` };
+  get run(): string {
+    return this.props.run;
+  }
+
+  start(updates: Partial<Corrector.Props>) {
+    void this.props.commands.execute(CommandIDs.stop, {
+      run: this.run,
+      release: true
+    });
+    this.set({ ...updates, run: UUID.uuid4(), stopping: false });
+  }
+
+  set(updates: Partial<Corrector.Props>) {
     this.props = { ...this.props, ...updates };
     this.update();
   }
@@ -129,7 +178,7 @@ class CorrectorContent extends ReactWidget {
     );
   }
 
-  protected props: Corrector.Props & { key?: string };
+  protected props: Corrector.Props;
 }
 
 export class CorrectorStatus extends ReactWidget {
@@ -141,11 +190,13 @@ export class CorrectorStatus extends ReactWidget {
 
   render() {
     const { graded, scanned, trans } = this;
-    const label = !scanned
-      ? trans.__('Scanning...')
-      : !graded
-        ? trans.__('Grading...')
-        : trans.__('Idle');
+    const label =
+      this.message ||
+      (!scanned
+        ? trans.__('Scanning...')
+        : !graded
+          ? trans.__('Grading...')
+          : trans.__('Idle'));
     return <span className="jp-StatusBar-TextItem">{label}</span>;
   }
 
@@ -153,12 +204,17 @@ export class CorrectorStatus extends ReactWidget {
     return this.graded && this.scanned;
   }
 
-  set(updates: { graded: boolean; scanned: boolean }) {
+  set(
+    updates: Pick<Corrector.Notification, 'graded' | 'scanned'> &
+      Partial<Pick<Corrector.Notification, 'message'>>
+  ) {
+    this.message = updates.message || '';
     this.graded = updates.graded;
     this.scanned = updates.scanned;
     this.update();
   }
 
+  protected message = '';
   protected graded = true;
   protected scanned = true;
   protected trans: IRenderMime.TranslationBundle;
@@ -167,64 +223,42 @@ export class CorrectorStatus extends ReactWidget {
 class ModeSelector extends ReactWidget {
   constructor(options: {
     go: (mode: Corrector.Mode, overwrite: boolean, submitted: boolean) => void;
+    stop: () => void;
     trans: IRenderMime.TranslationBundle;
   }) {
     super();
     this.go = options.go;
+    this.stop = options.stop;
     this.trans = options.trans;
     this.addClass('correxit-corrector-mode');
   }
 
-  handleEvent(event: Event): void {
-    event.stopPropagation();
-  }
-
-  protected onBeforeAttach(msg: Message): void {
-    super.onBeforeAttach(msg);
-    this.node.addEventListener('click', this);
-    this.node.removeEventListener('pointerdown', this);
-  }
-
-  protected onAfterDetach(msg: Message): void {
-    super.onAfterDetach(msg);
-    this.node.removeEventListener('click', this);
-    this.node.removeEventListener('pointerdown', this);
-  }
-
   render() {
-    const { busy, mode, overwrite, submitted, trans } = this;
+    const { busy, mode, stopping, submitted, trans } = this;
     const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
       {
         value: 'scan',
         label: trans.__('Scan'),
-        tooltip: trans.__('Scan for workbooks, leave them locked')
+        tooltip: trans.__('Find workbooks without grading them')
       },
       {
         value: 'grade',
         label: trans.__('Grade'),
-        tooltip: trans.__('Unlock, grade, certify, and save workbooks')
+        tooltip: trans.__('Find, authenticate, grade, and save workbooks')
       },
       {
         value: 'collect',
         label: trans.__('Sync'),
-        tooltip: trans.__('Save and sync certified workbook grades')
+        tooltip: trans.__('Find and sync certified workbook grades')
       }
     ];
-    const action = () => this.go(mode, overwrite, submitted);
-    const label = busy ? trans.__('Interrupt') : trans.__('Go');
-    const className = `correxit-corrector-mode-go ${
-      busy ? 'jp-mod-warn' : 'jp-mod-accept'
-    }`;
-    const description = busy
-      ? trans.__('Interrupt the current operation')
-      : trans.__('Execute selected mode');
-
+    const label = modes.find(item => item.value === mode)!.label;
     return (
       <>
         <fieldset
           className="correxit-corrector-mode-options"
           aria-label={trans.__('Corrector mode')}
-          style={{ border: 0, padding: 0, margin: 0 }}
+          disabled={busy}
         >
           {modes.map(({ label, tooltip, value }) => (
             <label key={value} title={tooltip}>
@@ -233,7 +267,10 @@ class ModeSelector extends ReactWidget {
                 name="correxit-mode"
                 value={value}
                 checked={mode === value}
-                onChange={() => this.select(value)}
+                onChange={() => {
+                  this.mode = value;
+                  this.update();
+                }}
                 aria-label={label}
                 aria-description={tooltip}
               />
@@ -241,81 +278,110 @@ class ModeSelector extends ReactWidget {
             </label>
           ))}
         </fieldset>
-        <label
-          className="correxit-corrector-overwrite"
-          title={trans.__('Re-process already certified workbooks')}
+        {mode !== 'collect' && (
+          <label
+            className="correxit-corrector-submitted"
+            title={trans.__(
+              'Only include workbooks with a local submission timestamp'
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={submitted}
+              disabled={busy}
+              onChange={({ target }) => {
+                this.submitted = target.checked;
+                this.update();
+              }}
+              aria-label={trans.__('Only include locally submitted workbooks')}
+            />
+            <span>{trans.__('Submitted only')}</span>
+          </label>
+        )}
+        {mode !== 'scan' && (
+          <label
+            className="correxit-corrector-overwrite"
+            title={
+              mode === 'grade'
+                ? trans.__(
+                    'Re-execute workbooks instead of reusing authenticated grades'
+                  )
+                : trans.__(
+                    'Sync again even when a collection receipt already exists'
+                  )
+            }
+          >
+            <input
+              type="checkbox"
+              checked={mode === 'grade' ? this.regrade : this.resync}
+              disabled={busy}
+              onChange={({ target }) => {
+                if (mode === 'grade') this.regrade = target.checked;
+                else this.resync = target.checked;
+                this.update();
+              }}
+              aria-label={
+                mode === 'grade' ? trans.__('Regrade') : trans.__('Resync')
+              }
+            />
+            <span>
+              {mode === 'grade' ? trans.__('Regrade') : trans.__('Resync')}
+            </span>
+          </label>
+        )}
+        <button
+          className="correxit-corrector-mode-go"
+          disabled={stopping}
+          onClick={() => {
+            if (busy) {
+              this.stopping = true;
+              this.stop();
+            } else {
+              this.busy = true;
+              this.go(
+                mode,
+                mode === 'grade' ? this.regrade : this.resync,
+                submitted
+              );
+            }
+            this.update();
+          }}
+          aria-label={
+            stopping ? trans.__('Stopping…') : busy ? trans.__('Stop') : label
+          }
         >
-          <input
-            type="checkbox"
-            checked={overwrite}
-            disabled={mode === 'scan'}
-            onChange={({ target }) => this.set({ overwrite: target.checked })}
-            aria-label={trans.__('Overwrite already certified workbooks')}
-          />
-          <span>{trans.__('Overwrite')}</span>
-        </label>
-        <label
-          className="correxit-corrector-submitted"
-          title={trans.__('Only include workbooks that were locally submitted')}
-        >
-          <input
-            type="checkbox"
-            checked={submitted}
-            disabled={mode === 'collect'}
-            onChange={({ target }) => this.set({ submitted: target.checked })}
-            aria-label={trans.__('Only include locally submitted workbooks')}
-          />
-          <span>{trans.__('Submitted')}</span>
-        </label>
-        <button className={className} onClick={action} aria-label={description}>
-          {label}
+          {stopping ? trans.__('Stopping…') : busy ? trans.__('Stop') : label}
         </button>
       </>
     );
   }
 
   reset() {
-    this.select('scan');
-    this.busy = false;
-    this.overwrite = false;
-    this.submitted = false;
+    this.mode = 'scan';
+    this.busy = true;
+    this.stopping = this.regrade = this.resync = this.submitted = false;
     this.update();
   }
 
-  set(
-    updates:
-      | Corrector.Notification
-      | { overwrite?: boolean; submitted?: boolean }
-  ) {
-    const fields = 'overwrite' in updates || 'submitted' in updates;
-    if ('overwrite' in updates && updates.overwrite !== undefined)
-      this.overwrite = updates.overwrite;
-    if ('submitted' in updates && updates.submitted !== undefined)
-      this.submitted = updates.submitted;
-    if (!fields) {
-      const { graded, scanned } = updates as Corrector.Notification;
-      this.busy = !(graded && scanned);
-    }
+  set({ graded, scanned }: Corrector.Notification) {
+    this.busy = !(graded && scanned);
+    if (!this.busy) this.stopping = false;
     this.update();
   }
 
-  protected busy = false;
+  protected busy = true;
+  protected stopping = false;
   protected go: (
     mode: Corrector.Mode,
     overwrite: boolean,
     submitted: boolean
   ) => void;
-  protected overwrite = false;
+  protected stop: () => void;
+  protected regrade = false;
+  protected resync = false;
   protected mode: Corrector.Mode = 'scan';
   protected submitted = false;
   protected trans: IRenderMime.TranslationBundle;
-
-  protected select(mode: Corrector.Mode) {
-    Corrector.Modes.forEach(mode => this.removeClass(`cxt-mod-${mode}`));
-    this.addClass(`cxt-mod-${mode}`);
-    this.mode = mode;
-    this.update();
-  }
 }
 
 export class ReviewerWidget extends MainAreaWidget<ReviewerContent> {

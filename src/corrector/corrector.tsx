@@ -11,7 +11,6 @@ import React, {
   useState
 } from 'react';
 import { Correxit, Rubric, Workbook } from '..';
-import * as state from '../correxit/state';
 import { useCommand } from '../correxit/use-command';
 import { trail } from '../ui/trail';
 import * as bridge from './bridge';
@@ -20,10 +19,9 @@ import {
   CommandIDs as COMMAND_IDS,
   Scanned
 } from './commands';
+import type { Event, Mode } from './run';
 import { CorrectorStatus, CorrectorWidget } from './widget';
 
-type Batched = [path: string, file: { grade: Grade; workbook: Headless }];
-type Collated = Corrector.Collated;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 type Phase =
@@ -48,34 +46,7 @@ type Walk = {
 const FAILED = 'cxt-mod-failed';
 const PENDING = 'cxt-mod-pending';
 const SELECTED = 'cxt-mod-selected';
-const { batch, collect, scan } = COMMAND_IDS;
 const { basename } = PathExt;
-
-/**
- * Cache workbook contexts by path.
- */
-const cache = (cached: { [path: string]: Headless }, workbooks: Headless[]) => {
-  for (const workbook of workbooks) {
-    const path = workbook.context.path;
-    const kept = cached[path];
-    if (kept && kept !== workbook) kept.context.dispose();
-    cached[path] = workbook;
-  }
-};
-
-/**
- * Dispose workbook contexts.
- */
-const dispose = (workbooks: Headless[]) =>
-  workbooks.forEach(({ context }) => context.dispose());
-
-const release = (cached: { [path: string]: Headless }) => {
-  dispose(Object.values(cached));
-
-  const workbook = state.workbook();
-  if (Workbook.headless(workbook)) state.workbook(null);
-  bridge.clear();
-};
 
 const advance = (workbooks: Scanned[], path: string, step: -1 | 1) => {
   const order = workbooks.map(({ context }) => context.path);
@@ -147,16 +118,6 @@ const useWalk = (workbooks: Scanned[]): Walk => {
     nodes.current[path] = row;
   }, []);
   useEffect(() => {
-    if (!focused) return;
-    if (workbooks.some(({ context }) => context.path === focused)) return;
-    setFocused('');
-  }, [focused, workbooks]);
-  useEffect(() => {
-    if (!selected) return;
-    if (workbooks.some(({ context }) => context.path === selected)) return;
-    setSelected('');
-  }, [selected, workbooks]);
-  useEffect(() => {
     const row = nodes.current[pending.current];
     if (!row) return;
     row.focus();
@@ -201,70 +162,9 @@ const match = (workbooks: Scanned[], path = ''): Headless | null =>
     return workbook.context.path === path && !workbook.hollow;
   }) || null) as Headless | null;
 
-/** @returns a merged list workbooks that prioritizes the graded collection. */
-const merge = (scanned: Scanned[], grades: Collated) => {
-  const latest = new Map<string, Scanned>();
-  for (const workbook of scanned) latest.set(workbook.context.path, workbook);
-  for (const [path, file] of grades) latest.set(path, file.workbook);
-  return Array.from(latest.values());
-};
-
 /** Open a workbook rubric quietly. */
 const open = (workbook: Scanned | null) =>
   workbook && !workbook.hollow ? Workbook.open(workbook, true) : null;
-
-/** Collect workbook paths as a set. */
-const paths = (workbooks: Scanned[]) =>
-  new Set(workbooks.map(({ context }) => context.path));
-
-/** Dispose and remove cached workbooks not in the live path set. */
-const prune = (
-  cached: { [path: string]: Headless },
-  live: Set<string>,
-  active: string | null
-) => {
-  for (const [path, workbook] of Object.entries(cached)) {
-    if (live.has(path) || path === active) continue;
-    workbook.context.dispose();
-    delete cached[path];
-  }
-};
-
-/** Reconcile cached workbooks with the current merged list. */
-const reconcile = (
-  cached: { [path: string]: Headless },
-  workbooks: Scanned[],
-  focus: string | null
-) => {
-  prune(cached, paths(workbooks), focus);
-  cache(cached, workbooks.filter(reified));
-};
-
-/** A filter function that filters out hollow workbooks. */
-const reified = (workbook: Scanned): workbook is Headless => !workbook.hollow;
-
-/** @returns the number of resolved grades in a collation of workbooks. */
-const resolutions = (collated: Collated) =>
-  Array.from(collated.values()).filter(({ grade }) => grade.resolved).length;
-
-/** @returns the grade for a workbook given current batch and scan state. */
-const resolve = (
-  workbook: Scanned,
-  collated: Collated,
-  graded: boolean
-): Grade | 'pending' => {
-  const { path } = workbook.context;
-  if (collated.has(path)) return collated.get(path)!.grade;
-  if (workbook.hollow || !graded) return 'pending';
-
-  return {
-    path,
-    resolved: true,
-    score: Rubric.Score.UNSCORED,
-    spec: null,
-    verified: false
-  };
-};
 
 /** @returns the at-a-glance status of a workbook in the corrector. */
 const status = (
@@ -273,16 +173,15 @@ const status = (
   phase: Exclude<Phase, 'pending'>,
   trans: TranslationBundle
 ) => {
-  if (phase === 'failed')
-    return graded ? trans.__('failed') : trans.__('retrying');
+  if (phase === 'failed') return trans.__('failed');
   if (!grade.verified) return trans.__('unverified');
 
   const { points, possible, status } = grade.score;
   const unscored = status === 'unscored';
   if (phase === 'collected') {
     return unscored
-      ? trans.__('unscored \u00b7 collected')
-      : trans.__('%1 of %2 \u00b7 collected', points, possible);
+      ? trans.__('unscored \u00b7 synced')
+      : trans.__('%1 of %2 \u00b7 synced', points, possible);
   }
   if (phase === 'certified') {
     return unscored
@@ -299,39 +198,143 @@ const status = (
     : trans.__('%1 of %2', points, possible);
 };
 
+/** Fold command events into a view; command ownership outlives React cleanup. */
+const collate = (events: Event[]) => {
+  const workbooks = new Map<string, Scanned>();
+  const grades: Corrector.Collated = new Map();
+  const phases = new Map<
+    string,
+    'queued' | 'processing' | 'scanned' | 'failed'
+  >();
+  const errors = new Map<string, string>();
+  let total = 0,
+    checked = 0,
+    completed = 0,
+    finished = 0,
+    skipped = 0,
+    failed = 0;
+  let listed = false,
+    done = false,
+    stopped = false,
+    error = false;
+  for (const event of events) {
+    if (event.type === 'listed') {
+      listed = true;
+      total = event.paths.length;
+      for (const path of event.paths) {
+        workbooks.set(path, { hollow: true, context: { path } });
+        phases.set(path, 'queued');
+      }
+    } else if (event.type === 'read') {
+      checked++;
+      if (event.workbook) {
+        workbooks.set(event.path, event.workbook);
+        phases.set(event.path, 'scanned');
+      } else if (event.error) {
+        finished++;
+        phases.set(event.path, 'failed');
+        errors.set(event.path, event.error);
+        failed++;
+      } else {
+        workbooks.delete(event.path);
+        phases.delete(event.path);
+        skipped++;
+        finished++;
+      }
+    } else if (event.type === 'started') {
+      phases.set(event.path, 'processing');
+    } else if (event.type === 'result') {
+      grades.set(event.path, event.file);
+      finished++;
+      if (event.changed) completed++;
+      else skipped++;
+      phases.set(event.path, event.file.grade.resolved ? 'scanned' : 'failed');
+      if (!event.file.grade.resolved) failed++;
+    } else if (event.type === 'error') {
+      failed++;
+      if (event.path) {
+        finished++;
+        phases.set(event.path, 'failed');
+        errors.set(event.path, event.message);
+      } else {
+        error = true;
+      }
+    } else if (event.type === 'done') {
+      done = true;
+      stopped = event.stopped;
+    }
+  }
+  return {
+    workbooks: Array.from(workbooks.values()),
+    grades,
+    phases,
+    errors,
+    total,
+    checked,
+    completed,
+    finished,
+    skipped,
+    failed,
+    listed,
+    done,
+    stopped,
+    error
+  };
+};
+
 export function Corrector(props: Corrector.Props) {
-  const { commands, mode, notify, overwrite, path, submitted, trans } = props;
-  const grading = mode !== 'scan';
-  const cwd = { path, submitted };
-  const [files, scanned] = useCommand<Scanned>(commands, scan, cwd);
-  const command = mode === 'grade' ? batch : mode === 'collect' ? collect : '';
-  const auth = mode === 'grade';
-  const config = { ...cwd, overwrite, ...(auth ? { unlock: true } : {}) };
-  const [batched, graded] = useCommand<Batched>(commands, command, config);
-  const loaded = useMemo(() => files.filter(reified).length, [files]);
-  const grades = useMemo(() => new Map(batched) as Collated, [batched]);
-  const resolved = useMemo(() => resolutions(grades), [grades]);
-  const workbooks = useMemo(() => merge(files, grades), [files, grades]);
-  const cached = useRef({} as { [path: string]: Headless });
+  const {
+    commands,
+    mode,
+    notify,
+    overwrite,
+    path,
+    run,
+    stopping,
+    submitted,
+    trans
+  } = props;
+  const [events, settled] = useCommand<Event>(commands, COMMAND_IDS.process, {
+    run,
+    path,
+    mode,
+    overwrite,
+    submitted
+  });
+  const summary = useMemo(() => collate(events), [events]);
+  const { workbooks, grades, phases, errors } = summary;
+  const idle = summary.done && settled;
   const walk = useWalk(workbooks);
-  const workbook = useMemo(
-    () => match(workbooks, walk.selected),
-    [walk.selected, workbooks]
+  const available = useMemo(
+    () =>
+      workbooks.filter(
+        ({ context }) =>
+          mode === 'scan' || summary.done || grades.has(context.path)
+      ),
+    [grades, mode, summary.done, workbooks]
   );
-  const focus = workbook?.context.path || null;
-  const total = workbooks.length;
-  const progress = { graded, grading, loaded, resolved, scanned, total };
-  useEffect(() => () => release(cached.current), []);
+  const workbook = useMemo(
+    () => match(available, walk.selected),
+    [available, walk.selected]
+  );
+  const message = describe(summary, mode, stopping, trans);
+  useEffect(
+    () => () => {
+      void commands.execute(COMMAND_IDS.stop, { run, release: true });
+    },
+    [commands, run]
+  );
+  useEffect(() => bridge.clear, []);
   useEffect(() => bridge.inject(commands, workbook), [commands, workbook]);
   useEffect(
-    () => notify({ graded, scanned, mode }),
-    [graded, mode, notify, scanned]
+    () => notify({ graded: idle, scanned: idle, mode, message }),
+    [idle, message, mode, notify]
   );
   useEffect(
-    () => reconcile(cached.current, workbooks, focus),
-    [focus, workbooks]
+    () => bridge.publish({ workbooks: available, grades }),
+    [available, grades]
   );
-  useEffect(() => bridge.publish({ workbooks, grades }), [grades, workbooks]);
+  const empty = idle && !workbooks.length && !summary.error;
   return (
     <table
       aria-label={trans.__('Corrector workbooks')}
@@ -339,24 +342,129 @@ export function Corrector(props: Corrector.Props) {
     >
       <Columns />
       <tbody>
-        <Progress {...{ ...progress, trans }} />
+        <tr className="correxit-corrector-progress">
+          <td colSpan={5}>
+            <div className="correxit-corrector-progress-bar">
+              {!idle && (
+                <progress
+                  aria-label={trans.__('Corrector progress')}
+                  max={Math.max(1, summary.total)}
+                  value={
+                    summary.checked === summary.total && summary.listed
+                      ? Math.min(summary.total, summary.finished)
+                      : undefined
+                  }
+                />
+              )}
+              <span role="status" aria-live="polite" aria-atomic="true">
+                {message}
+              </span>
+            </div>
+          </td>
+        </tr>
+        {empty && (
+          <tr>
+            <td colSpan={5} className="correxit-corrector-empty">
+              {summary.total
+                ? trans.__('No matching Correxit workbooks.')
+                : trans.__('This folder contains no notebooks.')}
+            </td>
+          </tr>
+        )}
         {workbooks.map(workbook => {
-          const grade = resolve(workbook, grades, graded);
           const { path } = workbook.context;
-          const props = { commands, grade, graded, trans, walk, workbook };
-          return <Row {...props} key={path} />;
+          const phase = phases.get(path) || 'queued';
+          const grade: Grade | 'pending' =
+            grades.get(path)?.grade ??
+            (phase === 'processing' || phase === 'queued'
+              ? 'pending'
+              : {
+                  path,
+                  resolved: phase !== 'failed',
+                  verified: false,
+                  score: Rubric.Score.UNSCORED,
+                  spec: null
+                });
+          const label =
+            phase === 'failed'
+              ? diagnostic(errors.get(path) || 'grade', trans)
+              : phase === 'processing' && !idle
+                ? trans.__('Processing…')
+                : summary.stopped
+                  ? trans.__('Not processed')
+                  : trans.__('Queued');
+          return (
+            <Row
+              {...{ commands, grade, trans, walk, workbook }}
+              graded={idle}
+              pending={label}
+              busy={phase === 'processing' && !idle}
+              key={path}
+            />
+          );
         })}
       </tbody>
     </table>
   );
 }
 
+const diagnostic = (code: string, trans: TranslationBundle) =>
+  code === 'read'
+    ? trans.__('Could not read workbook')
+    : code === 'sync'
+      ? trans.__('Could not authenticate or sync workbook')
+      : trans.__('Could not authenticate or grade workbook');
+
+const describe = (
+  summary: ReturnType<typeof collate>,
+  mode: Mode,
+  stopping: boolean,
+  trans: TranslationBundle
+) => {
+  if (summary.error) {
+    return trans.__(
+      'Could not read this folder. Choose another folder or try Scan again.'
+    );
+  }
+  const state =
+    stopping && !summary.done
+      ? trans.__('Stopping…')
+      : summary.stopped
+        ? trans.__('Stopped')
+        : summary.done
+          ? trans.__('Complete')
+          : !summary.listed
+            ? trans.__('Reading folder…')
+            : mode === 'scan'
+              ? trans.__('Scanning…')
+              : mode === 'grade'
+                ? trans.__('Grading…')
+                : trans.__('Syncing…');
+  const read = trans.__('%1/%2 checked', summary.checked, summary.total);
+  const processed =
+    mode === 'scan' ? '' : trans.__(' · %1 processed', summary.completed);
+  const failures = summary.failed
+    ? trans.__(' · %1 failed', summary.failed)
+    : '';
+  const skipped = summary.skipped
+    ? trans.__(' · %1 skipped', summary.skipped)
+    : '';
+  return `${state} · ${read}${processed}${failures}${skipped}`;
+};
+
 export namespace Corrector {
+  export type Event = import('./run').Event;
+
   export type Collated = Map<string, { grade: Grade; workbook: Headless }>;
 
-  export type Mode = 'collect' | 'grade' | 'scan';
+  export type Mode = import('./run').Mode;
 
-  export type Notification = { graded: boolean; scanned: boolean; mode: Mode };
+  export type Notification = {
+    graded: boolean;
+    scanned: boolean;
+    mode: Mode;
+    message: string;
+  };
 
   export type Props = {
     commands: CommandRegistry;
@@ -364,6 +472,8 @@ export namespace Corrector {
     notify: (updates: Notification) => void;
     overwrite: boolean;
     path: string;
+    run: string;
+    stopping: boolean;
     submitted: boolean;
     trans: TranslationBundle;
   };
@@ -382,42 +492,6 @@ export namespace Corrector {
 
   export const Widget = CorrectorWidget;
 }
-
-const Progress: React.FC<{
-  graded: boolean;
-  grading: boolean;
-  loaded: number;
-  resolved: number;
-  scanned: boolean;
-  total: number;
-  trans: TranslationBundle;
-}> = ({ graded, grading, loaded, resolved, scanned, total, trans }) => {
-  const active = !!total && (!scanned || (grading && !graded));
-  const peak = useRef(0);
-  peak.current = Math.max(peak.current, grading ? resolved : loaded);
-
-  const progress = active ? peak.current : 0;
-  const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
-  const className = active
-    ? 'correxit-corrector-progress cxt-mod-active'
-    : 'correxit-corrector-progress';
-  return (
-    <tr className={className}>
-      <td colSpan={5}>
-        {active ? (
-          <div className="correxit-corrector-progress-bar">
-            <progress
-              aria-label={trans.__('Corrector progress')}
-              max={total}
-              value={progress}
-            />
-            <span>{trans.__('%1%', percent)}</span>
-          </div>
-        ) : null}
-      </td>
-    </tr>
-  );
-};
 
 const Columns: React.FC = () => (
   <colgroup>
@@ -460,13 +534,14 @@ const HollowRow: React.FC<{
   className: string;
   path: string;
   walk: Walk;
-}> = ({ className, path, walk }) => (
+  label: string;
+}> = ({ className, path, walk, label }) => (
   <Line {...{ className, path, walk }}>
     <td className="correxit-corrector-open" />
     <td className="correxit-corrector-assignee">{basename(path)}</td>
     <td className="correxit-corrector-breakdown" />
     <td className="correxit-corrector-kernel" />
-    <Pending />
+    <Pending label={label} />
   </Line>
 );
 
@@ -477,18 +552,30 @@ const Row: React.FC<{
   trans: TranslationBundle;
   walk: Walk;
   workbook: Scanned;
+  pending: string;
+  busy: boolean;
 }> = React.memo(props => {
-  const { commands, grade, graded, trans, walk, workbook } = props;
+  const {
+    commands,
+    grade,
+    graded,
+    trans,
+    walk,
+    workbook,
+    pending: label,
+    busy
+  } = props;
   const { path } = workbook.context;
   const active = path === walk.active;
   const selected = path === walk.selected;
   const pending = grade === 'pending';
   const failed = !pending && !grade.resolved;
   const phase = lifecycle(workbook, grade);
-  const className = [failed && FAILED, pending && PENDING, selected && SELECTED]
+  const className = [failed && FAILED, busy && PENDING, selected && SELECTED]
     .filter(Boolean)
     .join(' ');
-  if (workbook.hollow) return <HollowRow {...{ className, path, walk }} />;
+  if (workbook.hollow)
+    return <HollowRow {...{ className, path, walk, label }} />;
 
   const spec = pending ? null : grade.spec;
   const title = history(workbook, trans);
@@ -499,9 +586,14 @@ const Row: React.FC<{
       <Breakdown
         {...{ active, commands, failed, trans, workbook }}
         verified={!pending && grade.verified}
+        busy={busy}
       />
       <Kernel {...{ spec }} />
-      <Status {...{ grade, graded, phase, title, trans }} />
+      <Status
+        {...{ grade, graded, phase, trans }}
+        title={failed ? label : title}
+        pending={label}
+      />
     </Line>
   );
 });
@@ -513,7 +605,8 @@ const Breakdown: React.FC<{
   trans: TranslationBundle;
   workbook: Workbook.Headless;
   verified: boolean;
-}> = ({ active, commands, failed, trans, workbook, verified }) => {
+  busy: boolean;
+}> = ({ active, commands, failed, trans, workbook, verified, busy }) => {
   if (failed) return <td className="correxit-corrector-breakdown" />;
 
   const rubric = open(workbook);
@@ -559,6 +652,7 @@ const Breakdown: React.FC<{
               aria-label={trans.__('Review %1', label(id))}
               className={className}
               key={id}
+              disabled={busy}
               onKeyDown={retreat}
               onClick={event => {
                 event.stopPropagation();
@@ -627,8 +721,10 @@ const Status: React.FC<{
   phase: Phase;
   title: string;
   trans: TranslationBundle;
-}> = ({ grade, graded, phase, title, trans }) => {
-  if (phase === 'pending' || grade === 'pending') return <Pending />;
+  pending: string;
+}> = ({ grade, graded, phase, title, trans, pending }) => {
+  if (phase === 'pending' || grade === 'pending')
+    return <Pending label={pending} />;
   return (
     <td className="correxit-corrector-status">
       <span
@@ -643,13 +739,9 @@ const Status: React.FC<{
   );
 };
 
-const Pending: React.FC = () => (
+const Pending: React.FC<{ label: string }> = ({ label }) => (
   <td className="correxit-corrector-status">
-    <span className={'correxit-corrector-chip cxt-mod-pending'}>
-      <span className="correxit-corrector-pending-dot" />
-      <span className="correxit-corrector-pending-dot" />
-      <span className="correxit-corrector-pending-dot" />
-    </span>
+    <span className="correxit-corrector-chip cxt-mod-pending">{label}</span>
   </td>
 );
 

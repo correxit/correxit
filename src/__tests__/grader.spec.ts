@@ -196,43 +196,101 @@ describe('grader', () => {
     expect(collected.sort()).toEqual(paths.slice().sort());
   });
 
-  it('starts a prefetched replacement before draining settled backlog', async () => {
-    const paths = ['a.ipynb', 'b.ipynb', 'c.ipynb', 'd.ipynb'];
-    const pending = new PromiseDelegate<void>();
-    const gates: Record<string, PromiseDelegate<void>> = Object.fromEntries(
-      paths.map(path => [path, new PromiseDelegate<void>()])
-    );
-    const scanner = async function* (): AsyncGenerator<Headless> {
+  it('delivers a completed grade while the next scan read is blocked', async () => {
+    const blocked = new PromiseDelegate<void>();
+    const scanner = async function* () {
       yield workbook('a.ipynb');
+      await blocked.promise;
       yield workbook('b.ipynb');
-      yield workbook('c.ipynb');
-      await pending.promise;
-      yield workbook('d.ipynb');
     };
+    const correct = jest.fn(async (workbook: Headless) => grade(workbook));
+    const stream = grader(scanner(), actions(correct, failed), 3);
+    const first = await stream.next();
+    expect(report(first.value as Result).path).toBe('a.ipynb');
+    expect(correct).toHaveBeenCalledTimes(1);
+    blocked.resolve();
+    for await (const _ of stream) void _;
+  });
+
+  it('stops new jobs and retries while draining active work', async () => {
+    const controller = new AbortController();
+    const gate = new PromiseDelegate<void>();
     const correct = jest.fn(async (workbook: Headless) => {
-      await gates[workbook.context.path].promise;
+      await gate.promise;
+      if (workbook.context.path === 'a.ipynb') throw new Error('failure');
       return grade(workbook);
     });
-    const recover = jest.fn((workbook: Headless) => failed(workbook));
-    const stream = grader(scanner(), actions(correct, recover), 3);
-    const next = stream.next();
-
+    const recover = jest.fn(failed);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const results = (async () => {
+      const output: Result[] = [];
+      for await (const result of grader(
+        source(['a.ipynb', 'b.ipynb', 'c.ipynb']),
+        actions(correct, recover),
+        2,
+        2,
+        controller.signal
+      ))
+        output.push(result);
+      return output;
+    })();
     await wait();
-    expect(correct).toHaveBeenCalledTimes(3);
+    expect(correct).toHaveBeenCalledTimes(2);
+    controller.abort();
+    gate.resolve();
+    expect(await results).toHaveLength(2);
+    expect(correct).toHaveBeenCalledTimes(2);
+    expect(recover).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
 
-    gates['a.ipynb'].resolve();
-    gates['b.ipynb'].resolve();
-    gates['c.ipynb'].resolve();
-    await wait();
-
-    pending.resolve();
-    await next;
-    expect(correct).toHaveBeenCalledWith(
-      expect.objectContaining({ context: { path: 'd.ipynb' } })
+  it('waits for active work before closing an iterator', async () => {
+    const first = new PromiseDelegate<void>();
+    const second = new PromiseDelegate<void>();
+    const correct = jest.fn(async (workbook: Headless) => {
+      await (workbook.context.path === 'a.ipynb'
+        ? first.promise
+        : second.promise);
+      return grade(workbook);
+    });
+    const stream = grader(
+      source(['a.ipynb', 'b.ipynb', 'c.ipynb']),
+      actions(correct, failed),
+      2
     );
+    const next = stream.next();
+    await wait();
+    expect(correct).toHaveBeenCalledTimes(2);
+    first.resolve();
+    await next;
+    let closed = false;
+    const closing = stream.return(undefined).then(() => {
+      closed = true;
+    });
+    await wait();
+    expect(closed).toBe(false);
+    second.resolve();
+    await closing;
+    expect(correct).toHaveBeenCalledTimes(2);
+  });
 
-    gates['d.ipynb'].resolve();
-    for await (const _ of stream) void _;
+  it('drains active work when the scanner throws', async () => {
+    const gate = new PromiseDelegate<void>();
+    const scanner = async function* () {
+      yield workbook('a.ipynb');
+      throw new Error('scan failed');
+    };
+    const correct = jest.fn(async (workbook: Headless) => {
+      await gate.promise;
+      return grade(workbook);
+    });
+    const stream = grader(scanner(), actions(correct, failed), 2);
+    const next = stream.next();
+    const rejected = expect(next).rejects.toThrow('scan failed');
+    await wait();
+    expect(correct).toHaveBeenCalledTimes(1);
+    gate.resolve();
+    await rejected;
   });
 
   it('yields recovered grades when all workbooks fail', async () => {

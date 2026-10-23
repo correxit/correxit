@@ -1,11 +1,9 @@
 import { Workbook } from '..';
+import { pool } from './pool';
 
 type Certified = Workbook.Certified;
 type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
-type Settled =
-  | { status: 'fulfilled'; value: Certified }
-  | { status: 'rejected'; reason: unknown; workbook: Headless };
 
 export type Actions = {
   correct: (workbook: Headless) => Promise<Certified>;
@@ -48,68 +46,26 @@ export async function* grade(
   scanner: Iterable<Headless> | AsyncIterable<Headless>,
   actions: Actions,
   cap: number,
-  retries: number = 0
+  retries: number = 0,
+  signal: AbortSignal | null = null
 ): AsyncGenerator<Result> {
-  let next: (() => void) | null = null;
-  let inflight = 0;
-  const max = Math.max(1, cap);
-  const queue: Settled[] = [];
-  const attempts = new WeakMap<Headless, number>();
-  const sleep = () => new Promise<void>(resolve => void (next = resolve));
-  const wake = () => {
-    next?.();
-    next = null;
-  };
-  const start = (workbook: Headless) => {
-    const { correct } = actions;
-    inflight++;
-    correct(workbook)
-      .then(value => queue.push({ status: 'fulfilled', value }))
-      .catch(reason => queue.push({ status: 'rejected', reason, workbook }))
-      .finally(() => {
-        inflight--;
-        wake();
-      });
-  };
-
-  const take = async (): Promise<Settled | null> => {
-    while (!queue.length) {
-      if (!inflight) return null;
-      await sleep();
+  const jobs = async function* () {
+    for await (const workbook of scanner) {
+      yield (async function* (): AsyncGenerator<Result> {
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const certified = await actions.correct(workbook);
+            yield { ok: true, certified };
+            return;
+          } catch {
+            if (attempt < retries && !signal?.aborted) continue;
+            console.warn('grader error', workbook.context.path);
+            yield actions.recover(workbook);
+            return;
+          }
+        }
+      })();
     }
-    return queue.shift()!;
   };
-  const emit = async (): Promise<Result | null> => {
-    const settled = await take();
-    if (!settled) return null;
-    if (settled.status === 'fulfilled')
-      return { ok: true, certified: settled.value };
-
-    const tried = (attempts.get(settled.workbook) ?? 0) + 1;
-    if (tried <= retries) {
-      attempts.set(settled.workbook, tried);
-      start(settled.workbook);
-      return null;
-    }
-    attempts.delete(settled.workbook);
-    console.warn('grader error', settled.workbook.context.path, settled.reason);
-    return actions.recover(settled.workbook);
-  };
-
-  for await (const workbook of scanner) {
-    while (inflight >= max) {
-      const result = await emit();
-      if (result) yield result;
-    }
-    start(workbook);
-    while (queue.length) {
-      const result = await emit();
-      if (result) yield result;
-    }
-  }
-
-  while (inflight || queue.length) {
-    const result = await emit();
-    if (result) yield result;
-  }
+  yield* pool(jobs(), cap, signal);
 }
