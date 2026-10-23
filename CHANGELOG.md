@@ -1,3 +1,15 @@
+# 2.3.1
+
+<!-- START GENERATED CHANGELOG: 2.3.1 -->
+
+## What's Changed
+* fix: use shared jupyter secrets manager by @afshin in https://github.com/correxit/correxit/pull/109
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v2.3.0...v2.3.1
+
+<!-- END GENERATED CHANGELOG: 2.3.1 -->
+
 # 2.3.0
 
 <!-- START GENERATED CHANGELOG: 2.3.0 -->
