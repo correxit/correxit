@@ -261,6 +261,10 @@
             },
             "@jupyterlab/ui-components": {
                 "requiredVersion": "^4.5.5"
+            },
+            "jupyter-secrets-manager": {
+                "bundled": false,
+                "singleton": true
             }
         }
     },
