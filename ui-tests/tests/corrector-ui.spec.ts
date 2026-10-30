@@ -1666,6 +1666,95 @@ test('reviewer skips processing workbooks and opens their finished contents', as
   }
 });
 
+test('closing a run iterator prevents retries while draining active work', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'print(42)' }
+  ]);
+  const propagated = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  try {
+    const result = await page.evaluate(async ({ directory }) => {
+      const app = (window as any).jupyterapp;
+      const { Workbook } = (window as any).__correxit__;
+      const certify = Workbook.certify;
+      let attempts = 0;
+      let release = () => {};
+      let start = () => {};
+      const blocked = new Promise<void>(resolve => (release = resolve));
+      const started = new Promise<void>(resolve => (start = resolve));
+      Workbook.certify = async (workbook: any) => {
+        const { assignee } = Workbook.open(workbook).assignment;
+        if (assignee === 'alice@example.com') {
+          attempts++;
+          start();
+          await blocked;
+        } else {
+          await started;
+        }
+        throw new Error('Grading failure');
+      };
+      const run = 'closing-iterator';
+      const stream = await app.commands.execute('correxit-corrector:run', {
+        run,
+        path: directory,
+        mode: 'grade',
+        key: 'secret'
+      });
+      const workbooks: any[] = [];
+      try {
+        for (;;) {
+          const { value: event, done } = await stream.next();
+          if (done) throw new Error('Expected a failed grading attempt');
+          if (event.type === 'read' && event.workbook)
+            workbooks.push(event.workbook);
+          if (event.type === 'error') break;
+        }
+        let closed = false;
+        const closing = stream.return(undefined).then(() => (closed = true));
+        await new Promise(resolve => window.setTimeout(resolve, 0));
+        const draining = {
+          closed,
+          attempts,
+          live: workbooks.filter(workbook => !workbook.context.isDisposed)
+            .length
+        };
+        release();
+        await closing;
+        await app.commands.execute('correxit-corrector:stop', {
+          run,
+          release: true
+        });
+        return {
+          draining,
+          attempts,
+          disposed: workbooks.every(workbook => workbook.context.isDisposed)
+        };
+      } finally {
+        release();
+        await stream.return(undefined);
+        await app.commands.execute('correxit-corrector:stop', {
+          run,
+          release: true
+        });
+        Workbook.certify = certify;
+      }
+    }, propagated);
+    expect(result).toEqual({
+      draining: { closed: false, attempts: 1, live: 2 },
+      attempts: 1,
+      disposed: true
+    });
+  } finally {
+    await cleanup(page, propagated);
+    await dispose();
+  }
+});
+
 test('closing corrector drains an active save before disposing contexts', async ({
   page
 }) => {

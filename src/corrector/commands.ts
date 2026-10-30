@@ -214,21 +214,32 @@ export function commands(
         }
       }
     };
+    const events = workflow.run(actions, {
+      mode,
+      cap: mode === 'collect' ? 1 : kernels.cap(),
+      retries: mode === 'grade' ? kernels.retries() : 0,
+      signal: controller.signal
+    });
     try {
-      yield* workflow.run(actions, {
-        mode,
-        cap: mode === 'collect' ? 1 : kernels.cap(),
-        retries: mode === 'grade' ? kernels.retries() : 0,
-        signal: controller.signal
-      });
+      // Explicit pulls let abort precede the delegated iterator's cleanup.
+      for (
+        let event = await events.next();
+        !event.done;
+        event = await events.next()
+      )
+        yield event.value;
     } finally {
       controller.abort();
-      if (!id) {
-        contexts.forEach(workbook => {
-          if (!retained?.has(workbook)) workbook.context.dispose();
-        });
+      try {
+        await events.return(undefined);
+      } finally {
+        if (!id) {
+          contexts.forEach(workbook => {
+            if (!retained?.has(workbook)) workbook.context.dispose();
+          });
+        }
+        done.resolve();
       }
-      done.resolve();
     }
   }
   const results = async function* (args: Options, mode: 'grade' | 'collect') {
