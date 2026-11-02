@@ -102,7 +102,15 @@ export function commands(
       contexts: Set<Headless>;
     }
   >();
-  const active = new Set<string>();
+  const active = new Map<string, Promise<void>>();
+  const retain = (path: string) => {
+    const done = new PromiseDelegate<void>();
+    active.set(path, done.promise);
+    return () => {
+      active.delete(path);
+      done.resolve();
+    };
+  };
   const factory = new NotebookModelFactory();
   async function* stream(
     args: Options,
@@ -143,6 +151,9 @@ export function commands(
               } as Partial<Credentials>)
             : normalize({ path, unlock: false });
         if (!scan) return null;
+        // A replacement run must read the saved review, not its prior contents.
+        await active.get(path);
+        if (controller.signal.aborted) return null;
         const workbook = await io.request(
           scan,
           factory,
@@ -167,7 +178,7 @@ export function commands(
       const path = workbook.context.path;
       if (active.has(path))
         throw new Error.Invalid('Workbook is already being processed');
-      active.add(path);
+      const release = retain(path);
       try {
         const graded = await correct(workbook, handle, !!args.overwrite, {
           fetch,
@@ -177,14 +188,14 @@ export function commands(
         });
         return { grade: graded.grade, workbook };
       } finally {
-        active.delete(path);
+        release();
       }
     };
     const collect = async (workbook: Headless) => {
       const path = workbook.context.path;
       if (active.has(path))
         throw new Error.Invalid('Workbook is already being processed');
-      active.add(path);
+      const release = retain(path);
       try {
         try {
           await authenticate(workbook, handle, unlocker, auth || prompted);
@@ -213,7 +224,7 @@ export function commands(
         await save(workbook);
         return { file: { workbook, grade: certified.grade }, completed: true };
       } finally {
-        active.delete(path);
+        release();
       }
     };
     const events = run(
@@ -293,6 +304,11 @@ export function commands(
           session.clear(run);
         }
         await pending.done.promise;
+        await Promise.all(
+          Array.from(pending.contexts, ({ context }) =>
+            active.get(context.path)
+          )
+        );
         if (!release) return;
         const inject = await commands.execute(Correxit.CommandIDs.inject);
         if (runs.get(run) === pending) {
@@ -468,9 +484,12 @@ export function commands(
           intervention: Rubric.Score | null;
         }>
       ) => {
-        const workbook = reviewer?.workbook ?? null;
+        const workbook = reviewer?.isDisposed
+          ? null
+          : (reviewer?.workbook ?? null);
         const { comment, id, intervention } = args;
         if (!workbook || !id || active.has(workbook.context.path)) return;
+        const release = retain(workbook.context.path);
         try {
           const rubric = open(workbook);
           if (!rubric) return;
@@ -517,6 +536,8 @@ export function commands(
         } catch (error) {
           session.record({ workbook, grade: unverified(workbook) });
           void showErrorMessage(...Error.interpret(error, trans));
+        } finally {
+          release();
         }
       }
     })
@@ -528,9 +549,12 @@ export function commands(
       execute: async (
         args: Partial<{ id: string }>
       ): Promise<Rubric.Cell.Output[] | null> => {
-        const workbook = reviewer?.workbook ?? null;
+        const workbook = reviewer?.isDisposed
+          ? null
+          : (reviewer?.workbook ?? null);
         const id = args.id ?? session.peek().cursor?.cell ?? null;
         if (!workbook || !id || active.has(workbook.context.path)) return null;
+        const release = retain(workbook.context.path);
         try {
           const rubric = open(workbook);
           if (!rubric) return null;
@@ -540,6 +564,8 @@ export function commands(
         } catch (error) {
           void showErrorMessage(...Error.interpret(error, trans));
           return null;
+        } finally {
+          release();
         }
       }
     })
