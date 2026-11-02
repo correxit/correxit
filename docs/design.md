@@ -59,11 +59,11 @@ The architecture is divided into three layers:
 - **User Interface**: displays state, accepts user input, and executes
   commands. It stays declarative except for minimal `ReactWidget` glue.
   Modules: `src/ui/`, `src/corrector/`, `src/correxit/input.ts`,
-  `src/correxit/use-command.ts`, `src/corrector/bridge.ts`.
+  `src/correxit/use-command.ts`.
 - **Commands**: define permissible actions and route them into the
   business logic. They orchestrate the `Rubric` and `Workbook` APIs.
   Modules: `src/correxit/commands.ts`,
-  `src/corrector/commands.ts`.
+  `src/corrector/commands.ts`, `src/corrector/session.ts`.
 - **`Rubric` & `Workbook`**: manage mutable notebook state, immutable
   rubric operations, cryptography, file manipulation, and kernel
   communication. Modules: `src/correxit/rubric.ts`,
@@ -227,7 +227,9 @@ flowchart TB
 
 **Corrector runs:** one cold run stream lists candidate paths and interleaves
 bounded per-workbook generators. Discovery, processing, results, diagnostics,
-and completion reach the view through discriminated events. One pending source
+and completion produce discriminated events. Commands apply each event once to
+the displayed session before yielding it. The table reads that session rather
+than replaying the event history. One pending source
 read competes with active job completions, so slow reads cannot hold completed
 grades back. The existing scan, batch, and collect commands adapt this same
 orchestration to their original result shapes.
@@ -261,17 +263,24 @@ switches tabs. It is backed by a Lumino `Stream`.
 its output via `for await`, buffers results, and flushes to component state at
 ~60fps via a `Throttler`. It handles cleanup on unmount.
 
-### Reviewer bridge (`bridge.ts`)
+### Corrector session (`session.ts`)
 
-The Corrector and Reviewer are separate widgets that share state: the Corrector
-owns the list of scanned workbooks and collated grades, while the Reviewer owns
-the navigation cursor. `bridge.ts` is a lightweight `useSyncExternalStore`-based
-external store that lets the Corrector `publish()` workbook/grade snapshots and
-the Reviewer `navigate()` to a cursor position. Both widgets subscribe via
-`useSnapshot()`. Review commands invalidate scores while saving, then publish
-authenticated results for both the table and CSV export. These results survive
-later batch emissions only for the same workbook context; a new scan clears
-their verification. This avoids coupling the two widgets through props or context.
+Commands own the displayed run's current results. Each path has one entry with
+its workbook context, grade, processing phase, and diagnostic. The Corrector,
+Reviewer, and CSV export read these same entries. React subscribes through
+`useSyncExternalStore`; it does not publish grading state.
+
+Manual review invalidates the entry's grade, authenticates the workbook, applies
+the intervention, and saves before recording its result. Replacing that entry
+also refreshes the Reviewer's view of the workbook. Other entries retain their
+identity, so later batch results neither overwrite a review nor reset its inputs.
+
+Starting a new displayed run clears the previous results. Run identities reject
+late events and releases from older runs; exact workbook identity rejects late
+review results. Release immediately clears the session and closes its Reviewer;
+contexts are disposed only after active operations have drained. Background scan, batch, and collect commands
+retain their own contexts without replacing the displayed session. The Reviewer
+also shares its navigation cursor through the session.
 
 ## Kernel pool concurrency model
 

@@ -15,7 +15,7 @@ import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import * as state from '../correxit/state';
 import { Corrector, Reviewer } from '.';
-import * as bridge from './bridge';
+import * as session from './session';
 import * as csv from './csv';
 import { Event, File, Mode, run } from './run';
 
@@ -127,6 +127,7 @@ export function commands(
       done.resolve();
       throw new Error.Invalid('Invalid Corrector directory or credentials');
     }
+    if (id && corrector?.content.run === id) session.begin(id, mode);
     let prompted = false;
     const directory = {
       signal: controller.signal,
@@ -234,8 +235,10 @@ export function commands(
         let event = await events.next();
         !event.done;
         event = await events.next()
-      )
+      ) {
+        if (id) session.advance(id, event.value);
         yield event.value;
+      }
     } finally {
       controller.abort();
       try {
@@ -284,13 +287,16 @@ export function commands(
         const pending = runs.get(run);
         if (!pending) return;
         pending.controller.abort();
+        if (release) {
+          if (reviewer?.workbook && pending.contexts.has(reviewer.workbook))
+            reviewer.dispose();
+          session.clear(run);
+        }
         await pending.done.promise;
         if (!release) return;
         const inject = await commands.execute(Correxit.CommandIDs.inject);
         if (runs.get(run) === pending) {
           runs.delete(run);
-          if (reviewer?.workbook && pending.contexts.has(reviewer.workbook))
-            reviewer.dispose();
           const workbook = state.workbook();
           if (workbook && !workbook.content && pending.contexts.has(workbook))
             inject?.(null);
@@ -365,8 +371,7 @@ export function commands(
 
         const { contents } = manager;
         const { path } = corrector;
-        const { workbooks, grades } = bridge.peek();
-        const content = csv.generate(workbooks, grades);
+        const content = csv.generate(session.peek().entries.values());
         const target = await io.available(manager, path, 'grades', '.csv');
         await contents.save(target, { type: 'file', format: 'text', content });
         void commands.execute('docmanager:open', { path: target });
@@ -469,7 +474,7 @@ export function commands(
         try {
           const rubric = open(workbook);
           if (!rubric) return;
-          bridge.record({ workbook, grade: unverified(workbook) });
+          session.record({ workbook, grade: unverified(workbook) });
           await authenticate(
             workbook,
             {
@@ -491,24 +496,26 @@ export function commands(
           // Auto-certify if this was the last pending reviewable cell.
           const updated = open(workbook);
           const { certification } = updated?.assignment ?? {};
-          if (updated && !updated.locked && !certification) {
-            if (!Rubric.pending(updated)) {
-              let certified: Certified | null = null;
-              try {
-                certified = await Workbook.certify(workbook, trans, true);
-              } catch {
-                // Certification may fail if auto-graded cells are unresolved;
-                // the workbook will be certified on the next batch pass.
-              }
-              if (certified) {
-                await save(workbook);
-                result = certified.grade;
-              }
+          if (
+            updated &&
+            !updated.locked &&
+            !certification &&
+            !Rubric.pending(updated)
+          ) {
+            // Unresolved automatic cells can defer certification to the next batch.
+            const certified = await Workbook.certify(
+              workbook,
+              trans,
+              true
+            ).catch(() => null);
+            if (certified) {
+              await save(workbook);
+              result = certified.grade;
             }
           }
-          bridge.record({ workbook, grade: result });
+          session.record({ workbook, grade: result });
         } catch (error) {
-          bridge.record({ workbook, grade: unverified(workbook) });
+          session.record({ workbook, grade: unverified(workbook) });
           void showErrorMessage(...Error.interpret(error, trans));
         }
       }
@@ -522,7 +529,7 @@ export function commands(
         args: Partial<{ id: string }>
       ): Promise<Rubric.Cell.Output[] | null> => {
         const workbook = reviewer?.workbook ?? null;
-        const id = args.id ?? bridge.peek().cursor?.cell ?? null;
+        const id = args.id ?? session.peek().cursor?.cell ?? null;
         if (!workbook || !id || active.has(workbook.context.path)) return null;
         try {
           const rubric = open(workbook);

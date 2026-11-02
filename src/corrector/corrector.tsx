@@ -13,7 +13,7 @@ import React, {
 import { Correxit, Rubric, Workbook } from '..';
 import { useCommand } from '../correxit/use-command';
 import { trail } from '../ui/trail';
-import * as bridge from './bridge';
+import * as session from './session';
 import {
   commands as COMMANDS,
   CommandIDs as COMMAND_IDS,
@@ -198,90 +198,6 @@ const status = (
     : trans.__('%1 of %2', points, possible);
 };
 
-/** Fold command events into a view; command ownership outlives React cleanup. */
-const collate = (events: Event[]) => {
-  const workbooks = new Map<string, Scanned>();
-  const grades: Corrector.Collated = new Map();
-  const phases = new Map<
-    string,
-    'queued' | 'processing' | 'scanned' | 'failed'
-  >();
-  const errors = new Map<string, Diagnostic>();
-  let total = 0,
-    checked = 0,
-    completed = 0,
-    finished = 0,
-    skipped = 0,
-    failed = 0;
-  let listed = false,
-    done = false,
-    stopped = false,
-    error = false;
-  for (const event of events) {
-    if (event.type === 'listed') {
-      listed = true;
-      total = event.paths.length;
-      for (const path of event.paths) {
-        workbooks.set(path, { hollow: true, context: { path } });
-        phases.set(path, 'queued');
-      }
-    } else if (event.type === 'read') {
-      checked++;
-      if (event.workbook) {
-        workbooks.set(event.path, event.workbook);
-        phases.set(event.path, 'scanned');
-      } else if (event.error) {
-        finished++;
-        phases.set(event.path, 'failed');
-        errors.set(event.path, event.error);
-        failed++;
-      } else {
-        workbooks.delete(event.path);
-        phases.delete(event.path);
-        skipped++;
-        finished++;
-      }
-    } else if (event.type === 'started') {
-      phases.set(event.path, 'processing');
-    } else if (event.type === 'result') {
-      grades.set(event.path, event.file);
-      finished++;
-      if (event.completed) completed++;
-      else skipped++;
-      phases.set(event.path, event.file.grade.resolved ? 'scanned' : 'failed');
-      if (!event.file.grade.resolved) failed++;
-    } else if (event.type === 'error') {
-      failed++;
-      if (event.path) {
-        finished++;
-        phases.set(event.path, 'failed');
-        errors.set(event.path, event.message);
-      } else {
-        error = true;
-      }
-    } else if (event.type === 'done') {
-      done = true;
-      stopped = event.stopped;
-    }
-  }
-  return {
-    workbooks: Array.from(workbooks.values()),
-    grades,
-    phases,
-    errors,
-    total,
-    checked,
-    completed,
-    finished,
-    skipped,
-    failed,
-    listed,
-    done,
-    stopped,
-    error
-  };
-};
-
 export function Corrector(props: Corrector.Props) {
   const {
     commands,
@@ -294,29 +210,25 @@ export function Corrector(props: Corrector.Props) {
     submitted,
     trans
   } = props;
-  const [events, settled] = useCommand<Event>(commands, COMMAND_IDS.process, {
+  const [, settled] = useCommand<Event>(commands, COMMAND_IDS.process, {
     run,
     path,
     mode,
     overwrite,
     submitted
   });
-  const summary = useMemo(() => collate(events), [events]);
-  const { workbooks, phases, errors } = summary;
-  const snapshot = bridge.useSnapshot();
-  const grades = useMemo(
-    () => bridge.merge(workbooks, summary.grades, snapshot.grades),
-    [workbooks, summary.grades, snapshot.grades]
+  const current = session.useSnapshot();
+  const snapshot = current.run === run ? current : session.empty;
+  const { entries, progress: summary } = snapshot;
+  const workbooks = useMemo(
+    () => Array.from(entries.values(), entry => entry.workbook),
+    [entries]
   );
   const idle = summary.done && settled;
   const walk = useWalk(workbooks);
   const available = useMemo(
-    () =>
-      workbooks.filter(
-        ({ context }) =>
-          mode === 'scan' || summary.done || summary.grades.has(context.path)
-      ),
-    [mode, summary.done, summary.grades, workbooks]
+    () => session.available(snapshot).map(entry => entry.workbook),
+    [snapshot]
   );
   const workbook = useMemo(
     () => match(available, walk.selected),
@@ -329,15 +241,10 @@ export function Corrector(props: Corrector.Props) {
     },
     [commands, run]
   );
-  useEffect(() => bridge.clear, []);
-  useEffect(() => bridge.inject(commands, workbook), [commands, workbook]);
+  useEffect(() => session.inject(commands, workbook), [commands, workbook]);
   useEffect(
     () => notify({ graded: idle, scanned: idle, mode, message }),
     [idle, message, mode, notify]
-  );
-  useEffect(
-    () => bridge.publish({ workbooks: available, grades: summary.grades }),
-    [available, summary.grades]
   );
   const empty = idle && !workbooks.length && !summary.error;
   return (
@@ -376,11 +283,11 @@ export function Corrector(props: Corrector.Props) {
             </td>
           </tr>
         )}
-        {workbooks.map(workbook => {
+        {Array.from(entries.values(), entry => {
+          const { workbook, phase, error } = entry;
           const { path } = workbook.context;
-          const phase = phases.get(path) || 'queued';
           const grade: Grade | 'pending' =
-            grades.get(path)?.grade ??
+            entry.grade ??
             (phase === 'processing' || phase === 'queued'
               ? 'pending'
               : {
@@ -392,7 +299,7 @@ export function Corrector(props: Corrector.Props) {
                 });
           const label =
             phase === 'failed'
-              ? diagnostic(errors.get(path) || 'grade', trans)
+              ? diagnostic(error || 'grade', trans)
               : phase === 'processing' && !idle
                 ? trans.__('Processing…')
                 : summary.stopped
@@ -424,7 +331,7 @@ const diagnostic = (code: Diagnostic, trans: TranslationBundle) =>
   })[code];
 
 const describe = (
-  summary: ReturnType<typeof collate>,
+  summary: session.Progress,
   mode: Mode,
   stopping: boolean,
   trans: TranslationBundle

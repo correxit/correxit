@@ -14,8 +14,8 @@ import { Correxit, Rubric, Workbook } from '../correxit';
 import * as state from '../correxit/state';
 import { Boundary } from '../ui';
 import { Corrector } from '.';
-import * as bridge from './bridge';
-import { CommandIDs, Scanned } from './commands';
+import * as session from './session';
+import { CommandIDs } from './commands';
 import { Reviewer } from './reviewer';
 
 export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
@@ -452,13 +452,13 @@ class ReviewerInfoWidget extends ReactWidget {
 }
 
 function ReviewerInfo({ trans }: { trans: IRenderMime.TranslationBundle }) {
-  const { cursor, workbooks } = bridge.useSnapshot();
+  const snapshot = session.useSnapshot();
+  const { cursor } = snapshot;
   if (!cursor) return null;
 
-  const workbook = workbooks.find(
-    (w): w is Exclude<Scanned, { hollow: true }> =>
-      !w.hollow && w.context.path === cursor.path
-  );
+  const workbook = session
+    .available(snapshot)
+    .find(({ workbook }) => workbook.context.path === cursor.path)?.workbook;
   if (!workbook) return null;
 
   const rubric = Workbook.open(workbook, true);
