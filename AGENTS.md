@@ -85,7 +85,7 @@ acceptable.
 ## 6. Testing Strategy
 
 - **Unit Tests (`src/__tests__/`)**: For pure logic and isolated modules. The following have Jest unit tests:
-  - `rubric.ts`, `state.ts`, `kernels.ts`, `unlocker.ts`, `grader.ts`, `csv.ts`, `nbgrader.ts`
+  - `rubric.ts`, `state.ts`, `kernels.ts`, `unlocker.ts`, `run.ts`, `pool.ts`, `csv.ts`, `nbgrader.ts`
 - **Playwright Tests (`ui-tests/`)**: For modules that require a live JupyterLab environment. These serve as the effective unit tests for the following. Do not attempt to Jest-mock them:
   - `workbook.ts`, `commands.ts` (both `correxit/` and `corrector/`), `corrector.tsx`, `reviewer.tsx`, `widget.tsx`
 
@@ -119,7 +119,8 @@ acceptable.
 - `io.ts`: File system operations (`available`, `cd`, `create`, `mkdir`, workbook fetching).
 - `correxit.ts`: Plugin type definitions (`Collector`, `Distributor`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`). The `Registrar` returns `Registration[]` objects (not raw strings).
 - `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, retries, timeout })`, `cap()`, `retries()`, and `timeout()` for settings-driven control.
-- `corrector/grader.ts`: Bounded-concurrency async generator for batch grading. Accepts a `recover` callback, `cap`, and `retries`. Scanner accepts `Iterable | AsyncIterable`; failures are recovered and yielded so nothing stalls the pipeline.
+- `corrector/run.ts`: Cold directory run for scan, grade, or collect. The `Run` union binds each mode to its operation; only grading has concurrency and retries. Authentication and invalid-workbook failures are terminal and emit safe diagnostic codes. Commands own authentication, mutations, and retained contexts.
+- `corrector/pool.ts`: Interleaves bounded cold jobs without blocking completed results on a pending source read. Stop prevents new jobs; cleanup drains pending operations before closing their generators.
 - `state.ts`: In-memory cache for active workbook and cell scores (`Map` with FIFO eviction). Also tracks the reviewer cursor cell via `cursor()` and exposes a `refreshed` signal for sidebar re-renders.
 - `use-command.ts`: React hook bridging async generators to component state at ~60fps. Restarts the stream whenever `id` or serialized `args` changes; cleanup marks the prior stream interrupted.
 - `corrector/bridge.ts`: `useSyncExternalStore`-based external store bridging Corrector and Reviewer state. The Corrector `publish()`es workbook/grade snapshots; the Reviewer reads them via `useSnapshot()` and writes cursor changes via `navigate()`.

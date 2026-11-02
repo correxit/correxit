@@ -174,12 +174,15 @@ receipt that Correxit stores in workbook metadata, or `null` if the grade was
 not recorded.
 
 ```typescript
-// Workbook.Certified
-type Certified = {
+// Workbook.Graded: authentication is established; review may still be pending.
+type Graded = {
   grade: Workbook.Grade.Verified;
   identifier: Workbook.Identifier.Assigned;
   workbook: Workbook;
 };
+
+// Existing certification and collector payload; no additional required fields.
+type Certified = Graded;
 
 // Workbook.Grade
 type Grade = {
@@ -290,6 +293,16 @@ Pass a unique string `run`, a directory `path`, `mode` (`scan`, `grade`, or
 `collect`), and the boolean `overwrite` and `submitted` options. Discovery,
 workbook reads, processing starts, results, safe diagnostic codes, and completion
 are separate events. Returned workbook contexts belong to the run.
+
+Result events carry `completed: true` when grading or collection completes,
+including reuse of an authenticated grade. `completed: false` means collection
+was skipped. This flag does not claim a change to the saved notebook.
+
+Failure events carry safe codes: `directory`, `read`, `authenticate`, `invalid`,
+`grade`, or `sync`. Authentication and invalid-workbook failures are not retried.
+Other grading failures use the configured retry count. Collection is serial and
+never retried automatically, since a failed delivery may already have reached
+the collector.
 
 `correxit-corrector:stop` accepts the run identity as `run`. It prevents new jobs
 and retries, awaits active work, and retains completed results. Pass

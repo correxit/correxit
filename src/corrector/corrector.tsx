@@ -19,7 +19,7 @@ import {
   CommandIDs as COMMAND_IDS,
   Scanned
 } from './commands';
-import type { Event, Mode } from './run';
+import type { Diagnostic, Event, Mode } from './run';
 import { CorrectorStatus, CorrectorWidget } from './widget';
 
 type Grade = Workbook.Grade;
@@ -206,7 +206,7 @@ const collate = (events: Event[]) => {
     string,
     'queued' | 'processing' | 'scanned' | 'failed'
   >();
-  const errors = new Map<string, string>();
+  const errors = new Map<string, Diagnostic>();
   let total = 0,
     checked = 0,
     completed = 0,
@@ -246,7 +246,7 @@ const collate = (events: Event[]) => {
     } else if (event.type === 'result') {
       grades.set(event.path, event.file);
       finished++;
-      if (event.changed) completed++;
+      if (event.completed) completed++;
       else skipped++;
       phases.set(event.path, event.file.grade.resolved ? 'scanned' : 'failed');
       if (!event.file.grade.resolved) failed++;
@@ -408,12 +408,15 @@ export function Corrector(props: Corrector.Props) {
   );
 }
 
-const diagnostic = (code: string, trans: TranslationBundle) =>
-  code === 'read'
-    ? trans.__('Could not read workbook')
-    : code === 'sync'
-      ? trans.__('Could not authenticate or sync workbook')
-      : trans.__('Could not authenticate or grade workbook');
+const diagnostic = (code: Diagnostic, trans: TranslationBundle) =>
+  ({
+    directory: trans.__('Could not read directory'),
+    read: trans.__('Could not read workbook'),
+    authenticate: trans.__('Could not authenticate workbook'),
+    invalid: trans.__('Workbook is invalid or unavailable'),
+    grade: trans.__('Could not grade workbook'),
+    sync: trans.__('Could not sync workbook')
+  })[code];
 
 const describe = (
   summary: ReturnType<typeof collate>,

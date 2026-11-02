@@ -258,6 +258,93 @@ test('grading rechecks current sources after an authenticated unlock', async ({
   }
 });
 
+test('Corrector does not retry rejected credentials or expose authentication errors', async ({
+  page
+}) => {
+  const fixture = await setup(page, cells);
+  const issued = await issue(page);
+  try {
+    await cd(page, '.');
+    const result = await page.evaluate(
+      async ({ directory, key }) => {
+        const app = (window as any).jupyterapp;
+        const { Correxit, Workbook } = (window as any).__correxit__;
+        const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
+        const unlock = unlocker.unlock;
+        const results = [];
+        try {
+          for (const mode of ['grade', 'collect']) {
+            for (const failure of ['cancelled', 'mismatch']) {
+              let attempts = 0;
+              unlocker.unlock = async () => {
+                attempts++;
+                if (failure === 'cancelled') return null;
+                throw new Correxit.Error.Mismatch(
+                  'private credential or notebook source'
+                );
+              };
+              const run = `${mode}-${failure}`;
+              const stream = await app.commands.execute(
+                'correxit-corrector:run',
+                {
+                  run,
+                  path: directory,
+                  key,
+                  mode
+                }
+              );
+              const events = [];
+              try {
+                for await (const event of stream) {
+                  if (event.type === 'read' && event.workbook) {
+                    events.push({
+                      type: 'read',
+                      certification: Workbook.open(event.workbook).assignment
+                        .certification
+                    });
+                  } else {
+                    events.push(event);
+                  }
+                }
+                results.push({ mode, failure, attempts, events });
+              } finally {
+                await stream.return(undefined);
+                await app.commands.execute('correxit-corrector:stop', {
+                  run,
+                  release: true
+                });
+              }
+            }
+          }
+        } finally {
+          unlocker.unlock = unlock;
+        }
+        return results;
+      },
+      { directory: issued.directory, key }
+    );
+    expect(result).toHaveLength(4);
+    for (const { attempts, events } of result) {
+      expect(attempts).toBe(1);
+      expect(events).toContainEqual({ type: 'read', certification: null });
+      expect(events).toContainEqual({
+        type: 'error',
+        path: issued.paths[0],
+        message: 'authenticate'
+      });
+      expect(events.some(event => event.type === 'result')).toBe(false);
+      expect(events[events.length - 1]).toEqual({
+        type: 'done',
+        stopped: false
+      });
+    }
+    expect(JSON.stringify(result)).not.toContain('private');
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
 test('authentic submissions grade and collect; authenticated cached reports skip execution', async ({
   page
 }) => {

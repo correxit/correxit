@@ -186,10 +186,12 @@ unrepresentable.
 
 `Workbook.Grade` also discriminates command results with `verified: true |
 false`. Only authenticated grading or collection produces verified scores;
-`Workbook.Certified` requires that provenance. The flag lives in memory, not in
-notebook metadata. Scanning and parsing cannot manufacture it. Batch cache
-reuse follows authentication inside the same bounded grading action, and CSV
-exports consume verified results instead of falling back to scanned reports.
+`Workbook.Graded` requires that provenance but may still await manual review.
+`Workbook.Certified` retains the same structural shape for certification and
+collector APIs; the operation establishes certification. The flag lives in
+memory, not in notebook metadata. Scanning and parsing cannot manufacture it.
+Batch cache reuse follows authentication inside the same bounded grading action,
+and CSV exports consume verified results instead of falling back to scanned reports.
 
 ## Asynchronous patterns
 
@@ -229,6 +231,19 @@ and completion reach the view through discriminated events. One pending source
 read competes with active job completions, so slow reads cannot hold completed
 grades back. The existing scan, batch, and collect commands adapt this same
 orchestration to their original result shapes.
+
+`run.ts` describes scan, grade, and collect as a discriminated `Run` union.
+Scanning has no processing operation. Grading supplies `grade`, concurrency,
+and retries; collection supplies `collect` and runs serially without retries.
+Commands own each operation and authenticate before cached-report reuse,
+execution, or collection. Authentication and invalid-workbook failures end that
+workbook's attempt immediately; processing failures may use the configured
+grading retries. Events carry diagnostic codes, never raw exception messages.
+`pool.ts` owns only interleaving and draining the cold jobs.
+
+A result's `completed` flag records completion of the requested operation,
+including authenticated grade reuse. False means collection was skipped; it
+does not describe whether notebook contents changed.
 
 Run identities route stop requests to in-memory cancellation state. Stop prevents
 new jobs and retries, then drains active operations. Runs retain source contexts

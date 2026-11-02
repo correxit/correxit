@@ -17,13 +17,12 @@ import * as state from '../correxit/state';
 import { Corrector, Reviewer } from '.';
 import * as bridge from './bridge';
 import * as csv from './csv';
-import * as grader from './grader';
-import * as workflow from './run';
+import { Event, File, Mode, run } from './run';
 
 type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
-type Failed = grader.Result.Failed;
 type Grade = Workbook.Grade;
+type Graded = Workbook.Graded;
 type Headless = Workbook.Headless;
 
 export type Hollow = { hollow: true; context: { path: string } };
@@ -90,7 +89,7 @@ export function commands(
   type Options = Partial<
     Credentials & {
       run: string;
-      mode: workflow.Mode;
+      mode: Mode;
       overwrite: boolean;
       submitted: boolean;
     }
@@ -107,9 +106,9 @@ export function commands(
   const factory = new NotebookModelFactory();
   async function* stream(
     args: Options,
-    mode: workflow.Mode,
+    mode: Mode,
     retained: Set<Headless> | null = null
-  ): AsyncGenerator<workflow.Event> {
+  ): AsyncGenerator<Event> {
     const id = retained ? null : (args.run ?? null);
     if (id && runs.has(id))
       throw new Error.Invalid('Run identity is already in use');
@@ -129,10 +128,11 @@ export function commands(
       throw new Error.Invalid('Invalid Corrector directory or credentials');
     }
     let prompted = false;
-    const actions: workflow.Actions = {
+    const directory = {
+      signal: controller.signal,
       list: async () =>
         (await io.notebooks(manager, handle.path)).map(({ path }) => path),
-      read: async path => {
+      read: async (path: string) => {
         const scan =
           mode === 'scan'
             ? normalize({
@@ -160,66 +160,74 @@ export function commands(
           return null;
         }
         return workbook;
-      },
-      perform: async workbook => {
-        const path = workbook.context.path;
-        if (active.has(path))
-          throw new Error.Invalid('Workbook is already being processed');
-        active.add(path);
-        try {
-          if (mode === 'grade') {
-            const certified = await correct(
-              workbook,
-              handle,
-              !!args.overwrite,
-              { fetch, manager, trans, unlocker }
-            );
-            return {
-              file: { grade: certified.grade, workbook },
-              changed: true
-            };
-          }
-          const verified = await authenticated(
-            workbook,
-            handle,
-            unlocker,
-            auth || prompted
-          );
-          prompted = true;
-          if (!verified)
-            throw new Error.Certify('Workbook authentication failed');
-          await Workbook.lock(workbook);
-          const certified = precertified(workbook);
-          if (!certified) {
-            return {
-              file: {
-                workbook,
-                grade: { ...recover(workbook).grade, resolved: true }
-              },
-              changed: false
-            };
-          }
-          if (open(workbook)?.assignment.collected && !args.overwrite) {
-            return {
-              file: { workbook, grade: certified.grade },
-              changed: false
-            };
-          }
-          const receipt = await collector({ ...certified, workbook });
-          await Workbook.collect(workbook, receipt);
-          await save(workbook);
-          return { file: { workbook, grade: certified.grade }, changed: true };
-        } finally {
-          active.delete(path);
-        }
       }
     };
-    const events = workflow.run(actions, {
-      mode,
-      cap: mode === 'collect' ? 1 : kernels.cap(),
-      retries: mode === 'grade' ? kernels.retries() : 0,
-      signal: controller.signal
-    });
+    const grade = async (workbook: Headless): Promise<File> => {
+      const path = workbook.context.path;
+      if (active.has(path))
+        throw new Error.Invalid('Workbook is already being processed');
+      active.add(path);
+      try {
+        const graded = await correct(workbook, handle, !!args.overwrite, {
+          fetch,
+          manager,
+          trans,
+          unlocker
+        });
+        return { grade: graded.grade, workbook };
+      } finally {
+        active.delete(path);
+      }
+    };
+    const collect = async (workbook: Headless) => {
+      const path = workbook.context.path;
+      if (active.has(path))
+        throw new Error.Invalid('Workbook is already being processed');
+      active.add(path);
+      try {
+        try {
+          await authenticate(workbook, handle, unlocker, auth || prompted);
+        } finally {
+          prompted = true;
+        }
+        await Workbook.lock(workbook);
+        const certified = precertified(workbook);
+        if (!certified) {
+          return {
+            file: {
+              workbook,
+              grade: { ...unverified(workbook), resolved: true }
+            },
+            completed: false
+          };
+        }
+        if (open(workbook)?.assignment.collected && !args.overwrite) {
+          return {
+            file: { workbook, grade: certified.grade },
+            completed: false
+          };
+        }
+        const receipt = await collector({ ...certified, workbook });
+        await Workbook.collect(workbook, receipt);
+        await save(workbook);
+        return { file: { workbook, grade: certified.grade }, completed: true };
+      } finally {
+        active.delete(path);
+      }
+    };
+    const events = run(
+      mode === 'scan'
+        ? { ...directory, mode }
+        : mode === 'grade'
+          ? {
+              ...directory,
+              mode,
+              grade,
+              cap: kernels.cap(),
+              retries: kernels.retries()
+            }
+          : { ...directory, mode, collect }
+    );
     try {
       // Explicit pulls let abort precede the delegated iterator's cleanup.
       for (
@@ -245,9 +253,9 @@ export function commands(
   const results = async function* (args: Options, mode: 'grade' | 'collect') {
     const retained = new Set<Headless>();
     for await (const event of stream(args, mode, retained)) {
-      if (event.type === 'result' && (mode === 'grade' || event.changed)) {
+      if (event.type === 'result' && (mode === 'grade' || event.completed)) {
         retained.add(event.file.workbook);
-        yield [event.path, event.file] as [string, workflow.File];
+        yield [event.path, event.file] as [string, File];
       }
     }
   };
@@ -303,7 +311,7 @@ export function commands(
               loaded.set(event.path, event.workbook);
             if (event.type === 'result') {
               retained.add(event.file.workbook);
-              yield [event.path, event.file] as [string, workflow.File];
+              yield [event.path, event.file] as [string, File];
             }
             if (
               event.type === 'error' &&
@@ -312,10 +320,10 @@ export function commands(
             ) {
               const workbook = loaded.get(event.path)!;
               retained.add(workbook);
-              yield [
-                event.path,
-                { workbook, grade: recover(workbook).grade }
-              ] as [string, workflow.File];
+              yield [event.path, { workbook, grade: unverified(workbook) }] as [
+                string,
+                File
+              ];
             }
           }
         })()
@@ -558,26 +566,21 @@ export function commands(
   return disposables;
 }
 
-async function authenticated(
+async function authenticate(
   workbook: Headless,
   handle: Credentials,
   unlocker: Correxit.Unlocker,
   silent: boolean
-): Promise<boolean> {
+): Promise<void> {
   const { path } = workbook.context;
-  try {
-    const credentials = { ...handle, path, silent };
-    await unlocker.unlock(workbook, credentials);
-    const rubric = open(workbook);
-    if (!rubric || rubric.locked) return false;
-    await Assignment.authenticate(
-      workbook.context.model.sharedModel.toJSON(),
-      rubric
-    );
-    return true;
-  } catch {
-    return false;
-  }
+  const unlocked = await unlocker.unlock(workbook, { ...handle, path, silent });
+  const rubric = open(workbook);
+  if (!unlocked || !rubric || rubric.locked)
+    throw new Correxit.Error.Unlock('Workbook authentication failed');
+  await Assignment.authenticate(
+    workbook.context.model.sharedModel.toJSON(),
+    rubric
+  );
 }
 
 async function correct(
@@ -595,18 +598,11 @@ async function correct(
     trans: IRenderMime.TranslationBundle;
     unlocker: Correxit.Unlocker;
   }
-): Promise<Certified> {
+): Promise<Graded> {
   const { path } = workbook.context;
   const silent = !!(handle.key || handle.passphrase);
-  const unlocked = await unlocker.unlock(workbook, { ...handle, path, silent });
-  const rubric = open(workbook);
-  if (!unlocked || !rubric || rubric.locked)
-    throw new Correxit.Error.Certify('grade error: authentication failed');
-  await Assignment.authenticate(
-    workbook.context.model.sharedModel.toJSON(),
-    rubric
-  );
-  const cached = exclude(workbook, overwrite);
+  await authenticate(workbook, handle, unlocker, silent);
+  const cached = reuse(workbook, overwrite);
   if (cached) {
     await Workbook.lock(workbook);
     return cached;
@@ -625,7 +621,7 @@ async function correct(
     throw new Correxit.Error.Certify('correct error: staging failed');
   }
   try {
-    const certified = await grade(staged, trans);
+    const graded = await grade(staged, trans);
     const snapshot = staged.context.model.toJSON() as INotebookContent;
     const restored = Workbook.restore(workbook, snapshot);
     if (!restored)
@@ -636,8 +632,8 @@ async function correct(
     if (!Workbook.Identifier.assigned(identifier))
       throw new Correxit.Error.Certify('correct error: unassigned');
     return {
-      ...certified,
-      grade: { ...certified.grade, path },
+      ...graded,
+      grade: { ...graded.grade, path },
       identifier,
       workbook
     };
@@ -647,7 +643,7 @@ async function correct(
   }
 }
 
-function exclude(workbook: Headless, overwrite: boolean): Certified | null {
+function reuse(workbook: Headless, overwrite: boolean): Graded | null {
   const rubric = open(workbook);
   if (!rubric || rubric.locked || overwrite) return null;
 
@@ -660,7 +656,7 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
 
-  const grade = (spec: Grade['spec']): Certified => ({
+  const grade = (spec: Grade['spec']): Graded => ({
     grade: { path, resolved: true, score: summary, spec, verified: true },
     identifier,
     workbook
@@ -687,7 +683,7 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
 async function grade(
   workbook: Headless,
   trans: IRenderMime.TranslationBundle
-): Promise<Certified> {
+): Promise<Graded> {
   const rubric = open(workbook);
   if (!rubric || rubric.locked)
     throw new Correxit.Error.Certify('grade error: invalid rubric');
@@ -751,15 +747,14 @@ function precertified(workbook: Headless): Certified | null {
   return { grade, identifier, workbook };
 }
 
-function recover(workbook: Headless): Failed {
-  const grade: Grade = {
+function unverified(workbook: Headless): Grade & { verified: false } {
+  return {
     path: workbook.context.path,
     resolved: false,
     score: { ...Rubric.Score.UNSCORED },
     spec: null,
     verified: false
   };
-  return { ok: false, grade, workbook };
 }
 
 async function save(workbook: Headless | null) {

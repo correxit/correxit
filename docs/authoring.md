@@ -399,12 +399,11 @@ A workbook moves through these stages:
 - **Reviewable cells are the escape hatch.** When automated scoring is
   impractical, use reviewable. The grader can assign any score from 0 to
   the cell's possible points.
-- **Student code cannot break grading.** The batch grader has a
-  configurable per-workbook timeout. If a student's code hangs, runs an
-  infinite loop, or crashes the kernel, that workbook times out and the
-  grader moves on. The timeout, concurrency limit, and retry count are
-  all configurable in the Corrector settings. You do not need to
-  defensively design around pathological submissions.
+- **Batch grading has timeout and recovery controls.** Configure the
+  per-workbook timeout, concurrency limit, and retry count in Corrector
+  settings to handle hung or failed kernels. These controls do not sandbox
+  student code. Use an isolated grading environment for adversarial submissions;
+  see the [security limitations](security.md#known-limitations).
 - **Keep the notebook self-contained.** Everything the student needs
   (data files, imports, context) should be in the notebook or its
   working directory. There is no server-side setup step. If you use a
