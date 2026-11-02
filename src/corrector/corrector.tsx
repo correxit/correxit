@@ -302,16 +302,21 @@ export function Corrector(props: Corrector.Props) {
     submitted
   });
   const summary = useMemo(() => collate(events), [events]);
-  const { workbooks, grades, phases, errors } = summary;
+  const { workbooks, phases, errors } = summary;
+  const snapshot = bridge.useSnapshot();
+  const grades = useMemo(
+    () => bridge.merge(workbooks, summary.grades, snapshot.grades),
+    [workbooks, summary.grades, snapshot.grades]
+  );
   const idle = summary.done && settled;
   const walk = useWalk(workbooks);
   const available = useMemo(
     () =>
       workbooks.filter(
         ({ context }) =>
-          mode === 'scan' || summary.done || grades.has(context.path)
+          mode === 'scan' || summary.done || summary.grades.has(context.path)
       ),
-    [grades, mode, summary.done, workbooks]
+    [mode, summary.done, summary.grades, workbooks]
   );
   const workbook = useMemo(
     () => match(available, walk.selected),
@@ -331,8 +336,8 @@ export function Corrector(props: Corrector.Props) {
     [idle, message, mode, notify]
   );
   useEffect(
-    () => bridge.publish({ workbooks: available, grades }),
-    [available, grades]
+    () => bridge.publish({ workbooks: available, grades: summary.grades }),
+    [available, summary.grades]
   );
   const empty = idle && !workbooks.length && !summary.error;
   return (

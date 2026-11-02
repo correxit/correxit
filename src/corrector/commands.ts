@@ -469,29 +469,46 @@ export function commands(
         try {
           const rubric = open(workbook);
           if (!rubric) return;
-          if (rubric.locked) await unlocker.unlock(workbook, null);
+          bridge.record({ workbook, grade: unverified(workbook) });
+          await authenticate(
+            workbook,
+            {
+              path: workbook.context.path,
+              unlock: true,
+              key: null,
+              passphrase: null
+            },
+            unlocker,
+            false
+          );
           if (intervention !== undefined)
             await Workbook.intervene(workbook, id, intervention ?? null);
           if (comment !== undefined)
             await Workbook.comment(workbook, id, comment);
           await save(workbook);
+          let result = reuse(workbook, false)?.grade ?? unverified(workbook);
 
           // Auto-certify if this was the last pending reviewable cell.
           const updated = open(workbook);
           const { certification } = updated?.assignment ?? {};
           if (updated && !updated.locked && !certification) {
             if (!Rubric.pending(updated)) {
+              let certified: Certified | null = null;
               try {
-                await Workbook.certify(workbook, trans, true);
-                await save(workbook);
+                certified = await Workbook.certify(workbook, trans, true);
               } catch {
                 // Certification may fail if auto-graded cells are unresolved;
                 // the workbook will be certified on the next batch pass.
               }
+              if (certified) {
+                await save(workbook);
+                result = certified.grade;
+              }
             }
           }
-          bridge.touch();
+          bridge.record({ workbook, grade: result });
         } catch (error) {
+          bridge.record({ workbook, grade: unverified(workbook) });
           void showErrorMessage(...Error.interpret(error, trans));
         }
       }
@@ -605,6 +622,8 @@ async function correct(
   const cached = reuse(workbook, overwrite);
   if (cached) {
     await Workbook.lock(workbook);
+    // A prior attempt may have restored this report but failed to save it.
+    await save(workbook);
     return cached;
   }
   const dir = PathExt.dirname(path) || '.';

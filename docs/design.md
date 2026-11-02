@@ -267,8 +267,11 @@ The Corrector and Reviewer are separate widgets that share state: the Corrector
 owns the list of scanned workbooks and collated grades, while the Reviewer owns
 the navigation cursor. `bridge.ts` is a lightweight `useSyncExternalStore`-based
 external store that lets the Corrector `publish()` workbook/grade snapshots and
-the Reviewer `navigate()` to a cursor position. The Reviewer subscribes via
-`useSnapshot()`. This avoids coupling the two widgets through props or context.
+the Reviewer `navigate()` to a cursor position. Both widgets subscribe via
+`useSnapshot()`. Review commands invalidate scores while saving, then publish
+authenticated results for both the table and CSV export. These results survive
+later batch emissions only for the same workbook context; a new scan clears
+their verification. This avoids coupling the two widgets through props or context.
 
 ## Kernel pool concurrency model
 

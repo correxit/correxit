@@ -523,6 +523,96 @@ test('batch grades and certifies workbooks', async ({ page }) => {
   await dispose();
 });
 
+for (const persistent of [false, true]) {
+  test(`batch requires a saved result after a ${persistent ? 'persistent' : 'transient'} save failure`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'ref', source: 'print(42)' },
+      { id: 'target', source: 'print(42)' }
+    ]);
+    const propagated = await propagate(page, ['alice@example.com']);
+    try {
+      await cd(page, '.');
+      const result = await page.evaluate(
+        async ({ directory, paths, persistent }) => {
+          const app = (window as any).jupyterapp;
+          const { Workbook } = (window as any).__correxit__;
+          const certify = Workbook.certify;
+          let executions = 0;
+          Workbook.certify = async (...args: any[]) => {
+            executions++;
+            return certify(...args);
+          };
+          const run = 'source-save-failure';
+          const stream = await app.commands.execute('correxit-corrector:run', {
+            run,
+            path: directory,
+            mode: 'grade',
+            key: 'secret'
+          });
+          let saves = 0;
+          const events: any[] = [];
+          try {
+            for await (const event of stream) {
+              if (event.type === 'read' && event.workbook) {
+                const context = event.workbook.context;
+                const save = context.save.bind(context);
+                context.save = async () => {
+                  saves++;
+                  if (persistent || saves === 1)
+                    throw new Error('Source save failed');
+                  return save();
+                };
+              }
+              if (event.type === 'result')
+                events.push({ type: event.type, grade: event.file.grade });
+              if (event.type === 'error') events.push(event);
+            }
+            const file = await app.serviceManager.contents.get(paths[0], {
+              content: true
+            });
+            return {
+              saves,
+              executions,
+              events,
+              certification:
+                file.content.metadata.correxit.assignment.certification
+            };
+          } finally {
+            Workbook.certify = certify;
+            await stream.return(undefined);
+            await app.commands.execute('correxit-corrector:stop', {
+              run,
+              release: true
+            });
+          }
+        },
+        { ...propagated, persistent }
+      );
+      expect(result.executions).toBe(1);
+      expect(result.saves).toBe(persistent ? 3 : 2);
+      if (persistent) {
+        expect(result.certification).toBeNull();
+        expect(result.events).toEqual([
+          { type: 'error', path: propagated.paths[0], message: 'grade' }
+        ]);
+      } else {
+        expect(result.certification).not.toBeNull();
+        expect(result.events).toEqual([
+          expect.objectContaining({
+            type: 'result',
+            grade: expect.objectContaining({ verified: true, resolved: true })
+          })
+        ]);
+      }
+    } finally {
+      await cleanup(page, propagated);
+      await dispose();
+    }
+  });
+}
+
 test('batch can require locally submitted workbooks', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'print(42)' },

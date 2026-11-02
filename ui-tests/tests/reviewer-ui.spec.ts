@@ -242,6 +242,124 @@ for (const id of ['manual', 'constructor', 'toString', 'hasOwnProperty']) {
   });
 }
 
+for (const mode of ['Scan', 'Grade']) {
+  test(`manual review refreshes CSV and Corrector scores after ${mode}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'first', source: 'First answer', type: 'markdown' },
+      { id: 'second', source: 'Second answer', type: 'markdown' }
+    ]);
+    const propagated = await prepare(page, {
+      cells: [{ id: 'first' }, { id: 'second' }]
+    });
+    const paths = [...propagated.paths];
+    const exported = async () => {
+      const exported = await page.evaluate(async (directory: string) => {
+        const app = (window as any).jupyterapp;
+        const { contents } = app.serviceManager;
+        const before = await contents.get(directory, { content: true });
+        const paths = new Set(before.content.map((file: any) => file.path));
+        await app.commands.execute('correxit-corrector:csv');
+        const after = await contents.get(directory, { content: true });
+        const csv = after.content.find(
+          (file: any) => file.name.endsWith('.csv') && !paths.has(file.path)
+        );
+        const file = await contents.get(csv.path, {
+          content: true,
+          format: 'text'
+        });
+        return {
+          path: csv.path,
+          score: file.content.split('\r\n')[1].split(',').slice(6, 8)
+        };
+      }, propagated.directory);
+      paths.push(exported.path);
+      return exported.score;
+    };
+    try {
+      await cd(page, '.');
+      await batch(page, propagated.directory);
+      await page.evaluate(async (path: string) => {
+        await (window as any).jupyterapp.commands.execute(
+          'correxit-corrector:launch',
+          { path }
+        );
+      }, propagated.directory);
+      const widget = page.locator('#correxit-corrector-widget');
+      await expect(
+        widget.getByRole('button', { name: 'Scan', exact: true })
+      ).toBeEnabled();
+      if (mode === 'Grade') {
+        await widget.getByRole('radio', { name: 'Grade', exact: true }).check();
+        await widget
+          .getByRole('button', { name: 'Grade', exact: true })
+          .click();
+        await expect(
+          widget.getByRole('button', { name: 'Grade', exact: true })
+        ).toBeEnabled();
+      }
+      await widget
+        .getByRole('button', {
+          name: 'Review reviewable: needs review',
+          exact: true
+        })
+        .first()
+        .click();
+      await score(page).fill('2');
+      await page.getByTitle('Pass and advance to next cell').click();
+      await expect
+        .poll(() => saved(page, propagated.paths[0], 'first'))
+        .toMatchObject({
+          points: 2,
+          certification: false
+        });
+      await expect(
+        widget.locator('.correxit-corrector-chip.cxt-mod-review')
+      ).toContainText('2 of 10');
+      expect(await exported()).toEqual(['2', '10']);
+
+      await page.evaluate(() =>
+        (window as any).jupyterapp.shell.activateById(
+          'correxit-reviewer-widget'
+        )
+      );
+      await expect(score(page)).toBeVisible();
+      await page.getByTitle('Pass and advance to next cell').click();
+      await expect
+        .poll(() => saved(page, propagated.paths[0], 'second'))
+        .toMatchObject({
+          points: 5,
+          certification: true
+        });
+      await expect(
+        widget.locator('.correxit-corrector-chip.cxt-mod-certified')
+      ).toContainText('7 of 10');
+      expect(await exported()).toEqual(['7', '10']);
+
+      // A fresh scan must not inherit verification from the reviewed context.
+      await page.evaluate(() =>
+        (window as any).jupyterapp.shell.activateById(
+          'correxit-corrector-widget'
+        )
+      );
+      await widget.getByRole('radio', { name: 'Scan', exact: true }).check();
+      await widget.getByRole('button', { name: 'Scan', exact: true }).click();
+      await expect(
+        widget.getByRole('button', { name: 'Scan', exact: true })
+      ).toBeEnabled();
+      await expect(
+        widget.locator('.correxit-corrector-chip.cxt-mod-scanned')
+      ).toHaveText('unverified');
+      expect(await exported()).toEqual(['', '']);
+    } finally {
+      await close(page);
+      await cleanup(page, { ...propagated, paths });
+      await dispose();
+    }
+  });
+}
+
 test('reviewer clears stored outputs when run result is empty', async ({
   page
 }) => {
