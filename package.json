@@ -2,7 +2,8 @@
     "name": "correxit",
     "version": "2.3.1",
     "workspaces": [
-        "lite/brand"
+        "lite/brand",
+        "packages/contracts"
     ],
     "description": "Correxit is a JupyterLab extension and the third-person singular perfect active indicative conjugation of the Latin verb corrigere",
     "keywords": [
@@ -51,11 +52,14 @@
     },
     "scripts": {
         "build": "jlpm build:lib && jlpm build:node && jlpm build:labextension:dev",
+        "build:contracts": "jlpm workspace @correxit/contracts build",
+        "contracts:check": "node scripts/check-contracts-api.mjs",
+        "contracts:update": "node scripts/check-contracts-api.mjs --update",
         "build:prod": "jlpm build:npm && jlpm build:labextension",
         "build:labextension": "jupyter-builder build .",
         "build:labextension:dev": "jupyter-builder build --development True .",
-        "build:lib": "tsc --sourceMap",
-        "build:lib:prod": "tsc",
+        "build:lib": "jlpm build:contracts && tsc --sourceMap",
+        "build:lib:prod": "jlpm build:contracts && tsc",
         "build:node": "node scripts/build-node.cjs",
         "build:npm": "jlpm clean:lib && jlpm build:lib:prod && jlpm build:node",
         "build:lite": "jlpm build && jlpm build:lite:app && jlpm build:site",
@@ -65,7 +69,8 @@
         "build:site": "jlpm build:api && node site/prepare.mjs && NO_MKDOCS_2_WARNING=true mkdocs build --strict",
         "link:lite": "node lite/link.mjs",
         "clean": "jlpm clean:lib",
-        "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
+        "clean:contracts": "jlpm workspace @correxit/contracts clean",
+        "clean:lib": "rimraf lib tsconfig.tsbuildinfo && jlpm clean:contracts",
         "clean:lintcache": "rimraf .eslintcache .stylelintcache",
         "clean:labextension": "rimraf correxit/labextension correxit/_version.py",
         "clean:coverage": "rimraf coverage junit.xml",
@@ -84,7 +89,8 @@
         "prettier:check": "jlpm prettier:base --check",
         "stylelint": "jlpm stylelint:check --fix",
         "stylelint:check": "stylelint --cache \"style/**/*.css\" \"site/style.css\"",
-        "test": "jest --coverage",
+        "test": "jlpm build:contracts && jest --coverage",
+        "test:contracts": "jlpm build:contracts && node --test scripts/test-contracts-api.mjs",
         "test:node": "jlpm build:lib && jlpm build:node && node scripts/test-node.mjs",
         "test:site": "NO_MKDOCS_2_WARNING=true mkdocs build --strict && node --test site/test.mjs",
         "watch": "run-p watch:src watch:labextension",
@@ -95,6 +101,7 @@
         "render-github-avatar": "cd ui-tests && node render-github-avatar.mjs"
     },
     "dependencies": {
+        "@correxit/contracts": "^1.0.0",
         "@jupyter-notebook/tree": "^7.5.4",
         "@jupyterlab/application": "^4.5.5",
         "@jupyterlab/apputils": "^4.5.5",
@@ -214,6 +221,10 @@
         "outputDir": "correxit/labextension",
         "schemaDir": "schema",
         "sharedPackages": {
+            "@correxit/contracts": {
+                "singleton": true,
+                "requiredVersion": "^1.0.0"
+            },
             "@jupyterlab/application": {
                 "requiredVersion": "^4.5.5"
             },
@@ -286,7 +297,10 @@
         ],
         "parser": "@typescript-eslint/parser",
         "parserOptions": {
-            "project": "tsconfig.json",
+            "project": [
+                "tsconfig.json",
+                "packages/contracts/tsconfig.json"
+            ],
             "sourceType": "module"
         },
         "plugins": [

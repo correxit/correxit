@@ -11,6 +11,7 @@ import { PromiseDelegate } from '@lumino/coreutils';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ServiceManager } from '@jupyterlab/services';
 import { Assignment, Correxit, Rubric, Workbook } from '..';
+import * as unlockerService from '../correxit/unlocker';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import * as state from '../correxit/state';
@@ -219,7 +220,9 @@ export function commands(
             completed: false
           };
         }
-        const receipt = await collector({ ...certified, workbook });
+        const receipt = await collector(
+          Workbook.payload({ ...certified, workbook })
+        );
         await Workbook.collect(workbook, receipt);
         await save(workbook);
         return { file: { workbook, grade: certified.grade }, completed: true };
@@ -623,7 +626,11 @@ async function authenticate(
   silent: boolean
 ): Promise<void> {
   const { path } = workbook.context;
-  const unlocked = await unlocker.unlock(workbook, { ...handle, path, silent });
+  const unlocked = await unlockerService.Unlocker.unlock(workbook, unlocker, {
+    ...handle,
+    path,
+    silent
+  });
   const rubric = open(workbook);
   if (!unlocked || !rubric || rubric.locked)
     throw new Correxit.Error.Unlock('Workbook authentication failed');

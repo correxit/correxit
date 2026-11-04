@@ -11,7 +11,15 @@ import { KernelSpec } from '@jupyterlab/services';
 import { findIndex, range } from '@lumino/algorithm';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { Assignment, Correxit, Rubric } from '.';
+import {
+  Collector,
+  Identifier as ContractIdentifier,
+  Notebook as ContractNotebook,
+  Unlocker
+} from '@correxit/contracts';
+import { Assignment } from './assignment';
+import { Correxit } from './correxit';
+import { Rubric } from './rubric';
 import * as certificate from './certificate';
 import * as Error from './error';
 import * as kernels from './kernels';
@@ -111,25 +119,40 @@ export namespace Workbook {
   }
 
   /** A type for plugins to identify a workbook/assignment/assignee match. */
-  export type Identifier = {
-    assignee: string | null;
-    assignment: string | null;
-    file: string | null;
-    issue: string | null;
-    rubric: string;
-  };
+  export type Identifier = ContractIdentifier;
 
   export namespace Identifier {
     /** An identifier with a guaranteed assignee. */
-    export type Assigned = Identifier & {
-      assignee: string;
-      file: string;
-    };
+    export type Assigned = ContractIdentifier.Assigned;
 
     /** Type guard for assigned identifiers. */
-    export function assigned(id: Identifier): id is Assigned {
-      return id.assignee !== null && id.file !== null;
-    }
+    export const assigned = ContractIdentifier.assigned;
+  }
+
+  /** Convert a certified workbook grade into a plain Collector payload. */
+  export function payload(certified: Certified): Collector.Payload {
+    const { grade, identifier, workbook } = certified;
+    const rubric = open(workbook, true);
+    const name = rubric?.assignment.name ?? '';
+    const certification = rubric?.assignment.certification ?? null;
+    const notebook = workbook.context.model.sharedModel.toJSON() as ContractNotebook;
+    return {
+      certification,
+      file: identifier.file,
+      identifier,
+      name,
+      notebook,
+      path: grade.path,
+      points: grade.score.points,
+      possible: grade.score.possible,
+      score: {
+        code: grade.score.code,
+        comment: grade.score.comment,
+        points: grade.score.points,
+        possible: grade.score.possible,
+        status: grade.score.status
+      }
+    };
   }
 
   export namespace Cell {
@@ -647,7 +670,7 @@ export namespace Workbook {
   export async function convert(
     workbook: Workbook,
     credentials: security.Secret | string,
-    unlocker: Correxit.Unlocker
+    unlocker: Unlocker
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;

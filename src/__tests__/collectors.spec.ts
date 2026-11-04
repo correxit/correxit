@@ -13,27 +13,20 @@ jest.mock('../correxit/workbook', () => ({
 }));
 jest.mock('../plugins', () => ({ plugins: [] }));
 
+import { Collector } from '@correxit/contracts';
 import { manual } from '../correxit/collectors';
 import { Rubric } from '../correxit/rubric';
-import { Workbook } from '../correxit/workbook';
-
-const seed = (
-  overrides: Partial<Rubric.Assignment> = {}
-): Rubric.Assignment => ({
-  ...Rubric.Assignment.empty(),
-  ...overrides
-});
 
 const certified = (
   overrides: {
     assignee?: string;
-    certification?: Rubric.Timestamp;
+    certification?: Rubric.Timestamp | null;
     issue?: string | null;
     points?: number;
     possible?: number;
     rubric?: string;
   } = {}
-): Workbook.Certified => {
+): Collector.Payload => {
   const {
     assignee = 'alice@example.com',
     certification = 1704067200000,
@@ -43,26 +36,9 @@ const certified = (
     rubric = 'rubric-1'
   } = overrides;
 
-  const assignment = seed({
-    assignee,
-    certification,
-    id: '',
-    name: ''
-  });
-
-  (Workbook.open as jest.Mock).mockReturnValue({
-    ...Rubric.create(),
-    assignment
-  });
-
   return {
-    grade: {
-      path: 'test.ipynb',
-      resolved: true,
-      score: { ...Rubric.Score.CORRECT, points, possible },
-      spec: null,
-      verified: true
-    },
+    certification,
+    file: 'test.ipynb',
     identifier: {
       assignee,
       assignment: '',
@@ -70,7 +46,23 @@ const certified = (
       issue,
       rubric
     },
-    workbook: {} as Workbook
+    name: 'test',
+    notebook: {
+      cells: [],
+      metadata: {},
+      nbformat: 4,
+      nbformat_minor: 5
+    },
+    path: 'test.ipynb',
+    points,
+    possible,
+    score: {
+      code: '',
+      comment: '',
+      points,
+      possible,
+      status: 'correct'
+    }
   };
 };
 
@@ -93,9 +85,8 @@ describe('manual collector', () => {
     });
   });
 
-  it('uses null certification when workbook is not openable', async () => {
-    const c = certified();
-    (Workbook.open as jest.Mock).mockReturnValue(null);
+  it('uses null certification when certification is null', async () => {
+    const c = certified({ certification: null });
     const receipt = await manual(c);
     const payload = JSON.parse(receipt.slice('manual:DIGEST<'.length, -1));
     expect(payload.certification).toBeNull();

@@ -270,15 +270,15 @@ test('Corrector does not retry rejected credentials or expose authentication err
         const app = (window as any).jupyterapp;
         const { Correxit, Workbook } = (window as any).__correxit__;
         const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
-        const unlock = unlocker.unlock;
+        const previous = unlocker.request;
         const results = [];
         try {
           for (const mode of ['grade', 'collect']) {
             for (const failure of ['cancelled', 'mismatch']) {
               let attempts = 0;
-              unlocker.unlock = async () => {
+              unlocker.request = async function* () {
                 attempts++;
-                if (failure === 'cancelled') return null;
+                if (failure === 'cancelled') return;
                 throw new Correxit.Error.Mismatch(
                   'private credential or notebook source'
                 );
@@ -289,7 +289,6 @@ test('Corrector does not retry rejected credentials or expose authentication err
                 {
                   run,
                   path: directory,
-                  key,
                   mode
                 }
               );
@@ -317,7 +316,7 @@ test('Corrector does not retry rejected credentials or expose authentication err
             }
           }
         } finally {
-          unlocker.unlock = unlock;
+          unlocker.request = previous;
         }
         return results;
       },

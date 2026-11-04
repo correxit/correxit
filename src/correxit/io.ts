@@ -5,6 +5,7 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
+import * as unlockerService from './unlocker';
 
 type Rack = {
   count: number;
@@ -262,7 +263,11 @@ export async function request(
     return workbook;
   }
   try {
-    await unlocker.unlock(workbook, silent ? { ...handle, silent } : handle);
+    await unlockerService.Unlocker.unlock(
+      workbook,
+      unlocker,
+      silent ? { ...handle, silent } : handle
+    );
   } catch (error) {
     console.warn(`access error, ${path}`, error);
   }

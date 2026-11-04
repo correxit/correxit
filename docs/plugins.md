@@ -4,18 +4,50 @@ Correxit is serverless by design. Distribution, submission recording, and
 grade collection are delegated to plugin tokens that a JupyterLab extension
 can provide.
 
+Plugin contracts are published as an independent, lightweight npm package:
+`@correxit/contracts`. Plugin implementors should depend on `@correxit/contracts`
+rather than the full `correxit` package. This decouples plugin authoring from
+internal Correxit releases and dependencies.
+
 The main external integration points are `Registrar`, `Distributor`,
 `Submitter`, and `Collector`.
 
-`Unlocker` and `Monitor` are also tokens. `Monitor` is internal. `Unlocker`
-is relevant only for deployments that manage keys externally.
+`Unlocker` is also provided for deployments that manage keys externally
+(such as hosted services like `notebook.link`).
 
 ---
 
-## `Workbook.Identifier`
+## Dependency Setup
 
-Most plugins receive `Workbook.Identifier`, the stable correlation identity
-for a workbook state:
+Plugin packages should declare `@correxit/contracts` as a dependency and register
+it as a shared singleton in `package.json`:
+
+```json
+{
+  "dependencies": {
+    "@correxit/contracts": "^1.0.0",
+    "@lumino/coreutils": "^1.11.0 || ^2.1.1"
+  },
+  "jupyterlab": {
+    "extension": true,
+    "sharedPackages": {
+      "@correxit/contracts": {
+        "singleton": true
+      }
+    }
+  }
+}
+```
+
+This guarantees that both Correxit and your plugin share the exact same Lumino
+service `Token` instances in the browser at runtime.
+
+---
+
+## `Identifier`
+
+Most plugins receive `Identifier`, the stable correlation identity for a
+workbook state:
 
 ```typescript
 type Identifier = {
@@ -23,6 +55,8 @@ type Identifier = {
   assignee: string | null;
   // The external assignment ID used for LMS correlation.
   assignment: string | null;
+  // Intended local file name of the notebook.
+  file: string | null;
   // The issued blank-slate digest, if propagation has occurred.
   issue: string | null;
   // The immutable rubric ID shared by all workbooks.
@@ -30,11 +64,11 @@ type Identifier = {
 };
 ```
 
-Plugins that operate on assigned workbooks receive
-`Identifier.Assigned`, which narrows `assignee` to `string`:
+Plugins that operate on assigned workbooks receive `Identifier.Assigned`, which
+narrows `assignee` and `file` to non-null `string`:
 
 ```typescript
-type Assigned = Identifier & { assignee: string };
+type Assigned = Identifier & { assignee: string; file: string };
 ```
 
 `Identifier.assigned(id)` narrows at runtime.
@@ -48,69 +82,66 @@ Plugins need a stable lookup identity. Correxit verifies the MAC internally.
 
 ---
 
-## `Correxit.Registrar`
+## `Registrar`
 
 ```typescript
 type Registrar = (
-  workbook: Workbook,
-  identifier: Workbook.Identifier
-) => Promise<
-  | Rubric.Assignment.Registration[]
-  | { group: string; assignments: Rubric.Assignment.Registration[] }[]
-  | null
->;
+  identifier: Identifier
+) => Promise<Registration[] | Registration.Group[] | null>;
 ```
 
-Called when an author opens an unassigned workbook. Returns available
-assignment registrations.
+Called when an author opens an unassigned notebook. Returns available
+assignment registrations:
 
 ```typescript
-// Rubric.Assignment.Registration
-type Registration = Pick<
-  Rubric.Assignment,
-  'expiration' | 'id' | 'name' | 'roster'
->;
+type Registration = {
+  expiration: number | null;
+  id: string | null;
+  name: string;
+  roster: string[];
+};
+
+namespace Registration {
+  type Group = {
+    assignments: Registration[];
+    group: string;
+  };
+}
 ```
 
 - `null`: assignment input stays unlocked. The author may enter details
   manually.
 - `[]`: assignment input is locked and there are no eligible
   registrations.
-- `Grouped[]`: assignment input is locked and registrations are shown
+- `Group[]`: assignment input is locked and registrations are shown
   under group headings.
 - `Registration[]`: assignment input is locked. A single registration is
   auto-selected. Multiple registrations produce a dropdown.
 
-Integrators use the `identifier` to fetch roster and assignment metadata.
+Integrators use `identifier` to fetch roster and assignment metadata.
 
 ---
 
-## `Correxit.Distributor`
+## `Distributor`
 
 ```typescript
 type Resource = { name: string; data: Uint8Array };
 
-type Distributor = (propagated: {
-  identifier: Workbook.Identifier.Assigned;
-  notebook: INotebookContent;
-  overwrite: boolean;
-  path: string;
-  resources: Resource[] | null;
-}) => Promise<boolean>;
+type Distributor = (propagated: Distributor.Payload) => Promise<boolean>;
+
+namespace Distributor {
+  type Payload = {
+    identifier: Identifier.Assigned;
+    notebook: Notebook; // structural JSON representation of the notebook
+    overwrite: boolean; // true when the author explicitly requests re-delivery
+    path: string; // intended destination path
+    resources: Resource[] | null; // sidecar files, loaded by the propagator
+  };
+}
 ```
 
 Called for each assignee during propagation, and again on a single-workbook
 retry. The distributor receives one personalized notebook ready for delivery.
-
-```typescript
-type Propagated = {
-  identifier: Workbook.Identifier.Assigned;
-  notebook: INotebookContent; // nbformat notebook, ready to save
-  overwrite: boolean; // true when the author explicitly requests re-delivery
-  path: string; // intended local destination path
-  resources: Resource[] | null; // sidecar files, loaded by the propagator
-};
-```
 
 `resources` is `null` when no sidecar files were declared on the assignment.
 Otherwise each entry carries the file name and raw bytes.
@@ -135,13 +166,21 @@ distributor. A distributor that checks for an existing delivery should return
 
 ---
 
-## `Correxit.Submitter`
+## `Submitter`
 
 ```typescript
-type Submitter = (
-  workbook: Workbook,
-  identifier: Workbook.Identifier.Assigned
-) => Promise<string | null>;
+type Submitter = (submitted: Submitter.Payload) => Promise<string | null>;
+
+namespace Submitter {
+  type Payload = {
+    file: string;
+    identifier: Identifier.Assigned;
+    name: string;
+    notebook: Notebook;
+    path: string;
+    submission: number | null;
+  };
+}
 ```
 
 Called when a student submits a workbook. Returns an opaque receipt that
@@ -163,37 +202,37 @@ the workbook is an opaque pointer to that authority.
 
 ---
 
-## `Correxit.Collector`
+## `Collector`
 
 ```typescript
-type Collector = (certified: Workbook.Certified) => Promise<string | null>;
+type Collector = (certified: Collector.Payload) => Promise<string | null>;
+
+namespace Collector {
+  type Score = {
+    code: string;
+    comment: string;
+    points: number;
+    possible: number;
+    status: string;
+  };
+
+  type Payload = {
+    certification: number | null;
+    file: string;
+    identifier: Identifier.Assigned;
+    name: string;
+    notebook: Notebook;
+    path: string;
+    points: number;
+    possible: number;
+    score: Score;
+  };
+}
 ```
 
 Called after a workbook has been graded and certified. Returns an opaque
 receipt that Correxit stores in workbook metadata, or `null` if the grade was
 not recorded.
-
-```typescript
-// Workbook.Graded: authentication is established; review may still be pending.
-type Graded = {
-  grade: Workbook.Grade.Verified;
-  identifier: Workbook.Identifier.Assigned;
-  workbook: Workbook;
-};
-
-// Existing certification and collector payload; no additional required fields.
-type Certified = Graded;
-
-// Workbook.Grade
-type Grade = {
-  path: string; // workbook file path
-  resolved: boolean; // automated scoring resolved; manual review may still be pending
-  score: Rubric.Score; // final score summary
-  spec: KernelSpec.ISpecModel | null; // kernel used for correction
-} & ({ verified: true } | { verified: false });
-
-type Verified = Grade & { verified: true };
-```
 
 Verified grades carry in-memory provenance from authenticated rubric and issued
 contents checks. The normal collection command authenticates before calling the
@@ -208,7 +247,10 @@ workbook via the identifier, and return the server's receipt.
 
 ---
 
-## `Correxit.Unlocker`
+## `Unlocker`
+
+The `Unlocker` token provides key custody without requiring external plugins
+to implement Correxit's internal cryptography or authentication loops.
 
 ```typescript
 type Secret =
@@ -216,77 +258,154 @@ type Secret =
   | { key: null; passphrase: string };
 
 type Unlocker = {
-  request(
-    workbook: Workbook,
-    purpose: 'create' | 'submit' | 'revise' | 'recover',
-    credentials: Partial<Workbook.Credentials> | null
-  ): Promise<{ secret: Secret | null } | null>;
-  store(id: string, key: string): Promise<void>;
-  unlock(
-    workbook: Workbook,
-    credentials: Partial<Workbook.Credentials & { silent: boolean }> | null
-  ): Promise<Rubric.Unlocked | null>;
+  request(request: Unlocker.Request): AsyncIterable<Secret | null>;
+  store(rubric: string, key: string): Promise<void>;
 };
+
+namespace Unlocker {
+  type Purpose = 'create' | 'submit' | 'revise' | 'recover' | 'unlock';
+
+  type Request = {
+    identifier: Identifier | null;
+    path: string;
+    purpose: Purpose;
+    silent: boolean;
+  };
+}
 ```
 
-`request` acquires credentials without changing the workbook:
+### Division of Responsibility
 
-| Purpose   | Credential | Use                                                  |
-| --------- | ---------- | ---------------------------------------------------- |
-| `create`  | Author     | Create a workbook; no rubric exists yet              |
-| `submit`  | Student    | Protect the student's private key for later revision |
-| `revise`  | Student    | Reopen answers while leaving the rubric locked       |
-| `recover` | Either     | Recover encrypted cells; metadata may be invalid     |
+- **Key Custody (Plugin)**: The `Unlocker` plugin yields candidate secrets
+  (`key` or `passphrase`) via `request()`, and persists author keys via `store()`.
+  It does not perform cryptographic decryption or authenticate workbooks.
+- **Authentication & Decryption (Correxit Core)**: Correxit tests candidate
+  secrets against the workbook's rubric, derives keys using `security.derive(credentials, rubric.id)`,
+  persists successful keys via `unlocker.store()`, unseals encrypted cells, and
+  manages the in-memory key lifecycle.
 
-`Secret`, exported by `correxit`, accepts a 256-bit key as 64 lowercase hex
-characters or a passphrase from which Correxit derives a key using the rubric
-id as salt.
+### Request Lifecycle and Purposes
 
-- `null` cancels the operation.
-- `{ secret: null }` submits without revision access or skips decryption on recovery.
-  Creation and revision require a secret.
-- Throw to report a failure. Commands display the error and stop without
-  falling back to passphrase prompts.
+`request` receives the operation `purpose`, the notebook `path`, whether the
+request is `silent`, and the `identifier` (if a rubric already exists):
 
-`store` records an author key by rubric id. Conversion awaits it before
-committing the new rubric. Student credentials do not pass through `store`.
-`unlock` authenticates and unlocks the author-side rubric.
+| Purpose   | Description                                         |
+| --------- | --------------------------------------------------- |
+| `create`  | Convert a notebook into a workbook assignment.      |
+| `unlock`  | Unlock an authored workbook for editing or grading. |
+| `submit`  | Protect the student's submission keypair.           |
+| `revise`  | Reopen student answers while keeping rubric locked. |
+| `recover` | Forensic recovery of cell sources without rubric.   |
 
-The default provider uses passphrase prompts and an in-memory `SecretsManager`.
-Hosted providers can supply keys directly throughout the lifecycle. Correxit
-never writes plaintext keys to notebook metadata, settings, or assignment files;
-external credential storage and access control belong to the provider.
+`request` is an `AsyncIterable`:
 
-Existing custom unlockers must implement `request` alongside `store` and `unlock`.
+- For `unlock`, the plugin yields candidate secrets. Correxit tests each until
+  one authenticates. Other purposes consume the first yielded choice. Persist
+  any required student credential before yielding it, since the generator is
+  closed once a choice is accepted.
+- Yielding `null` proceeds without a secret (for fire-and-forget submission or
+  skipping decryption).
+- Ending the generator without a usable secret cancels the operation cleanly.
+- Throwing an error stops the operation and displays the failure reason without
+  falling back to interactive prompts.
 
----
+### Eliminating Passphrase Dialogs (Hosted Services)
 
-## Providing a plugin
-
-Each token is a standard Lumino `Token<T>`. Override a default by declaring a
-`JupyterFrontEndPlugin` that `provides` the token:
+A hosted provider (e.g. `notebook.link`) can supply keys directly from an
+authenticated API without showing any user prompts:
 
 ```typescript
 import { JupyterFrontEndPlugin } from '@jupyterlab/application';
-import { Correxit } from 'correxit';
+import { Secret, Unlocker } from '@correxit/contracts';
 
-const submitter: JupyterFrontEndPlugin<Correxit.Submitter> = {
-  id: 'my-lms:submitter',
-  provides: Correxit.Submitter,
+const hostedUnlocker: JupyterFrontEndPlugin<Unlocker> = {
+  id: 'notebook-link:unlocker',
+  provides: Unlocker,
   autoStart: true,
-  activate: () => async (workbook, identifier) => {
-    const receipt = await myLms.submit(
-      identifier.assignment,
-      identifier.assignee
-    );
-    return receipt ?? null;
+  activate: () => {
+    return {
+      async *request({ identifier, purpose, silent }) {
+        if (purpose === 'create') {
+          const key = await api.generateAuthorKey();
+          yield { key, passphrase: null };
+          return;
+        }
+
+        if (purpose === 'unlock' && identifier) {
+          const key = await api.getAuthorKey(identifier.rubric);
+          if (key) yield { key, passphrase: null };
+          return;
+        }
+
+        if ((purpose === 'submit' || purpose === 'revise') && identifier) {
+          const key = await api.getStudentKey(
+            identifier.rubric,
+            identifier.assignee
+          );
+          if (key) yield { key, passphrase: null };
+          return;
+        }
+      },
+
+      async store(rubric: string, key: string) {
+        await api.saveAuthorKey(rubric, key);
+      }
+    };
   }
 };
 ```
 
 ---
 
-## Corrector run commands
+## Providing a Plugin
+
+Each token is a standard Lumino `Token<T>`. Declare a `JupyterFrontEndPlugin`
+that `provides` the token:
+
+```typescript
+import { JupyterFrontEndPlugin } from '@jupyterlab/application';
+import { Submitter } from '@correxit/contracts';
+
+const submitter: JupyterFrontEndPlugin<Submitter> = {
+  id: 'my-lms:submitter',
+  provides: Submitter,
+  autoStart: true,
+  activate:
+    () =>
+    async ({ file, identifier, notebook }) => {
+      const receipt = await myLms.submit({
+        assignment: identifier.assignment,
+        assignee: identifier.assignee,
+        notebook
+      });
+      return receipt ?? null;
+    }
+};
+export default submitter;
+```
+
+---
+
+## Migration Guide: v2 to v3
+
+If you authored plugins against Correxit v2:
+
+1. **Depend on `@correxit/contracts` instead of `correxit`**:
+   Update `package.json` dependencies to `"@correxit/contracts": "^1.0.0"`.
+   In `jupyterlab.sharedPackages`, mark `"@correxit/contracts": { "singleton": true }`.
+2. **Plain-data signatures**:
+   - `Collector` receives `Collector.Payload` (`{ certification, file, identifier, name, notebook, path, points, possible, score }`).
+   - `Submitter` receives `Submitter.Payload` (`{ file, identifier, name, notebook, path, submission }`).
+   - `Distributor` receives `Distributor.Payload` (`{ identifier, notebook, overwrite, path, resources }`).
+   - `Registrar` takes `identifier: Identifier` and returns `Registration[] | Registration.Group[] | null`.
+3. **`Unlocker` refactor**:
+   - Remove `unlock()` implementation. Correxit core now owns rubric unlocking.
+   - Change `request()` from returning a single promise to an `AsyncIterable<Secret | null>` (e.g. `async function* request(...)`).
+   - Implement `store(rubric: string, key: string): Promise<void>`.
+
+---
+
+## Corrector Run Commands
 
 `correxit-corrector:run` returns a cold `AsyncGenerator<Corrector.Event>`.
 Pass a unique string `run`, a directory `path`, `mode` (`scan`, `grade`, or

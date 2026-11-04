@@ -23,11 +23,16 @@ test('a hosted unlocker supports the full lifecycle without passphrases', async 
     const stored = new Map<string, string>();
     let recovery = author;
     Object.assign(unlocker, {
-      request: async (workbook: any, purpose: string) => {
+      request: async function* ({ identifier, purpose }: any) {
         requests.push(purpose);
+        if (purpose === 'unlock') {
+          const key = stored.get(identifier?.rubric);
+          yield { key: 'ef'.repeat(32), passphrase: null };
+          if (key) yield { key, passphrase: null };
+          return;
+        }
         if (purpose === 'submit' || purpose === 'revise') {
-          const identifier = Workbook.identifier(workbook);
-          if (identifier.assignee !== 'student@example.com')
+          if (identifier?.assignee !== 'student@example.com')
             throw new Error('Wrong assignee');
         }
         const key =
@@ -36,17 +41,10 @@ test('a hosted unlocker supports the full lifecycle without passphrases', async 
             : purpose === 'recover'
               ? recovery
               : student;
-        return { secret: { key, passphrase: null } };
+        yield { key, passphrase: null };
       },
       store: async (id: string, key: string) => {
         stored.set(id, key);
-      },
-      unlock: async (workbook: any) => {
-        requests.push('unlock');
-        return Workbook.unlock(
-          workbook,
-          stored.get(Workbook.identifier(workbook).rubric)
-        );
       }
     });
 
@@ -207,9 +205,9 @@ test('conversion waits for key custody before committing metadata', async ({
       release = resolve;
     });
     Object.assign(unlocker, {
-      request: async () => ({
-        secret: { key: 'ab'.repeat(32), passphrase: null }
-      }),
+      request: async function* () {
+        yield { key: 'ab'.repeat(32), passphrase: null };
+      },
       store: async () => {
         entered();
         await custody;
@@ -266,9 +264,10 @@ for (const outcome of ['cancel', 'decline', 'deny']) {
       });
       await Workbook.lock(workbook);
       const snapshot = JSON.stringify(workbook.context.model.toJSON());
-      unlocker.request = async () => {
+      unlocker.request = async function* () {
         if (outcome === 'deny') throw new Error('Access denied');
-        return outcome === 'cancel' ? null : { secret: null };
+        if (outcome === 'cancel') return;
+        yield null;
       };
       try {
         await app.commands.execute('correxit:submit');
@@ -309,9 +308,9 @@ test('failed key custody restores the original notebook', async ({ page }) => {
     const previous = { ...unlocker };
     const snapshot = JSON.stringify(workbook.context.model.toJSON());
     Object.assign(unlocker, {
-      request: async () => ({
-        secret: { key: 'ab'.repeat(32), passphrase: null }
-      }),
+      request: async function* () {
+        yield { key: 'ab'.repeat(32), passphrase: null };
+      },
       store: async () => {
         throw new Error('Custody unavailable');
       }
@@ -391,11 +390,13 @@ test('student credentials never enter author unlocking when commands use a path'
     const app = (window as any).jupyterapp;
     const workbook = app.shell.currentWidget;
     const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
-    const previous = unlocker.unlock;
+    const previous = unlocker.request;
     let calls = 0;
-    unlocker.unlock = async () => {
-      ++calls;
-      throw new Error('Author access requested');
+    unlocker.request = async function* (req: any) {
+      if (req.purpose === 'unlock') {
+        ++calls;
+        throw new Error('Author access requested');
+      }
     };
     try {
       await app.commands.execute('correxit:convert', { key: 'ab'.repeat(32) });
@@ -430,7 +431,7 @@ test('student credentials never enter author unlocking when commands use a path'
         seal: revised.metadata.correxit.assignment.seal
       };
     } finally {
-      unlocker.unlock = previous;
+      unlocker.request = previous;
     }
   });
   expect(result).toEqual({

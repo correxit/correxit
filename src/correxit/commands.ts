@@ -10,6 +10,7 @@ import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { Correxit, Rubric, Workbook } from '..';
+import * as unlockerService from './unlocker';
 import { Propagator } from '../ui/propagator';
 import * as input from './input';
 import * as io from './io';
@@ -90,11 +91,18 @@ export function commands(
     if (!undo) workbook.context.model.sharedModel.clearUndoHistory();
     await workbook.context.save();
   };
-  const request: Correxit.Unlocker['request'] = async (
-    workbook, purpose, credentials
+  const request = async (
+    workbook: Workbook,
+    purpose: Correxit.Unlocker.Purpose,
+    credentials?: Partial<Credentials & { silent?: boolean }> | null
   ) => {
     try {
-      return await unlocker.request(workbook, purpose, credentials);
+      return await unlockerService.Unlocker.request(
+        workbook,
+        unlocker,
+        purpose,
+        credentials
+      );
     } catch (error) {
       void showErrorMessage(...Error.interpret(error, trans));
       return null;
@@ -409,7 +417,7 @@ export function commands(
       if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
       try {
         const certified = await Workbook.certify(workbook, trans, true);
-        const receipt = await collector(certified);
+        const receipt = await collector(Workbook.payload(certified));
         await Workbook.collect(workbook, receipt);
         await save(workbook, false);
       } catch (error) {
@@ -894,7 +902,7 @@ If conversion fails, Correxit restores the original notebook.`
         return null;
       };
       const identifier = Workbook.identifier(workbook);
-      return await registrar(workbook, identifier).catch(warn);
+      return await registrar(identifier).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.redistribute, {
@@ -1077,9 +1085,19 @@ If conversion fails, Correxit restores the original notebook.`
 
       const identifier = Workbook.identifier(workbook);
       if (!Workbook.Identifier.assigned(identifier)) return;
+      const payload = (submission: number | null): Correxit.Submitter.Payload => ({
+        file: identifier.file,
+        identifier,
+        name: rubric.assignment.name,
+        notebook: workbook.context.model.sharedModel.toJSON(),
+        path: workbook.context.path,
+        submission
+      });
       if (rubric.assignment.submission && !rubric.assignment.submitted) {
         try {
-          const receipt = await submitter(workbook, identifier);
+          const receipt = await submitter(
+            payload(rubric.assignment.submission)
+          );
           await Workbook.acknowledge(workbook, receipt);
           await save(workbook, false);
         } catch (error) {
@@ -1092,9 +1110,9 @@ If conversion fails, Correxit restores the original notebook.`
       if (!choice) return;
       try {
         const recipients = await Workbook.recipients(workbook, choice.secret);
-        await Workbook.submit(workbook, recipients);
+        const submitted = await Workbook.submit(workbook, recipients);
         try {
-          const receipt = await submitter(workbook, identifier);
+          const receipt = await submitter(payload(submitted.assignment.submission));
           await Workbook.acknowledge(workbook, receipt);
         } catch (error) {
           const reason = Error.reason(error);
@@ -1159,7 +1177,11 @@ successful, an unlocked rubric.
       const { handle, workbook } = await reify(args);
       if (!workbook) return null;
       try {
-        return await unlocker.unlock(workbook, handle);
+        return await unlockerService.Unlocker.unlock(
+          workbook,
+          unlocker,
+          handle
+        );
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }

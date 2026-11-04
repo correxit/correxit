@@ -43,18 +43,23 @@ The shipped secrets-manager connector is in-memory. Deployments may configure
 a different secrets connector or `Unlocker`; that is an intentional key custody
 choice made by the deployment, not a hidden Correxit write path.
 
-The `Unlocker` also acquires credentials for creation, submission, revision,
-and forensic recovery. A hosted provider can supply generated keys directly,
-without user passphrases. Author keys and student revision keys have separate
-purposes: student credentials must never unlock the rubric or enter the author
-cache. Hosted stores must authorize access independently of notebook-supplied
-identifiers and scope student credentials by rubric and assignee. Creation
-awaits author-key storage; a hosted provider must persist student credentials
-before allowing submission to proceed.
+The `Unlocker` handles key custody: it yields candidate credentials for
+creation, unlocking, submission, revision, and forensic recovery via
+`request()`, and persists author keys via `store()`. Cryptographic
+authentication and decryption belong strictly to Correxit core: Correxit
+derives keys via `security.derive(credentials, rubric.id)`, verifies rubric MAC
+and cell commitments, unseals encrypted payloads, and retains plaintext keys
+only in transient memory during the active browser session. A hosted provider
+can supply generated keys directly, without user passphrases. Author keys and
+student revision keys have separate purposes: student credentials must never
+unlock the rubric or enter the author cache. Hosted stores must authorize access
+independently of notebook-supplied identifiers and scope student credentials by
+rubric and assignee. Creation awaits author-key storage; a hosted provider must
+persist student credentials before allowing submission to proceed.
 
 The author's PGP private key is stored in
 `assignment.keys.private.author`, encrypted with the same
-symmetric key that encrypts the roster. `unlock`
+symmetric key that encrypts the roster. `Workbook.unlock`
 recovers it into local scope, uses it, and discards it before
 returning.
 

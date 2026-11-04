@@ -16,7 +16,8 @@ jobs:
     if: >-
       github.repository == 'correxit/correxit' &&
       !github.event.repository.private &&
-      !github.event.release.prerelease
+      !github.event.release.prerelease &&
+      startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     permissions:
       actions: read

@@ -1344,7 +1344,10 @@ export namespace Rubric {
   /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
     const { assignment: { roster: [block] } } = rubric;
-    const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
+    const plaintext = block ? await security.decrypt(block, key).catch(() => {
+      throw new Error.Unlock('unlock error: could not decrypt roster');
+    }) : '[]';
+    const roster = JSON.parse(plaintext);
     const assignment = { ...rubric.assignment, roster };
     const revised = Date.now();
     const unlocked: Unlocked = {

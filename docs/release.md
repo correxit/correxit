@@ -113,6 +113,26 @@ CSV contract: exports from scanning alone leave scores blank; authenticated
 batch grading can reuse valid reports without kernel execution. Package
 version selection remains separate from `cxtformat`.
 
+## Releasing `@correxit/contracts`
+
+`@correxit/contracts` is versioned and released independently from the root
+`correxit` package to ensure plugin implementors have a stable, slow-moving
+contract.
+
+1. Increase the version in `packages/contracts/package.json` (e.g. `1.0.0`).
+2. Run `pixi run jlpm build:contracts` and `pixi run jlpm contracts:update`
+   to update `packages/contracts/contracts.api.md`. CI compares this report
+   with the base revision and requires a version increase for API changes.
+3. Commit and merge to `main`.
+4. Publish a stable GitHub release with tag `contracts-v` followed by the contracts
+   package version (e.g. `contracts-v1.0.0`).
+5. The `contracts.yml` workflow automatically publishes `@correxit/contracts` to npm.
+   It does not affect PyPI or the Correxit documentation website.
+
+Publish the contracts version before releasing a Correxit version that depends
+on it. The initial npm publication also requires configuring package publishing
+access for the new package and its `contracts.yml` trusted publisher.
+
 ## Local packaging
 
 To inspect package archives without publishing:
@@ -121,6 +141,8 @@ To inspect package archives without publishing:
 pixi run python -m build
 pixi run jlpm build:npm
 pixi run npm pack --ignore-scripts --pack-destination dist
+pixi run jlpm workspace @correxit/contracts build
+(cd packages/contracts && npm pack --ignore-scripts --pack-destination ../../dist)
 ```
 
 Website development commands are in the [site README](../site/README.md).

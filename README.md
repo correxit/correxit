@@ -22,7 +22,7 @@ runs in the browser; there is no server component.
 | [DESIGN](docs/design.md)       | Developer           | Architecture, data model, async patterns                  |
 | [MOODLE](docs/moodle.md)       | Teacher, integrator | Browser-only Moodle workflow and constraints              |
 | [SECURITY](docs/security.md)   | Developer, auditor  | Threat model, encryption, key management                  |
-| [PLUGINS](docs/plugins.md)     | Integrator          | Plugin token interfaces for LMS and transport             |
+| [PLUGINS](docs/plugins.md)     | Integrator          | Plugin token interfaces and `@correxit/contracts`         |
 | [RELEASE](docs/release.md)     | Maintainer          | Release process and versioning                            |
 | [CHANGELOG](CHANGELOG.md)      | Everyone            | Version history                                           |
 

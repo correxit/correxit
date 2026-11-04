@@ -1,0 +1,54 @@
+{
+  "name": "@correxit/contracts",
+  "version": "1.0.0",
+  "description": "Stable plugin contracts and tokens for Correxit JupyterLab extensions",
+  "keywords": [
+    "jupyter",
+    "jupyterlab",
+    "jupyterlab-extension",
+    "correxit"
+  ],
+  "homepage": "https://correx.it",
+  "bugs": {
+    "url": "https://github.com/correxit/correxit/issues"
+  },
+  "license": "BSD-3-Clause",
+  "author": {
+    "name": "A. T. Darian",
+    "email": "correxit@darian.link"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/correxit/correxit.git",
+    "directory": "packages/contracts"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.{d.ts,d.ts.map,js,js.map}",
+    "src/**/*.ts"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib tsconfig.tsbuildinfo",
+    "prepack": "jlpm build",
+    "test": "node --test ../../scripts/test-contracts-api.mjs"
+  },
+  "dependencies": {
+    "@lumino/coreutils": "^2.2.2"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.5",
+    "typescript": "~5.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

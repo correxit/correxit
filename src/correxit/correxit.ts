@@ -1,106 +1,38 @@
-import { INotebookContent } from '@jupyterlab/nbformat';
+import * as Contracts from '@correxit/contracts';
 import { Token } from '@lumino/coreutils';
-import { Rubric, Workbook } from '.';
+import { Workbook } from '.';
 import { commands as COMMANDS, CommandIDs as COMMAND_IDS } from './commands';
 import * as description from './description';
 import * as error from './error';
 import { Icons as ICONS } from './icons';
-import type { Secret } from './security';
 
 /** Tokens and contracts for composing Correxit JupyterLab plugins. */
 export namespace Correxit {
-  /** A collector of certified workbook grades. */
-  export type Collector = (
-    certified: Workbook.Certified
-  ) => Promise<string | null>;
+  export import Collector = Contracts.Collector;
+  export const COLLECTOR = Contracts.COLLECTOR;
 
-  /**
-   * Called for each assignee during propagation, and again on a single-workbook
-   * retry. Returns `true` to confirm delivery (the propagator attempts to
-   * write the local file with `assignment.distribution` recorded, and emits
-   * `distributed` only when that save succeeds), `false` to skip the assignee
-   * without writing a local file (the propagator emits `skipped`), or throws
-   * to signal an unexpected failure (the propagator attempts to write the
-   * local file for recovery but emits `distribute-error` and does not record
-   * `assignment.distribution`). A distributor with no external target should
-   * return `true` unconditionally.
-   */
-  export type Distributor = (propagated: {
-    identifier: Workbook.Identifier.Assigned;
-    notebook: INotebookContent;
-    overwrite: boolean;
-    path: string;
-    resources: Resource[] | null;
-  }) => Promise<boolean>;
+  export import Distributor = Contracts.Distributor;
+  export const DISTRIBUTOR = Contracts.DISTRIBUTOR;
+
+  export import Identifier = Contracts.Identifier;
+  export import Notebook = Contracts.Notebook;
 
   export type Injector = (workbook: Workbook | null) => void;
 
-  /** Connects/disconnects workbooks and yields them to plugins. */
   export type Monitor = AsyncIterable<Workbook | null>;
 
-  /**
-    * A registrar that provides assignment registrations for a workbook.
-   *
-   * #### Notes
-    * If the returned registrations are null, assignment input is unlocked.
-    * If registrations are empty or populated, assignment input is locked.
-   */
-  export type Registrar = (
-    workbook: Workbook,
-    identifier: Workbook.Identifier
-  ) => Promise<
-    | Rubric.Assignment.Registration[]
-    | { group: string; assignments: Rubric.Assignment.Registration[] }[]
-    | null
-  >;
+  export import Registrar = Contracts.Registrar;
+  export const REGISTRAR = Contracts.REGISTRAR;
 
-  /**
-   * A simple sidecar file utility type to encapsulate required workbook files.
-   */
-  export type Resource = { name: string; data: Uint8Array };
+  export import Registration = Contracts.Registration;
+  export import Resource = Contracts.Resource;
+  export import Secret = Contracts.Secret;
 
-  export type Submitter = (
-    workbook: Workbook,
-    identifier: Workbook.Identifier.Assigned
-  ) => Promise<string | null>;
+  export import Submitter = Contracts.Submitter;
+  export const SUBMITTER = Contracts.SUBMITTER;
 
-  export type Unlocker = {
-    /** Store an author key for a given rubric id. */
-    store(id: string, key: string): Promise<void>;
-
-    /**
-     * Acquire credentials without changing the workbook. Null cancels;
-     * { secret: null } submits without revision access or skips recovery.
-     * Throw on denied access or failed custody; commands stop on failure.
-     */
-    request(
-      workbook: Workbook,
-      purpose: Unlocker.Purpose,
-      credentials: Partial<Workbook.Credentials> | null
-    ): Promise<{ secret: Secret | null } | null>;
-
-    /** Authenticate and unlock the author-side rubric. */
-    unlock(
-      workbook: Workbook,
-      credentials: Partial<Workbook.Credentials & { silent: boolean }> | null
-    ): Promise<Rubric.Unlocked | null>;
-  };
-
-  export namespace Unlocker {
-    export type Purpose = 'create' | 'submit' | 'revise' | 'recover';
-  }
-
-  export const COLLECTOR = 'correxit:collector';
-
-  export const Collector = new Token<Collector>(COLLECTOR);
-
-  export import CommandIDs = COMMAND_IDS;
-
-  export const commands = COMMANDS;
-
-  export const DISTRIBUTOR = 'correxit:distributor';
-
-  export const Distributor = new Token<Distributor>(DISTRIBUTOR);
+  export import Unlocker = Contracts.Unlocker;
+  export const UNLOCKER = Contracts.UNLOCKER;
 
   export const CORRECTOR = 'correxit:corrector';
 
@@ -135,28 +67,14 @@ export namespace Correxit {
   }
 
   export const GALATA = 'correxit:galata';
-
+  export import CommandIDs = COMMAND_IDS;
+  export const commands = COMMANDS;
   export import Icons = ICONS;
 
   export const MONITOR = 'correxit:monitor';
-
   export const Monitor = new Token<Monitor>(MONITOR);
 
   export const NO_CORREXIT_METADATA = new TypeError('no correxit metadata');
-
-  export const REGISTRAR = 'correxit:registrar';
-
-  export const Registrar = new Token<Registrar>(REGISTRAR);
-
-  export const SUBMITTER = 'correxit:submitter';
-
-  export const Submitter = new Token<Correxit.Submitter>(SUBMITTER);
-
   export const TOOLBARS = 'correxit:toolbars';
-
   export const UI = 'correxit:ui';
-
-  export const UNLOCKER = 'correxit:unlocker';
-
-  export const Unlocker = new Token<Unlocker>(UNLOCKER);
 }
