@@ -5,8 +5,7 @@ type Grade = Workbook.Grade;
 type Headless = Workbook.Headless;
 
 export function generate(
-  workbooks: readonly Scanned[],
-  grades: ReadonlyMap<string, { grade: Grade }>
+  files: Iterable<{ workbook: Scanned; grade: Grade | null }>
 ): string {
   const identity = ['assignee', 'assignment', 'expiration', 'title', 'rubric'];
   const resolution = ['issue', 'points', 'possible'];
@@ -19,11 +18,10 @@ export function generate(
   ];
   const diagnostic = ['resolved', 'path'];
   const header = [...identity, ...resolution, ...lifecycle, ...diagnostic];
-  const reified = workbooks.filter(workbook => !workbook.hollow);
-  const rows = reified.map(workbook => {
+  const reified = Array.from(files).filter(({ workbook }) => !workbook.hollow);
+  const rows = reified.map(({ workbook, grade: result }) => {
     const rubric = Workbook.open(workbook as Headless, true);
     const path = workbook.context.path;
-    const result = grades.get(path)?.grade;
     const grade = result?.verified ? result : null;
     const assignee = rubric?.assignment.assignee || '';
     const assignment = rubric?.assignment.id || '';

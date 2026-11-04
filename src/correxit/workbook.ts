@@ -42,11 +42,18 @@ export namespace Workbook {
     export type Fail = { ok: false; error: string; rubric: Rubric | null; };
   }
 
-  export type Certified = {
+  /** An authenticated grading result; manual review may still be pending. */
+  export type Graded = {
     grade: Workbook.Grade.Verified;
     identifier: Workbook.Identifier.Assigned;
     workbook: Workbook;
   };
+
+  /**
+   * The existing certification and collector payload. Its shape is unchanged;
+   * certification is established by the operation, not by this structural type.
+   */
+  export type Certified = Graded;
 
   export type Credentials = |
     { path: string; unlock: null; key: null; passphrase: null; } |

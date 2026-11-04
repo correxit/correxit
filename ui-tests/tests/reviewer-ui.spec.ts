@@ -242,6 +242,253 @@ for (const id of ['manual', 'constructor', 'toString', 'hasOwnProperty']) {
   });
 }
 
+for (const [action, operation] of [
+  ['close', 'save'],
+  ['restart', 'save'],
+  ['close', 'run']
+] as const) {
+  test(`Corrector ${action} waits for a pending Reviewer ${operation}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'manual', source: 'print("review output")' }
+    ]);
+    const propagated = await prepare(page);
+    await cd(page, '.');
+    await batch(page, propagated.directory);
+    await launch(page, propagated.directory);
+    await expect.poll(() => status(page, 'manual')).toBe('unscored');
+    await page.evaluate(operation => {
+      const app = (window as any).jupyterapp;
+      const { Workbook, Rubric } = (window as any).__correxit__;
+      const workbook = app.shell.currentWidget.workbook;
+      const owner = operation === 'run' ? Workbook : workbook.context;
+      const method = operation === 'run' ? 'execute' : 'save';
+      const original = owner[method];
+      const held = {
+        workbook,
+        owner,
+        method,
+        original,
+        release: null as (() => void) | null,
+        pending: null as Promise<any> | null,
+        closing: null as Promise<any> | null,
+        closed: false
+      };
+      (window as any).__reviewerPending = held;
+      owner[method] = async (...args: any[]) => {
+        owner[method] = original;
+        await new Promise<void>(resolve => (held.release = resolve));
+        return original.apply(owner, args);
+      };
+      held.pending = app.commands.execute(
+        operation === 'run'
+          ? 'correxit-reviewer:run'
+          : 'correxit-reviewer:intervene',
+        {
+          id: 'manual',
+          intervention: Rubric.Score.intervene('manual', {
+            comment: 'Almost correct',
+            points: 4,
+            possible: 5
+          })
+        }
+      );
+    }, operation);
+    try {
+      await expect
+        .poll(() =>
+          page.evaluate(() => !!(window as any).__reviewerPending.release)
+        )
+        .toBe(true);
+      await page.evaluate(action => {
+        const app = (window as any).jupyterapp;
+        const widget = Array.from(app.shell.widgets('main')).find(
+          (widget: any) => widget.id === 'correxit-corrector-widget'
+        ) as any;
+        const run = widget.content.run;
+        if (action === 'close') widget.dispose();
+        else widget.content.start({ mode: 'scan' });
+        const held = (window as any).__reviewerPending;
+        held.closing = app.commands
+          .execute('correxit-corrector:stop', { run, release: true })
+          .then(() => (held.closed = true));
+      }, action);
+      await expect(page.locator('#correxit-reviewer-widget')).toHaveCount(0);
+      if (action === 'restart') {
+        await expect(
+          page.locator('#correxit-corrector-widget [role="status"]').first()
+        ).toContainText('0/1 checked');
+      }
+      expect(
+        await page.evaluate(() => {
+          const { closed, workbook } = (window as any).__reviewerPending;
+          return { closed, disposed: workbook.context.isDisposed };
+        })
+      ).toEqual({ closed: false, disposed: false });
+      const outputs = await page.evaluate(async () => {
+        const held = (window as any).__reviewerPending;
+        held.release();
+        const result = await held.pending;
+        await held.closing;
+        return result;
+      });
+      expect(
+        await page.evaluate(
+          () => (window as any).__reviewerPending.workbook.context.isDisposed
+        )
+      ).toBe(true);
+      if (operation === 'save') {
+        expect(await saved(page, propagated.paths[0])).toMatchObject({
+          certification: true,
+          comment: 'Almost correct',
+          points: 4
+        });
+      } else {
+        expect(JSON.stringify(outputs)).toContain('review output');
+      }
+      if (action === 'restart') {
+        await expect(
+          page.getByRole('button', { name: 'Scan', exact: true })
+        ).toBeEnabled();
+        await page
+          .getByRole('button', { name: /^Review reviewable: needs review/ })
+          .click();
+        await expect.poll(() => status(page, 'manual')).toBe('partial');
+      }
+    } finally {
+      await page.evaluate(async () => {
+        const held = (window as any).__reviewerPending;
+        held.release?.();
+        await held.pending;
+        await held.closing;
+        held.owner[held.method] = held.original;
+      });
+      await close(page);
+      await cleanup(page, propagated);
+      await dispose();
+    }
+  });
+}
+
+for (const mode of ['Scan', 'Grade']) {
+  test(`manual review refreshes CSV and Corrector scores after ${mode}`, async ({
+    page
+  }) => {
+    const { dispose } = await setup(page, [
+      { id: 'first', source: 'First answer', type: 'markdown' },
+      { id: 'second', source: 'Second answer', type: 'markdown' }
+    ]);
+    const propagated = await prepare(page, {
+      cells: [{ id: 'first' }, { id: 'second' }]
+    });
+    const paths = [...propagated.paths];
+    const exported = async () => {
+      const exported = await page.evaluate(async (directory: string) => {
+        const app = (window as any).jupyterapp;
+        const { contents } = app.serviceManager;
+        const before = await contents.get(directory, { content: true });
+        const paths = new Set(before.content.map((file: any) => file.path));
+        await app.commands.execute('correxit-corrector:csv');
+        const after = await contents.get(directory, { content: true });
+        const csv = after.content.find(
+          (file: any) => file.name.endsWith('.csv') && !paths.has(file.path)
+        );
+        const file = await contents.get(csv.path, {
+          content: true,
+          format: 'text'
+        });
+        return {
+          path: csv.path,
+          score: file.content.split('\r\n')[1].split(',').slice(6, 8)
+        };
+      }, propagated.directory);
+      paths.push(exported.path);
+      return exported.score;
+    };
+    try {
+      await cd(page, '.');
+      await batch(page, propagated.directory);
+      await page.evaluate(async (path: string) => {
+        await (window as any).jupyterapp.commands.execute(
+          'correxit-corrector:launch',
+          { path }
+        );
+      }, propagated.directory);
+      const widget = page.locator('#correxit-corrector-widget');
+      await expect(
+        widget.getByRole('button', { name: 'Scan', exact: true })
+      ).toBeEnabled();
+      if (mode === 'Grade') {
+        await widget.getByRole('radio', { name: 'Grade', exact: true }).check();
+        await widget
+          .getByRole('button', { name: 'Grade', exact: true })
+          .click();
+        await expect(
+          widget.getByRole('button', { name: 'Grade', exact: true })
+        ).toBeEnabled();
+      }
+      await widget
+        .getByRole('button', {
+          name: 'Review reviewable: needs review',
+          exact: true
+        })
+        .first()
+        .click();
+      await score(page).fill('2');
+      await page.getByTitle('Pass and advance to next cell').click();
+      await expect
+        .poll(() => saved(page, propagated.paths[0], 'first'))
+        .toMatchObject({
+          points: 2,
+          certification: false
+        });
+      await expect(
+        widget.locator('.correxit-corrector-chip.cxt-mod-review')
+      ).toContainText('2 of 10');
+      expect(await exported()).toEqual(['2', '10']);
+
+      await page.evaluate(() =>
+        (window as any).jupyterapp.shell.activateById(
+          'correxit-reviewer-widget'
+        )
+      );
+      await expect(score(page)).toBeVisible();
+      await page.getByTitle('Pass and advance to next cell').click();
+      await expect
+        .poll(() => saved(page, propagated.paths[0], 'second'))
+        .toMatchObject({
+          points: 5,
+          certification: true
+        });
+      await expect(
+        widget.locator('.correxit-corrector-chip.cxt-mod-certified')
+      ).toContainText('7 of 10');
+      expect(await exported()).toEqual(['7', '10']);
+
+      // A fresh scan must not inherit verification from the reviewed context.
+      await page.evaluate(() =>
+        (window as any).jupyterapp.shell.activateById(
+          'correxit-corrector-widget'
+        )
+      );
+      await widget.getByRole('radio', { name: 'Scan', exact: true }).check();
+      await widget.getByRole('button', { name: 'Scan', exact: true }).click();
+      await expect(
+        widget.getByRole('button', { name: 'Scan', exact: true })
+      ).toBeEnabled();
+      await expect(
+        widget.locator('.correxit-corrector-chip.cxt-mod-scanned')
+      ).toHaveText('unverified');
+      expect(await exported()).toEqual(['', '']);
+    } finally {
+      await close(page);
+      await cleanup(page, { ...propagated, paths });
+      await dispose();
+    }
+  });
+}
+
 test('reviewer clears stored outputs when run result is empty', async ({
   page
 }) => {

@@ -19,6 +19,12 @@ const scenes: Scene[] = [
     title: 'Corrector submitted filter',
     caption:
       'Corrector can optionally require a local submission timestamp when grading manual or backendless workflows.'
+  },
+  {
+    file: 'corrector-grade-results.png',
+    title: 'Corrector grades and contextual controls',
+    caption:
+      'The Grade mode shows only relevant options and retains verified results beside a completion summary.'
   }
 ];
 
@@ -208,7 +214,7 @@ test.describe('screenshots', () => {
         name: 'Only include locally submitted workbooks'
       })
       .check();
-    await page.getByRole('button', { name: 'Execute selected mode' }).click();
+    await page.getByRole('button', { name: 'Scan', exact: true }).click();
 
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText('alice@example.com');
@@ -217,6 +223,28 @@ test.describe('screenshots', () => {
       page,
       [page.locator('#correxit-corrector-widget .jp-Toolbar'), rows.first()],
       scenes[1].file,
+      { padding: 8, within: page.locator('#correxit-corrector-widget') }
+    );
+
+    await page.locator('body').evaluate(async (_: Element, path: string) => {
+      const opened = await (window as any).jupyterapp.commands.execute(
+        'correxit:fetch',
+        { path, key: 'secret' }
+      );
+      opened.context.dispose();
+    }, propagated.paths[0]);
+    await page.getByRole('radio', { name: 'Grade', exact: true }).check();
+    await page.getByRole('button', { name: 'Grade', exact: true }).click();
+    await expect(
+      page.locator('.correxit-corrector-chip.cxt-mod-certified')
+    ).toHaveCount(1);
+    await captureGroup(
+      page,
+      [
+        page.locator('#correxit-corrector-widget .jp-Toolbar'),
+        page.locator('.correxit-corrector')
+      ],
+      scenes[2].file,
       { padding: 8, within: page.locator('#correxit-corrector-widget') }
     );
 

@@ -17,6 +17,12 @@
   width: 100%;
 }
 
+.correxit-corrector-progress-bar {
+  min-height: 24px;
+  padding: 4px 8px;
+  box-sizing: border-box;
+}
+
 /* Cell styles */
 
 td {
@@ -315,15 +321,29 @@ table.correxit-corrector {
 
 /* Mode controls */
 
+.correxit-corrector-widget > .jp-Toolbar {
+  overflow-x: auto;
+}
+
+.correxit-corrector-widget > .jp-Toolbar,
+.correxit-corrector-widget > .jp-Toolbar::part(positioning-region) {
+  flex-wrap: nowrap;
+}
+
 .correxit-corrector-mode {
   align-items: center;
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .correxit-corrector-mode-options {
   display: flex;
   gap: 6px;
+  border: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .correxit-corrector-mode-options label,
@@ -347,16 +367,6 @@ table.correxit-corrector {
 .correxit-corrector-submitted input {
   margin: 0;
   vertical-align: middle;
-}
-
-.correxit-corrector-mode.cxt-mod-scan .correxit-corrector-overwrite {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.correxit-corrector-mode.cxt-mod-collect .correxit-corrector-submitted {
-  opacity: 0.4;
-  pointer-events: none;
 }
 
 .correxit-corrector-mode-go {
@@ -403,5 +413,29 @@ table.correxit-corrector {
   40% {
     opacity: 1;
     transform: scale(1.2);
+  }
+}
+
+.correxit-corrector-empty {
+  color: var(--jp-ui-font-color2);
+  text-align: center;
+}
+
+.correxit-corrector-mode-go:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.correxit-corrector-mode-options:disabled,
+.correxit-corrector-mode input:disabled + span {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .correxit-corrector-pending-dot,
+  table.correxit-corrector
+    tr.cxt-mod-pending
+    .correxit-corrector-breakdown-segment {
+    animation: none;
   }
 }

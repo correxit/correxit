@@ -11,7 +11,7 @@ module.exports = {
   // must run sequentially to avoid cross-file interference.
   workers: 1,
   retries: process.env.CI ? 2 : 0,
-  testIgnore: ['**/demo.spec.ts'],
+  testIgnore: ['**/demo.spec.ts', '**/performance/**'],
   timeout: 120 * 1000,
   use: {
     ...baseConfig.use,

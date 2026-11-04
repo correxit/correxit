@@ -59,11 +59,11 @@ The architecture is divided into three layers:
 - **User Interface**: displays state, accepts user input, and executes
   commands. It stays declarative except for minimal `ReactWidget` glue.
   Modules: `src/ui/`, `src/corrector/`, `src/correxit/input.ts`,
-  `src/correxit/use-command.ts`, `src/corrector/bridge.ts`.
+  `src/correxit/use-command.ts`.
 - **Commands**: define permissible actions and route them into the
   business logic. They orchestrate the `Rubric` and `Workbook` APIs.
   Modules: `src/correxit/commands.ts`,
-  `src/corrector/commands.ts`.
+  `src/corrector/commands.ts`, `src/corrector/session.ts`.
 - **`Rubric` & `Workbook`**: manage mutable notebook state, immutable
   rubric operations, cryptography, file manipulation, and kernel
   communication. Modules: `src/correxit/rubric.ts`,
@@ -186,10 +186,12 @@ unrepresentable.
 
 `Workbook.Grade` also discriminates command results with `verified: true |
 false`. Only authenticated grading or collection produces verified scores;
-`Workbook.Certified` requires that provenance. The flag lives in memory, not in
-notebook metadata. Scanning and parsing cannot manufacture it. Batch cache
-reuse follows authentication inside the same bounded grading action, and CSV
-exports consume verified results instead of falling back to scanned reports.
+`Workbook.Graded` requires that provenance but may still await manual review.
+`Workbook.Certified` retains the same structural shape for certification and
+collector APIs; the operation establishes certification. The flag lives in
+memory, not in notebook metadata. Scanning and parsing cannot manufacture it.
+Batch cache reuse follows authentication inside the same bounded grading action,
+and CSV exports consume verified results instead of falling back to scanned reports.
 
 ## Asynchronous patterns
 
@@ -223,29 +225,33 @@ flowchart TB
   P -. progress .-> UI
 ```
 
-**Batch grading:** the batch command iterates a grader, which iterates scanned
-workbooks. Each graded workbook is automatically certified when all cells are
-resolved. Collection is a separate step invoked per-workbook after
-certification:
+**Corrector runs:** one cold run stream lists candidate paths and interleaves
+bounded per-workbook generators. Discovery, processing, results, diagnostics,
+and completion produce discriminated events. Commands apply each event once to
+the displayed session before yielding it. The table reads that session rather
+than replaying the event history. One pending source
+read competes with active job completions, so slow reads cannot hold completed
+grades back. The existing scan, batch, and collect commands adapt this same
+orchestration to their original result shapes.
 
-```mermaid
-flowchart TB
-  classDef ui fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e,stroke-width:1px
-  classDef gen fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1px
-  classDef src fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1px
+`run.ts` describes scan, grade, and collect as a discriminated `Run` union.
+Scanning has no processing operation. Grading supplies `grade`, concurrency,
+and retries; collection supplies `collect` and runs serially without retries.
+Commands own each operation and authenticate before cached-report reuse,
+execution, or collection. Authentication and invalid-workbook failures end that
+workbook's attempt immediately; processing failures may use the configured
+grading retries. Events carry diagnostic codes, never raw exception messages.
+`pool.ts` owns only interleaving and draining the cold jobs.
 
-    UI(["useCommand"]):::ui
-    B["batch()"]:::gen
-    G["grader()"]:::gen
-    SC{{"scan()"}}:::src
+A result's `completed` flag records completion of the requested operation,
+including authenticated grade reuse. False means collection was skipped; it
+does not describe whether notebook contents changed.
 
-  UI -->|for await| B
-  B -->|for await| G
-  G -->|for await| SC
-    SC -. workbook .-> G
-    G -. grade .-> B
-    B -. "path, grade" .-> UI
-```
+Run identities route stop requests to in-memory cancellation state. Stop prevents
+new jobs and retries, then drains active operations. Runs retain source contexts
+for the table and Reviewer until explicitly released; widget disposal requests
+release after pending reads, saves, and staging cleanup settle. A new run clears
+previous verification until its own authentication succeeds.
 
 Every pipeline is pull-driven and cold. The one intentionally _hot_ async
 iterable is the `Monitor` plugin, which emits workbook changes as the user
@@ -257,14 +263,24 @@ switches tabs. It is backed by a Lumino `Stream`.
 its output via `for await`, buffers results, and flushes to component state at
 ~60fps via a `Throttler`. It handles cleanup on unmount.
 
-### Reviewer bridge (`bridge.ts`)
+### Corrector session (`session.ts`)
 
-The Corrector and Reviewer are separate widgets that share state: the Corrector
-owns the list of scanned workbooks and collated grades, while the Reviewer owns
-the navigation cursor. `bridge.ts` is a lightweight `useSyncExternalStore`-based
-external store that lets the Corrector `publish()` workbook/grade snapshots and
-the Reviewer `navigate()` to a cursor position. The Reviewer subscribes via
-`useSnapshot()`. This avoids coupling the two widgets through props or context.
+Commands own the displayed run's current results. Each path has one entry with
+its workbook context, grade, processing phase, and diagnostic. The Corrector,
+Reviewer, and CSV export read these same entries. React subscribes through
+`useSyncExternalStore`; it does not publish grading state.
+
+Manual review invalidates the entry's grade, authenticates the workbook, applies
+the intervention, and saves before recording its result. Replacing that entry
+also refreshes the Reviewer's view of the workbook. Other entries retain their
+identity, so later batch results neither overwrite a review nor reset its inputs.
+
+Starting a new displayed run clears the previous results. Run identities reject
+late events and releases from older runs; exact workbook identity rejects late
+review results. Release immediately clears the session and closes its Reviewer;
+contexts are disposed only after active operations have drained. Background scan, batch, and collect commands
+retain their own contexts without replacing the displayed session. The Reviewer
+also shares its navigation cursor through the session.
 
 ## Kernel pool concurrency model
 

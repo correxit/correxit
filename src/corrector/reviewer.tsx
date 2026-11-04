@@ -20,13 +20,11 @@ import React, {
 } from 'react';
 import { Rubric, Workbook } from '..';
 import * as state from '../correxit/state';
-import { Corrector } from '.';
-import * as bridge from './bridge';
+import * as session from './session';
 import { commands as COMMANDS, CommandIDs, Scanned } from './commands';
 import { ReviewerWidget } from './widget';
 
-type Collated = Corrector.Collated;
-type Cursor = bridge.Cursor;
+type Cursor = session.Cursor;
 type Headless = Workbook.Headless;
 type Output = Rubric.Cell.Output | IOutput;
 type ScoreRef = React.MutableRefObject<(action: 'pass' | 'fail') => void>;
@@ -35,7 +33,6 @@ type TranslationBundle = IRenderMime.TranslationBundle;
 
 const open = (workbook: Scanned | null) =>
   workbook && !workbook.hollow ? Workbook.open(workbook, true) : null;
-const reified = (workbook: Scanned): workbook is Headless => !workbook.hollow;
 const record = (value: unknown): value is { [key: string]: unknown } =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const code = (
@@ -108,33 +105,23 @@ export function Reviewer(props: Reviewer.Props) {
     trans,
     cursor: initial
   } = props;
-  const snapshot = bridge.useSnapshot();
-  const { workbooks, grades, revision } = snapshot;
-  const empty = workbooks.length === 0;
+  const snapshot = session.useSnapshot();
+  const entries = useMemo(() => session.available(snapshot), [snapshot]);
+  const empty = entries.length === 0;
   const [cursor, setCursor] = useState<Cursor | null>(initial ?? null);
   useEffect(() => {
     if (initial) setCursor(initial);
   }, [initial]);
 
   const columns = useMemo(
-    () => workbooks.filter(reified).map(w => w.context.path),
-    [workbooks]
+    () => entries.map(({ workbook }) => workbook.context.path),
+    [entries]
   );
-  const path = cursor?.path;
-  const workbook = useMemo(
-    () =>
-      path === undefined
-        ? null
-        : (workbooks
-            .filter(reified)
-            .find(({ context }) => context.path === path) ?? null),
-    [path, workbooks]
+  const entry = entries.find(
+    ({ workbook }) => workbook.context.path === cursor?.path
   );
-  const rubric = useMemo(() => {
-    // Manual interventions update the workbook cache in place.
-    void revision;
-    return open(workbook);
-  }, [revision, workbook]);
+  const workbook = entry?.workbook ?? null;
+  const rubric = useMemo(() => open(entry?.workbook ?? null), [entry]);
   const certified = !!(rubric && rubric.assignment.certification);
   const rows = useMemo(() => {
     if (!workbook || !rubric) return [];
@@ -144,9 +131,9 @@ export function Reviewer(props: Reviewer.Props) {
   }, [workbook, rubric]);
   useEffect(() => {
     props.on.workbook(workbook);
-    if (workbook) void bridge.inject(commands, workbook);
+    if (workbook) void session.inject(commands, workbook);
     if (cursor) state.cursor(cursor.cell);
-    bridge.navigate(cursor);
+    session.navigate(cursor);
     return () => void state.cursor(null);
   }, [commands, cursor, props.on, workbook]);
 
@@ -236,14 +223,13 @@ export function Reviewer(props: Reviewer.Props) {
   const [score, setScore] = useState<number | ''>(persisted);
   const [comment, setComment] = useState(report?.comment ?? '');
   useEffect(() => {
-    void revision;
     const resolved =
       rubric && cursor
         ? (Rubric.Score.resolve(rubric.assignment.report, cursor.cell) ?? null)
         : null;
     setScore(resolved && resolved.status !== 'unscored' ? resolved.points : '');
     setComment(resolved?.comment ?? '');
-  }, [cursor, revision, rubric]);
+  }, [cursor, rubric]);
 
   const commit = useCallback(
     async (points: number) => {
@@ -342,12 +328,10 @@ export function Reviewer(props: Reviewer.Props) {
         <Minimap
           columns={columns}
           cursor={cursor}
-          grades={grades}
-          revision={revision}
+          entries={entries}
           rows={rows}
           setCursor={setCursor}
           trans={trans}
-          workbooks={workbooks}
         />
         <div className="correxit-reviewer-content">
           {question && (
@@ -699,32 +683,18 @@ const CellOutput: React.FC<{
 const Minimap: React.FC<{
   columns: string[];
   cursor: Cursor;
-  grades: Collated;
-  revision: number;
+  entries: session.Entry[];
   rows: string[];
   setCursor: (cursor: Cursor) => void;
   trans: TranslationBundle;
-  workbooks: Scanned[];
-}> = ({
-  columns,
-  cursor,
-  grades,
-  revision,
-  rows,
-  setCursor,
-  trans,
-  workbooks
-}) => {
+}> = ({ columns, cursor, entries, rows, setCursor, trans }) => {
   const host = useRef<HTMLDivElement>(null);
   const focus = useRef<HTMLButtonElement | null>(null);
   const grid = useMemo(() => {
-    // These signals invalidate rubric values cached behind stable workbooks.
-    void grades;
-    void revision;
     const rubrics = new Map(
-      workbooks
-        .filter(reified)
-        .map(workbook => [workbook.context.path, open(workbook)] as const)
+      entries.map(
+        ({ workbook }) => [workbook.context.path, open(workbook)] as const
+      )
     );
     return rows.map(id =>
       columns.map(path => {
@@ -741,7 +711,7 @@ const Minimap: React.FC<{
         return score.status;
       })
     );
-  }, [columns, rows, workbooks, grades, revision]);
+  }, [columns, rows, entries]);
   useEffect(() => {
     const current = focus.current;
     if (!current) return;

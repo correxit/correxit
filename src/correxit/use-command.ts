@@ -3,7 +3,7 @@ import { ReadonlyPartialJSONObject } from '@lumino/coreutils';
 import { Throttler } from '@lumino/polling';
 import { useEffect, useState } from 'react';
 
-type State<T> = { idle: boolean; list: T[]; };
+type State<T> = { idle: boolean; list: T[]; snapshot: string | null; };
 
 /**
  * Executes a command that yields an async iterable and streams its results into
@@ -32,35 +32,50 @@ export function useCommand<T>(
   id: string,
   args?: ReadonlyPartialJSONObject
 ): [T[], boolean] {
-  const [state, setState] = useState<State<T>>({ idle: true, list: [] });
-  const snapshot = JSON.stringify(args);
+  const snapshot = JSON.stringify(args) ?? null;
+  const [state, setState] = useState<State<T>>({ idle: false, list: [], snapshot });
   useEffect((interrupted = false) => {
     const args: ReadonlyPartialJSONObject | undefined =
-      snapshot === undefined ? undefined : JSON.parse(snapshot);
+      snapshot === null ? undefined : JSON.parse(snapshot);
     (async (stream?: Promise<AsyncIterable<T> | Iterable<T>>) => {
       const buffer: T[] = [];
       const flush = () => {
-        if (buffer.length) {
+        if (!interrupted && buffer.length) {
           const chunk = buffer.slice();
           buffer.length = 0;
-          setState(({ list }) => ({ idle: false, list: [...list, ...chunk] }));
+          setState(({ list }) => ({ idle: false, list: [...list, ...chunk], snapshot }));
         }
       };
       const throttler = new Throttler(flush, { limit: 16 });
-      setState({ idle: false, list: [] });
+      setState({ idle: false, list: [], snapshot });
+      let painted = performance.now();
       try {
-        for await (const item of await (stream || [])) {
+        const iterable = await (stream || []);
+        if (interrupted) {
+          if (Symbol.asyncIterator in iterable)
+            await iterable[Symbol.asyncIterator]().return?.();
+          return;
+        }
+        for await (const item of iterable) {
           if (interrupted) return;
           buffer.push(item);
           void throttler.invoke();
+          if (performance.now() - painted >= 16) {
+            flush();
+            await new Promise<void>(resolve => setTimeout(resolve, 0));
+            if (interrupted) return;
+            painted = performance.now();
+          }
         }
         flush();
+      } catch (error) {
+        console.warn('Command stream failed', id);
       } finally {
         throttler.dispose();
-        if (!interrupted) setState(({ list }) => ({ idle: true, list }));
+        if (!interrupted) setState(({ list }) => ({ idle: true, list, snapshot }));
       }
     })(commands.hasCommand(id) ? commands.execute(id, args) : undefined);
     return () => void (interrupted = true);
   }, [commands, id, snapshot]);
-  return [state.list, state.idle];
+  return state.snapshot === snapshot ? [state.list, state.idle] : [[], false];
 }

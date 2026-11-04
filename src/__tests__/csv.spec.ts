@@ -99,19 +99,21 @@ afterEach(() => mock.mockReset());
 
 describe('csv', () => {
   it('returns header-only output for empty workbooks', () => {
-    const output = generate([], new Map());
+    const output = generate([]);
     expect(output).toBe(BOM + header);
   });
 
   it('skips hollow workbooks', () => {
-    const output = generate([hollow('a.ipynb')], new Map());
+    const output = generate([{ workbook: hollow('a.ipynb'), grade: null }]);
     expect(output).toBe(BOM + header);
   });
 
   it('produces a row for a reified workbook with no rubric', () => {
     const wb = workbook('dir/student.ipynb');
     mock.mockReturnValue(null);
-    const rows = parse(generate([wb as unknown as Scanned], new Map()));
+    const rows = parse(
+      generate([{ workbook: wb as unknown as Scanned, grade: null }])
+    );
     expect(rows).toHaveLength(2);
     const [, row] = rows;
     expect(row[0]).toBe('');
@@ -133,7 +135,9 @@ describe('csv', () => {
         })
       })
     );
-    const rows = parse(generate([wb as unknown as Scanned], new Map()));
+    const rows = parse(
+      generate([{ workbook: wb as unknown as Scanned, grade: null }])
+    );
     const [, row] = rows;
     expect(row[0]).toBe('Alice');
     expect(row[1]).toBe('hw-1');
@@ -157,10 +161,14 @@ describe('csv', () => {
       possible: 10,
       status: 'correct'
     };
-    const grades = new Map([
-      ['hw/bob.ipynb', { grade: grade('hw/bob.ipynb', score) }]
-    ]);
-    const rows = parse(generate([wb as unknown as Scanned], grades));
+    const rows = parse(
+      generate([
+        {
+          workbook: wb as unknown as Scanned,
+          grade: grade('hw/bob.ipynb', score)
+        }
+      ])
+    );
     const [, row] = rows;
     expect(row[6]).toBe('8');
     expect(row[7]).toBe('10');
@@ -184,7 +192,9 @@ describe('csv', () => {
         assignment: assignment({ report: { ...report(), scores } })
       })
     );
-    const rows = parse(generate([wb as unknown as Scanned], new Map()));
+    const rows = parse(
+      generate([{ workbook: wb as unknown as Scanned, grade: null }])
+    );
     const [, row] = rows;
     expect(row[6]).toBe('');
     expect(row[7]).toBe('');
@@ -201,10 +211,7 @@ describe('csv', () => {
       verified: false
     };
     const rows = parse(
-      generate(
-        [wb as unknown as Scanned],
-        new Map([['forged.ipynb', { grade: forged }]])
-      )
+      generate([{ workbook: wb as unknown as Scanned, grade: forged }])
     );
     expect(rows[1][6]).toBe('');
     expect(rows[1][7]).toBe('');
@@ -218,7 +225,9 @@ describe('csv', () => {
         assignment: assignment({ name: 'Last, First' })
       })
     );
-    const output = generate([wb as unknown as Scanned], new Map());
+    const output = generate([
+      { workbook: wb as unknown as Scanned, grade: null }
+    ]);
     expect(output).toContain('"Last, First"');
     const rows = parse(output);
     expect(rows[1][3]).toBe('Last, First');
@@ -231,7 +240,9 @@ describe('csv', () => {
         assignment: assignment({ name: 'Say "hello"' })
       })
     );
-    const output = generate([wb as unknown as Scanned], new Map());
+    const output = generate([
+      { workbook: wb as unknown as Scanned, grade: null }
+    ]);
     expect(output).toContain('"Say ""hello"""');
   });
 
@@ -242,7 +253,9 @@ describe('csv', () => {
         assignment: assignment({ assignee: '=CMD()' })
       })
     );
-    const rows = parse(generate([wb as unknown as Scanned], new Map()));
+    const rows = parse(
+      generate([{ workbook: wb as unknown as Scanned, grade: null }])
+    );
     expect(rows[1][0]).toBe("'=CMD()");
   });
 
@@ -254,20 +267,24 @@ describe('csv', () => {
           assignment: assignment({ assignee: `${prefix}payload` })
         })
       );
-      const rows = parse(generate([wb as unknown as Scanned], new Map()));
+      const rows = parse(
+        generate([{ workbook: wb as unknown as Scanned, grade: null }])
+      );
       expect(rows[1][0]).toBe(`'${prefix}payload`);
     }
   });
 
   it('starts with a UTF-8 BOM', () => {
-    const output = generate([], new Map());
+    const output = generate([]);
     expect(output.charCodeAt(0)).toBe(0xfeff);
   });
 
   it('uses CRLF line endings', () => {
     const wb = workbook('hw/a.ipynb');
     mock.mockReturnValue(null);
-    const output = generate([wb as unknown as Scanned], new Map());
+    const output = generate([
+      { workbook: wb as unknown as Scanned, grade: null }
+    ]);
     const raw = output.slice(1);
     expect(raw.split('\r\n')).toHaveLength(2);
   });
@@ -284,7 +301,9 @@ describe('csv', () => {
         })
       })
     );
-    const rows = parse(generate([wb as unknown as Scanned], new Map()));
+    const rows = parse(
+      generate([{ workbook: wb as unknown as Scanned, grade: null }])
+    );
     const [, row] = rows;
     expect(row[9]).not.toBe('');
     expect(row[11]).toBe('');
@@ -299,7 +318,12 @@ describe('csv', () => {
     const d = workbook('d.ipynb');
     mock.mockReturnValue(null);
     const rows = parse(
-      generate([a, b, c, d] as unknown as Scanned[], new Map())
+      generate(
+        ([a, b, c, d] as unknown as Scanned[]).map(workbook => ({
+          workbook,
+          grade: null
+        }))
+      )
     );
     expect(rows).toHaveLength(3);
     expect(rows[1][rows[1].length - 1]).toBe('b.ipynb');

@@ -250,7 +250,7 @@ that external system should remain authoritative. Correxit's local overdue
 policy is for the cases where there is no backend to do that job.
 
 If you use the local `reject` policy, the corresponding grading-side control
-is in **Correxit Corrector**: enable **Submitted** to scan and grade only
+is in **Correxit Corrector**: enable **Submitted only** to scan and grade only
 workbooks that carry a local submission timestamp. That gives backendless
 workflows a coherent intake rule without pretending the workbook has an
 external authority behind it.
@@ -399,12 +399,11 @@ A workbook moves through these stages:
 - **Reviewable cells are the escape hatch.** When automated scoring is
   impractical, use reviewable. The grader can assign any score from 0 to
   the cell's possible points.
-- **Student code cannot break grading.** The batch grader has a
-  configurable per-workbook timeout. If a student's code hangs, runs an
-  infinite loop, or crashes the kernel, that workbook times out and the
-  grader moves on. The timeout, concurrency limit, and retry count are
-  all configurable in the Corrector settings. You do not need to
-  defensively design around pathological submissions.
+- **Batch grading has timeout and recovery controls.** Configure the
+  per-workbook timeout, concurrency limit, and retry count in Corrector
+  settings to handle hung or failed kernels. These controls do not sandbox
+  student code. Use an isolated grading environment for adversarial submissions;
+  see the [security limitations](security.md#known-limitations).
 - **Keep the notebook self-contained.** Everything the student needs
   (data files, imports, context) should be in the notebook or its
   working directory. There is no server-side setup step. If you use a
@@ -413,6 +412,33 @@ A workbook moves through these stages:
 - **Clear outputs before propagating.** Unless you intentionally want
   students to see a cell's output, clear all outputs before distributing.
   Outputs are not encrypted, even on secret reference cells.
+
+## Batch grading with Corrector
+
+Click **Launch Correxit Corrector** in the JupyterLab launcher. It scans the
+current folder automatically; use the folder button to choose another.
+
+Choose a mode, then click its matching action button:
+
+- **Scan** finds workbooks without grading them.
+- **Grade** authenticates, grades, and saves workbooks. Existing authenticated
+  grades are reused; select **Regrade** to execute them again.
+- **Sync** sends certified grades to the configured collector. Select **Resync**
+  to send grades that already have a collection receipt.
+
+For manual review, click a cell segment in a workbook's score breakdown to open
+Reviewer. Score the pending cells; the workbook is certified automatically when
+all cells are scored. Finish manual review before syncing.
+
+Run **Grade** before using the spreadsheet button to export scores to CSV.
+Scan alone leaves score fields blank, even for previously graded workbooks.
+
+**Submitted only** limits Scan and Grade to workbooks with a local submission
+timestamp; it is not independent proof of delivery time.
+
+**Stop** prevents new work while active workbooks finish and save. Completed
+results remain available for export. Closing Corrector also lets active saves
+finish.
 
 ## Converting from nbgrader
 

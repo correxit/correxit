@@ -6,21 +6,23 @@ import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog, IDefaultFileBrowser } from '@jupyterlab/filebrowser';
 import { INotebookContent } from '@jupyterlab/nbformat';
+import { NotebookModelFactory } from '@jupyterlab/notebook';
+import { PromiseDelegate } from '@lumino/coreutils';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
-import { Contents, ServiceManager } from '@jupyterlab/services';
+import { ServiceManager } from '@jupyterlab/services';
 import { Assignment, Correxit, Rubric, Workbook } from '..';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
+import * as state from '../correxit/state';
 import { Corrector, Reviewer } from '.';
-import * as bridge from './bridge';
+import * as session from './session';
 import * as csv from './csv';
-import * as grader from './grader';
+import { Event, File, Mode, run } from './run';
 
-type Actions = grader.Actions;
 type Certified = Workbook.Certified;
 type Credentials = Workbook.Credentials;
-type Failed = grader.Result.Failed;
 type Grade = Workbook.Grade;
+type Graded = Workbook.Graded;
 type Headless = Workbook.Headless;
 
 export type Hollow = { hollow: true; context: { path: string } };
@@ -42,6 +44,8 @@ export namespace CommandIDs {
   export const right = 'correxit-reviewer:right';
   export const run = 'correxit-reviewer:run';
   export const scan = 'correxit-corrector:scan';
+  export const process = 'correxit-corrector:run';
+  export const stop = 'correxit-corrector:stop';
   export const up = 'correxit-reviewer:up';
 }
 
@@ -82,45 +86,269 @@ export function commands(
   const disposables = [];
   let corrector: Corrector.Widget | null = null;
   let reviewer: Reviewer.Widget | null = null;
+  type Options = Partial<
+    Credentials & {
+      run: string;
+      mode: Mode;
+      overwrite: boolean;
+      submitted: boolean;
+    }
+  >;
+  const runs = new Map<
+    string,
+    {
+      controller: AbortController;
+      done: PromiseDelegate<void>;
+      contexts: Set<Headless>;
+    }
+  >();
+  const active = new Map<string, Promise<void>>();
+  const retain = (path: string) => {
+    const done = new PromiseDelegate<void>();
+    active.set(path, done.promise);
+    return () => {
+      active.delete(path);
+      done.resolve();
+    };
+  };
+  const factory = new NotebookModelFactory();
+  async function* stream(
+    args: Options,
+    mode: Mode,
+    retained: Set<Headless> | null = null
+  ): AsyncGenerator<Event> {
+    const id = retained ? null : (args.run ?? null);
+    if (id && runs.has(id))
+      throw new Error.Invalid('Run identity is already in use');
+    const controller = new AbortController();
+    const done = new PromiseDelegate<void>();
+    const contexts = new Set<Headless>();
+    if (id) runs.set(id, { controller, done, contexts });
+    const auth = !!(args.key || args.passphrase);
+    const handle = normalize({
+      ...args,
+      path: args.path || '.',
+      unlock: auth ? !!args.unlock : true
+    } as Partial<Credentials>);
+    if (!handle) {
+      if (id) runs.delete(id);
+      done.resolve();
+      throw new Error.Invalid('Invalid Corrector directory or credentials');
+    }
+    if (id && corrector?.content.run === id) session.begin(id, mode);
+    let prompted = false;
+    const directory = {
+      signal: controller.signal,
+      list: async () =>
+        (await io.notebooks(manager, handle.path)).map(({ path }) => path),
+      read: async (path: string) => {
+        const scan =
+          mode === 'scan'
+            ? normalize({
+                ...handle,
+                path,
+                unlock: !!args.unlock
+              } as Partial<Credentials>)
+            : normalize({ path, unlock: false });
+        if (!scan) return null;
+        // A replacement run must read the saved review, not its prior contents.
+        await active.get(path);
+        if (controller.signal.aborted) return null;
+        const workbook = await io.request(
+          scan,
+          factory,
+          manager,
+          unlocker,
+          prompted,
+          true
+        );
+        if (!workbook) return null;
+        const locked = open(workbook)?.locked;
+        if (mode === 'scan') prompted ||= !locked || !scan.unlock || auth;
+        contexts.add(workbook);
+        if (args.submitted && mode !== 'collect' && !submission(workbook)) {
+          workbook.context.dispose();
+          contexts.delete(workbook);
+          return null;
+        }
+        return workbook;
+      }
+    };
+    const grade = async (workbook: Headless): Promise<File> => {
+      const path = workbook.context.path;
+      if (active.has(path))
+        throw new Error.Invalid('Workbook is already being processed');
+      const release = retain(path);
+      try {
+        const graded = await correct(workbook, handle, !!args.overwrite, {
+          fetch,
+          manager,
+          trans,
+          unlocker
+        });
+        return { grade: graded.grade, workbook };
+      } finally {
+        release();
+      }
+    };
+    const collect = async (workbook: Headless) => {
+      const path = workbook.context.path;
+      if (active.has(path))
+        throw new Error.Invalid('Workbook is already being processed');
+      const release = retain(path);
+      try {
+        try {
+          await authenticate(workbook, handle, unlocker, auth || prompted);
+        } finally {
+          prompted = true;
+        }
+        await Workbook.lock(workbook);
+        const certified = precertified(workbook);
+        if (!certified) {
+          return {
+            file: {
+              workbook,
+              grade: { ...unverified(workbook), resolved: true }
+            },
+            completed: false
+          };
+        }
+        if (open(workbook)?.assignment.collected && !args.overwrite) {
+          return {
+            file: { workbook, grade: certified.grade },
+            completed: false
+          };
+        }
+        const receipt = await collector({ ...certified, workbook });
+        await Workbook.collect(workbook, receipt);
+        await save(workbook);
+        return { file: { workbook, grade: certified.grade }, completed: true };
+      } finally {
+        release();
+      }
+    };
+    const events = run(
+      mode === 'scan'
+        ? { ...directory, mode }
+        : mode === 'grade'
+          ? {
+              ...directory,
+              mode,
+              grade,
+              cap: kernels.cap(),
+              retries: kernels.retries()
+            }
+          : { ...directory, mode, collect }
+    );
+    try {
+      // Explicit pulls let abort precede the delegated iterator's cleanup.
+      for (
+        let event = await events.next();
+        !event.done;
+        event = await events.next()
+      ) {
+        if (id) session.advance(id, event.value);
+        yield event.value;
+      }
+    } finally {
+      controller.abort();
+      try {
+        await events.return(undefined);
+      } finally {
+        if (!id) {
+          contexts.forEach(workbook => {
+            if (!retained?.has(workbook)) workbook.context.dispose();
+          });
+        }
+        done.resolve();
+      }
+    }
+  }
+  const results = async function* (args: Options, mode: 'grade' | 'collect') {
+    const retained = new Set<Headless>();
+    for await (const event of stream(args, mode, retained)) {
+      if (event.type === 'result' && (mode === 'grade' || event.completed)) {
+        retained.add(event.file.workbook);
+        yield [event.path, event.file] as [string, File];
+      }
+    }
+  };
+  disposables.push(
+    commands.addCommand(CommandIDs.process, {
+      label: trans.__('Run Corrector'),
+      execute: (args: Options) => {
+        if (
+          typeof args.run !== 'string' ||
+          !args.run ||
+          !Corrector.Modes.includes(args.mode ?? 'scan')
+        )
+          throw new Error.Invalid('Invalid Corrector run identity or mode');
+        return stream(args, args.mode ?? 'scan');
+      }
+    })
+  );
+  disposables.push(
+    commands.addCommand(CommandIDs.stop, {
+      label: trans.__('Stop Corrector'),
+      execute: async ({
+        run,
+        release
+      }: Partial<{ run: string; release: boolean }>) => {
+        if (!run) return;
+        const pending = runs.get(run);
+        if (!pending) return;
+        pending.controller.abort();
+        if (release) {
+          if (reviewer?.workbook && pending.contexts.has(reviewer.workbook))
+            reviewer.dispose();
+          session.clear(run);
+        }
+        await pending.done.promise;
+        await Promise.all(
+          Array.from(pending.contexts, ({ context }) =>
+            active.get(context.path)
+          )
+        );
+        if (!release) return;
+        const inject = await commands.execute(Correxit.CommandIDs.inject);
+        if (runs.get(run) === pending) {
+          runs.delete(run);
+          const workbook = state.workbook();
+          if (workbook && !workbook.content && pending.contexts.has(workbook))
+            inject?.(null);
+          pending.contexts.forEach(({ context }) => context.dispose());
+        }
+      }
+    })
+  );
   disposables.push(
     commands.addCommand(CommandIDs.batch, {
       label: trans.__('Batch grade a scanned workbook directory...'),
-      execute: (
-        args: Partial<Credentials & { overwrite: boolean; submitted: boolean }>
-      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const auth = !!(args.key || args.passphrase);
-        const overwrite = !!args.overwrite;
-        const submitted = !!args.submitted;
-        const potential = { ...args, unlock: auth ? !!args.unlock : true };
-        const handle = normalize(potential as Partial<Credentials>);
-        if (!handle)
-          throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
-
-        const scan = normalize({ path: handle.path, unlock: false });
-        if (!scan)
-          throw new Error.Invalid(`batch error, ${JSON.stringify(args)}`);
-
-        const actions: Actions = {
-          correct: workbook =>
-            correct(workbook, handle, overwrite, {
-              fetch,
-              manager,
-              trans,
-              unlocker
-            }),
-          recover
-        };
-        const cap = kernels.cap();
-        const retries = kernels.retries();
-        return (async function* () {
-          const source = scanner({ commands }, { ...scan, submitted });
-          const results = grader.grade(source, actions, cap, retries);
-          for await (const result of results) {
-            const { grade, workbook } = result.ok ? result.certified : result;
-            yield [grade.path, { grade, workbook: workbook as Headless }];
+      execute: (args: Options) =>
+        (async function* () {
+          const loaded = new Map<string, Headless>();
+          const retained = new Set<Headless>();
+          for await (const event of stream(args, 'grade', retained)) {
+            if (event.type === 'read' && event.workbook)
+              loaded.set(event.path, event.workbook);
+            if (event.type === 'result') {
+              retained.add(event.file.workbook);
+              yield [event.path, event.file] as [string, File];
+            }
+            if (
+              event.type === 'error' &&
+              event.path &&
+              loaded.has(event.path)
+            ) {
+              const workbook = loaded.get(event.path)!;
+              retained.add(workbook);
+              yield [event.path, { workbook, grade: unverified(workbook) }] as [
+                string,
+                File
+              ];
+            }
           }
-        })();
-      }
+        })()
     })
   );
   disposables.push(
@@ -128,9 +356,10 @@ export function commands(
       icon: Icons.folder,
       caption: () =>
         trans.__('Change directory - current: %1', corrector?.path),
-      label: () => `/ ${corrector?.path.split('/').join(' / ')} /`,
+      label: trans.__('Change directory'),
+      isEnabled: () => !!corrector && corrector.idle,
       execute: async ({ path }: { path?: string }) => {
-        if (!corrector || corrector.isDisposed) return;
+        if (!corrector || corrector.isDisposed || !corrector.idle) return;
 
         corrector.addClass('cxt-mod-cd');
         if (typeof path !== 'string') {
@@ -152,14 +381,13 @@ export function commands(
     commands.addCommand(CommandIDs.csv, {
       icon: Icons.csv,
       caption: trans.__('Export to CSV'),
-      isEnabled: () => !!indicator?.idle,
+      isEnabled: () => !!corrector && corrector.idle,
       execute: async () => {
-        if (!corrector || corrector.isDisposed) return;
+        if (!corrector || corrector.isDisposed || !corrector.idle) return;
 
         const { contents } = manager;
         const { path } = corrector;
-        const { workbooks, grades } = bridge.peek();
-        const content = csv.generate(workbooks, grades);
+        const content = csv.generate(session.peek().entries.values());
         const target = await io.available(manager, path, 'grades', '.csv');
         await contents.save(target, { type: 'file', format: 'text', content });
         void commands.execute('docmanager:open', { path: target });
@@ -169,41 +397,7 @@ export function commands(
   disposables.push(
     commands.addCommand(CommandIDs.collect, {
       label: trans.__('Save and sync certified workbook grades...'),
-      execute: (
-        args: Partial<Credentials & { overwrite: boolean }>
-      ): AsyncGenerator<[string, { grade: Grade; workbook: Headless }]> => {
-        const overwrite = !!args.overwrite;
-        const auth = !!(args.key || args.passphrase);
-        const credentials = { ...args, unlock: auth ? !!args.unlock : true };
-        const handle = normalize(credentials as Partial<Credentials>);
-        if (!handle) throw new Error.Invalid('collect error, bad handle');
-        return (async function* () {
-          let prompted = false;
-          const scan = { path: handle.path, unlock: false };
-          for await (const workbook of scanner({ commands }, scan)) {
-            const verified = await authenticated(
-              workbook,
-              handle,
-              unlocker,
-              auth || prompted
-            );
-            prompted = true;
-            if (!verified) continue;
-            await Workbook.lock(workbook);
-
-            const certified = precertified(workbook);
-            if (!certified) continue;
-
-            const { collected } = open(workbook)?.assignment || {};
-            if (collected && !overwrite) continue;
-
-            const receipt = await collector({ ...certified, workbook });
-            await Workbook.collect(workbook, receipt);
-            await save(workbook);
-            yield [certified.grade.path, { grade: certified.grade, workbook }];
-          }
-        })();
-      }
+      execute: (args: Options) => results(args, 'collect')
     })
   );
   disposables.push(
@@ -219,7 +413,6 @@ export function commands(
             trans
           });
           corrector.id = 'correxit-corrector-widget';
-          corrector.title.label = trans.__('Correxit Corrector');
           corrector.title.closable = true;
           disposables.push(corrector);
         }
@@ -237,49 +430,27 @@ export function commands(
   disposables.push(
     commands.addCommand(CommandIDs.scan, {
       label: trans.__('Scan a directory for Correxit workbooks'),
-      execute: (
-        handle: Partial<Credentials & { submitted: boolean }>
-      ): AsyncGenerator<Scanned> =>
-        (async function* scanner(handle, submitted) {
-          const directory = handle && handle.path;
-          if (!directory) return;
-
-          let notebooks: Contents.IModel[];
-          try {
-            notebooks = await io.notebooks(manager, directory);
-          } catch (error) {
-            console.warn(CommandIDs.scan, directory, error);
-            return;
-          }
-          if (!submitted) {
-            for (const { path } of notebooks)
-              yield { hollow: true, context: { path } };
-          }
-
-          let prompted = false;
-          for (const { path } of notebooks) {
-            const fetched = await fetch({ ...handle, path }, prompted);
-            if (fetched) {
-              const locked = open(fetched)?.locked;
-              const unauthenticated = !handle.key && !handle.passphrase;
-              prompted ||= !locked || !handle.unlock || !unauthenticated;
-              if (submitted && !submission(fetched as Headless)) {
-                fetched.context.dispose();
-                continue;
-              }
-              yield fetched as Headless;
+      execute: (args: Options): AsyncGenerator<Scanned> =>
+        (async function* () {
+          const retained = new Set<Headless>();
+          for await (const event of stream(args, 'scan', retained)) {
+            if (event.type === 'listed' && !args.submitted) {
+              for (const path of event.paths)
+                yield { hollow: true, context: { path } };
+            }
+            if (event.type === 'read' && event.workbook) {
+              retained.add(event.workbook);
+              yield event.workbook;
             }
           }
-        })(
-          normalize({ ...handle, path: handle.path || '.' }),
-          !!handle.submitted
-        )
+        })()
     })
   );
   disposables.push(
     commands.addCommand(CommandIDs.review, {
       label: trans.__('Launch Correxit Reviewer'),
       execute: (args: { path?: string; cell?: string }) => {
+        if (args.path && active.has(args.path)) return;
         if (!reviewer || reviewer.isDisposed) {
           reviewer = new Reviewer.Widget({
             commands,
@@ -313,36 +484,60 @@ export function commands(
           intervention: Rubric.Score | null;
         }>
       ) => {
-        const workbook = reviewer?.workbook ?? null;
+        const workbook = reviewer?.isDisposed
+          ? null
+          : (reviewer?.workbook ?? null);
         const { comment, id, intervention } = args;
-        if (!workbook || !id) return;
+        if (!workbook || !id || active.has(workbook.context.path)) return;
+        const release = retain(workbook.context.path);
         try {
           const rubric = open(workbook);
           if (!rubric) return;
-          if (rubric.locked) await unlocker.unlock(workbook, null);
+          session.record({ workbook, grade: unverified(workbook) });
+          await authenticate(
+            workbook,
+            {
+              path: workbook.context.path,
+              unlock: true,
+              key: null,
+              passphrase: null
+            },
+            unlocker,
+            false
+          );
           if (intervention !== undefined)
             await Workbook.intervene(workbook, id, intervention ?? null);
           if (comment !== undefined)
             await Workbook.comment(workbook, id, comment);
           await save(workbook);
+          let result = reuse(workbook, false)?.grade ?? unverified(workbook);
 
           // Auto-certify if this was the last pending reviewable cell.
           const updated = open(workbook);
           const { certification } = updated?.assignment ?? {};
-          if (updated && !updated.locked && !certification) {
-            if (!Rubric.pending(updated)) {
-              try {
-                await Workbook.certify(workbook, trans, true);
-                await save(workbook);
-              } catch {
-                // Certification may fail if auto-graded cells are unresolved;
-                // the workbook will be certified on the next batch pass.
-              }
+          if (
+            updated &&
+            !updated.locked &&
+            !certification &&
+            !Rubric.pending(updated)
+          ) {
+            // Unresolved automatic cells can defer certification to the next batch.
+            const certified = await Workbook.certify(
+              workbook,
+              trans,
+              true
+            ).catch(() => null);
+            if (certified) {
+              await save(workbook);
+              result = certified.grade;
             }
           }
-          bridge.touch();
+          session.record({ workbook, grade: result });
         } catch (error) {
+          session.record({ workbook, grade: unverified(workbook) });
           void showErrorMessage(...Error.interpret(error, trans));
+        } finally {
+          release();
         }
       }
     })
@@ -354,9 +549,12 @@ export function commands(
       execute: async (
         args: Partial<{ id: string }>
       ): Promise<Rubric.Cell.Output[] | null> => {
-        const workbook = reviewer?.workbook ?? null;
-        const id = args.id ?? bridge.peek().cursor?.cell ?? null;
-        if (!workbook || !id) return null;
+        const workbook = reviewer?.isDisposed
+          ? null
+          : (reviewer?.workbook ?? null);
+        const id = args.id ?? session.peek().cursor?.cell ?? null;
+        if (!workbook || !id || active.has(workbook.context.path)) return null;
+        const release = retain(workbook.context.path);
         try {
           const rubric = open(workbook);
           if (!rubric) return null;
@@ -366,6 +564,8 @@ export function commands(
         } catch (error) {
           void showErrorMessage(...Error.interpret(error, trans));
           return null;
+        } finally {
+          release();
         }
       }
     })
@@ -412,29 +612,25 @@ export function commands(
       execute: () => reviewer?.score('fail')
     })
   );
+  disposables.push(factory);
   return disposables;
 }
 
-async function authenticated(
+async function authenticate(
   workbook: Headless,
   handle: Credentials,
   unlocker: Correxit.Unlocker,
   silent: boolean
-): Promise<boolean> {
+): Promise<void> {
   const { path } = workbook.context;
-  try {
-    const credentials = { ...handle, path, silent };
-    await unlocker.unlock(workbook, credentials);
-    const rubric = open(workbook);
-    if (!rubric || rubric.locked) return false;
-    await Assignment.authenticate(
-      workbook.context.model.sharedModel.toJSON(),
-      rubric
-    );
-    return true;
-  } catch {
-    return false;
-  }
+  const unlocked = await unlocker.unlock(workbook, { ...handle, path, silent });
+  const rubric = open(workbook);
+  if (!unlocked || !rubric || rubric.locked)
+    throw new Correxit.Error.Unlock('Workbook authentication failed');
+  await Assignment.authenticate(
+    workbook.context.model.sharedModel.toJSON(),
+    rubric
+  );
 }
 
 async function correct(
@@ -452,20 +648,15 @@ async function correct(
     trans: IRenderMime.TranslationBundle;
     unlocker: Correxit.Unlocker;
   }
-): Promise<Certified> {
+): Promise<Graded> {
   const { path } = workbook.context;
   const silent = !!(handle.key || handle.passphrase);
-  const unlocked = await unlocker.unlock(workbook, { ...handle, path, silent });
-  const rubric = open(workbook);
-  if (!unlocked || !rubric || rubric.locked)
-    throw new Correxit.Error.Certify('grade error: authentication failed');
-  await Assignment.authenticate(
-    workbook.context.model.sharedModel.toJSON(),
-    rubric
-  );
-  const cached = exclude(workbook, overwrite);
+  await authenticate(workbook, handle, unlocker, silent);
+  const cached = reuse(workbook, overwrite);
   if (cached) {
     await Workbook.lock(workbook);
+    // A prior attempt may have restored this report but failed to save it.
+    await save(workbook);
     return cached;
   }
   const dir = PathExt.dirname(path) || '.';
@@ -482,7 +673,7 @@ async function correct(
     throw new Correxit.Error.Certify('correct error: staging failed');
   }
   try {
-    const certified = await grade(staged, trans);
+    const graded = await grade(staged, trans);
     const snapshot = staged.context.model.toJSON() as INotebookContent;
     const restored = Workbook.restore(workbook, snapshot);
     if (!restored)
@@ -493,8 +684,8 @@ async function correct(
     if (!Workbook.Identifier.assigned(identifier))
       throw new Correxit.Error.Certify('correct error: unassigned');
     return {
-      ...certified,
-      grade: { ...certified.grade, path },
+      ...graded,
+      grade: { ...graded.grade, path },
       identifier,
       workbook
     };
@@ -504,7 +695,7 @@ async function correct(
   }
 }
 
-function exclude(workbook: Headless, overwrite: boolean): Certified | null {
+function reuse(workbook: Headless, overwrite: boolean): Graded | null {
   const rubric = open(workbook);
   if (!rubric || rubric.locked || overwrite) return null;
 
@@ -517,7 +708,7 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
 
-  const grade = (spec: Grade['spec']): Certified => ({
+  const grade = (spec: Grade['spec']): Graded => ({
     grade: { path, resolved: true, score: summary, spec, verified: true },
     identifier,
     workbook
@@ -544,7 +735,7 @@ function exclude(workbook: Headless, overwrite: boolean): Certified | null {
 async function grade(
   workbook: Headless,
   trans: IRenderMime.TranslationBundle
-): Promise<Certified> {
+): Promise<Graded> {
   const rubric = open(workbook);
   if (!rubric || rubric.locked)
     throw new Correxit.Error.Certify('grade error: invalid rubric');
@@ -608,28 +799,18 @@ function precertified(workbook: Headless): Certified | null {
   return { grade, identifier, workbook };
 }
 
-function recover(workbook: Headless): Failed {
-  const grade: Grade = {
+function unverified(workbook: Headless): Grade & { verified: false } {
+  return {
     path: workbook.context.path,
     resolved: false,
     score: { ...Rubric.Score.UNSCORED },
     spec: null,
     verified: false
   };
-  return { ok: false, grade, workbook };
 }
 
 async function save(workbook: Headless | null) {
   await workbook?.context.save();
-}
-
-async function* scanner(
-  { commands }: Pick<JupyterFrontEnd, 'commands'>,
-  credentials: Partial<Credentials & { submitted: boolean }>
-): AsyncGenerator<Headless> {
-  const stream = await commands.execute(CommandIDs.scan, credentials);
-  for await (const workbook of stream as AsyncIterable<Scanned>)
-    if (!workbook.hollow) yield workbook;
 }
 
 function submission(workbook: Headless): boolean {
