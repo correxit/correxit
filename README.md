@@ -156,6 +156,10 @@ not require a separate acceptance.
 
 ## Contributing
 
+CLA acceptance is verified manually during PR review. See
+[CONTRIBUTING](CONTRIBUTING.md) for the process and
+[CLA-SIGNATURES](CLA-SIGNATURES.md) for recorded acceptances.
+
 ### Development install
 
 Install [Pixi](https://pixi.sh) first. Pixi provides the Python, NodeJS,
