@@ -43,18 +43,21 @@ The shipped secrets-manager connector is in-memory. Deployments may configure
 a different secrets connector or `Unlocker`; that is an intentional key custody
 choice made by the deployment, not a hidden Correxit write path.
 
-The `Unlocker` also acquires credentials for creation, submission, revision,
-and forensic recovery. A hosted provider can supply generated keys directly,
-without user passphrases. Author keys and student revision keys have separate
-purposes: student credentials must never unlock the rubric or enter the author
-cache. Hosted stores must authorize access independently of notebook-supplied
-identifiers and scope student credentials by rubric and assignee. Creation
-awaits author-key storage; a hosted provider must persist student credentials
-before allowing submission to proceed.
+The `Unlocker` supplies credentials through `request()` and stores author keys
+through `store()`. Correxit derives keys from passphrases, authenticates the
+rubric and issued contents, and decrypts cells. Providers may also supply keys
+directly. See [PLUGINS](plugins.md#unlocker) for the request lifecycle.
+
+Author keys and student revision keys have separate purposes: student credentials
+must never unlock the rubric or enter the author cache. Hosted stores must
+authorize access independently of notebook-supplied identifiers and scope
+student credentials by rubric and assignee. Creation awaits author-key storage;
+a hosted provider must persist student credentials before yielding them for
+submission.
 
 The author's PGP private key is stored in
 `assignment.keys.private.author`, encrypted with the same
-symmetric key that encrypts the roster. `unlock`
+symmetric key that encrypts the roster. `Workbook.unlock`
 recovers it into local scope, uses it, and discards it before
 returning.
 

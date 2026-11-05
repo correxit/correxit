@@ -339,12 +339,12 @@ const registrar: JupyterFrontEndPlugin<Correxit.Registrar> =
     Correxit.DESCRIPTION.REGISTRAR,
     Correxit.Registrar,
     (_, { moodle: settings, provider }) => {
-      const registrar: Correxit.Registrar = (workbook, identifier) => {
+      const registrar: Correxit.Registrar = identifier => {
         switch (provider()) {
           case 'moodle':
-            return Moodle.registrar(workbook, identifier, settings());
+            return Moodle.registrar(identifier, settings());
           default:
-            return registrars.manual(workbook, identifier);
+            return registrars.manual(identifier);
         }
       };
       return [registrar, () => {}];
@@ -451,16 +451,17 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
               'Secrets manager token unavailable'
             );
             return {
-              store: () => Promise.resolve(),
-              request: () =>
-                Promise.reject(
-                  new Correxit.Error.Plugin('Secrets manager token unavailable')
-                ),
-              unlock: () =>
-                Promise.reject(
-                  new Correxit.Error.Plugin('Secrets manager token unavailable')
-                )
-            } as Correxit.Unlocker;
+              store: async () => {
+                throw new Correxit.Error.Plugin(
+                  'Secrets manager token unavailable'
+                );
+              },
+              request: () => {
+                throw new Correxit.Error.Plugin(
+                  'Secrets manager token unavailable'
+                );
+              }
+            };
           }
           const trans = (translator || nullTranslator).load('correxit');
           const secrets = {
@@ -469,14 +470,7 @@ const unlocker: JupyterFrontEndPlugin<Correxit.Unlocker> = SecretsManager.sign(
             pending: null as Promise<string | null> | null,
             token
           };
-          return {
-            store: (id: string, key: string) =>
-              Unlocker.store(id, key, secrets),
-            request: (workbook, purpose, credentials) =>
-              Unlocker.request(workbook, purpose, credentials, trans),
-            unlock: async (workbook, credentials) =>
-              Unlocker.unlock(workbook, credentials, secrets, trans)
-          } as Correxit.Unlocker;
+          return Unlocker.provider(secrets, trans);
         },
         deactivate: () => deactivator?.()
       }))()

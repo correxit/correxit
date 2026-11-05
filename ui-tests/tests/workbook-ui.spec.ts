@@ -2922,7 +2922,7 @@ test('rejects an overdue submission before sealing', async ({ page }) => {
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
 
@@ -2981,7 +2981,7 @@ test('submit reuses the checked timestamp when reject is active', async ({
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
 
@@ -3337,7 +3337,7 @@ test('revise rejects tampered sealed cells', async ({ page }) => {
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
     let rubric = Rubric.add(converted, {
@@ -3394,7 +3394,7 @@ test('headed unlock rejects missing issued cells without writing decrypted answe
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     let rubric = await Workbook.convert(workbook, 'secret', unlocker);
     rubric = Rubric.add(rubric, {
@@ -3475,7 +3475,7 @@ test('recovers encrypted cells after metadata corruption', async ({ page }) => {
     // Use convert to get a properly derived key (PBKDF2).
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, passphrase, unlocker);
     const rubric = Rubric.add(
@@ -3552,7 +3552,7 @@ test('recovers zero cells with wrong passphrase', async ({ page }) => {
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
     const rubric = Rubric.add(
@@ -3610,7 +3610,7 @@ test('recovers only encrypted cells, leaves plain cells alone', async ({
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
     const rubric = Rubric.add(
@@ -3695,7 +3695,7 @@ test('recovers sealed cells using author PGP key from metadata', async ({
     // access to the security module).
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, passphrase, unlocker);
 
@@ -3784,7 +3784,7 @@ test('recovery drops sealed payloads bound to the wrong cell', async ({
     const passphrase = 'secret';
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, passphrase, unlocker);
     let rubric = Rubric.add(converted, {

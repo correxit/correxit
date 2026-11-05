@@ -19,8 +19,9 @@ jest.mock('../correxit/workbook', () => ({
           key = null,
           unlock = null,
           passphrase = null,
-          path = 'mock'
+          path
         } = credentials;
+        if (!path || (key && unlock)) return null;
         return {
           path,
           key,
@@ -32,6 +33,13 @@ jest.mock('../correxit/workbook', () => ({
     headed: (workbook: { content?: unknown } | null) => !!workbook?.content,
     headless: (workbook: { content?: unknown } | null) =>
       !!workbook && workbook.content === null,
+    identifier: () => ({
+      rubric: 'rubric-123',
+      assignee: null,
+      assignment: null,
+      file: 'test-notebook.ipynb',
+      issue: null
+    }),
     open: jest.fn(),
     unlock: jest.fn()
   }
@@ -74,7 +82,7 @@ describe('Unlocker', () => {
     (Workbook.open as jest.Mock).mockReturnValue(locked);
     (Workbook.unlock as jest.Mock).mockImplementation(async (_, key) => {
       if (key === 'valid-key') return unlocked;
-      throw new Error('invalid');
+      throw new Correxit.Error.Unlock('invalid');
     });
   });
 
@@ -84,13 +92,13 @@ describe('Unlocker', () => {
       Workbook.Credentials & { silent: boolean }
     > | null = null,
     passphrases = new Set<string>()
-  ) =>
-    Unlocker.unlock(
-      workbook,
-      credentials,
+  ) => {
+    const plugin = Unlocker.provider(
       { manager, passphrases, pending: null, token },
       trans
     );
+    return Unlocker.unlock(workbook, plugin, credentials);
+  };
 
   describe('unlock()', () => {
     it('returns immediately if rubric is already unlocked', async () => {
@@ -113,12 +121,13 @@ describe('Unlocker', () => {
       (Workbook.unlock as jest.Mock).mockImplementation(
         async (workbook, key) => {
           if (key === expected) return unlocked;
-          throw new Error('invalid');
+          throw new Correxit.Error.Unlock('invalid');
         }
       );
 
       const result = await unlock({ passphrase });
-      expect(manager.get).toHaveBeenCalledWith(token, Correxit.UNLOCKER, id);
+      expect(manager.get).not.toHaveBeenCalled();
+      expect(input.text).not.toHaveBeenCalled();
       expect(security.keygen).toHaveBeenCalledWith(passphrase, id);
       expect(Workbook.unlock).toHaveBeenCalledWith(workbook, expected);
       expect(result).toBe(unlocked);
@@ -127,19 +136,35 @@ describe('Unlocker', () => {
     it('returns null without prompting if silent is true', async () => {
       manager.get.mockResolvedValue(undefined);
 
-      const result = await unlock({ silent: true });
+      const result = await unlock({ silent: true }, new Set(['stale']));
       expect(result).toBeNull();
       expect(input.text).not.toHaveBeenCalled();
       expect(manager.get).toHaveBeenCalled();
+      expect(Workbook.unlock).toHaveBeenCalledTimes(1);
     });
 
-    it('returns null if user cancels the passphrase prompt', async () => {
-      manager.get.mockResolvedValue(undefined);
-      (input.text as jest.Mock).mockResolvedValue(null);
+    it.each([false, true])(
+      'returns null on prompt cancellation with cached credentials: %j',
+      async cached => {
+        manager.get.mockResolvedValue(undefined);
+        (input.text as jest.Mock).mockResolvedValue(null);
 
-      const result = await unlock();
-      expect(result).toBeNull();
-      expect(Workbook.unlock).not.toHaveBeenCalled();
+        const result = await unlock(null, new Set(cached ? ['stale'] : []));
+        expect(result).toBeNull();
+        expect(Workbook.unlock).toHaveBeenCalledTimes(cached ? 1 : 0);
+        expect(manager.set).not.toHaveBeenCalled();
+      }
+    );
+
+    it('reports a rejected prompted passphrase after cached credentials fail', async () => {
+      (input.text as jest.Mock).mockResolvedValue('incorrect');
+
+      await expect(unlock(null, new Set(['stale']))).rejects.toMatchObject({
+        name: 'Unlock',
+        message: 'Incorrect passphrase'
+      });
+      expect(Workbook.unlock).toHaveBeenCalledTimes(2);
+      expect(manager.set).not.toHaveBeenCalled();
     });
 
     it('falls back to SecretsManager if key is missing', async () => {
@@ -161,7 +186,7 @@ describe('Unlocker', () => {
       (Workbook.unlock as jest.Mock).mockImplementation(
         async (workbook, key) => {
           if (key === expected) return unlocked;
-          throw new Error('invalid');
+          throw new Correxit.Error.Unlock('invalid');
         }
       );
 
@@ -179,7 +204,7 @@ describe('Unlocker', () => {
       (Workbook.unlock as jest.Mock).mockImplementation(
         async (workbook, key) => {
           if (key === expected) return unlocked;
-          throw new Error('invalid');
+          throw new Correxit.Error.Unlock('invalid');
         }
       );
 
@@ -227,7 +252,7 @@ describe('Unlocker', () => {
       const expected = `KEY<passphrase:${id}>`;
       (Workbook.unlock as jest.Mock).mockImplementation(
         async (workbook, key) => {
-          if (key === wrong) throw new Error('invalid');
+          if (key === wrong) throw new Correxit.Error.Unlock('invalid');
           if (key === expected) return unlocked;
           throw new Error('unknown');
         }
@@ -239,13 +264,79 @@ describe('Unlocker', () => {
       expect(Workbook.unlock).toHaveBeenNthCalledWith(2, workbook, expected);
       expect(result).toBe(unlocked);
     });
+
+    it('tries later provider credentials after a rejected key and closes the stream', async () => {
+      const closed = jest.fn();
+      const plugin: Correxit.Unlocker = {
+        store: jest.fn(),
+        request: async function* () {
+          try {
+            yield { key: 'stale-key', passphrase: null };
+            yield { key: 'valid-key', passphrase: null };
+            throw new Error('Stream should be closed after success');
+          } finally {
+            closed();
+          }
+        }
+      };
+      expect(await Unlocker.unlock(workbook, plugin)).toBe(unlocked);
+      expect(Workbook.unlock).toHaveBeenCalledTimes(2);
+      expect(plugin.store).toHaveBeenCalledWith(id, 'valid-key');
+      expect(closed).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([null, { key: 'valid-key' }])(
+      'propagates custody failure without trying more credentials: %j',
+      async credentials => {
+        manager.get.mockResolvedValue({
+          id,
+          namespace: Correxit.UNLOCKER,
+          value: 'valid-key'
+        });
+        manager.set.mockRejectedValue(new Error('Custody unavailable'));
+        await expect(unlock(credentials)).rejects.toThrow(
+          'Custody unavailable'
+        );
+        expect(input.text).not.toHaveBeenCalled();
+        expect(Workbook.unlock).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it('does not retry integrity failures or store an unauthenticated key', async () => {
+      (Workbook.unlock as jest.Mock).mockRejectedValue(
+        new Correxit.Error.Mismatch('mac mismatch')
+      );
+      await expect(unlock({ key: 'valid-key' })).rejects.toThrow(
+        'mac mismatch'
+      );
+      expect(manager.set).not.toHaveBeenCalled();
+      expect(manager.get).not.toHaveBeenCalled();
+      expect(input.text).not.toHaveBeenCalled();
+    });
+
+    it('authenticates an already unlocked workbook before storing its key', async () => {
+      (Workbook.open as jest.Mock).mockReturnValue(unlocked);
+      (Workbook.unlock as jest.Mock).mockRejectedValue(
+        new Correxit.Error.Mismatch('changed contents')
+      );
+      await expect(unlock()).rejects.toThrow('changed contents');
+      expect(manager.set).not.toHaveBeenCalled();
+    });
   });
 
   describe('request()', () => {
     const request = (
       purpose: Correxit.Unlocker.Purpose,
-      credentials: Partial<Workbook.Credentials> | null = null
-    ) => Unlocker.request(workbook, purpose, credentials, trans);
+      credentials: Partial<
+        Workbook.Credentials & { silent: boolean }
+      > | null = null
+    ) => {
+      const plugin = Unlocker.provider(
+        { manager, passphrases: new Set<string>(), pending: null, token },
+        trans
+      );
+      return Unlocker.request(workbook, plugin, purpose, credentials);
+    };
 
     it.each(['create', 'submit', 'revise', 'recover'] as const)(
       'accepts a supplied key for %s without prompting or unlocking',
@@ -290,14 +381,26 @@ describe('Unlocker', () => {
       expect(await request('submit')).toBeNull();
     });
 
-    it.each(['submit', 'revise'] as const)(
+    it('does not silently choose fire-and-forget submission', async () => {
+      expect(await request('submit', { silent: true })).toBeNull();
+      expect(input.submission).not.toHaveBeenCalled();
+      expect(input.text).not.toHaveBeenCalled();
+    });
+
+    it.each(['submit', 'revise', 'recover'] as const)(
       'keeps %s passphrases out of author credentials',
       async purpose => {
         (input.submission as jest.Mock).mockResolvedValue(true);
         (input.text as jest.Mock).mockResolvedValue('student');
-        expect(await request(purpose)).toEqual({
+        const passphrases = new Set<string>();
+        const plugin = Unlocker.provider(
+          { manager, passphrases, pending: null, token },
+          trans
+        );
+        expect(await Unlocker.request(workbook, plugin, purpose)).toEqual({
           secret: { key: null, passphrase: 'student' }
         });
+        expect(passphrases.size).toBe(0);
         expect(Workbook.unlock).not.toHaveBeenCalled();
         expect(manager.set).not.toHaveBeenCalled();
       }

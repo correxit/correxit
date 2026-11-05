@@ -68,7 +68,7 @@ test('assignment saves target a view while path commands fetch headlessly', asyn
 
   try {
     const result = await page.evaluate(async () => {
-      const { Correxit, Rubric, Workbook } = (window as any).__correxit__;
+      const { Rubric, Workbook } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
       const created = Rubric.create();
@@ -111,12 +111,11 @@ test('assignment saves target a view while path commands fetch headlessly', asyn
       await app.commands.execute('correxit:save');
       const grade = await app.commands.execute('correxit:correct', { path });
 
-      const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
-      const previous = unlocker.unlock;
+      const previous = Workbook.unlock;
       const workbooks: any[] = [];
-      unlocker.unlock = async (workbook: any, credentials: any) => {
+      Workbook.unlock = async (workbook: any, key: string) => {
         workbooks.push(workbook);
-        return Workbook.unlock(workbook, credentials.key);
+        return previous(workbook, key);
       };
       try {
         const assignment = await app.commands.execute('correxit:assign', {
@@ -135,7 +134,7 @@ test('assignment saves target a view while path commands fetch headlessly', asyn
           headless: workbooks.map(workbook => Workbook.headless(workbook))
         };
       } finally {
-        unlocker.unlock = previous;
+        Workbook.unlock = previous;
         workbooks.forEach(workbook => workbook.context.dispose());
       }
     });

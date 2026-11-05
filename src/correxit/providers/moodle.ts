@@ -1,5 +1,5 @@
 import { URLExt } from '@jupyterlab/coreutils';
-import { Assignment, Correxit, Rubric, Workbook } from '..';
+import { Assignment, Correxit, Rubric } from '..';
 import * as Error from '../error';
 
 export namespace Moodle {
@@ -144,7 +144,7 @@ export namespace Moodle {
   };
 
   export async function collector(
-    certified: Workbook.Certified,
+    certified: Correxit.Collector.Payload,
     settings: Settings
   ): Promise<string | null> {
     const { token, url: raw } = settings;
@@ -152,10 +152,7 @@ export namespace Moodle {
     if (!token || !url)
       throw new Error.Plugin('Moodle URL or token not configured');
 
-    const rubric = Workbook.open(certified.workbook, true);
-    if (!rubric) throw new Error.Plugin('collector error: no rubric');
-
-    const compound = rubric.assignment.id;
+    const compound = certified.identifier.assignment;
     if (!compound) throw new Error.Plugin('collector error: no assignment ID');
 
     const [course, assignment] = compound.split(':');
@@ -169,14 +166,13 @@ export namespace Moodle {
     if (uid === undefined)
       throw new Error.Plugin(`collector error: no Moodle user for ${assignee}`);
 
-    const notebook = certified.workbook.context.model.sharedModel.toJSON();
-    const content = JSON.stringify(notebook);
-    const file = await Assignment.filename(rubric.assignment.name, assignee);
+    const content = JSON.stringify(certified.notebook);
+    const file = await Assignment.filename(certified.name, assignee);
     const item = await upload(url, token, content, file);
     if (!item)
       throw new Error.Plugin(`collector error: upload failed (${assignee})`);
 
-    const { points, possible } = certified.grade.score;
+    const { points, possible } = certified.score;
     const max = await scale(request, course, assignment);
     const grade = possible > 0 ? (points / possible) * max : 0;
     await request(
@@ -258,8 +254,7 @@ export namespace Moodle {
   }
 
   export async function registrar(
-    workbook: Workbook,
-    identifier: Workbook.Identifier,
+    _identifier: Correxit.Identifier,
     settings: Settings
   ): ReturnType<Correxit.Registrar> {
     const { token, url: raw } = settings;

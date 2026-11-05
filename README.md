@@ -22,7 +22,7 @@ runs in the browser; there is no server component.
 | [DESIGN](docs/design.md)       | Developer           | Architecture, data model, async patterns                  |
 | [MOODLE](docs/moodle.md)       | Teacher, integrator | Browser-only Moodle workflow and constraints              |
 | [SECURITY](docs/security.md)   | Developer, auditor  | Threat model, encryption, key management                  |
-| [PLUGINS](docs/plugins.md)     | Integrator          | Plugin token interfaces for LMS and transport             |
+| [PLUGINS](docs/plugins.md)     | Integrator          | Plugin token interfaces and `@correxit/contracts`         |
 | [RELEASE](docs/release.md)     | Maintainer          | Release process and versioning                            |
 | [CHANGELOG](CHANGELOG.md)      | Everyone            | Version history                                           |
 
@@ -121,6 +121,9 @@ Correxit is open source under the
 [GNU Affero General Public License version 3 only](LICENSE)
 (`AGPL-3.0-only`). Version 2.0 marks its first open-source release.
 
+The separate `@correxit/contracts` package is available under
+[BSD-3-Clause](packages/contracts/LICENSE).
+
 ### Scheduled transition to BSD 3-Clause
 
 Correxit will switch to the
@@ -155,6 +158,10 @@ whose necessary rights are already held under another applicable agreement do
 not require a separate acceptance.
 
 ## Contributing
+
+CLA acceptance is verified manually during PR review. See
+[CONTRIBUTING](CONTRIBUTING.md) for the process and
+[CLA-SIGNATURES](CLA-SIGNATURES.md) for recorded acceptances.
 
 ### Development install
 
@@ -225,9 +232,8 @@ pixi run jlpm watch
 pixi run jlpm serve
 ```
 
-**3. Open `http://localhost:8888/demo/notebooks/?path=chinook.ipynb` and refresh
-after each rebuild.** JupyterLab remains available at
-`http://localhost:8888/demo/lab/`.
+**3. Open `http://localhost:8888/demo/lab/?path=chinook.ipynb` and refresh
+after each rebuild.**
 
 The landing page is at `http://localhost:8888/`. Its guides are rendered
 directly from `README.md`, `CHANGELOG.md`, and `docs/`, while its API reference

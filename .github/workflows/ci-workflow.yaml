@@ -20,6 +20,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      with:
+        fetch-depth: 0
 
     - name: Base Setup
       uses: jupyterlab/maintainer-tools/.github/actions/base-setup@21b1cac622018fd37ec13a1c8081da814e10d94e # v1.0.0
@@ -34,10 +36,13 @@ jobs:
         jlpm run lint:check
 
     - name: Test the extension and Node entrypoint
+      env:
+        CONTRACTS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: |
         set -eux
         jlpm run test
         jlpm run test:node
+        jlpm run test:contracts
         node --test scripts/test-changelog.mjs
 
     - name: Build the extension
@@ -66,6 +71,8 @@ jobs:
         ln -s "$GITHUB_WORKSPACE/node_modules" "$archive/package/node_modules"
         node "$archive/package/scripts/test-node.mjs"
 
+        (cd packages/contracts && npm pack --ignore-scripts --pack-destination ../../dist)
+
         pip uninstall -y "correxit" jupyterlab
 
     - name: Upload extension packages
@@ -81,7 +88,14 @@ jobs:
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: npm-artifact
-        path: dist/correxit*.tgz
+        path: dist/correxit-[0-9]*.tgz
+        if-no-files-found: error
+
+    - name: Upload contracts npm package
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: contracts-npm-artifact
+        path: dist/correxit-contracts-[0-9]*.tgz
         if-no-files-found: error
 
   site:

@@ -331,25 +331,29 @@ identifiers are acceptable when convention demands it (e.g., `useCommand`,
 
 ## Plugins
 
-Correxit provides extension points as JupyterLab plugins, each identified by a
-single token. Core logic is decoupled from IO, e.g. replacing a distributor
-implementation requires no changes to the propagator loop or commands.
+Correxit's public integration points use Lumino tokens from
+`@correxit/contracts`. Plugins receive plain-data payloads without depending on
+internal `Workbook` or `Rubric` models. Core logic is decoupled from IO: replacing
+a distributor requires no changes to the propagator loop or commands.
 
-- **`Distributor`**: delivers one propagated workbook. Default: manual
+- **`Distributor`**: delivers one propagated workbook payload. Default: manual
   no-op.
-- **`Collector`**: collects certified grades. Default: digest receipt.
+- **`Collector`**: records certified grades. Default: digest receipt.
 - **`Registrar`**: provides assignment registrations. Default: `null`
   for manual entry.
-- **`Submitter`**: handles submission receipts. Default: digest receipt.
-- **`Unlocker`**: acquires credentials for creation, submission, revision, and
-  recovery; stores author keys and unlocks rubrics. Default: passphrase prompts
-  and in-memory `SecretsManager`. Hosted providers can supply keys directly.
-- **`Monitor`**: yields the active workbook as the user switches tabs.
-  Default: `Stream`-based async iterable.
+- **`Submitter`**: delivers sealed submissions and returns receipts. Default:
+  digest receipt without external delivery.
+- **`Unlocker`**: yields credentials for creation, unlocking, submission,
+  revision, and recovery; stores author keys. Core handles cryptographic
+  authentication and decryption. Default: passphrase prompts and in-memory
+  `SecretsManager`. Hosted providers can supply keys directly.
 
-Type definitions are in `src/correxit/correxit.ts`. Default implementations are
-in `src/plugins.tsx`. See [PLUGINS.md](plugins.md) for the full integration
-API.
+The internal **`Monitor`** token yields the active workbook as the user switches
+tabs. It uses a `Stream`-based async iterable and is not part of
+`@correxit/contracts`.
+
+Default implementations are in `src/plugins.tsx`. See [PLUGINS.md](plugins.md)
+for the full integration API.
 
 ## Design philosophy
 

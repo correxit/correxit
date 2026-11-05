@@ -1,22 +1,23 @@
-import { ICell } from '@jupyterlab/nbformat';
-import { Workbook } from '.';
+import { Notebook, Submitter } from '@correxit/contracts';
 import * as security from './security';
 
 /** Content-addressed digest receipt for a submitted workbook. */
 export async function manual(
-  workbook: Workbook,
-  identifier: Workbook.Identifier.Assigned
+  submitted: Submitter.Payload
 ): Promise<string> {
+  const { identifier, notebook, submission } = submitted;
   const { assignee, issue, rubric: id } = identifier;
-  const rubric = Workbook.open(workbook, true);
-  const submission = rubric?.assignment.submission ?? null;
-  const notebook = workbook.context.model.sharedModel.toJSON();
-  const collapse = ({ id, source }: ICell) =>
+  const collapse = ({ id, source }: Notebook.Cell) =>
     [id, Array.isArray(source) ? source.join('') : source];
   const sources = notebook.cells
-    .map(collapse).sort(([a], [b]) => String(a).localeCompare(String(b)));
+    .map(collapse)
+    .sort(([a], [b]) => String(a).localeCompare(String(b)));
   const payload = JSON.stringify({
-    assignee, issue, rubric: id, sources, submission
+    assignee,
+    issue,
+    rubric: id,
+    sources,
+    submission
   });
   return `manual:${await security.digest(payload)}`;
 }

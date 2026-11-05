@@ -117,7 +117,9 @@ acceptable.
 - `dispatcher.ts`: Plugin factory for provider-dispatched plugins (Distributor, Registrar). The `create` callback returns a `[Plugin, () => void]` tuple. Handles Moodle settings and intercepts secrets via a settings registry transform, moving them to the secrets manager so they never reach disk.
 - `propagator.ts`: Async generator for assignment distribution to rosters.
 - `io.ts`: File system operations (`available`, `cd`, `create`, `mkdir`, workbook fetching).
-- `correxit.ts`: Plugin type definitions (`Collector`, `Distributor`, `Monitor`, `Registrar`, `Submitter`, `Unlocker`). The `Registrar` returns `Registration[]` objects (not raw strings).
+- `packages/contracts/`: Lightweight, slow-moving npm package (`@correxit/contracts`) defining pure data contracts and Lumino tokens for `Collector`, `Distributor`, `Registrar`, `Submitter`, and `Unlocker`.
+- `unlocker.ts`: Core key evaluation loop, PBKDF2/SHA-256 derivation via `security.derive`, calling `unlocker.store`, and testing candidate secrets against `Workbook.unlock`. Shipped provider implements prompt dialogs and secrets manager connector.
+- `correxit.ts`: Re-exports public contracts and tokens from `@correxit/contracts`, plus internal tokens (`Monitor`, `commands`, `icons`).
 - `kernels.ts`: Kernel pool with lease/release/restart lifecycle and TTL eviction. Exports `configure({ concurrency, retries, timeout })`, `cap()`, `retries()`, and `timeout()` for settings-driven control.
 - `corrector/run.ts`: Cold directory run for scan, grade, or collect. The `Run` union binds each mode to its operation; only grading has concurrency and retries. Authentication and invalid-workbook failures are terminal and emit safe diagnostic codes. Commands own authentication, mutations, and retained contexts.
 - `corrector/pool.ts`: Interleaves bounded cold jobs without blocking completed results on a pending source read. Stop prevents new jobs; cleanup drains pending operations before closing their generators.

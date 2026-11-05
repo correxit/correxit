@@ -1,7 +1,9 @@
 # Making a Correxit release
 
-Publishing a stable GitHub release publishes the npm and PyPI packages and the
-versioned website. Pull requests and pushes to `main` run CI without publishing.
+Publishing a stable Correxit release (`vX.Y.Z`) publishes the npm and PyPI
+packages and the versioned website. The contracts package has a
+[separate release process](#releasing-correxitcontracts). Pull requests and
+pushes to `main` run CI without publishing.
 
 ## Release
 
@@ -113,6 +115,29 @@ CSV contract: exports from scanning alone leave scores blank; authenticated
 batch grading can reuse valid reports without kernel execution. Package
 version selection remains separate from `cxtformat`.
 
+## Releasing `@correxit/contracts`
+
+`@correxit/contracts` is versioned and released independently from `correxit`.
+
+1. Set the version in `packages/contracts/package.json` (`1.0.0` for the initial
+   release; increase it for later releases) and update its `CHANGELOG.md`.
+2. Run `pixi run jlpm build:contracts` and `pixi run jlpm contracts:update`
+   to update `packages/contracts/contracts.api.md`. CI compares this report
+   with the base revision and requires a version increase for API changes.
+3. Commit and merge to `main`. Wait for CI on the merged commit to pass.
+4. Publish a stable GitHub release at that exact commit, with tag `contracts-v`
+   followed by the contracts package version (e.g. `contracts-v1.0.0`).
+5. The `contracts.yml` workflow automatically publishes `@correxit/contracts` to npm.
+   It does not affect PyPI or the Correxit documentation website.
+
+Publish the contracts version before releasing a Correxit version that depends
+on it. The initial npm publication also requires configuring package publishing
+access for the new package and its `contracts.yml` trusted publisher.
+
+The first Correxit release using these contracts changes the plugin API. Include
+the [migration guide](plugins.md#migrating-existing-plugins) in its release notes.
+The saved notebook format remains unchanged.
+
 ## Local packaging
 
 To inspect package archives without publishing:
@@ -121,6 +146,8 @@ To inspect package archives without publishing:
 pixi run python -m build
 pixi run jlpm build:npm
 pixi run npm pack --ignore-scripts --pack-destination dist
+pixi run jlpm workspace @correxit/contracts build
+(cd packages/contracts && pixi run npm pack --ignore-scripts --pack-destination ../../dist)
 ```
 
 Website development commands are in the [site README](../site/README.md).
