@@ -4,16 +4,10 @@ Correxit is serverless by design. Distribution, submission recording, and
 grade collection are delegated to plugin tokens that a JupyterLab extension
 can provide.
 
-Plugin contracts are published as an independent, lightweight npm package:
-`@correxit/contracts`. Plugin implementors should depend on `@correxit/contracts`
-rather than the full `correxit` package. This decouples plugin authoring from
-internal Correxit releases and dependencies.
-
-The main external integration points are `Registrar`, `Distributor`,
-`Submitter`, and `Collector`.
-
-`Unlocker` is also provided for deployments that manage keys externally
-(such as hosted services like `notebook.link`).
+Import plugin types and tokens from `@correxit/contracts`, which is versioned
+independently from Correxit. It provides `Registrar`, `Distributor`, `Submitter`,
+`Collector`, and `Unlocker` without depending on Correxit's internal models.
+`Unlocker` lets deployments supply their own credential storage and prompts.
 
 ---
 
@@ -25,8 +19,7 @@ it as a shared singleton in `package.json`:
 ```json
 {
   "dependencies": {
-    "@correxit/contracts": "^1.0.0",
-    "@lumino/coreutils": "^1.11.0 || ^2.1.1"
+    "@correxit/contracts": "^1.0.0"
   },
   "jupyterlab": {
     "extension": true,
@@ -39,8 +32,13 @@ it as a shared singleton in `package.json`:
 }
 ```
 
-This guarantees that both Correxit and your plugin share the exact same Lumino
-service `Token` instances in the browser at runtime.
+The singleton setting lets Correxit and your plugin use the same Lumino token
+instances to identify services. Correxit must also be installed in JupyterLab.
+
+The signatures below use plain data. `Notebook` is notebook JSON; resource files
+carry `Uint8Array` bytes. Timestamps are milliseconds since the Unix epoch, or
+`null` when absent. `file` is the notebook's basename, `path` is its Jupyter
+contents path, and `name` is the assignment's display name.
 
 ---
 
@@ -59,7 +57,7 @@ type Identifier = {
   file: string | null;
   // The issued blank-slate digest, if propagation has occurred.
   issue: string | null;
-  // The immutable rubric ID shared by all workbooks.
+  // The immutable rubric ID shared by workbooks from the same assignment.
   rubric: string;
 };
 ```
@@ -150,19 +148,17 @@ Otherwise each entry carries the file name and raw bytes.
 
 The `boolean` return is feedback to the propagator:
 
-| Return  | Meaning                                     | Propagator behaviour                                                                                                                                                     |
-| ------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `true`  | Delivered (or no external delivery needed). | Attempts to save the local notebook with `assignment.distribution` recorded; on success, emits a `distributed` event, and on local-save failure emits `create-error`.    |
-| `false` | Skip this assignee intentionally.           | Skips writing the local file entirely and emits a `skipped` event. Use this to avoid overwriting an existing delivery when `overwrite` is `false`.                       |
-| throws  | Delivery failed unexpectedly.               | Emits a `distribute-error` event, then attempts to save the local file for recovery without `assignment.distribution`; on local-save failure, also emits `create-error`. |
+| Result  | Propagator behaviour                                                                                          |
+| ------- | ------------------------------------------------------------------------------------------------------------- |
+| `true`  | Saves the local notebook with `assignment.distribution` recorded, then emits `distributed`.                   |
+| `false` | Skips this assignee without writing a local file; emits `skipped`.                                            |
+| throws  | Emits `distribute-error` and attempts a local save for recovery, without recording `assignment.distribution`. |
 
-A distributor that does not interact with any external system should return
-`true` unconditionally, matching the behaviour of the default (manual)
-distributor. A distributor that checks for an existing delivery should return
-`false` when `overwrite` is `false` and a prior delivery is detected.
+A failed local save emits `create-error` instead of `distributed`, or in addition
+to `distribute-error` if delivery also failed.
 
-> The default distributor is the manual distributor. It returns `true`
-> unconditionally: every workbook is considered delivered locally.
+The default manual distributor returns `true`; no external delivery is needed.
+Return `false` when a prior delivery exists and `overwrite` is `false`.
 
 ---
 
@@ -183,22 +179,15 @@ namespace Submitter {
 }
 ```
 
-Called when a student submits a workbook. Returns an opaque receipt that
-Correxit stores in workbook metadata, or `null` if the submission was not
-recorded. `assignee` is guaranteed non-null.
+Called after a student seals a workbook, including when retrying delivery.
+Return an opaque receipt for Correxit to store as `assignment.submitted`, or
+`null` if delivery was not recorded. Throw to report a delivery failure.
 
-The default implementation returns a content-addressed digest receipt. A
-server-backed submitter would POST the submission to an LMS, validate the
-assignee against the roster, enforce the deadline, and return the server's
-receipt.
-
-This is the authority boundary: a submitter receipt can carry the upstream
-system's clock, rules, and acceptance decision. Correxit's own local
-`submission` timestamp cannot do that by itself.
-
-A strong submitter should bind the accepted bytes, assignee, assignment
-identifier, and acceptance time in the external system. The receipt stored in
-the workbook is an opaque pointer to that authority.
+The default manual submitter returns a digest receipt without uploading the
+notebook. An LMS submitter should validate the assignee, enforce the deadline,
+and record the accepted notebook, assignment, and acceptance time externally.
+The local `submission` timestamp and manual receipt do not prove on-time delivery;
+that authority belongs to the external system.
 
 ---
 
@@ -230,16 +219,14 @@ namespace Collector {
 }
 ```
 
-Called after a workbook has been graded and certified. Returns an opaque
-receipt that Correxit stores in workbook metadata, or `null` if the grade was
-not recorded.
+Called after a workbook has been graded and certified. Return an opaque receipt
+for Correxit to store as `assignment.collected`, or `null` if the grade was not
+recorded. Throw to report a collection failure. `points` and `possible` are the
+same totals as in `score`, which also carries status and feedback.
 
-Verified grades carry in-memory provenance from authenticated rubric and issued
-contents checks. The normal collection command authenticates before calling the
-collector; a parsed report or certification timestamp is not a grade authority.
-Plugins should consume these command results rather than constructing verified
-grades from notebook metadata. The source-integrity contract requires format 2;
-see [SECURITY](security.md) for the serialization and authentication contract.
+Correxit authenticates the rubric and issued contents before calling the
+collector. Use the supplied payload; reading a saved report or certification
+timestamp alone does not verify a grade. See [SECURITY](security.md#grade-provenance).
 
 The default implementation returns a content-addressed digest receipt. A
 server-backed collector would POST the grade to the gradebook, correlate the
@@ -249,8 +236,8 @@ workbook via the identifier, and return the server's receipt.
 
 ## `Unlocker`
 
-The `Unlocker` token provides key custody without requiring external plugins
-to implement Correxit's internal cryptography or authentication loops.
+The `Unlocker` supplies credentials and stores author keys. Correxit handles
+key derivation, workbook authentication, and decryption.
 
 ```typescript
 type Secret =
@@ -274,57 +261,61 @@ namespace Unlocker {
 }
 ```
 
-### Division of Responsibility
+`Secret.key` is a 256-bit key encoded as 64 lowercase hexadecimal characters.
+For `Secret.passphrase`, Correxit derives the key using the rubric ID as salt.
 
-- **Key Custody (Plugin)**: The `Unlocker` plugin yields candidate secrets
-  (`key` or `passphrase`) via `request()`, and persists author keys via `store()`.
-  It does not perform cryptographic decryption or authenticate workbooks.
-- **Authentication & Decryption (Correxit Core)**: Correxit tests candidate
-  secrets against the workbook's rubric, derives keys using `security.derive(credentials, rubric.id)`,
-  persists successful keys via `unlocker.store()`, unseals encrypted cells, and
-  manages the in-memory key lifecycle.
+### Requests and storage
 
-### Request Lifecycle and Purposes
+`identifier` is `null` when no readable rubric exists. With `silent: true`,
+return available credentials without opening prompts or sign-in dialogs.
 
-`request` receives the operation `purpose`, the notebook `path`, whether the
-request is `silent`, and the `identifier` (if a rubric already exists):
-
-| Purpose   | Description                                         |
-| --------- | --------------------------------------------------- |
-| `create`  | Convert a notebook into a workbook assignment.      |
-| `unlock`  | Unlock an authored workbook for editing or grading. |
-| `submit`  | Protect the student's submission keypair.           |
-| `revise`  | Reopen student answers while keeping rubric locked. |
-| `recover` | Forensic recovery of cell sources without rubric.   |
+| Purpose   | Credential | Use                                                           |
+| --------- | ---------- | ------------------------------------------------------------- |
+| `create`  | Author     | Create a workbook; no rubric exists yet.                      |
+| `unlock`  | Author     | Open an authored workbook for editing or grading.             |
+| `submit`  | Student    | Protect the student's private key for later revision.         |
+| `revise`  | Student    | Reopen answers while keeping the rubric locked.               |
+| `recover` | Either     | Attempt to recover encrypted sources from a damaged workbook. |
 
 `request` is an `AsyncIterable`:
 
-- For `unlock`, the plugin yields candidate secrets. Correxit tests each until
-  one authenticates. Other purposes consume the first yielded choice. Persist
-  any required student credential before yielding it, since the generator is
-  closed once a choice is accepted.
-- Yielding `null` proceeds without a secret (for fire-and-forget submission or
-  skipping decryption).
-- Ending the generator without a usable secret cancels the operation cleanly.
+- For `unlock`, Correxit tests candidates until one authenticates. An incorrect
+  credential allows another attempt; an integrity failure stops the operation.
+  Other purposes consume only the first yielded choice.
+- Yield `null` to submit without revision access or reset without recovering
+  encrypted sources. Creation and revision require a secret; unlocking skips
+  null candidates.
+- End the generator to cancel without making a choice.
 - Throwing an error stops the operation and displays the failure reason without
   falling back to interactive prompts.
 
-### Eliminating Passphrase Dialogs (Hosted Services)
+`store(rubric, key)` records only author keys. Correxit awaits it before committing
+a new workbook and after a successful unlock. Student credentials never pass
+through `store`: save any credential needed for later revision before yielding
+it, because Correxit closes the generator after accepting a choice.
 
-A hosted provider (e.g. `notebook.link`) can supply keys directly from an
-authenticated API without showing any user prompts:
+The default provider uses passphrase prompts and in-memory storage. External
+providers must authorize access independently of notebook-supplied identifiers
+and keep student credentials separate from author keys. See
+[Key Management](security.md#key-management).
+
+### Hosted provider example
+
+This example uses an illustrative authenticated `api`. `ensureStudentKey` must
+save a key before returning it, and `getStudentKey` must retrieve that same key
+for revision. Unsupported recovery requests end without yielding a choice.
 
 ```typescript
 import { JupyterFrontEndPlugin } from '@jupyterlab/application';
-import { Secret, Unlocker } from '@correxit/contracts';
+import { Unlocker } from '@correxit/contracts';
 
 const hostedUnlocker: JupyterFrontEndPlugin<Unlocker> = {
-  id: 'notebook-link:unlocker',
+  id: 'my-service:unlocker',
   provides: Unlocker,
   autoStart: true,
   activate: () => {
     return {
-      async *request({ identifier, purpose, silent }) {
+      async *request({ identifier, purpose }) {
         if (purpose === 'create') {
           const key = await api.generateAuthorKey();
           yield { key, passphrase: null };
@@ -337,11 +328,15 @@ const hostedUnlocker: JupyterFrontEndPlugin<Unlocker> = {
           return;
         }
 
-        if ((purpose === 'submit' || purpose === 'revise') && identifier) {
-          const key = await api.getStudentKey(
-            identifier.rubric,
-            identifier.assignee
-          );
+        if (
+          identifier?.assignee &&
+          (purpose === 'submit' || purpose === 'revise')
+        ) {
+          const { rubric, assignee } = identifier;
+          const key =
+            purpose === 'submit'
+              ? await api.ensureStudentKey(rubric, assignee)
+              : await api.getStudentKey(rubric, assignee);
           if (key) yield { key, passphrase: null };
           return;
         }
@@ -353,7 +348,10 @@ const hostedUnlocker: JupyterFrontEndPlugin<Unlocker> = {
     };
   }
 };
+export default hostedUnlocker;
 ```
+
+These API calls must not open dialogs, including when a request is silent.
 
 ---
 
@@ -372,7 +370,7 @@ const submitter: JupyterFrontEndPlugin<Submitter> = {
   autoStart: true,
   activate:
     () =>
-    async ({ file, identifier, notebook }) => {
+    async ({ identifier, notebook }) => {
       const receipt = await myLms.submit({
         assignment: identifier.assignment,
         assignee: identifier.assignee,
@@ -384,24 +382,46 @@ const submitter: JupyterFrontEndPlugin<Submitter> = {
 export default submitter;
 ```
 
+Disable the built-in provider for the token you replace. For this example, add
+the following to your extension's `package.json`, alongside `sharedPackages`:
+
+```json
+{
+  "jupyterlab": {
+    "disabledExtensions": ["correxit:submitter"]
+  }
+}
+```
+
+The other built-in provider IDs are `correxit:collector`, `correxit:distributor`,
+`correxit:registrar`, and `correxit:unlocker`. Disable only the providers you
+replace. This uses JupyterLab's
+[plugin replacement mechanism](https://jupyterlab.readthedocs.io/en/stable/extension/extension_dev.html#disabling-other-extensions).
+
 ---
 
-## Migration Guide: v2 to v3
+## Migrating existing plugins
 
-If you authored plugins against Correxit v2:
+For plugins using the earlier model-based API:
 
 1. **Depend on `@correxit/contracts` instead of `correxit`**:
    Update `package.json` dependencies to `"@correxit/contracts": "^1.0.0"`.
    In `jupyterlab.sharedPackages`, mark `"@correxit/contracts": { "singleton": true }`.
-2. **Plain-data signatures**:
-   - `Collector` receives `Collector.Payload` (`{ certification, file, identifier, name, notebook, path, points, possible, score }`).
-   - `Submitter` receives `Submitter.Payload` (`{ file, identifier, name, notebook, path, submission }`).
-   - `Distributor` receives `Distributor.Payload` (`{ identifier, notebook, overwrite, path, resources }`).
-   - `Registrar` takes `identifier: Identifier` and returns `Registration[] | Registration.Group[] | null`.
+   Import tokens and types directly from the new package.
+2. **Use the payloads documented above**: `Collector` and `Submitter` receive
+   plain data instead of a `Workbook`. `Distributor` retains its payload shape;
+   `Registrar` receives only the identifier. Replace calls to `Workbook.open()`
+   with the supplied payload fields.
 3. **`Unlocker` refactor**:
    - Remove `unlock()` implementation. Correxit core now owns rubric unlocking.
    - Change `request()` from returning a single promise to an `AsyncIterable<Secret | null>` (e.g. `async function* request(...)`).
-   - Implement `store(rubric: string, key: string): Promise<void>`.
+   - Keep `store(rubric: string, key: string): Promise<void>` for author keys.
+   - To cancel, return without yielding. Replace `{ secret: null }` with
+     `yield null` for submission without revision access or recovery without
+     decryption.
+
+The contracts package version is independent of the Correxit and workbook
+format versions. This API change does not change the saved notebook format.
 
 ---
 

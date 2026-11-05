@@ -121,6 +121,9 @@ Correxit is open source under the
 [GNU Affero General Public License version 3 only](LICENSE)
 (`AGPL-3.0-only`). Version 2.0 marks its first open-source release.
 
+The separate `@correxit/contracts` package is available under
+[BSD-3-Clause](packages/contracts/LICENSE).
+
 ### Scheduled transition to BSD 3-Clause
 
 Correxit will switch to the

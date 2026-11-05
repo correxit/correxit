@@ -1,19 +1,15 @@
 # @correxit/contracts
 
-Stable plugin contracts and Lumino tokens for [Correxit](https://correx.it) JupyterLab extensions.
+Plugin types and Lumino tokens for integrating with [Correxit](https://correx.it)
+in JupyterLab.
 
-## Design
+`Distributor`, `Collector`, `Registrar`, `Submitter`, and `Unlocker` use plain
+data: notebook JSON, identifiers, scores, credentials, and resource bytes. They
+do not depend on Correxit's internal models or JupyterLab widgets.
 
-`@correxit/contracts` defines the integration surface between Correxit and external plugins
-(`Distributor`, `Collector`, `Registrar`, `Submitter`, and `Unlocker`).
-
-- **Data-only payloads:** Plugin interfaces operate purely on JSON-serializable payloads,
-  identifiers, and Lumino tokens—never on internal Correxit models or JupyterLab widgets.
-- **Slower-moving & dependable:** Modeled after `@jupyterlab/rendermime-interfaces`, this
-  package follows strict Semantic Versioning and evolves by adding new tokens rather
-  than breaking existing interfaces.
-- **Singleton tokens:** All plugins and Correxit must share a single instance of this package
-  via JupyterLab module federation (`singleton: true`).
+This package follows Semantic Versioning and is released independently from
+Correxit, so plugins can depend on the contracts they use without tracking
+every Correxit release.
 
 ## Installation
 
@@ -28,7 +24,6 @@ In your JupyterLab extension's `package.json`, configure:
   "jupyterlab": {
     "sharedPackages": {
       "@correxit/contracts": {
-        "bundled": false,
         "singleton": true
       }
     }
@@ -36,6 +31,12 @@ In your JupyterLab extension's `package.json`, configure:
 }
 ```
 
+Correxit and your plugin must share the same token instances. The singleton
+setting enables that sharing; Correxit must also be installed in JupyterLab.
+
+See the [integration guide](https://github.com/correxit/correxit/blob/main/docs/plugins.md)
+for payloads, provider replacement, examples, and migration from the earlier API.
+
 ## License
 
-BSD-3-Clause
+[BSD-3-Clause](https://github.com/correxit/correxit/blob/main/packages/contracts/LICENSE)
