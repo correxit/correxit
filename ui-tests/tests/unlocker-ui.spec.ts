@@ -446,6 +446,67 @@ test('student credentials never enter author unlocking when commands use a path'
   await dispose();
 });
 
+test('the default unlock prompt reports rejection, permits cancellation, and retries', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [{ id: 'answer', source: 'answer' }]);
+  try {
+    await page.evaluate(async () => {
+      const { Workbook } = (window as any).__correxit__;
+      const workbook = (window as any).jupyterapp.shell.currentWidget;
+      // Leave the default provider's credential cache empty.
+      await Workbook.convert(workbook, 'correct-passphrase', {
+        store: async () => {},
+        request: async function* () {}
+      });
+      await Workbook.lock(workbook);
+    });
+    const unlock = () =>
+      page.evaluate(() => {
+        window.setTimeout(() => {
+          (window as any).__unlock = (
+            window as any
+          ).jupyterapp.commands.execute('correxit:unlock');
+        }, 0);
+      });
+    const dialog = page.locator('.jp-Dialog');
+    await unlock();
+    await expect(dialog).toContainText('Enter passphrase to unlock');
+    await dialog.getByRole('textbox').fill('incorrect');
+    await dialog.getByRole('button', { name: /^ok$/i }).click();
+    await expect(dialog).toContainText('Could not unlock');
+    await expect(dialog).toContainText('Incorrect passphrase');
+    expect(
+      await page.evaluate(() => {
+        const { Workbook } = (window as any).__correxit__;
+        return Workbook.open((window as any).jupyterapp.shell.currentWidget)
+          .locked;
+      })
+    ).toBe(true);
+    await dialog.getByRole('button', { name: 'Close' }).click();
+
+    await unlock();
+    await expect(dialog).toContainText('Enter passphrase to unlock');
+    await dialog.getByRole('button', { name: /^cancel$/i }).click();
+    expect(await page.evaluate(() => (window as any).__unlock)).toBeNull();
+    await expect(dialog).toHaveCount(0);
+
+    await unlock();
+    await expect(dialog).toContainText('Enter passphrase to unlock');
+    await dialog.getByRole('textbox').fill('correct-passphrase');
+    await dialog.getByRole('button', { name: /^ok$/i }).click();
+    expect(
+      await page.evaluate(async () => {
+        const rubric = await (window as any).__unlock;
+        return rubric.locked;
+      })
+    ).toBe(false);
+    await expect(dialog).toHaveCount(0);
+  } finally {
+    await dispose();
+  }
+});
+
 test('the default submission and revision prompts still work', async ({
   page
 }) => {

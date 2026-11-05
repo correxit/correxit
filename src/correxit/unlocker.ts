@@ -166,6 +166,8 @@ export namespace Unlocker {
           if (passphrase) {
             secrets.passphrases.add(passphrase);
             yield { key: null, passphrase };
+            // A successful unlock closes the stream before this point.
+            throw new Correxit.Error.Unlock(trans.__('Incorrect passphrase'));
           }
           return;
         }

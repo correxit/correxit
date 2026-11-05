@@ -136,19 +136,35 @@ describe('Unlocker', () => {
     it('returns null without prompting if silent is true', async () => {
       manager.get.mockResolvedValue(undefined);
 
-      const result = await unlock({ silent: true });
+      const result = await unlock({ silent: true }, new Set(['stale']));
       expect(result).toBeNull();
       expect(input.text).not.toHaveBeenCalled();
       expect(manager.get).toHaveBeenCalled();
+      expect(Workbook.unlock).toHaveBeenCalledTimes(1);
     });
 
-    it('returns null if user cancels the passphrase prompt', async () => {
-      manager.get.mockResolvedValue(undefined);
-      (input.text as jest.Mock).mockResolvedValue(null);
+    it.each([false, true])(
+      'returns null on prompt cancellation with cached credentials: %j',
+      async cached => {
+        manager.get.mockResolvedValue(undefined);
+        (input.text as jest.Mock).mockResolvedValue(null);
 
-      const result = await unlock();
-      expect(result).toBeNull();
-      expect(Workbook.unlock).not.toHaveBeenCalled();
+        const result = await unlock(null, new Set(cached ? ['stale'] : []));
+        expect(result).toBeNull();
+        expect(Workbook.unlock).toHaveBeenCalledTimes(cached ? 1 : 0);
+        expect(manager.set).not.toHaveBeenCalled();
+      }
+    );
+
+    it('reports a rejected prompted passphrase after cached credentials fail', async () => {
+      (input.text as jest.Mock).mockResolvedValue('incorrect');
+
+      await expect(unlock(null, new Set(['stale']))).rejects.toMatchObject({
+        name: 'Unlock',
+        message: 'Incorrect passphrase'
+      });
+      expect(Workbook.unlock).toHaveBeenCalledTimes(2);
+      expect(manager.set).not.toHaveBeenCalled();
     });
 
     it('falls back to SecretsManager if key is missing', async () => {
