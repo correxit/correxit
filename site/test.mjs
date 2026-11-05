@@ -173,9 +173,15 @@ test(
       await access(path.join(directory, new URL(meta['og:image']).pathname));
     }
     assert.ok(page.includes(`href="${route}/authoring/"`));
-    assert.ok(
-      page.includes(`href="${route}/demo/notebooks/?path=chinook.ipynb"`)
-    );
+    const landing =
+      route === 'latest'
+        ? latest
+        : await readFile(path.join(directory, version, 'index.html'), 'utf8');
+    const demo = landing.match(
+      /href="(demo\/[^"?]+\?path=chinook\.ipynb)"/
+    )?.[1];
+    assert.ok(demo);
+    assert.ok(page.includes(`href="${route}/${demo}"`));
     const config = JSON.parse(
       page.match(/<script id="__config"[^>]*>(.*?)<\/script>/)[1]
     );
@@ -199,7 +205,7 @@ test(
   }
 );
 
-test('the demo opens Chinook in Jupyter Notebook', async () => {
+test('the demo opens Chinook in JupyterLab', async () => {
   const versions = process.env.CORREXIT_SITE_REFRESH
     ? JSON.parse(
         await readFile(path.join(path.dirname(output), 'versions.json'), 'utf8')
@@ -220,12 +226,18 @@ test('the demo opens Chinook in Jupyter Notebook', async () => {
       path.join(output, 'demo', 'files', 'chinook.ipynb')
     ].map(async source => JSON.parse(await readFile(source, 'utf8')))
   );
-  const [home, notebook, runtime] = await Promise.all([
+  const [home, lab, runtime, config] = await Promise.all([
     read(''),
-    readFile(path.join(output, 'demo', 'notebooks', 'index.html'), 'utf8'),
+    readFile(path.join(output, 'demo', 'lab', 'index.html'), 'utf8'),
     readFile(path.join(output, 'demo', 'jupyter-lite.json'), 'utf8').then(
       JSON.parse
-    )
+    ),
+    readFile(
+      version
+        ? path.join(path.dirname(directory), 'jupyter-lite.json')
+        : path.join(root, 'lite', 'jupyter-lite.json'),
+      'utf8'
+    ).then(JSON.parse)
   ]);
 
   const extension = runtime['jupyter-config-data'].federated_extensions.find(
@@ -241,9 +253,9 @@ test('the demo opens Chinook in Jupyter Notebook', async () => {
     (await lstat(path.join(output, 'demo'))).isSymbolicLink(),
     !process.env.MIKE_DOCS_VERSION
   );
-  assert.match(home, /href="demo\/notebooks\/?\?path=chinook\.ipynb"/);
-  assert.match(notebook, /id="jupyter-lite-main"/);
-  assert.match(notebook, /config-utils\.js/);
+  assert.match(home, /href="demo\/lab\/?\?path=chinook\.ipynb"/);
+  assert.match(lab, /id="jupyter-lite-main"/);
+  assert.match(lab, /config-utils\.js/);
   assert.equal(
     notebooks[1].metadata.correxit.cxtformat,
     notebooks[0].metadata.correxit.cxtformat
@@ -254,7 +266,10 @@ test('the demo opens Chinook in Jupyter Notebook', async () => {
     assert.equal(welcome.source, instructions);
     assert.equal(notebook.metadata.correxit.cells[welcome.id], undefined);
   });
-  assert.equal(runtime['jupyter-config-data'].appUrl, './notebooks');
+  assert.equal(
+    runtime['jupyter-config-data'].appUrl,
+    config['jupyter-config-data'].appUrl
+  );
   assert.equal(runtime['jupyter-config-data'].baseUrl, './');
 });
 

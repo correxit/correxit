@@ -232,9 +232,8 @@ pixi run jlpm watch
 pixi run jlpm serve
 ```
 
-**3. Open `http://localhost:8888/demo/notebooks/?path=chinook.ipynb` and refresh
-after each rebuild.** JupyterLab remains available at
-`http://localhost:8888/demo/lab/`.
+**3. Open `http://localhost:8888/demo/lab/?path=chinook.ipynb` and refresh
+after each rebuild.**
 
 The landing page is at `http://localhost:8888/`. Its guides are rendered
 directly from `README.md`, `CHANGELOG.md`, and `docs/`, while its API reference
