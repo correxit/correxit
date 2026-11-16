@@ -412,31 +412,6 @@ replace. This uses JupyterLab's
 
 ---
 
-## Migrating existing plugins
-
-For plugins using the earlier model-based API:
-
-1. **Depend on `@correxit/contracts` instead of `correxit`**:
-   Update `package.json` dependencies to `"@correxit/contracts": "^1.0.0"`.
-   In `jupyterlab.sharedPackages`, mark `"@correxit/contracts": { "singleton": true }`.
-   Import tokens and types directly from the new package.
-2. **Use the payloads documented above**: `Collector` and `Submitter` receive
-   plain data instead of a `Workbook`. `Distributor` retains its payload shape;
-   `Registrar` receives only the identifier. Replace calls to `Workbook.open()`
-   with the supplied payload fields.
-3. **`Unlocker` refactor**:
-   - Remove `unlock()` implementation. Correxit core now owns rubric unlocking.
-   - Change `request()` from returning a single promise to an `AsyncIterable<Secret | null>` (e.g. `async function* request(...)`).
-   - Keep `store(rubric: string, key: string): Promise<void>` for author keys.
-   - To cancel, return without yielding. Replace `{ secret: null }` with
-     `yield null` for submission without revision access or recovery without
-     decryption.
-
-The contracts package version is independent of the Correxit and workbook
-format versions. This API change does not change the saved notebook format.
-
----
-
 ## Corrector Run Commands
 
 `correxit-corrector:run` returns a cold `AsyncGenerator<Corrector.Event>`.

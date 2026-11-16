@@ -68,15 +68,9 @@ using the original tag; do not move the tag or recreate the release.
 
 ## Versioning
 
-For 2.1.0, requiring `Unlocker.request` is an intentional exception to strict
-SemVer while Correxit has no known external plugin consumers. Custom unlockers
-must implement it; that release retained workbook-format compatibility.
-
-For 2.2.0, superseding the unused draft workbook format and requiring
-`Workbook.Grade.verified` are intentional exceptions to strict SemVer. Format 1
-never had usage in the wild; format 2 is the only supported format. Custom
-integrations must follow the authenticated grade-result contract in
-[PLUGINS](plugins.md).
+Correxit and `@correxit/contracts` follow Semantic Versioning with independent
+release cycles. Plugin interfaces are documented in [PLUGINS](plugins.md).
+Persisted notebook data has a separate `cxtformat` version, described below.
 
 Numbered website snapshots, such as `/2.0.0/`, remain fixed. The domain root
 serves the newest stable homepage directly, with links to its guides and demo.
@@ -99,21 +93,17 @@ replaces it with that release's homepage and guides.
 
 ## Workbook format
 
-`cxtformat: 1` was a draft with no usage in the wild. Although Correxit 2.0
-described it as frozen, format 2 supersedes it to authenticate issued contents.
-Format 1 is rejected; no legacy reader or migration path is retained. The
-bundled Chinook workbook has been authenticated and re-signed as format 2.
-See [SECURITY](security.md) for the supported contract.
+Correxit supports `cxtformat: 2`, which authenticates issued contents. Other
+format versions are rejected. See [SECURITY](security.md) for the supported
+contract.
 
 Future incompatible persisted-format changes require a new `cxtformat` and an
 explicit compatibility policy for existing workbooks. Package versions and
 workbook-format versions are independent. Changes to authenticated terms, such
 as the assignment MAC or issue digest surfaces, are persisted-format changes.
 
-When releasing this change, call out the workbook-format transition and the
-CSV contract: exports from scanning alone leave scores blank; authenticated
-batch grading can reuse valid reports without kernel execution. Package
-version selection remains separate from `cxtformat`.
+CSV exports from scanning alone leave scores blank; authenticated batch grading
+can reuse valid reports without kernel execution.
 
 ## Releasing `@correxit/contracts`
 
@@ -136,10 +126,6 @@ Both follow the same [public-license schedule](../README.md#license):
 Publish the contracts version before releasing a Correxit version that depends
 on it. The initial npm publication also requires configuring package publishing
 access for the new package and its `contracts.yml` trusted publisher.
-
-The first Correxit release using these contracts changes the plugin API. Include
-the [migration guide](plugins.md#migrating-existing-plugins) in its release notes.
-The saved notebook format remains unchanged.
 
 For local API checks, the default base is the merge base of `origin/main` and
 `HEAD`. In a fork, fetch the upstream repository and set `CONTRACTS_BASE`

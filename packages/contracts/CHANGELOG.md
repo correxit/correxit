@@ -8,11 +8,11 @@ Initial release of `@correxit/contracts`.
   types and tokens independently from Correxit.
 - Uses Correxit's `AGPL-3.0-only` license and scheduled `BSD-3-Clause`
   transition on 1 January 2028.
-- Replaced internal model parameters with plain-data payloads.
-- Changed `Unlocker.request()` to yield credentials through an async iterable.
+- Plugin interfaces use plain-data payloads.
+- `Unlocker.request()` yields credentials through an async iterable.
   `store()` retains author keys; Correxit handles authentication and decryption.
 - Creation requests include a proposed rubric identity before credentials are
   acquired; the same ID is retained through key storage and workbook creation.
 
-See the [migration guide](https://github.com/correxit/correxit/blob/main/docs/plugins.md#migrating-existing-plugins)
-for changes required in existing plugins.
+See the [integration guide](https://github.com/correxit/correxit/blob/main/docs/plugins.md)
+for provider interfaces and examples.

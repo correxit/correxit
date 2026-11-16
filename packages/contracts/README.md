@@ -35,7 +35,7 @@ Correxit and your plugin must share the same token instances. The singleton
 setting enables that sharing; Correxit must also be installed in JupyterLab.
 
 See the [integration guide](https://github.com/correxit/correxit/blob/main/docs/plugins.md)
-for payloads, provider replacement, examples, and migration from the earlier API.
+for payloads, provider replacement, and examples.
 
 ## License
 
