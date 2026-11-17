@@ -4,16 +4,17 @@
 
 ```ts
 import { Token } from '@lumino/coreutils';
-/**
- * Identifies a workbook state across provider calls,
- * `file` is a basename; `assignment` is an external assignment ID; `issue` is
- * the issued-content digest. Missing values are explicit nulls.
- */
+/** Identifies a workbook state across provider calls. */
 export type Identifier = {
+    /** The registrar-provided assignee. */
     assignee: string | null;
+    /** An external assignment ID. */
     assignment: string | null;
+    /** The file basename. */
     file: string | null;
+    /** The issued-content digest. */
     issue: string | null;
+    /** The workbook's rubric ID. */
     rubric: string;
 };
 export declare namespace Identifier {
@@ -36,7 +37,7 @@ export type Notebook = {
 export declare namespace Notebook {
     type Cell = {
         cell_type: string;
-        /** Optional in native notebook JSON; Correxit requires IDs before issuance. */
+        /** Though optional in nbformat; Correxit requires IDs before issuance. */
         id?: string;
         metadata: Record<string, unknown>;
         source: string | string[];
