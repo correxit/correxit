@@ -176,8 +176,8 @@ export namespace Rubric {
       if (shape(x) !== shape(y))
         return { ...Score.INCORRECT, code: 'mismatch-congruence' };
       if ('data' in x && 'data' in y) {
-        const equal = JSON.stringify(order(x.data)) ===
-          JSON.stringify(order(y.data));
+        const equal =
+          JSON.stringify(order(x.data)) === JSON.stringify(order(y.data));
         const error: Score = { ...Score.INCORRECT, code: 'mismatch-data' };
         return equal ? Score.CORRECT : error;
       }
@@ -259,7 +259,8 @@ export namespace Rubric {
     ): Promise<Score> {
       const cell = get(rubric, id);
       const given = outputs.get(id);
-      const intervention = Score.get(rubric.assignment.report.interventions, id);
+      const { interventions } = rubric.assignment.report;
+      const intervention = Score.get(interventions, id);
       if (!cell)
         return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
@@ -290,7 +291,6 @@ export namespace Rubric {
       const visible = rubric.locked
         ? references.filter(reference => !reference.secret)
         : references;
-
       if (cell.is === 'comparable') {
         const [reference] = visible;
         if (!reference)
@@ -301,13 +301,11 @@ export namespace Rubric {
             ...Score.INCORRECT, code: 'missing-reference', id, possible
           };
         }
-
         const points = ({ status }: Score) =>
           status === 'correct' ? possible : 0;
         const score = await compare(expected, given);
         return { ...score, id, points: points(score), possible };
       }
-
       if (cell.is === 'correctable') {
         if (!visible.length)
           return { ...Score.INCORRECT, code: 'locked', id, possible };
@@ -330,7 +328,6 @@ export namespace Rubric {
           points: earned, possible: total, status
         };
       }
-
       return { ...Score.UNSCORED, code: 'error-is-unknown', id };
     }
   }
@@ -367,17 +364,9 @@ export namespace Rubric {
         (sum, id) =>
           sum + (id === referent ? points : get(rubric, id)!.points), 0
       );
-      const cells = {
-        ...rubric.cells,
-        [cell.id]: { ...cell, points: total }
-      };
-      const references = {
-        ...rubric.references, [referent]: updated
-      };
-      return {
-        ...rubric, assignment, cells,
-        references, revised: Date.now()
-      };
+      const cells = { ...rubric.cells, [cell.id]: { ...cell, points: total } };
+      const references = { ...rubric.references, [referent]: updated };
+      return { ...rubric, assignment, cells, references, revised: Date.now() };
     }
   }
 
