@@ -1,5 +1,9 @@
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { ICodeCellModel } from '@jupyterlab/cells';
+import type {
+  Registrar,
+  Registration as REGISTRATION
+} from '@correxit/contracts';
 import { Kernel, KernelMessage, KernelSpec } from '@jupyterlab/services';
 import { find } from '@lumino/algorithm';
 import * as Error from './error';
@@ -413,20 +417,14 @@ export namespace Rubric {
   export namespace Assignment {
     export type Overdue = 'accept' | 'dock' | 'reject' | null;
 
-    export type Registration = Pick<
-      Assignment,
-      'expiration' | 'id' | 'name' | 'roster'
-    >;
+    export type Registration = REGISTRATION;
 
     export namespace Equal {
       /** A named group of assignment registrations. */
-      export type Course = {
-        assignments: Registration[];
-        group: string;
-      };
+      export type Course = REGISTRATION.Group;
 
       /** Registration shapes accepted by a registrar. */
-      export type Registered = Registration[] | Course[] | null;
+      export type Registered = Awaited<ReturnType<Registrar>>;
 
       const course = (x: Course, y: Course): boolean =>
         x.group === y.group &&

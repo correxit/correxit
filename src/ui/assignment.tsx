@@ -14,7 +14,7 @@ type Enrolled = {
   registered: Registered;
 };
 type Registration = Rubric.Assignment.Registration;
-type Course = { assignments: Registration[]; group: string };
+type Course = Correxit.Registration.Group;
 type TranslationBundle = IRenderMime.TranslationBundle;
 
 const TTL = 10_000;

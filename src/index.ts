@@ -8,6 +8,5 @@
  */
 import { Assignment, Correxit, Rubric, Workbook } from './correxit';
 export * from '@correxit/contracts';
-export type { Secret } from './correxit/security';
 export { plugins as default } from './plugins';
 export { Assignment, Correxit, Rubric, Workbook };
