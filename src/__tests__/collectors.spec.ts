@@ -38,7 +38,6 @@ const certified = (
 
   return {
     certification,
-    file: 'test.ipynb',
     identifier: {
       assignee,
       assignment: '',
@@ -54,8 +53,6 @@ const certified = (
       nbformat_minor: 5
     },
     path: 'test.ipynb',
-    points,
-    possible,
     score: {
       code: '',
       comment: '',

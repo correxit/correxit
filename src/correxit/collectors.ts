@@ -3,7 +3,7 @@ import * as security from './security';
 
 /** Content-addressed digest receipt for a certified workbook grade. */
 export async function manual(payload: Collector.Payload): Promise<string> {
-  const { certification, identifier, points, possible } = payload;
+  const { certification, identifier, score: { points, possible } } = payload;
   const { assignee, issue, rubric: id } = identifier;
   const terms = JSON.stringify({
     assignee,

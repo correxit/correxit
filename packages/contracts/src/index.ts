@@ -92,16 +92,12 @@ export namespace Collector {
   export type Payload = {
     /** Local certification time in milliseconds since the Unix epoch. */
     certification: number | null;
-    /** Notebook basename. */
-    file: string;
     identifier: Identifier.Assigned;
     /** Assignment display name. */
     name: string;
     notebook: Notebook;
     /** Jupyter contents path of the workbook. */
     path: string;
-    points: number;
-    possible: number;
     score: Score;
   };
 }
@@ -154,8 +150,6 @@ export type Submitter = (payload: Submitter.Payload) => Promise<string | null>;
 
 export namespace Submitter {
   export type Payload = {
-    /** Notebook basename. */
-    file: string;
     identifier: Identifier.Assigned;
     /** Assignment display name. */
     name: string;

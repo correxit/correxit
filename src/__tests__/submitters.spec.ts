@@ -35,7 +35,6 @@ const submitted = (
     submission?: Rubric.Timestamp | null;
   } = {}
 ): Submitter.Payload => ({
-  file: overrides.identifier?.file ?? 'assignment-alice.ipynb',
   identifier: identifier(overrides.identifier),
   name: 'assignment',
   notebook: {

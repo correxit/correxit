@@ -344,6 +344,48 @@ test('Corrector does not retry rejected credentials or expose authentication err
   }
 });
 
+test('delivery retries require a currently sealed submission', async ({
+  page
+}) => {
+  const fixture = await setup(page, cells);
+  const issued = await issue(page);
+  try {
+    const result = await page.evaluate(
+      async ({ path, key }) => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const workbook = app.shell.currentWidget;
+        const file = await app.serviceManager.contents.get(path);
+        Workbook.restore(workbook, file.content);
+        await app.commands.execute('correxit:submit');
+        const receipt = Workbook.open(workbook).assignment.submitted;
+
+        // Start from the same pending delivery, then open it for grading.
+        Workbook.restore(workbook, file.content);
+        await Workbook.unlock(workbook, key);
+        await Workbook.lock(workbook);
+        const enabled = app.commands.isEnabled('correxit:submit');
+        await app.commands.execute('correxit:submit');
+        return {
+          receipt,
+          enabled,
+          after: Workbook.open(workbook).assignment.submitted
+        };
+      },
+      { path: issued.paths[0], key }
+    );
+    expect(result.receipt).toMatch(/^manual:/);
+    expect(result.enabled).toBe(false);
+    expect(result.after).toBeNull();
+    const dialog = page.locator('.jp-Dialog');
+    await expect(dialog).toContainText('missing seal');
+    await dialog.getByRole('button', { name: 'Close' }).click();
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
 test('authentic submissions grade and collect; authenticated cached reports skip execution', async ({
   page
 }) => {

@@ -14,7 +14,7 @@ import { IRenderMime } from '@jupyterlab/rendermime';
 import {
   Collector,
   Identifier as ContractIdentifier,
-  Notebook as ContractNotebook,
+  Submitter,
   Unlocker
 } from '@correxit/contracts';
 import { Assignment } from './assignment';
@@ -129,22 +129,23 @@ export namespace Workbook {
     export const assigned = ContractIdentifier.assigned;
   }
 
-  /** Convert a certified workbook grade into a plain Collector payload. */
-  export function payload(certified: Certified): Collector.Payload {
+  /** Record a certified grade; a declined collection leaves its receipt intact. */
+  export async function record(
+    certified: Certified,
+    collector: Collector
+  ): Promise<boolean> {
     const { grade, identifier, workbook } = certified;
     const rubric = open(workbook, true);
-    const name = rubric?.assignment.name ?? '';
-    const certification = rubric?.assignment.certification ?? null;
-    const notebook = workbook.context.model.sharedModel.toJSON() as ContractNotebook;
-    return {
+    if (!rubric?.locked || rubric.assignment.certification === null)
+      throw new Error.Certify('collect error: not certified');
+    const { name, certification } = rubric.assignment;
+    const notebook = workbook.context.model.sharedModel.toJSON();
+    const receipt = await collector({
       certification,
-      file: identifier.file,
       identifier,
       name,
       notebook,
       path: grade.path,
-      points: grade.score.points,
-      possible: grade.score.possible,
       score: {
         code: grade.score.code,
         comment: grade.score.comment,
@@ -152,7 +153,10 @@ export namespace Workbook {
         possible: grade.score.possible,
         status: grade.score.status
       }
-    };
+    });
+    if (receipt === null) return false;
+    await collect(workbook, receipt);
+    return true;
   }
 
   export namespace Cell {
@@ -380,26 +384,35 @@ export namespace Workbook {
   const digest = (ciphertexts: string[]) =>
     security.digest(ciphertexts.join('\n'));
   const verify = async (
-    workbook: Workbook,
+    notebook: INotebookContent,
     rubric: Rubric.Locked,
-    action: 'unlock' | 'revise'
+    action: 'unlock' | 'revise' | 'submit',
+    partial = false
   ): Promise<string[]> => {
     const { seal } = rubric.assignment;
-    if (!seal) return [];
+    const Failure = action === 'submit' ? Error.Submit : Error.Unseal;
+    if (!seal) throw new Failure(`${action} seal error: missing seal`);
 
     const ids = sequence(rubric);
-    const { cells } = workbook.context.model.sharedModel;
-    const indices = new Map(cells.map(cell => [cell.id, cell]));
+    const indices = new Map(notebook.cells.map(cell => [cell.id, cell]));
+    if (action === 'submit' && indices.size !== notebook.cells.length)
+      throw new Error.Submit('submit seal error: duplicate cell IDs');
     const present = ids.filter(id => indices.has(id));
     const missing = ids.filter(id => !indices.has(id));
     if (missing.length) {
-      if (headless(workbook))
-        throw new Error.Unseal(`${action} seal error: missing cells`);
+      if (!partial)
+        throw new Failure(`${action} seal error: missing cells`);
       console.warn(`${action}: skipping seal verify, missing cells`, missing);
       return present;
     }
 
-    const ciphertexts = present.map(id => indices.get(id)!.getSource());
+    const ciphertexts = present.map(id => {
+      const cell = indices.get(id)!;
+      const source = Array.isArray(cell.source) ? cell.source.join('') : cell.source;
+      if (action === 'submit' && (cell.cell_type !== 'raw' || !security.encrypted(source)))
+        throw new Error.Submit('submit seal error: unsealed cell');
+      return source;
+    });
     const hash = await digest(ciphertexts);
     if (hash !== seal)
       throw new Error.Mismatch('seal mismatch: ciphertexts tampered');
@@ -414,11 +427,11 @@ export namespace Workbook {
   };
   type Recovered = Cell.Prepared & { payload: Payload | null; };
   const forensic = (metadata: unknown) => {
-    const root = record(metadata) ? metadata : null;
-    const assignment = root && record(root.assignment) ? root.assignment : null;
-    const keys: Keys | null = assignment && record(assignment.keys)
+    const root = isRecord(metadata) ? metadata : null;
+    const assignment = root && isRecord(root.assignment) ? root.assignment : null;
+    const keys: Keys | null = assignment && isRecord(assignment.keys)
       ? {
-          private: record(assignment.keys.private)
+          private: isRecord(assignment.keys.private)
             ? assignment.keys.private
             : null
         }
@@ -430,7 +443,7 @@ export namespace Workbook {
       keys
     };
   };
-  const record = (value: unknown): value is Record<string, unknown> =>
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
   const rescue = async (
     field: unknown,
@@ -460,7 +473,7 @@ export namespace Workbook {
         const json = await security.unseal(source, recipient);
         const decoded = JSON.parse(json) as unknown;
         return {
-          payload: record(decoded) ? decoded : null,
+          payload: isRecord(decoded) ? decoded : null,
           recovered: null
         };
       } catch { /* wrong key or not sealed to this recipient */ }
@@ -666,12 +679,16 @@ export namespace Workbook {
     return { grade, identifier, workbook };
   }
 
-  /** Convert a notebook, retaining a prepared rubric's identity when supplied. */
+  /**
+   * Convert a notebook, retaining a proposed rubric's identity. Take any rollback
+   * checkpoint after custody succeeds, immediately before the first notebook write.
+   */
   export async function convert(
     workbook: Workbook,
     credentials: security.Secret | string,
     unlocker: Unlocker,
-    created: ReturnType<typeof Rubric.create> | null = null
+    created: ReturnType<typeof Rubric.create> | null = null,
+    checkpoint?: () => void
   ): Promise<Rubric.Unlocked> {
     try {
       const opened = open(workbook)!;
@@ -706,6 +723,7 @@ export namespace Workbook {
       current();
       await unlocker.store(created.id, key);
       current();
+      checkpoint?.();
       if (model.nbformatMinor < 5) {
         // Ensure nbformat 4.5 so cell IDs persist on save.
         const notebook = model.toJSON() as INotebookContent;
@@ -1101,7 +1119,7 @@ export namespace Workbook {
       if (!recovered && !payload) continue;
 
       const raw = cell.getMetadata('jupyter');
-      const jupyter = record(raw) ? { ...raw } : {};
+      const jupyter = isRecord(raw) ? { ...raw } : {};
       delete jupyter['source_hidden'];
 
       const snapshot = cell.toJSON();
@@ -1175,7 +1193,9 @@ export namespace Workbook {
       throw new Error.Revise('revise error');
 
     const { assignee } = rubric.assignment;
-    const ids = await verify(workbook, rubric, 'revise');
+    const ids = await verify(
+      workbook.context.model.sharedModel.toJSON(), rubric, 'revise', headed(workbook)
+    );
     const prepared = await Promise.all(
       ids.map(id => Cell.unseal(workbook, id, assignee, key))
     );
@@ -1245,6 +1265,19 @@ export namespace Workbook {
     return update(workbook, Rubric.submit(sealed, submission));
   }
 
+  /** Snapshot and verify the sealed notebook before handing it to a submitter. */
+  export async function submission(workbook: Workbook): Promise<Submitter.Payload> {
+    const notebook = workbook.context.model.sharedModel.toJSON();
+    const rubric = Rubric.normalize(notebook.metadata.correxit as Partial<Rubric.Locked>);
+    const identifier = Workbook.identifier(workbook, rubric);
+    const { name, submission } = rubric.assignment;
+    if (!Identifier.assigned(identifier) || submission === null)
+      throw new Error.Submit('submit error: no assigned submission');
+    const path = workbook.context.path;
+    await verify(notebook, rubric, 'submit');
+    return { identifier, name, notebook, path, submission };
+  }
+
   /** Toggle a workbook reference's `secret` flag. */
   export async function toggle(
     workbook: Workbook,
@@ -1276,7 +1309,9 @@ export namespace Workbook {
         assignment.keys.private.author, key
       );
       const author = await security.parse(armored);
-      const present = await verify(workbook, rubric, 'unlock');
+      const present = await verify(
+        workbook.context.model.sharedModel.toJSON(), rubric, 'unlock', headed(workbook)
+      );
 
       // Unseal each rubric cell present in the notebook.
       const { assignee } = assignment;

@@ -1,5 +1,5 @@
 import { URLExt } from '@jupyterlab/coreutils';
-import { Assignment, Correxit, Rubric } from '..';
+import type { Collector, Distributor, Identifier, Registrar } from '@correxit/contracts';
 import * as Error from '../error';
 
 export namespace Moodle {
@@ -144,7 +144,7 @@ export namespace Moodle {
   };
 
   export async function collector(
-    payload: Correxit.Collector.Payload,
+    payload: Collector.Payload,
     settings: Settings
   ): Promise<string | null> {
     const { token, url: raw } = settings;
@@ -167,8 +167,7 @@ export namespace Moodle {
       throw new Error.Plugin(`collector error: no Moodle user for ${assignee}`);
 
     const content = JSON.stringify(payload.notebook);
-    const file = await Assignment.filename(payload.name, assignee);
-    const item = await upload(url, token, content, file);
+    const item = await upload(url, token, content, payload.identifier.file);
     if (!item)
       throw new Error.Plugin(`collector error: upload failed (${assignee})`);
 
@@ -192,9 +191,9 @@ export namespace Moodle {
   }
 
   export async function distributor(
-    payload: Parameters<Correxit.Distributor>[0],
+    payload: Distributor.Payload,
     settings: Settings
-  ): ReturnType<Correxit.Distributor> {
+  ): ReturnType<Distributor> {
     const { identifier, notebook, overwrite, resources } = payload;
     const { token, url: raw } = settings;
     const url = URLExt.normalize(raw);
@@ -222,13 +221,8 @@ export namespace Moodle {
         .some(({ userid }) => userid === user);
       if (assigned) return false;
     }
-    const metadata = notebook.metadata['correxit'] as Partial<Rubric.Locked>;
-    const { name } = metadata.assignment as Partial<Rubric.Assignment>;
-    const base =
-      (name || `moodle-${course}-${assignment}`).toLocaleLowerCase();
-    const file = await Assignment.filename(base, assignee);
     const content = JSON.stringify(notebook);
-    let draft = await upload(url, token, content, file);
+    let draft = await upload(url, token, content, identifier.file);
     if (resources) {
       for (const resource of resources) {
         draft = await upload(
@@ -254,9 +248,9 @@ export namespace Moodle {
   }
 
   export async function registrar(
-    _identifier: Correxit.Identifier,
+    _identifier: Identifier,
     settings: Settings
-  ): ReturnType<Correxit.Registrar> {
+  ): ReturnType<Registrar> {
     const { token, url: raw } = settings;
     const url = URLExt.normalize(raw);
     if (!token || !url) return null;

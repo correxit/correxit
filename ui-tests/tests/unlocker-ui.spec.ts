@@ -526,7 +526,9 @@ for (const outcome of ['cancel', 'decline', 'deny']) {
   });
 }
 
-test('failed key custody restores the original notebook', async ({ page }) => {
+test('failed key custody preserves edits made while conversion is pending', async ({
+  page
+}) => {
   const { dispose } = await setup(page, [{ id: 'answer', source: 'answer' }]);
   const result = await page.evaluate(async () => {
     const { Correxit, Workbook } = (window as any).__correxit__;
@@ -534,12 +536,16 @@ test('failed key custody restores the original notebook', async ({ page }) => {
     const workbook = app.shell.currentWidget;
     const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
     const previous = { ...unlocker };
-    const snapshot = JSON.stringify(workbook.context.model.toJSON());
+    let snapshot: string | null = null;
     Object.assign(unlocker, {
       request: async function* () {
         yield { key: 'ab'.repeat(32), passphrase: null };
       },
       store: async () => {
+        workbook.context.model.sharedModel.cells[0].setSource(
+          'concurrent edit'
+        );
+        snapshot = JSON.stringify(workbook.context.model.toJSON());
         throw new Error('Custody unavailable');
       }
     });

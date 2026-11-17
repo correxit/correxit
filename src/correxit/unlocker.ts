@@ -59,11 +59,13 @@ export namespace Unlocker {
     if (!rubric) return null;
 
     const { id } = rubric;
-    if (rubric.key) {
-      const unlocked = await Workbook.unlock(workbook, rubric.key);
-      await unlocker.store(id, rubric.key);
+    const store = async (unlocked: Rubric.Unlocked) => {
+      if (unlocked.id !== id)
+        throw new Correxit.Error.Invalid('unlock target changed');
+      await unlocker.store(id, unlocked.key);
       return unlocked;
-    }
+    };
+    if (rubric.key) return store(await Workbook.unlock(workbook, rubric.key));
 
     const attempt = async (secret: security.Secret) => {
       const key = await security.derive(secret, id);
@@ -74,8 +76,7 @@ export namespace Unlocker {
         if (error instanceof Correxit.Error.Unlock) return null;
         throw error;
       }
-      await unlocker.store(id, key);
-      return unlocked;
+      return store(unlocked);
     };
 
     const handle = Workbook.Credentials.normalize({

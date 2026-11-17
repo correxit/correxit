@@ -169,7 +169,6 @@ type Submitter = (payload: Submitter.Payload) => Promise<string | null>;
 
 namespace Submitter {
   type Payload = {
-    file: string;
     identifier: Identifier.Assigned;
     name: string;
     notebook: Notebook;
@@ -179,7 +178,8 @@ namespace Submitter {
 }
 ```
 
-Called after a student seals a workbook, including when retrying delivery.
+Called with a snapshot of the sealed workbook. Correxit checks its seal before
+each delivery, including retries.
 Return an opaque receipt for Correxit to store as `assignment.submitted`, or
 `null` if delivery was not recorded. Throw to report a delivery failure.
 
@@ -207,13 +207,10 @@ namespace Collector {
 
   type Payload = {
     certification: number | null;
-    file: string;
     identifier: Identifier.Assigned;
     name: string;
     notebook: Notebook;
     path: string;
-    points: number;
-    possible: number;
     score: Score;
   };
 }
@@ -221,8 +218,8 @@ namespace Collector {
 
 Called after a workbook has been graded and certified. Return an opaque receipt
 for Correxit to store as `assignment.collected`, or `null` if the grade was not
-recorded. Throw to report a collection failure. `points` and `possible` are the
-same totals as in `score`, which also carries status and feedback.
+recorded. A null receipt leaves any previous receipt intact. Throw to report a
+collection failure. The `score` carries the totals, status, and feedback.
 
 Correxit authenticates the rubric and issued contents before calling the
 collector. Use the supplied payload; reading a saved report or certification
@@ -507,6 +504,7 @@ current Correxit code exactly.
 
 The external service must also have **Can upload files** and
 **Can download files** enabled (checkboxes on the service edit page).
+The distributor and collector use `identifier.file` as the upload filename.
 The distributor uploads each workbook notebook to the Moodle draft area
 before attaching it to the student's feedback. The collector uses the same
 upload path for the graded workbook and records the numeric grade in the same

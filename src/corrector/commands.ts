@@ -214,18 +214,15 @@ export function commands(
             completed: false
           };
         }
-        if (open(workbook)?.assignment.collected && !args.overwrite) {
-          return {
-            file: { workbook, grade: certified.grade },
-            completed: false
-          };
-        }
-        const receipt = await collector(
-          Workbook.payload({ ...certified, workbook })
-        );
-        await Workbook.collect(workbook, receipt);
-        await save(workbook);
-        return { file: { workbook, grade: certified.grade }, completed: true };
+        const file = { workbook, grade: certified.grade };
+        if (
+          !args.overwrite &&
+          typeof open(workbook)?.assignment.collected === 'string'
+        )
+          return { file, completed: false };
+        const completed = await Workbook.record(certified, collector);
+        if (completed) await save(workbook);
+        return { file, completed };
       } finally {
         release();
       }

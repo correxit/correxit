@@ -405,19 +405,18 @@ export function commands(
     icon: Icons.certify,
     isEnabled: () => {
       const rubric = open(state.workbook());
-      const assigned = !!rubric?.assignment.assignee;
-      const certified = !!rubric?.assignment.certification;
-      const collected = !!rubric?.assignment.collected;
-      return assigned && !rubric.locked && certified && !collected;
+      if (!rubric || rubric.locked) return false;
+      const { assignee, certification, collected } = rubric.assignment;
+      return !!assignee && certification !== null && collected === null;
     },
     label: trans.__('Collect workbook...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
-      if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
+      if (!rubric || rubric.locked || !rubric.assignment.assignee ||
+        rubric.assignment.collected !== null) return;
       try {
         const certified = await Workbook.certify(workbook, trans, true);
-        const receipt = await collector(Workbook.payload(certified));
-        await Workbook.collect(workbook, receipt);
+        await Workbook.record(certified, collector);
         await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
@@ -601,7 +600,7 @@ If conversion fails, Correxit restores the original notebook.`
         if (workbook.context.isDisposed || open(workbook) ||
           notebook.getMetadata('correxit')) return;
 
-        const snapshot = workbook.context.model.toJSON() as INotebookContent;
+        let snapshot: INotebookContent | null = null;
         const overlay = document.createElement('div');
         const converting = trans.__('Converting...');
         overlay.classList.add('correxit-overlay', 'cxt-mod-loading');
@@ -613,11 +612,13 @@ If conversion fails, Correxit restores the original notebook.`
 
         let report: string[] | null;
         try {
-          await Workbook.convert(workbook, choice.secret, unlocker, created);
+          await Workbook.convert(workbook, choice.secret, unlocker, created, () => {
+            snapshot = workbook.context.model.toJSON() as INotebookContent;
+          });
           report = await nbgrader.convert(workbook, trans);
         } catch (error) {
           const current = workbook.context.isDisposed ? null : open(workbook);
-          if (workbook.context.isDisposed ||
+          if (!snapshot || workbook.context.isDisposed ||
             (current ? current.id !== created.id : notebook.getMetadata('correxit'))) {
             void showErrorMessage(...Error.interpret(error, trans));
             return;
@@ -1100,35 +1101,28 @@ If conversion fails, Correxit restores the original notebook.`
   disposables.push(commands.addCommand(CommandIDs.submit, {
     isEnabled: () => {
       const rubric = open(state.workbook());
-      const locked = !!rubric?.locked;
-      const assigned = !!rubric?.assignment.assignee;
-      const sealed = !!rubric?.assignment.submission;
-      const receipt = !!rubric?.assignment.submitted;
-      const certified = !!rubric?.assignment.certification;
-      return locked && assigned && !certified && (!sealed || !receipt);
+      if (!rubric?.locked || !rubric.assignment.assignee) return false;
+      const { certification, seal, submission, submitted } = rubric.assignment;
+      return certification === null && submitted === null &&
+        (submission === null || seal !== null);
     },
     isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify({ path: args.path });
-      if (!rubric) return;
+      if (!rubric?.locked || rubric.assignment.certification !== null ||
+        rubric.assignment.submitted !== null) return;
 
       const identifier = Workbook.identifier(workbook);
       if (!Workbook.Identifier.assigned(identifier)) return;
-      const payload = (submission: number | null): Correxit.Submitter.Payload => ({
-        file: identifier.file,
-        identifier,
-        name: rubric.assignment.name,
-        notebook: workbook.context.model.sharedModel.toJSON(),
-        path: workbook.context.path,
-        submission
-      });
-      if (rubric.assignment.submission && !rubric.assignment.submitted) {
+      const deliver = async () => {
+        const payload = await Workbook.submission(workbook);
+        const receipt = await submitter(payload);
+        await Workbook.acknowledge(workbook, receipt);
+      };
+      if (rubric.assignment.submission !== null) {
         try {
-          const receipt = await submitter(
-            payload(rubric.assignment.submission)
-          );
-          await Workbook.acknowledge(workbook, receipt);
+          await deliver();
           await save(workbook, false);
         } catch (error) {
           showErrorMessage(...Error.interpret(error, trans));
@@ -1145,10 +1139,9 @@ If conversion fails, Correxit restores the original notebook.`
       if (!choice) return;
       try {
         const recipients = await Workbook.recipients(workbook, choice.secret);
-        const submitted = await Workbook.submit(workbook, recipients);
+        await Workbook.submit(workbook, recipients);
         try {
-          const receipt = await submitter(payload(submitted.assignment.submission));
-          await Workbook.acknowledge(workbook, receipt);
+          await deliver();
         } catch (error) {
           const reason = Error.reason(error);
           const message = `Submission sealed but receipt failed: ${reason}`;

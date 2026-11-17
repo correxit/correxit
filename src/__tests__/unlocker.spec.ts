@@ -218,7 +218,10 @@ describe('Unlocker', () => {
     it('caches and stores key in secrets manager after prompt', async () => {
       manager.get.mockResolvedValue(undefined);
       (input.text as jest.Mock).mockResolvedValue('passphrase');
-      (Workbook.unlock as jest.Mock).mockResolvedValue(unlocked);
+      (Workbook.unlock as jest.Mock).mockResolvedValue({
+        ...unlocked,
+        key: `KEY<passphrase:${id}>`
+      });
       const passphrases = new Set<string>();
       await unlock(null, passphrases);
       expect(passphrases.has('passphrase')).toBe(true);
@@ -301,6 +304,41 @@ describe('Unlocker', () => {
         expect(Workbook.unlock).toHaveBeenCalledTimes(1);
       }
     );
+
+    it('retains the authenticated key when a late candidate finds the workbook already unlocked', async () => {
+      let resume!: () => void;
+      const waiting = new Promise<void>(resolve => {
+        resume = resolve;
+      });
+      const plugin = {
+        store: jest.fn(),
+        request: async function* () {
+          await waiting;
+          yield { key: 'stale', passphrase: null };
+        }
+      };
+      const late = Unlocker.unlock(workbook, plugin);
+      await Unlocker.unlock(workbook, plugin, { key: 'valid-key' });
+      // Workbook.unlock returns the current authenticated rubric once it is open.
+      (Workbook.unlock as jest.Mock).mockResolvedValue(unlocked);
+      resume();
+      await expect(late).resolves.toBe(unlocked);
+      expect(plugin.store.mock.calls).toEqual([
+        [id, 'valid-key'],
+        [id, 'valid-key']
+      ]);
+    });
+
+    it('does not store a key when the authenticated rubric has been replaced', async () => {
+      (Workbook.unlock as jest.Mock).mockResolvedValue({
+        ...unlocked,
+        id: 'replacement'
+      });
+      await expect(unlock({ key: 'valid-key' })).rejects.toThrow(
+        'unlock target changed'
+      );
+      expect(manager.set).not.toHaveBeenCalled();
+    });
 
     it('does not retry integrity failures or store an unauthenticated key', async () => {
       (Workbook.unlock as jest.Mock).mockRejectedValue(
