@@ -148,7 +148,7 @@ Otherwise each entry carries the file name and raw bytes.
 
 The `boolean` return is feedback to the propagator:
 
-| Result  | Propagator behaviour                                                                                          |
+| Result  | Propagator behavior                                                                                          |
 | ------- | ------------------------------------------------------------------------------------------------------------- |
 | `true`  | Saves the local notebook with `assignment.distribution` recorded, then emits `distributed`.                   |
 | `false` | Skips this assignee without writing a local file; emits `skipped`.                                            |
