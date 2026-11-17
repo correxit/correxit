@@ -272,10 +272,11 @@ for (const { command, path } of [
         );
         if (command === 'draft') await Workbook.lock(first);
         await first.context.save();
+        const operation = command === 'collect' ? 'record' : command;
         (window as any).__correxit_followup = {
           first,
-          original: Workbook[command],
-          command,
+          original: Workbook[operation],
+          operation,
           restores: [],
           target: null,
           release: null,
@@ -324,10 +325,11 @@ for (const { command, path } of [
             });
           };
           watch(record.second, 'other');
-          Workbook[command] = async (workbook: any, ...args: any[]) => {
+          Workbook[record.operation] = async (...args: any[]) => {
+            const workbook = command === 'collect' ? args[0].workbook : args[0];
             record.target = workbook;
             watch(workbook, 'source');
-            const result = await record.original(workbook, ...args);
+            const result = await record.original(...args);
             record.expected =
               workbook.context.model.sharedModel.getMetadata('correxit');
             await new Promise<void>(resolve => {
@@ -401,6 +403,8 @@ for (const { command, path } of [
       expect(result.clears).toEqual(['source']);
       expect(result.headless).toBe(path);
       expect(result.stored).toEqual(result.expected);
+      if (command === 'collect')
+        expect(result.stored.assignment.collected).toEqual(expect.any(String));
     } finally {
       await page
         .evaluate(async () => {
@@ -410,7 +414,7 @@ for (const { command, path } of [
           if (!record) return;
           record.release?.();
           if (record.release) await record.done.catch(() => {});
-          Workbook[record.command] = record.original;
+          Workbook[record.operation] = record.original;
           record.restores.forEach((restore: () => void) => restore());
           if (Workbook.headless(record.target)) record.target.context.dispose();
           record.second?.dispose();
