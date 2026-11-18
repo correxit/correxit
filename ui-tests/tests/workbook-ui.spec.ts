@@ -37,6 +37,7 @@ namespace Saves {
       const context = window as any;
       const { Rubric } = context.__correxit__;
       const { commands } = context.jupyterapp;
+      const browser: Window = window;
       const save = (context.__correxit_save = {
         execute: commands.execute.bind(commands),
         prepare: Rubric.assign,
@@ -46,28 +47,24 @@ namespace Saves {
         written: false,
         finished: 0,
         errors: [] as string[],
-        timeout: window.setTimeout,
+        timeout: browser.setTimeout,
         timer: null as number | null,
         release: null as (() => void) | null
       });
       const wait = () => new Promise<void>(resolve => (save.release = resolve));
       const crypto = mode === 'signing' || mode === 'encryption';
       if (mode === 'debounce') {
-        window.setTimeout = ((
-          callback: (...args: any[]) => void,
-          delay: number,
-          ...args: any[]
-        ) => {
-          if (delay !== 150)
-            return save.timeout.call(window, callback, delay, ...args);
-          save.timer = save.timeout.call(window, () => {}, 60000);
+        browser.setTimeout = (callback, delay, ...args) => {
+          if (delay !== 150 || typeof callback !== 'function')
+            return save.timeout.call(browser, callback, delay, ...args);
+          save.timer = save.timeout.call(browser, () => {}, 60000);
           save.release = () => {
-            window.setTimeout = save.timeout;
-            window.clearTimeout(save.timer!);
+            browser.setTimeout = save.timeout;
+            browser.clearTimeout(save.timer!);
             callback(...args);
           };
           return save.timer;
-        }) as typeof window.setTimeout;
+        };
       }
       if (crypto) {
         const method = mode === 'signing' ? 'assign' : 'lock';
@@ -1173,8 +1170,10 @@ for (const outcome of ['success', 'encryption failure', 'metadata failure']) {
           lock: Rubric.lock,
           write: notebook.setMetadata,
           first: true,
-          signed: null,
-          encrypted: null,
+          signed: null as (() => void) | null,
+          encrypted: null as (() => void) | null,
+          older: null as Promise<string | null> | null,
+          newer: null as Promise<string | null> | null,
           finished: false
         });
         Rubric.assign = async (...args: any[]) => {
@@ -1307,7 +1306,7 @@ for (const { mode, reversion, named } of [
         const held = ((window as any).__correxit_registration = {
           panel: app.shell.currentWidget,
           execute: app.commands.execute.bind(app.commands),
-          calls: [],
+          calls: [] as string[],
           clone: null
         });
         app.commands.execute = (id: string, args: any) => {
