@@ -6,12 +6,13 @@
   "scripts": {
     "start": "jupyter lab --config jupyter_server_test_config.py",
     "screenshots": "jlpm playwright test -c playwright.screenshots.config.js",
-    "test": "jlpm playwright test",
-    "test:update": "jlpm playwright test --update-snapshots"
+    "test": "tsc --noEmit && playwright test",
+    "test:update": "jlpm test --update-snapshots"
   },
   "devDependencies": {
     "@jupyterlab/galata": "~5.6.0",
-    "@playwright/test": "1.57.0"
+    "@playwright/test": "1.57.0",
+    "typescript": "~5.0.2"
   },
   "resolutions": {
     "@playwright/test": "1.57.0",

@@ -39,11 +39,11 @@ pixi run jlpm playwright install
 cd ..
 ```
 
-3. Execute the [Playwright](https://playwright.dev/docs/intro) tests:
+3. Typecheck the specs and run the Playwright tests with the same command as CI.
 
 ```sh
 cd ./ui-tests
-pixi run jlpm playwright test
+pixi run jlpm test
 ```
 
 Test results will be shown in the terminal. In case of any test failures, the test report
@@ -96,7 +96,7 @@ cd ..
 
 ```sh
 cd ./ui-tests
-pixi run jlpm playwright test -u
+pixi run jlpm test -u
 ```
 
 Snapshot updates run locally. If CI and local rendering differ, attach the
@@ -167,7 +167,7 @@ The useful pattern is:
 - throw away the extra noise
 - replace raw recorded clicks with existing helpers or command-driven setup
 - finish by running the smallest relevant command:
-  - `pixi run jlpm playwright test tests/my-spec.ts`
+  - `pixi run jlpm test tests/my-spec.ts`
   - `pixi run jlpm screenshots`
 
 ## Debug tests
