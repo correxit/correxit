@@ -416,8 +416,9 @@ export function commands(
         rubric.assignment.collected !== null) return;
       try {
         const certified = await Workbook.certify(workbook, trans, true);
-        await Workbook.record(certified, collector);
+        // Persist the local grade even if the collector declines or fails.
         await save(workbook, false);
+        if (await Workbook.record(certified, collector)) await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }
@@ -783,12 +784,7 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<Credentials & { silent: boolean }>):
       Promise<Headless | null> => {
       const handle = Workbook.Credentials.normalize(args);
-      try {
-        return handle && await fetch(handle, !!args.silent);
-      } catch (error) {
-        console.warn(CommandIDs.fetch, error);
-        return null;
-      }
+      return handle && await fetch(handle, !!args.silent);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.inject, {
@@ -1115,40 +1111,23 @@ If conversion fails, Correxit restores the original notebook.`
 
       const identifier = Workbook.identifier(workbook);
       if (!Workbook.Identifier.assigned(identifier)) return;
-      const deliver = async () => {
-        const payload = await Workbook.submission(workbook);
-        const receipt = await submitter(payload);
-        await Workbook.acknowledge(workbook, receipt);
-      };
-      if (rubric.assignment.submission !== null) {
-        try {
-          await deliver();
-          await save(workbook, false);
-        } catch (error) {
-          showErrorMessage(...Error.interpret(error, trans));
-        }
-        return;
-      }
-
-      const choice = await request({
-        identifier,
-        path: workbook.context.path,
-        purpose: 'submit',
-        silent: false
-      }, args);
-      if (!choice) return;
       try {
-        const recipients = await Workbook.recipients(workbook, choice.secret);
-        await Workbook.submit(workbook, recipients);
-        try {
-          await deliver();
-        } catch (error) {
-          const reason = Error.reason(error);
-          const message = `Submission sealed but receipt failed: ${reason}`;
+        let sealed = rubric;
+        if (rubric.assignment.submission === null) {
+          const choice = await request({
+            identifier,
+            path: workbook.context.path,
+            purpose: 'submit',
+            silent: false
+          }, args);
+          if (!choice) return;
+          const recipients = await Workbook.recipients(workbook, choice.secret);
+          sealed = await Workbook.submit(workbook, recipients);
+          // Keep the sealed submission even if the provider declines or fails.
           await save(workbook, false);
-          throw new Error.Plugin(message);
         }
-        await save(workbook, false);
+        if (await Workbook.deliver(workbook, sealed, submitter))
+          await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }
@@ -1207,9 +1186,9 @@ successful, an unlocked rubric.
     `,
     execute: async (args: Partial<Credentials>):
       Promise<Rubric.Unlocked | null> => {
-      const { handle, workbook } = await reify(args);
-      if (!workbook) return null;
       try {
+        const { handle, workbook } = await reify(args);
+        if (!workbook) return null;
         return await unlockerService.Unlocker.unlock(
           workbook,
           unlocker,

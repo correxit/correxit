@@ -9,7 +9,7 @@ import {
 } from '@jupyterlab/notebook';
 import { KernelSpec } from '@jupyterlab/services';
 import { findIndex, range } from '@lumino/algorithm';
-import { PromiseDelegate } from '@lumino/coreutils';
+import { JSONExt, PromiseDelegate } from '@lumino/coreutils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import {
   Collector,
@@ -57,11 +57,8 @@ export namespace Workbook {
     workbook: Workbook;
   };
 
-  /**
-   * The existing certification and collector payload. Its shape is unchanged;
-   * certification is established by the operation, not by this structural type.
-   */
-  export type Certified = Graded;
+  /** A verified grade paired with the locked revision that certified it. */
+  export type Certified = Graded & { rubric: Rubric.Locked; revision: number; };
 
   export type Credentials = |
     { path: string; unlock: null; key: null; passphrase: null; } |
@@ -129,15 +126,37 @@ export namespace Workbook {
     export const assigned = ContractIdentifier.assigned;
   }
 
+  const revisions = new WeakMap<INotebookModel, number>();
+
+  /** Identify edits to notebook content, including edits that leave the rubric intact. */
+  export function revision(workbook: Workbook): number {
+    const { model } = workbook.context;
+    if (!revisions.has(model)) {
+      revisions.set(model, 0);
+      model.contentChanged.connect(() => {
+        revisions.set(model, revisions.get(model)! + 1);
+      });
+    }
+    return revisions.get(model)!;
+  }
+
+  // Locked rubrics also have a shared metadata copy, which a reload can replace.
+  const current = (workbook: Workbook, rubric: Rubric, expected?: number) =>
+    !workbook.context.isDisposed && get(workbook) === rubric &&
+    (expected === undefined || revision(workbook) === expected) &&
+    (!rubric.locked || JSONExt.deepEqual(
+      workbook.context.model.sharedModel.getMetadata('correxit') ?? null, rubric
+    ));
+
   /** Record a certified grade; a declined collection leaves its receipt intact. */
   export async function record(
     certified: Certified,
     collector: Collector
   ): Promise<boolean> {
-    const { grade, identifier, workbook } = certified;
-    const rubric = open(workbook, true);
-    if (!rubric?.locked || rubric.assignment.certification === null)
+    const { grade, identifier, rubric, workbook } = certified;
+    if (typeof rubric.assignment.certification !== 'number')
       throw new Error.Certify('collect error: not certified');
+    if (!current(workbook, rubric, certified.revision)) return false;
     const { name, certification } = rubric.assignment;
     const notebook = workbook.context.model.sharedModel.toJSON();
     const receipt = await collector({
@@ -154,9 +173,8 @@ export namespace Workbook {
         status: grade.score.status
       }
     });
-    if (receipt === null) return false;
-    await collect(workbook, receipt);
-    return true;
+    if (receipt === null || !current(workbook, rubric, certified.revision)) return false;
+    return current(workbook, await collect(workbook, receipt));
   }
 
   export namespace Cell {
@@ -501,8 +519,9 @@ export namespace Workbook {
     receipt: string | null = null
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || !rubric.locked || !rubric.assignment.submission)
+    if (!rubric?.locked || rubric.assignment.submission === null)
       throw new Error.Submit('acknowledge error');
+    if (receipt === null) return rubric;
     return update(workbook, Rubric.acknowledge(rubric, receipt));
   }
 
@@ -612,7 +631,7 @@ export namespace Workbook {
     receipt: string | null = null
   ): Promise<Rubric.Locked> {
     const rubric = open(workbook, quiet);
-    if (!rubric || !rubric.locked || !rubric.assignment.certification)
+    if (!rubric?.locked || rubric.assignment.certification === null)
       throw new Error.Certify('collect error');
     return update(workbook, Rubric.collect(rubric, receipt));
   }
@@ -638,7 +657,10 @@ export namespace Workbook {
   ): Promise<Certified> {
     const rubric = open(workbook, quiet);
     if (!rubric || rubric.locked) throw new Error.Certify('certify error');
+    const started = revision(workbook);
     await Assignment.authenticate(workbook.context.model.sharedModel.toJSON(), rubric);
+    if (!current(workbook, rubric, started))
+      throw new Error.Certify('certify error: workbook changed');
 
     if (Rubric.pending(rubric))
       throw new Error.Certify('certify error: pending review');
@@ -672,11 +694,13 @@ export namespace Workbook {
 
     const scored = open(workbook, quiet);
     if (!scored || scored.locked) throw new Error.Certify('certify error');
-    await update(workbook, Rubric.certify(scored));
-    await lock(workbook);
+    const certified = await update(workbook, Rubric.certify(scored));
+    const locked = await encrypt(workbook, certified);
+    if (!current(workbook, locked))
+      throw new Error.Certify('certify error: workbook changed');
     certificate.render(workbook, grade, trans);
     freeze(workbook);
-    return { grade, identifier, workbook };
+    return { grade, identifier, rubric: locked, revision: revision(workbook), workbook };
   }
 
   /**
@@ -971,8 +995,14 @@ export namespace Workbook {
   /** Lock a workbook if its rubric is unlocked. */
   export async function lock(workbook: Workbook): Promise<void> {
     const rubric = open(workbook, quiet);
-    if (!rubric || rubric.locked) return;
+    if (rubric && !rubric.locked) await encrypt(workbook, rubric);
+  }
 
+  const encrypt = async (
+    workbook: Workbook,
+    rubric: Rubric.Unlocked
+  ): Promise<Rubric.Locked> => {
+    const started = revision(workbook);
     const audited = audit(workbook, rubric);
     if (!audited.ok) throw new Error.Invalid(`lock error: ${audited.error}`);
 
@@ -983,9 +1013,11 @@ export namespace Workbook {
     const prepared = await Promise.all(
       secrets.map(({ referent }) => Cell.encrypt(workbook, referent, key))
     );
+    if (!current(workbook, rubric, started))
+      throw new Error.Invalid('lock error: workbook changed');
     transact(workbook, prepared);
-    await update(workbook, locked, { ok: true, rubric: locked });
-  }
+    return update(workbook, locked, { ok: true, rubric: locked });
+  };
 
   /**
    * Intervenes with a manual score for a cell.
@@ -1265,13 +1297,28 @@ export namespace Workbook {
     return update(workbook, Rubric.submit(sealed, submission));
   }
 
+  /** Deliver one sealed revision and acknowledge only that revision. */
+  export async function deliver(
+    workbook: Workbook,
+    sealed: Rubric.Locked,
+    submitter: Submitter
+  ): Promise<boolean> {
+    if (!current(workbook, sealed) || sealed.assignment.submitted !== null) return false;
+    const started = revision(workbook);
+    const payload = await submission(workbook);
+    if (!current(workbook, sealed, started)) return false;
+    const receipt = await submitter(payload);
+    if (receipt === null || !current(workbook, sealed, started)) return false;
+    return current(workbook, await acknowledge(workbook, receipt));
+  }
+
   /** Snapshot and verify the sealed notebook before handing it to a submitter. */
   export async function submission(workbook: Workbook): Promise<Submitter.Payload> {
     const notebook = workbook.context.model.sharedModel.toJSON();
     const rubric = Rubric.normalize(notebook.metadata.correxit as Partial<Rubric.Locked>);
     const identifier = Workbook.identifier(workbook, rubric);
     const { name, submission } = rubric.assignment;
-    if (!Identifier.assigned(identifier) || submission === null)
+    if (!Identifier.assigned(identifier) || typeof submission !== 'number')
       throw new Error.Submit('submit error: no assigned submission');
     const path = workbook.context.path;
     await verify(notebook, rubric, 'submit');

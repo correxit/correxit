@@ -967,6 +967,7 @@ describe('Rubric', () => {
       expect(acknowledged.assignment.submission).toBeGreaterThan(0);
       expect(acknowledged.assignment.submitted).toBe(receipt);
       expect(acknowledged.locked).toBe(true);
+      expect(Rubric.acknowledge(acknowledged, null)).toBe(acknowledged);
     });
 
     it('submits a locked rubric without receipt', async () => {

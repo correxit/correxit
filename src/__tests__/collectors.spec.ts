@@ -15,12 +15,11 @@ jest.mock('../plugins', () => ({ plugins: [] }));
 
 import { Collector } from '@correxit/contracts';
 import { manual } from '../correxit/collectors';
-import { Rubric } from '../correxit/rubric';
 
 const certified = (
   overrides: {
     assignee?: string;
-    certification?: Rubric.Timestamp | null;
+    certification?: number;
     issue?: string | null;
     points?: number;
     possible?: number;
@@ -82,17 +81,16 @@ describe('manual collector', () => {
     });
   });
 
-  it('uses null certification when certification is null', async () => {
-    const c = certified({ certification: null });
-    const receipt = await manual(c);
-    const payload = JSON.parse(receipt.slice('manual:DIGEST<'.length, -1));
-    expect(payload.certification).toBeNull();
-  });
-
   it('produces identical receipts for identical inputs', async () => {
     const a = await manual(certified());
     const b = await manual(certified());
     expect(a).toBe(b);
+  });
+
+  it('distinguishes recertifications with the same score', async () => {
+    const first = await manual(certified({ certification: 1 }));
+    const next = await manual(certified({ certification: 2 }));
+    expect(next).not.toBe(first);
   });
 
   it('produces different receipts for different assignees', async () => {

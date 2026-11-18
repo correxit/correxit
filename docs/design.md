@@ -194,9 +194,9 @@ unrepresentable.
 `Workbook.Grade` also discriminates command results with `verified: true |
 false`. Only authenticated grading or collection produces verified scores;
 `Workbook.Graded` requires that provenance but may still await manual review.
-`Workbook.Certified` retains the same structural shape for certification and
-collector APIs; the operation establishes certification. The flag lives in
-memory, not in notebook metadata. Scanning and parsing cannot manufacture it.
+`Workbook.Certified` pairs a verified grade with its locked rubric and the
+notebook revision at certification. Collection checks both before sending the
+grade and before recording the receipt. The verification flag lives in memory.
 Batch cache reuse follows authentication inside the same bounded grading action,
 and CSV exports consume verified results instead of falling back to scanned reports.
 

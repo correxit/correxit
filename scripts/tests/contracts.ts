@@ -61,9 +61,9 @@ export const distributor: Distributor = async payload => {
   return file.length > 0 && assignee.length > 0 && resources.length === 0;
 };
 export const collector: Collector = async payload =>
-  payload.certification === null ? null : payload.identifier.issue;
+  payload.certification.toFixed();
 export const submitter: Submitter = async payload =>
-  payload.submission === null ? null : payload.identifier.issue;
+  payload.submission.toFixed();
 export const registrar: Registrar = async () => [registration];
 export const grouped: Registrar = async () => [
   { assignments: [registration], group: 'Course' } satisfies Registration.Group

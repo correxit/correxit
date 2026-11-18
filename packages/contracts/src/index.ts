@@ -91,7 +91,7 @@ export namespace Collector {
 
   export type Payload = {
     /** Local certification time in milliseconds since the Unix epoch. */
-    certification: number | null;
+    certification: number;
     identifier: Identifier.Assigned;
     /** Assignment display name. */
     name: string;
@@ -157,7 +157,7 @@ export namespace Submitter {
     /** Jupyter contents path of the workbook. */
     path: string;
     /** Local sealing time in milliseconds since the Unix epoch. */
-    submission: number | null;
+    submission: number;
   };
 }
 

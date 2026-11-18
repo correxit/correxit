@@ -386,6 +386,261 @@ test('delivery retries require a currently sealed submission', async ({
   }
 });
 
+test('late submission receipts cannot acknowledge a new seal or erase an accepted receipt', async ({
+  page
+}) => {
+  const fixture = await setup(page, cells);
+  const issued = await issue(page);
+  try {
+    const result = await page.evaluate(
+      async ({ path, key }) => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const workbook = await app.commands.execute('correxit:fetch', { path });
+        try {
+          const original = Workbook.open(workbook);
+          const stale = await Workbook.deliver(workbook, original, async () => {
+            await Workbook.unlock(workbook, key);
+            await Workbook.lock(workbook);
+            await Workbook.draft(workbook);
+            await Workbook.submit(workbook, [
+              original.assignment.keys.public.author
+            ]);
+            return 'old receipt';
+          });
+          const next = Workbook.open(workbook);
+          const snapshot = workbook.context.model.toJSON();
+          const reloaded = await Workbook.deliver(workbook, next, async () => {
+            await workbook.context.revert();
+            return 'receipt from before reload';
+          });
+          const disk =
+            workbook.context.model.sharedModel.getMetadata('correxit');
+          const restored = Workbook.restore(workbook, snapshot);
+          const declined = await Workbook.deliver(
+            workbook,
+            restored,
+            async () => {
+              await Workbook.deliver(
+                workbook,
+                restored,
+                async () => 'accepted'
+              );
+              return null;
+            }
+          );
+          return {
+            stale,
+            resealed: original.assignment.seal !== next.assignment.seal,
+            pending: next.assignment.submitted,
+            reloaded,
+            keptOriginal:
+              disk.assignment.seal === original.assignment.seal &&
+              disk.assignment.submitted === null,
+            declined,
+            receipt: Workbook.open(workbook).assignment.submitted
+          };
+        } finally {
+          workbook.context.dispose();
+        }
+      },
+      { path: issued.paths[0], key }
+    );
+    expect(result).toEqual({
+      stale: false,
+      resealed: true,
+      pending: null,
+      reloaded: false,
+      keptOriginal: true,
+      declined: false,
+      receipt: 'accepted'
+    });
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
+test('locking preserves a workbook restored while encryption is pending', async ({
+  page
+}) => {
+  const fixture = await setup(page, cells);
+  const issued = await issue(page);
+  try {
+    const result = await page.evaluate(
+      async ({ path, key }) => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const file = await app.serviceManager.contents.get(path);
+        const workbook = await app.commands.execute('correxit:fetch', {
+          path,
+          key
+        });
+        try {
+          const locking = Workbook.lock(workbook);
+          Workbook.restore(workbook, file.content);
+          const snapshot = workbook.context.model.toJSON();
+          const error = await locking.then(
+            () => null,
+            (error: Error) => error.message
+          );
+          return { error, snapshot, after: workbook.context.model.toJSON() };
+        } finally {
+          workbook.context.dispose();
+        }
+      },
+      { path: issued.paths[0], key }
+    );
+    expect(result.error).toContain('workbook changed');
+    expect(result.after).toEqual(result.snapshot);
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
+test('a late collection receipt cannot mark a recertified grade collected', async ({
+  page
+}) => {
+  const fixture = await setup(page, cells);
+  const issued = await issue(page);
+  try {
+    await cd(page, '.');
+    await batch(page, issued.directory);
+    const result = await page.evaluate(
+      async ({ path, key }) => {
+        const { Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const workbook = await app.commands.execute('correxit:fetch', {
+          path,
+          key
+        });
+        const trans = { __: (message: string) => message };
+        try {
+          const first = await Workbook.certify(workbook, trans, true);
+          let next;
+          const stale = await Workbook.record(first, async () => {
+            await Workbook.unlock(workbook, key);
+            next = await Workbook.certify(workbook, trans, true);
+            return 'old grade';
+          });
+          const pending = Workbook.open(workbook).assignment.collected;
+          let calls = 0;
+          const retried = await Workbook.record(first, async () => {
+            calls++;
+            return 'obsolete grade';
+          });
+          const accepted = await Workbook.record(next, async () => 'new grade');
+          const acceptedReceipt = Workbook.open(workbook).assignment.collected;
+          await Workbook.unlock(workbook, key);
+          const annotated = await Workbook.certify(workbook, trans, true);
+          const changed = await Workbook.record(annotated, async () => {
+            workbook.context.model.sharedModel.setMetadata(
+              'review-note',
+              'updated'
+            );
+            return 'receipt from before edit';
+          });
+          return {
+            stale,
+            pending,
+            retried,
+            calls,
+            accepted,
+            acceptedReceipt,
+            changed,
+            receipt: Workbook.open(workbook).assignment.collected
+          };
+        } finally {
+          workbook.context.dispose();
+        }
+      },
+      { path: issued.paths[0], key }
+    );
+    expect(result).toEqual({
+      stale: false,
+      pending: null,
+      retried: false,
+      calls: 0,
+      accepted: true,
+      acceptedReceipt: 'new grade',
+      changed: false,
+      receipt: null
+    });
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
+test('a headless fetch rejects failed key storage and disposes its document', async ({
+  page
+}) => {
+  const fixture = await setup(page, cells);
+  const issued = await issue(page);
+  try {
+    const result = await page.evaluate(
+      async ({ path, key }) => {
+        const { Correxit, Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
+        const { request, store } = unlocker;
+        const unlock = Workbook.unlock;
+        let context: any;
+        let attempts = 0;
+        let error = null;
+        try {
+          Workbook.unlock = (workbook: any, key: string) => {
+            context = workbook.context;
+            return unlock(workbook, key);
+          };
+          unlocker.store = async () => {
+            attempts++;
+            throw new Error('Key storage unavailable');
+          };
+          try {
+            await app.commands.execute('correxit:fetch', { path, key });
+          } catch (reason) {
+            error = (reason as Error).message;
+          }
+          const disposed = context?.isDisposed;
+          unlocker.request = async function* () {};
+          const cancelled = await app.commands.execute('correxit:fetch', {
+            path,
+            unlock: true,
+            silent: true
+          });
+          try {
+            return {
+              error,
+              disposed,
+              attempts,
+              locked: Workbook.open(cancelled).locked
+            };
+          } finally {
+            cancelled.context.dispose();
+          }
+        } finally {
+          context?.dispose();
+          Workbook.unlock = unlock;
+          unlocker.store = store;
+          unlocker.request = request;
+        }
+      },
+      { path: issued.paths[0], key }
+    );
+    expect(result).toEqual({
+      error: 'Key storage unavailable',
+      disposed: true,
+      attempts: 1,
+      locked: true
+    });
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
 test('authentic submissions grade and collect; authenticated cached reports skip execution', async ({
   page
 }) => {

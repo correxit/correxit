@@ -13,7 +13,6 @@ jest.mock('../correxit/workbook', () => ({
 }));
 
 import { Submitter } from '@correxit/contracts';
-import { Rubric } from '../correxit/rubric';
 import { Workbook } from '../correxit/workbook';
 import { manual } from '../correxit/submitters';
 
@@ -32,7 +31,7 @@ const submitted = (
   overrides: {
     cells?: { id: string; source: string | string[] }[];
     identifier?: Partial<Workbook.Identifier.Assigned>;
-    submission?: Rubric.Timestamp | null;
+    submission?: number;
   } = {}
 ): Submitter.Payload => ({
   identifier: identifier(overrides.identifier),
@@ -47,8 +46,7 @@ const submitted = (
     nbformat_minor: 5
   },
   path: 'assignment-alice.ipynb',
-  submission:
-    overrides.submission !== undefined ? overrides.submission : 1704067200000
+  submission: overrides.submission ?? 1704067200000
 });
 
 describe('manual submitter', () => {
@@ -90,6 +88,12 @@ describe('manual submitter', () => {
     expect(a).toBe(b);
   });
 
+  it('distinguishes submissions of the same sources at different times', async () => {
+    const first = await manual(submitted({ submission: 1 }));
+    const next = await manual(submitted({ submission: 2 }));
+    expect(next).not.toBe(first);
+  });
+
   it('produces different receipts for different assignees', async () => {
     const a = await manual(
       submitted({ identifier: { assignee: 'alice@example.com' } })
@@ -108,12 +112,6 @@ describe('manual submitter', () => {
       submitted({ cells: [{ id: 'c1', source: 'x = 2' }] })
     );
     expect(a).not.toBe(b);
-  });
-
-  it('uses null submission when submission is null', async () => {
-    const receipt = await manual(submitted({ submission: null }));
-    const payload = JSON.parse(receipt.slice('manual:DIGEST<'.length, -1));
-    expect(payload.submission).toBeNull();
   });
 
   it('joins array sources into a single string', async () => {

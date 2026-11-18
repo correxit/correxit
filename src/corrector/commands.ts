@@ -668,15 +668,11 @@ async function correct(
   const resources = open(workbook)?.assignment.resources ?? null;
   const capacity = kernels.cap();
   const local = await io.stage({ capacity, dir, manager, notebook, resources });
-  const staged = (await fetch({
-    ...handle,
-    path: local.path
-  })) as Headless | null;
-  if (!staged) {
-    await local.release();
-    throw new Correxit.Error.Certify('correct error: staging failed');
-  }
+  let staged: Headless | null = null;
   try {
+    staged = (await fetch({ ...handle, path: local.path })) as Headless | null;
+    if (!staged)
+      throw new Correxit.Error.Certify('correct error: staging failed');
     const graded = await grade(staged, trans);
     const snapshot = staged.context.model.toJSON() as INotebookContent;
     const restored = Workbook.restore(workbook, snapshot);
@@ -688,13 +684,12 @@ async function correct(
     if (!Workbook.Identifier.assigned(identifier))
       throw new Correxit.Error.Certify('correct error: unassigned');
     return {
-      ...graded,
       grade: { ...graded.grade, path },
       identifier,
       workbook
     };
   } finally {
-    staged.context.dispose();
+    staged?.context.dispose();
     await local.release();
   }
 }
@@ -800,7 +795,13 @@ function precertified(workbook: Headless): Certified | null {
   };
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
-  return { grade, identifier, workbook };
+  return {
+    grade,
+    identifier,
+    rubric,
+    revision: Workbook.revision(workbook),
+    workbook
+  };
 }
 
 function unverified(workbook: Headless): Grade & { verified: false } {

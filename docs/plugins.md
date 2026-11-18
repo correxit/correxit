@@ -36,8 +36,8 @@ The singleton setting lets Correxit and your plugin use the same Lumino token
 instances to identify services. Correxit must also be installed in JupyterLab.
 
 The signatures below use plain data. `Notebook` is notebook JSON; resource files
-carry `Uint8Array` bytes. Timestamps are milliseconds since the Unix epoch, or
-`null` when absent. `file` is the notebook's basename, `path` is its Jupyter
+carry `Uint8Array` bytes. Submission and certification times are milliseconds
+since the Unix epoch. `file` is the notebook's basename, `path` is its Jupyter
 contents path, and `name` is the assignment's display name.
 
 ---
@@ -173,7 +173,7 @@ namespace Submitter {
     name: string;
     notebook: Notebook;
     path: string;
-    submission: number | null;
+    submission: number;
   };
 }
 ```
@@ -181,7 +181,9 @@ namespace Submitter {
 Called with a snapshot of the sealed workbook. Correxit checks its seal before
 each delivery, including retries.
 Return an opaque receipt for Correxit to store as `assignment.submitted`, or
-`null` if delivery was not recorded. Throw to report a delivery failure.
+`null` if delivery was not recorded. Correxit applies the receipt only while the
+same sealed revision is pending in the sending document. Throw to report a
+delivery failure.
 
 The default manual submitter returns a digest receipt without uploading the
 notebook. An LMS submitter should validate the assignee, enforce the deadline,
@@ -206,7 +208,7 @@ namespace Collector {
   };
 
   type Payload = {
-    certification: number | null;
+    certification: number;
     identifier: Identifier.Assigned;
     name: string;
     notebook: Notebook;
@@ -218,8 +220,10 @@ namespace Collector {
 
 Called after a workbook has been graded and certified. Return an opaque receipt
 for Correxit to store as `assignment.collected`, or `null` if the grade was not
-recorded. A null receipt leaves any previous receipt intact. Throw to report a
-collection failure. The `score` carries the totals, status, and feedback.
+recorded. A null receipt leaves any previous receipt intact. Correxit checks
+that the certification is current in the document before calling the collector
+and again before applying its receipt. Throw to report a collection failure.
+The `score` carries the totals, status, and feedback.
 
 Correxit authenticates the rubric and issued contents before calling the
 collector. Use the supplied payload; reading a saved report or certification
@@ -299,9 +303,11 @@ credentials without opening prompts or sign-in dialogs.
   falling back to interactive prompts.
 
 `store(rubric, key)` records only author keys. Correxit awaits it before committing
-a new workbook and after a successful unlock. Student credentials never pass
-through `store`: save any credential needed for later revision before yielding
-it, because Correxit closes the generator after accepting a choice.
+a new workbook and after a successful unlock. If storage fails during a headless
+fetch, Correxit disposes the document and propagates the error. Student
+credentials never pass through `store`: save any credential needed for later
+revision before yielding it, because Correxit closes the generator after
+accepting a choice.
 
 The default provider uses passphrase prompts and in-memory storage. External
 providers must authorize access independently of notebook-supplied identifiers

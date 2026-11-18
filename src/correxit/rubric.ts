@@ -851,8 +851,9 @@ export namespace Rubric {
     rubric: Locked,
     receipt: string | null = null
   ): Locked {
-    if (!rubric.assignment.submission)
+    if (rubric.assignment.submission === null)
       throw new Error.Submit('acknowledge error: not submitted');
+    if (receipt === null) return rubric;
 
     const assignment = { ...rubric.assignment, submitted: receipt };
     return { ...rubric, assignment, revised: Date.now() };
@@ -1016,7 +1017,7 @@ export namespace Rubric {
     rubric: Locked,
     receipt: string | null = null
   ): Locked {
-    if (!rubric.assignment.certification)
+    if (rubric.assignment.certification === null)
       throw new Error.Certify('collect error: not certified');
 
     const revised = Date.now();
