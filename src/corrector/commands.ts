@@ -698,37 +698,21 @@ function reuse(workbook: Headless, overwrite: boolean): Graded | null {
   const rubric = open(workbook);
   if (!rubric || rubric.locked || overwrite) return null;
 
-  const path = workbook.context.path;
   const { assignment } = rubric;
+  if (Rubric.Assignment.rejected(assignment) || !scored(rubric)) return null;
   const { report } = assignment;
-  if (Rubric.Assignment.rejected(assignment)) return null;
+  const score = Rubric.Assignment.summary(report, assignment);
+  const certified = !!assignment.certification && score.status !== 'unscored';
+  if (!certified && !Rubric.pending(rubric)) return null;
 
-  const summary = Rubric.Assignment.summary(report, assignment);
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
-
-  const grade = (spec: Grade['spec']): Graded => ({
-    grade: { path, resolved: true, score: summary, spec, verified: true },
+  const { path } = workbook.context;
+  return {
+    grade: { path, resolved: true, score, spec: report.kernel, verified: true },
     identifier,
     workbook
-  });
-  const { scores } = report;
-  const ids = Object.keys(rubric.cells);
-  const scored =
-    ids.length > 0 &&
-    ids.every(id => {
-      const score = Rubric.Score.get(scores, id);
-      return score && !unexecuted(score);
-    });
-  if (!scored) return null;
-  if (
-    assignment.certification &&
-    !Rubric.pending(rubric) &&
-    summary.status !== 'unscored'
-  )
-    return grade(report.kernel);
-
-  return Rubric.pending(rubric) ? grade(report.kernel) : null;
+  };
 }
 
 async function grade(
@@ -771,14 +755,12 @@ async function restore(
   const rubric = open(workbook);
   if (!rubric?.locked) return null;
 
-  const { assignment, cells } = rubric;
-  const { kernel, scores } = assignment.report;
+  const { assignment } = rubric;
   if (
     !assignment.certification ||
     Rubric.Assignment.rejected(assignment) ||
     Rubric.pending(rubric) ||
-    Object.keys(cells).some(id => !Rubric.Score.get(scores, id)) ||
-    Object.values(scores).some(unexecuted)
+    !scored(rubric)
   )
     return null;
 
@@ -790,7 +772,7 @@ async function restore(
     path: workbook.context.path,
     resolved: true,
     score,
-    spec: kernel,
+    spec: assignment.report.kernel,
     verified: true
   };
   const revision = Workbook.revision(workbook);
@@ -816,6 +798,16 @@ async function save(workbook: Headless | null) {
 
 function submission(workbook: Headless): boolean {
   return open(workbook)?.assignment.submission !== null;
+}
+
+function scored({ assignment, cells }: Rubric): boolean {
+  const ids = Object.keys(cells);
+  const { scores } = assignment.report;
+  return (
+    ids.length > 0 &&
+    ids.every(id => Rubric.Score.get(scores, id)) &&
+    !Object.values(scores).some(unexecuted)
+  );
 }
 
 function unexecuted({ code }: Pick<Rubric.Score, 'code'>): boolean {
