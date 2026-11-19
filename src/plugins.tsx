@@ -43,7 +43,10 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> =
       const select = () =>
         provider() === 'moodle' ? moodle : collectors.manual;
       const collect: Correxit.Collector = payload => select()(payload);
-      return [Object.assign(collect, { [selected]: select }), () => {}];
+      return [
+        Object.defineProperty(collect, selected, { get: select }),
+        () => {}
+      ];
     }
   );
 
@@ -118,26 +121,22 @@ const corrector: JupyterFrontEndPlugin<void> = {
 
       const { down, fail, launch, left, pass, review, right, up } =
         Corrector.CommandIDs;
-      const select = selected in collector ? collector[selected] : null;
       const finalize = () =>
-        (typeof select === 'function' ? select() : collector) ===
+        (selected in collector ? collector[selected] : collector) ===
         collectors.manual;
-      const added = Corrector.commands(
-        app,
-        {
-          browser,
-          collector,
-          documents,
-          editors,
-          indicator,
-          rendermime,
-          tracker,
-          trans,
-          tree,
-          unlocker
-        },
-        finalize
-      );
+      const utilities = {
+        browser,
+        collector,
+        documents,
+        editors,
+        indicator,
+        rendermime,
+        tracker,
+        trans,
+        tree,
+        unlocker
+      };
+      const added = Corrector.commands(app, utilities, finalize);
       if (status) {
         status.registerStatusItem('correxit-corrector:indicator', {
           item: indicator,

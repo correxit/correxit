@@ -205,8 +205,7 @@ export function commands(
         } finally {
           prompted = true;
         }
-        await Workbook.lock(workbook);
-        const certified = precertified(workbook);
+        const certified = await restore(workbook, trans);
         if (!certified) {
           return {
             file: {
@@ -216,17 +215,12 @@ export function commands(
             completed: false
           };
         }
+        await save(workbook);
         const file = { workbook, grade: certified.grade };
-        if (
-          !args.overwrite &&
-          typeof open(workbook)?.assignment.collected === 'string'
-        )
+        const { collected } = certified.rubric.assignment;
+        if (!args.overwrite && typeof collected === 'string')
           return { file, completed: false };
-        const completed = await certificate.record(
-          certificate.restore(certified, trans),
-          collector,
-          trans
-        );
+        const completed = await certificate.record(certified, collector, trans);
         if (completed) await save(workbook);
         return { file, completed };
       } finally {
@@ -415,15 +409,13 @@ export function commands(
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
         if (!corrector || corrector.isDisposed) {
-          corrector = new Corrector.Widget(
-            {
-              commands,
-              path: path || browser?.model.path || '.',
-              indicator,
-              trans
-            },
-            finalize()
-          );
+          corrector = new Corrector.Widget({
+            commands,
+            path: path || browser?.model.path || '.',
+            indicator,
+            trans
+          });
+          corrector.setFinalize(finalize());
           corrector.id = 'correxit-corrector-widget';
           corrector.title.closable = true;
           disposables.push(corrector);
@@ -666,9 +658,7 @@ async function correct(
   await authenticate(workbook, handle, unlocker, silent);
   const cached = reuse(workbook, overwrite);
   if (cached) {
-    await Workbook.lock(workbook);
-    const certified = precertified(workbook);
-    if (certified) certificate.restore(certified, trans);
+    await restore(workbook, trans);
     // A prior attempt may have restored this report but failed to save it.
     await save(workbook);
     return cached;
@@ -772,46 +762,42 @@ function open(workbook: Workbook): Rubric | null {
   return Workbook.open(workbook, true);
 }
 
-function precertified(workbook: Headless): Certified | null {
+/** Re-lock the authenticated workbook and restore any certified feedback. */
+async function restore(
+  workbook: Headless,
+  trans: IRenderMime.TranslationBundle
+): Promise<Certified | null> {
+  await Workbook.lock(workbook);
   const rubric = open(workbook);
-  if (!rubric || !rubric.locked) return null;
+  if (!rubric?.locked) return null;
 
   const { assignment, cells } = rubric;
   const { kernel, scores } = assignment.report;
-  if (Rubric.Assignment.rejected(assignment)) return null;
-
-  const path = workbook.context.path;
-  const nonexistent = (id: string) => !Rubric.Score.get(scores, id);
-  const incomplete = Object.keys(cells).some(nonexistent);
-  const partial = Object.values(scores).some(unexecuted);
-  const uncertified = !assignment.certification;
-  const summary = Rubric.Assignment.summary(assignment.report, assignment);
-  const unscored = summary.status === 'unscored';
   if (
-    incomplete ||
-    partial ||
+    !assignment.certification ||
+    Rubric.Assignment.rejected(assignment) ||
     Rubric.pending(rubric) ||
-    uncertified ||
-    unscored
+    Object.keys(cells).some(id => !Rubric.Score.get(scores, id)) ||
+    Object.values(scores).some(unexecuted)
   )
     return null;
 
+  const score = Rubric.Assignment.summary(assignment.report, assignment);
+  const identifier = Workbook.identifier(workbook);
+  if (score.status === 'unscored' || !Workbook.Identifier.assigned(identifier))
+    return null;
   const grade: Workbook.Grade.Verified = {
-    path,
+    path: workbook.context.path,
     resolved: true,
-    score: summary,
+    score,
     spec: kernel,
     verified: true
   };
-  const identifier = Workbook.identifier(workbook);
-  if (!Workbook.Identifier.assigned(identifier)) return null;
-  return {
-    grade,
-    identifier,
-    rubric,
-    revision: Workbook.revision(workbook),
-    workbook
-  };
+  const revision = Workbook.revision(workbook);
+  return certificate.restore(
+    { grade, identifier, revision, rubric, workbook },
+    trans
+  );
 }
 
 function unverified(workbook: Headless): Grade & { verified: false } {

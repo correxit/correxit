@@ -19,12 +19,9 @@ import { CommandIDs } from './commands';
 import { Reviewer } from './reviewer';
 
 export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
-  constructor(
-    { commands, indicator, path, trans }: CorrectorWidget.IOptions,
-    finalize = false
-  ) {
+  constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
     super({
-      content: new CorrectorContent({ commands, finalize, path, trans }),
+      content: new CorrectorContent({ commands, path, trans }),
       toolbar: new Toolbar({ noFocusOnClick: true })
     });
     this.commands = commands;
@@ -33,7 +30,7 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     this.addClass('correxit-corrector-widget');
     this.title.icon = Correxit.Icons.correxit;
     this.identify();
-    this.initialize(finalize);
+    this.initialize();
   }
 
   get path(): string {
@@ -81,7 +78,7 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     super.dispose();
   }
 
-  protected initialize(finalize = false) {
+  protected initialize() {
     const { commands, content, indicator, toolbar, trans } = this;
     const go = (
       mode: Corrector.Mode,
@@ -97,7 +94,7 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
       content.set({ stopping: true });
       void commands.execute(CommandIDs.stop, { run: content.run });
     };
-    const selector = new ModeSelector({ go, finalize, stop, trans });
+    const selector = new ModeSelector({ go, stop, trans });
     const notify = (updates: Corrector.Notification) => {
       this.busy = !(updates.graded && updates.scanned);
       indicator?.set(updates);
@@ -141,11 +138,7 @@ export namespace CorrectorWidget {
 }
 
 class CorrectorContent extends ReactWidget {
-  constructor(
-    props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'> & {
-      finalize: boolean;
-    }
-  ) {
+  constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
     super();
     this.props = {
       ...props,
@@ -175,7 +168,7 @@ class CorrectorContent extends ReactWidget {
     this.set({ ...updates, run: UUID.uuid4(), stopping: false });
   }
 
-  set(updates: Partial<Corrector.Props & { finalize: boolean }>) {
+  set(updates: Partial<Corrector.Props>) {
     this.props = { ...this.props, ...updates };
     this.update();
   }
@@ -190,7 +183,7 @@ class CorrectorContent extends ReactWidget {
     );
   }
 
-  protected props: Corrector.Props & { finalize: boolean };
+  protected props: Corrector.Props;
 }
 
 export class CorrectorStatus extends ReactWidget {
@@ -235,13 +228,11 @@ export class CorrectorStatus extends ReactWidget {
 class ModeSelector extends ReactWidget {
   constructor(options: {
     go: (mode: Corrector.Mode, overwrite: boolean, submitted: boolean) => void;
-    finalize: boolean;
     stop: () => void;
     trans: IRenderMime.TranslationBundle;
   }) {
     super();
     this.go = options.go;
-    this.finalize = options.finalize;
     this.stop = options.stop;
     this.trans = options.trans;
     this.addClass('correxit-corrector-mode');
@@ -408,7 +399,7 @@ class ModeSelector extends ReactWidget {
   protected stop: () => void;
   protected regrade = false;
   protected recollect = false;
-  protected finalize: boolean;
+  protected finalize = false;
   protected mode: Corrector.Mode = 'scan';
   protected submitted = false;
   protected trans: IRenderMime.TranslationBundle;

@@ -161,7 +161,11 @@ const step = (
       command: distribute
     };
   }
-  if (!locked && assignment.certification !== null && !assignment.collected) {
+  if (
+    !locked &&
+    assignment.certification !== null &&
+    assignment.collected === null
+  ) {
     return {
       body: trans.__('Record the certified grade.'),
       command: collect

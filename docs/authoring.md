@@ -381,8 +381,9 @@ A workbook moves through these stages:
   comes from a separate authority.
 - **Certified**: the grade has been computed and frozen. Certification
   is the grader's seal; it requires all cells to be scored.
-- **Collected**: a Collector plugin acknowledged receipt of the grade and
-  stored the external receipt.
+- **Collected** means the workbook holds a receipt for its certified grade.
+  The manual collector creates that receipt locally. An external collector
+  supplies its own receipt.
 
 ## Tips
 

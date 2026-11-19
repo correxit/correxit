@@ -106,7 +106,7 @@ export function render(
   lines.push(
     `| **${trans.__('Certified')}** | ${timestamp(certification, 'n/a')} |`
   );
-  if (collected)
+  if (typeof collected === 'string')
     lines.push(`| **${trans.__('Collected')}** | \`${collected}\` |`);
   if (grade.spec)
     lines.push(`| **${trans.__('Kernel')}** | ${grade.spec.display_name} |`);

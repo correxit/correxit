@@ -1258,9 +1258,7 @@ test('collect gathers certified workbooks and records receipts', async ({
       'correxit-corrector:batch',
       { key: 'secret', path: directory }
     );
-    for await (const _ of stream) {
-      /* drain */
-    }
+    for await (const [, { workbook }] of stream) workbook.context.dispose();
   }, propagated.directory);
 
   // Now collect: the collector returns a manual:<sha256> digest receipt.
@@ -1340,49 +1338,100 @@ test('collect gathers certified workbooks and records receipts', async ({
   }, propagated.directory);
   expect(again).toEqual({ count: 0, contexts: 2, disposed: true });
 
-  // A provider may decline a requested re-collection. Keep both stored receipts.
-  const declined = await page.evaluate(
-    async ({ directory, paths }) => {
-      const app = (window as any).jupyterapp;
-      const { Workbook } = (window as any).__correxit__;
-      const record = Workbook.record;
-      let attempts = 0;
-      Workbook.record = (certified: any) =>
-        record(certified, async () => {
-          attempts++;
-          return null;
-        });
-      try {
-        const stream = await app.commands.execute(
-          'correxit-corrector:collect',
-          {
-            path: directory,
-            overwrite: true
-          }
-        );
-        let completed = 0;
-        for await (const [, { workbook }] of stream) {
-          completed++;
-          workbook.context.dispose();
+  const [alice, bob] = result.map(entry => entry.path as string);
+  // An external collector may return any string, including the empty string.
+  const receipts = { [alice]: result[0].collected as string, [bob]: '' };
+  for (const overwrite of [false, true]) {
+    const repaired = await page.evaluate(
+      async ({ directory, receipts, overwrite }) => {
+        const app = (window as any).jupyterapp;
+        const { Workbook } = (window as any).__correxit__;
+        const contents = app.serviceManager.contents;
+        const paths = Object.keys(receipts);
+        const certificate = 'correxit-workbook-certificate';
+        const intact = (path: string, notebook: any) => {
+          const reports = notebook.cells.filter(
+            (cell: any) => cell.id === certificate
+          );
+          return (
+            notebook.metadata.correxit.assignment.collected ===
+              receipts[path] &&
+            reports.length === 1 &&
+            JSON.stringify(reports[0].source).includes(
+              `**Collected** | \`${receipts[path]}\``
+            ) &&
+            notebook.cells.every(
+              (cell: any) => cell.metadata.editable === false
+            )
+          );
+        };
+        const saved = async (path: string) =>
+          intact(path, (await contents.get(path)).content);
+        for (const path of paths) {
+          const file = await contents.get(path);
+          file.content.metadata.correxit.assignment.collected = receipts[path];
+          file.content.cells = file.content.cells.filter(
+            (cell: any) => cell.id !== certificate
+          );
+          await contents.save(path, file);
         }
-        const receipts = await Promise.all(
-          paths.map(async path => {
-            const file = await app.serviceManager.contents.get(path);
-            return file.content.metadata.correxit.assignment.collected;
-          })
-        );
-        return { attempts, completed, receipts };
-      } finally {
-        Workbook.record = record;
-      }
-    },
-    { directory: propagated.directory, paths: result.map(entry => entry.path) }
-  );
-  expect(declined).toEqual({
-    attempts: 2,
-    completed: 0,
-    receipts: result.map(entry => entry.collected)
-  });
+
+        const record = Workbook.record;
+        const offered: [string, boolean][] = [];
+        Workbook.record = (certified: any) =>
+          record(certified, async ({ path }: { path: string }) => {
+            offered.push([path, await saved(path)]);
+            if (path === paths[1]) throw new Error('Collector unavailable');
+            return null;
+          });
+        const run = 'repair-feedback';
+        const results: Record<string, boolean | string> = {};
+        const retained: Record<string, boolean> = {};
+        try {
+          const stream = await app.commands.execute('correxit-corrector:run', {
+            run,
+            mode: 'collect',
+            path: directory,
+            overwrite
+          });
+          for await (const event of stream) {
+            if (event.type === 'result') {
+              results[event.path] = event.completed;
+              retained[event.path] = intact(
+                event.path,
+                event.file.workbook.context.model.toJSON()
+              );
+            }
+            if (event.type === 'error') results[event.path] = event.message;
+          }
+          return {
+            offered: offered.sort(([a], [b]) => a.localeCompare(b)),
+            retained,
+            results,
+            saved: await Promise.all(paths.map(saved))
+          };
+        } finally {
+          Workbook.record = record;
+          await app.commands.execute('correxit-corrector:stop', {
+            run,
+            release: true
+          });
+        }
+      },
+      { directory: propagated.directory, receipts, overwrite }
+    );
+    expect(repaired).toEqual({
+      offered: overwrite
+        ? [
+            [alice, true],
+            [bob, true]
+          ]
+        : [],
+      retained: overwrite ? { [alice]: true } : { [alice]: true, [bob]: true },
+      results: { [alice]: false, [bob]: overwrite ? 'sync' : false },
+      saved: [true, true]
+    });
+  }
 
   await cleanup(page, propagated);
   await dispose();
