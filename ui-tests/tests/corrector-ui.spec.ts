@@ -1,3 +1,4 @@
+import type { IJupyterLabPageFixture } from '@jupyterlab/galata';
 import { expect, test } from './fixtures';
 import { cd, cleanup, close, corrector, keys, reviewer, setup } from './utils';
 
@@ -143,6 +144,18 @@ async function launch(page: any, path: string) {
     await app.commands.execute('correxit-corrector:launch', { path });
   }, path);
   await corrector(page);
+}
+
+function select(page: IJupyterLabPageFixture, provider: 'manual' | 'moodle') {
+  return page.evaluate(async provider => {
+    const registry = await window.galata.getPlugin(
+      '@jupyterlab/apputils-extension:settings'
+    );
+    await registry!.set('correxit:collector', 'provider', provider);
+    return (window as any).jupyterapp.commands.label(
+      'correxit-corrector:collect'
+    );
+  }, provider);
 }
 
 const selected = (page: any) =>
@@ -1513,17 +1526,7 @@ test('Corrector updates collection labels when the provider changes', async ({
     .getByRole('checkbox', { name: 'Finalize again', exact: true })
     .check();
 
-  const select = (provider: 'manual' | 'moodle') =>
-    page.evaluate(async provider => {
-      const registry = await window.galata.getPlugin(
-        '@jupyterlab/apputils-extension:settings'
-      );
-      await registry!.set('correxit:collector', 'provider', provider);
-      return (window as any).jupyterapp.commands.label(
-        'correxit-corrector:collect'
-      );
-    }, provider);
-  expect(await select('moodle')).toContain('sync');
+  expect(await select(page, 'moodle')).toContain('sync');
   await expect(
     widget.getByRole('radio', { name: 'Sync', exact: true })
   ).toBeChecked();
@@ -1533,7 +1536,7 @@ test('Corrector updates collection labels when the provider changes', async ({
   const resync = widget.getByRole('checkbox', { name: 'Resync', exact: true });
   await expect(resync).not.toBeChecked();
   await resync.check();
-  expect(await select('manual')).toContain('Finalize');
+  expect(await select(page, 'manual')).toContain('Finalize');
   await expect(
     widget.getByRole('button', { name: 'Finalize', exact: true })
   ).toBeEnabled();
@@ -1541,6 +1544,88 @@ test('Corrector updates collection labels when the provider changes', async ({
     widget.getByRole('checkbox', { name: 'Finalize again', exact: true })
   ).not.toBeChecked();
   await close(page);
+});
+
+test('Finalize keeps its collector and label until the run completes', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'print(42)' }
+  ]);
+  const issued = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  let resume!: () => void;
+  const paused = new Promise<void>(resolve => (resume = resolve));
+  try {
+    await page.evaluate(async path => {
+      const app = (window as any).jupyterapp;
+      const grades = await app.commands.execute('correxit-corrector:batch', {
+        path,
+        key: 'secret'
+      });
+      for await (const [, { workbook }] of grades) workbook.context.dispose();
+    }, issued.directory);
+    await launch(page, issued.directory);
+    const widget = page.locator('#correxit-corrector-widget');
+    const status = widget.getByRole('status').first();
+    const finalize = widget.getByRole('radio', {
+      name: 'Finalize',
+      exact: true
+    });
+    await finalize.check();
+
+    // Pause the second workbook while changing the provider for the next run.
+    const second = (url: URL) =>
+      decodeURIComponent(url.pathname).endsWith(
+        '/api/contents/' + issued.paths[1]
+      );
+    await page.route(
+      second,
+      async route => {
+        await paused;
+        await route.continue();
+      },
+      { times: 1 }
+    );
+    const waiting = page.waitForRequest(request =>
+      second(new URL(request.url()))
+    );
+    await widget.getByRole('button', { name: 'Finalize', exact: true }).click();
+    await waiting;
+    expect(await select(page, 'moodle')).toContain('sync');
+    await expect(status).toContainText('Finalizing');
+    await expect(finalize).toBeChecked();
+    resume();
+    await expect(status).toContainText('2 processed');
+
+    const receipts = await page.evaluate(async paths => {
+      const { contents } = (window as any).jupyterapp.serviceManager;
+      return Promise.all(
+        paths.map(async path => {
+          const { content } = await contents.get(path);
+          return content.metadata.correxit.assignment.collected;
+        })
+      );
+    }, issued.paths);
+    expect(receipts).toEqual([
+      expect.stringMatching(/^manual:/),
+      expect.stringMatching(/^manual:/)
+    ]);
+
+    // Moodle has no credentials in this fixture.
+    await widget.getByRole('checkbox', { name: 'Resync', exact: true }).check();
+    await widget.getByRole('button', { name: 'Sync', exact: true }).click();
+    await expect(status).toContainText('0 processed · 2 failed');
+  } finally {
+    resume();
+    await select(page, 'manual');
+    await close(page);
+    await cleanup(page, issued);
+    await dispose();
+  }
 });
 
 test('Corrector applies changes to grading concurrency', async ({ page }) => {

@@ -685,8 +685,13 @@ test('authentic submissions grade and collect; authenticated cached reports skip
   }
 });
 
-for (const code of ['missing-given', 'missing-reference']) {
-  test(`regrades a certified report with an extra ${code} score`, async ({
+for (const extra of [
+  'missing-given',
+  'missing-reference',
+  'earned score',
+  'intervention'
+]) {
+  test(`regrades a certified report with an extra ${extra}`, async ({
     page
   }) => {
     const fixture = await setup(page, cells);
@@ -697,7 +702,7 @@ for (const code of ['missing-given', 'missing-reference']) {
       const [initial] = await batch(page, issued.directory);
       expect(initial.certification).not.toBeNull();
       await page.evaluate(
-        async ({ path, key, code }) => {
+        async ({ path, key, extra }) => {
           const { Rubric } = (window as any).__correxit__;
           const contents = (window as any).jupyterapp.serviceManager.contents;
           const file = await contents.get(path);
@@ -706,15 +711,25 @@ for (const code of ['missing-given', 'missing-reference']) {
             key
           );
           const { report } = rubric.assignment;
-          const obsolete = { ...report.scores.answer, id: 'obsolete', code };
-          const scores = { ...report.scores, obsolete };
-          const signed = await Rubric.sign(rubric, { ...report, scores });
+          const field = extra === 'intervention' ? 'interventions' : 'scores';
+          const score = extra.startsWith('missing-')
+            ? { ...report.scores.answer, code: extra }
+            : {
+                ...Rubric.Score.CORRECT,
+                code: field === 'interventions' ? 'intervene' : ''
+              };
+          const obsolete = { ...score, id: 'obsolete' };
+          const signed = await Rubric.sign(rubric, {
+            ...report,
+            [field]: { ...report[field], obsolete }
+          });
           file.content.metadata.correxit = await Rubric.lock(signed);
           await contents.save(path, file);
         },
-        { path, key, code }
+        { path, key, extra }
       );
 
+      expect(await collect(page, issued.directory)).toBe(0);
       const { grades, starts } = await rerun(page, issued.directory);
       expect(starts).toBeGreaterThan(0);
       expect(grades).toMatchObject([
@@ -724,19 +739,25 @@ for (const code of ['missing-given', 'missing-reference']) {
       const saved = await page.evaluate(async path => {
         const { contents } = (window as any).jupyterapp.serviceManager;
         const { content } = await contents.get(path);
+        const { report } = content.metadata.correxit.assignment;
         return {
-          scores: Object.keys(
-            content.metadata.correxit.assignment.report.scores
-          ),
-          reports: content.cells.filter(
-            (cell: any) => cell.id === 'correxit-workbook-certificate'
-          ).length,
+          scores: Object.keys(report.scores),
+          interventions: Object.keys(report.interventions),
+          reports: content.cells
+            .filter((cell: any) => cell.id === 'correxit-workbook-certificate')
+            .map((cell: any) => cell.source),
           frozen: content.cells.every(
             (cell: any) => cell.metadata.editable === false
           )
         };
       }, path);
-      expect(saved).toEqual({ scores: ['answer'], reports: 1, frozen: true });
+      expect(saved).toMatchObject({
+        scores: ['answer'],
+        interventions: [],
+        frozen: true
+      });
+      expect(saved.reports).toHaveLength(1);
+      expect(JSON.stringify(saved.reports[0])).toContain('0 / 1');
     } finally {
       await cleanup(page, issued);
       await fixture.dispose();

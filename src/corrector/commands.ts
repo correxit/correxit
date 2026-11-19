@@ -12,6 +12,7 @@ import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ServiceManager } from '@jupyterlab/services';
 import { Assignment, Correxit, Rubric, Workbook } from '..';
 import * as certificate from '../correxit/certificate';
+import { manual } from '../correxit/collectors';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import * as state from '../correxit/state';
@@ -67,13 +68,11 @@ export function commands(
     trans: IRenderMime.TranslationBundle;
     tree: INotebookTree | null;
     unlocker: Correxit.Unlocker;
-  },
-  finalize: () => boolean = () => false
+  }
 ) {
   const { commands, serviceManager: manager, shell } = app;
   const {
     browser,
-    collector,
     editors,
     indicator,
     rendermime,
@@ -138,7 +137,12 @@ export function commands(
       done.resolve();
       throw new Error.Invalid('Invalid Corrector directory or credentials');
     }
-    if (id && corrector?.content.run === id) session.begin(id, mode);
+    // A provider change takes effect on the next run.
+    const { collector } = utilities;
+    if (id && corrector?.content.run === id) {
+      corrector.content.set({ finalize: collector === manual });
+      session.begin(id, mode);
+    }
     let prompted = false;
     const directory = {
       signal: controller.signal,
@@ -397,7 +401,7 @@ export function commands(
   disposables.push(
     commands.addCommand(CommandIDs.collect, {
       label: () =>
-        finalize()
+        utilities.collector === manual
           ? trans.__('Finalize certified workbook grades...')
           : trans.__('Save and sync certified workbook grades...'),
       execute: (args: Options) => results(args, 'collect')
@@ -415,7 +419,7 @@ export function commands(
             indicator,
             trans
           });
-          corrector.setFinalize(finalize());
+          corrector.setFinalize(utilities.collector === manual);
           corrector.id = 'correxit-corrector-widget';
           corrector.title.closable = true;
           disposables.push(corrector);
@@ -800,13 +804,17 @@ function submission(workbook: Headless): boolean {
   return open(workbook)?.assignment.submission !== null;
 }
 
-function scored({ assignment, cells }: Rubric): boolean {
-  const ids = Object.keys(cells);
-  const { scores } = assignment.report;
+function scored(rubric: Rubric): boolean {
+  const ids = Object.keys(rubric.cells);
+  const { interventions, scores } = rubric.assignment.report;
   return (
     ids.length > 0 &&
-    ids.every(id => Rubric.Score.get(scores, id)) &&
-    !Object.values(scores).some(unexecuted)
+    ids.length === Object.keys(scores).length &&
+    ids.every(id => {
+      const score = Rubric.Score.get(scores, id);
+      return score && !unexecuted(score);
+    }) &&
+    Object.keys(interventions).every(id => Rubric.has(rubric, id))
   );
 }
 

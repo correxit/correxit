@@ -564,11 +564,15 @@ export namespace Rubric {
       const all = [...subset, ...missing];
       if (!all.length) return report;
 
-      const current = Object.entries(report.scores).filter(([id]) => valid(id));
+      const kept = ([id]: [string, Score]) => valid(id);
+      const current = Object.entries(report.scores).filter(kept);
+      const interventions = Object.fromEntries(
+        Object.entries(report.interventions).filter(kept)
+      );
       const pending = all.map(id => Cell.score(rubric, id, outputs));
       const done = (await Promise.all(pending)).map(score => [score.id, score]);
       const scores = Object.fromEntries([...current, ...done]);
-      return { ...report, scores };
+      return { ...report, interventions, scores };
     }
 
     export async function issue({ assignment, notebook, rubric }: {

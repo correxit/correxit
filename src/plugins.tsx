@@ -29,7 +29,7 @@ import * as state from './correxit/state';
 import * as submitters from './correxit/submitters';
 import { Sidebar } from './ui';
 
-const selected = Symbol('selected collector');
+const providers = new WeakMap<Correxit.Collector, () => Correxit.Collector>();
 
 /** The Correxit grade collector dispatches to the configured provider. */
 const collector: JupyterFrontEndPlugin<Correxit.Collector> =
@@ -43,10 +43,8 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> =
       const select = () =>
         provider() === 'moodle' ? moodle : collectors.manual;
       const collect: Correxit.Collector = payload => select()(payload);
-      return [
-        Object.defineProperty(collect, selected, { get: select }),
-        () => {}
-      ];
+      providers.set(collect, select);
+      return [collect, () => providers.delete(collect)];
     }
   );
 
@@ -121,12 +119,12 @@ const corrector: JupyterFrontEndPlugin<void> = {
 
       const { down, fail, launch, left, pass, review, right, up } =
         Corrector.CommandIDs;
-      const finalize = () =>
-        (selected in collector ? collector[selected] : collector) ===
-        collectors.manual;
+      const select = providers.get(collector) ?? (() => collector);
       const utilities = {
         browser,
-        collector,
+        get collector() {
+          return select();
+        },
         documents,
         editors,
         indicator,
@@ -136,7 +134,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
         tree,
         unlocker
       };
-      const added = Corrector.commands(app, utilities, finalize);
+      const added = Corrector.commands(app, utilities);
       if (status) {
         status.registerStatusItem('correxit-corrector:indicator', {
           item: indicator,
@@ -168,7 +166,7 @@ const corrector: JupyterFrontEndPlugin<void> = {
       if (registry) {
         const reconfigure = (_: ISettingRegistry, id: string) => {
           if (id === Correxit.COLLECTOR) {
-            const manual = finalize();
+            const manual = select() === collectors.manual;
             tracker.corrector.forEach(widget => widget.setFinalize(manual));
             app.commands.notifyCommandChanged(Corrector.CommandIDs.collect);
           } else if (id === Correxit.CORRECTOR) {

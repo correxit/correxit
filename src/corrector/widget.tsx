@@ -56,7 +56,6 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
 
   setFinalize(finalize: boolean) {
     this.selector?.setFinalize(finalize);
-    this.content.set({ finalize });
   }
 
   protected identify() {
@@ -377,6 +376,8 @@ class ModeSelector extends ReactWidget {
   }
 
   setFinalize(finalize: boolean) {
+    this.preferred = finalize;
+    if (this.busy && this.mode === 'collect') return;
     if (this.finalize === finalize) return;
     this.finalize = finalize;
     this.recollect = false;
@@ -385,7 +386,10 @@ class ModeSelector extends ReactWidget {
 
   set({ graded, scanned }: Corrector.Notification) {
     this.busy = !(graded && scanned);
-    if (!this.busy) this.stopping = false;
+    if (!this.busy) {
+      this.stopping = false;
+      this.setFinalize(this.preferred);
+    }
     this.update();
   }
 
@@ -400,6 +404,7 @@ class ModeSelector extends ReactWidget {
   protected regrade = false;
   protected recollect = false;
   protected finalize = false;
+  protected preferred = false;
   protected mode: Corrector.Mode = 'scan';
   protected submitted = false;
   protected trans: IRenderMime.TranslationBundle;
