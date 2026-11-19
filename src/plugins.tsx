@@ -29,6 +29,8 @@ import * as state from './correxit/state';
 import * as submitters from './correxit/submitters';
 import { Sidebar } from './ui';
 
+const selected = Symbol('selected collector');
+
 /** The Correxit grade collector dispatches to the configured provider. */
 const collector: JupyterFrontEndPlugin<Correxit.Collector> =
   dispatcher.dispatch(
@@ -36,15 +38,12 @@ const collector: JupyterFrontEndPlugin<Correxit.Collector> =
     Correxit.DESCRIPTION.COLLECTOR,
     Correxit.Collector,
     (_, { moodle: settings, provider }) => {
-      const collector: Correxit.Collector = payload => {
-        switch (provider()) {
-          case 'moodle':
-            return Moodle.collector(payload, settings());
-          default:
-            return collectors.manual(payload);
-        }
-      };
-      return [collector, () => {}];
+      const moodle: Correxit.Collector = payload =>
+        Moodle.collector(payload, settings());
+      const select = () =>
+        provider() === 'moodle' ? moodle : collectors.manual;
+      const collect: Correxit.Collector = payload => select()(payload);
+      return [Object.assign(collect, { [selected]: select }), () => {}];
     }
   );
 
@@ -119,18 +118,26 @@ const corrector: JupyterFrontEndPlugin<void> = {
 
       const { down, fail, launch, left, pass, review, right, up } =
         Corrector.CommandIDs;
-      const added = Corrector.commands(app, {
-        browser,
-        collector,
-        documents,
-        editors,
-        indicator,
-        rendermime,
-        tracker,
-        trans,
-        tree,
-        unlocker
-      });
+      const select = selected in collector ? collector[selected] : null;
+      const finalize = () =>
+        (typeof select === 'function' ? select() : collector) ===
+        collectors.manual;
+      const added = Corrector.commands(
+        app,
+        {
+          browser,
+          collector,
+          documents,
+          editors,
+          indicator,
+          rendermime,
+          tracker,
+          trans,
+          tree,
+          unlocker
+        },
+        finalize
+      );
       if (status) {
         status.registerStatusItem('correxit-corrector:indicator', {
           item: indicator,
@@ -160,17 +167,29 @@ const corrector: JupyterFrontEndPlugin<void> = {
         });
       }
       if (registry) {
+        const reconfigure = (_: ISettingRegistry, id: string) => {
+          if (id === Correxit.COLLECTOR) {
+            const manual = finalize();
+            tracker.corrector.forEach(widget => widget.setFinalize(manual));
+            app.commands.notifyCommandChanged(Corrector.CommandIDs.collect);
+          } else if (id === Correxit.CORRECTOR) {
+            const settings = registry.plugins[id];
+            if (settings)
+              kernels.configure(settings.data.composite as kernels.Config);
+          }
+        };
+        registry.pluginChanged.connect(reconfigure);
+        added.push(
+          new DisposableDelegate(() =>
+            registry.pluginChanged.disconnect(reconfigure)
+          )
+        );
         void registry
           .load(Correxit.CORRECTOR)
           .then(settings => {
-            const reconfigure = () =>
-              kernels.configure(settings.composite as kernels.Config);
-            const disconnect = new DisposableDelegate(() =>
-              settings.changed.disconnect(reconfigure)
-            );
-            settings.changed.connect(reconfigure);
-            added.push(disconnect);
-            reconfigure();
+            if (!tracker.corrector.isDisposed)
+              reconfigure(registry, settings.id);
+            settings.dispose();
           })
           .catch(reason =>
             console.warn(Correxit.CORRECTOR, 'settings error', reason)

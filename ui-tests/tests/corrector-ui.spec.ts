@@ -492,32 +492,60 @@ test('batch grades and certifies workbooks', async ({ page }) => {
   const result = await page.evaluate(async (directory: string) => {
     const { Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
-    const stream: AsyncGenerator<any> = await app.commands.execute(
-      'correxit-corrector:batch',
-      { key: 'secret', path: directory }
-    );
-    const grades: any[] = [];
-    for await (const [path, { grade, workbook }] of stream) {
-      const rubric = Workbook.open(workbook, true);
-      const { certification } = rubric.assignment;
-      grades.push({
-        certification: certification !== null,
-        path,
-        points: grade.score.points,
-        possible: grade.score.possible,
-        status: grade.score.status
-      });
-      workbook.context.dispose();
+    const contents = app.serviceManager.contents;
+    const certificate = 'correxit-workbook-certificate';
+    async function batch() {
+      const stream: AsyncGenerator<any> = await app.commands.execute(
+        'correxit-corrector:batch',
+        { key: 'secret', path: directory }
+      );
+      const grades = [];
+      for await (const [path, { grade, workbook }] of stream) {
+        const rubric = Workbook.open(workbook, true);
+        const { certification } = rubric.assignment;
+        const { content } = await contents.get(path, { content: true });
+        grades.push({
+          certification,
+          frozen: content.cells.every(
+            (cell: any) => cell.metadata.editable === false
+          ),
+          path,
+          points: grade.score.points,
+          possible: grade.score.possible,
+          reports: content.cells.filter((cell: any) => cell.id === certificate),
+          status: grade.score.status,
+          verified: grade.verified
+        });
+        workbook.context.dispose();
+      }
+      return grades.sort((a, b) => a.path.localeCompare(b.path));
     }
-    return grades;
+
+    const initial = await batch();
+    // Simulate an already-certified file whose report was lost.
+    if (initial.length) {
+      const path = initial[0].path;
+      const file = await contents.get(path, { content: true });
+      file.content.cells = file.content.cells.filter(
+        (cell: any) => cell.id !== certificate
+      );
+      await contents.save(path, { ...file, type: 'notebook' });
+    }
+    return { initial, cached: await batch() };
   }, propagated.directory);
 
-  expect(result).toHaveLength(2);
-  for (const grade of result) {
-    expect(grade.certification).toBe(true);
+  expect(result.initial).toHaveLength(2);
+  for (const grade of result.initial) {
+    expect(grade.certification).not.toBeNull();
     expect(grade.status).not.toBe('unscored');
     expect(grade.possible).toBeGreaterThan(0);
+    expect(grade.verified).toBe(true);
+    expect(grade.frozen).toBe(true);
+    expect(grade.reports).toHaveLength(1);
+    expect(grade.reports[0].cell_type).toBe('markdown');
+    expect(JSON.stringify(grade.reports[0].source)).toContain('Score Report');
   }
+  expect(result.cached).toEqual(result.initial);
 
   await cleanup(page, propagated);
   await dispose();
@@ -1246,12 +1274,21 @@ test('collect gathers certified workbooks and records receipts', async ({
     const collected: any[] = [];
     for await (const [path, { grade, workbook }] of stream) {
       const rubric = Workbook.open(workbook, true);
+      const { content } = await app.serviceManager.contents.get(path, {
+        content: true
+      });
       collected.push({
         assignee: rubric.assignment.assignee,
         collected: rubric.assignment.collected,
+        frozen: content.cells.every(
+          (cell: any) => cell.metadata.editable === false
+        ),
         path,
         points: grade.score.points,
-        possible: grade.score.possible
+        possible: grade.score.possible,
+        reports: content.cells.filter(
+          (cell: any) => cell.id === 'correxit-workbook-certificate'
+        )
       });
       workbook.context.dispose();
     }
@@ -1264,6 +1301,11 @@ test('collect gathers certified workbooks and records receipts', async ({
     expect(entry.collected).toBeTruthy();
     expect(typeof entry.collected).toBe('string');
     expect(entry.possible).toBeGreaterThan(0);
+    expect(entry.frozen).toBe(true);
+    expect(entry.reports).toHaveLength(1);
+    const source = JSON.stringify(entry.reports[0].source);
+    expect(source).toContain('Score Report');
+    expect(source).toContain(entry.collected);
   }
   expect(result[0].assignee).toBe('alice@example.com');
   expect(result[1].assignee).toBe('bob@example.com');
@@ -1376,14 +1418,14 @@ test('corrector has contextual controls, folder identity, and an idle summary', 
   expect(title.icon).toContain('correxit');
   await widget.getByRole('radio', { name: 'Grade', exact: true }).check();
   await widget.getByRole('checkbox', { name: 'Regrade', exact: true }).check();
-  await widget.getByRole('radio', { name: 'Sync', exact: true }).check();
+  await widget.getByRole('radio', { name: 'Finalize', exact: true }).check();
   await expect(
     widget.getByRole('checkbox', {
       name: 'Only include locally submitted workbooks'
     })
   ).toHaveCount(0);
   await expect(
-    widget.getByRole('checkbox', { name: 'Resync', exact: true })
+    widget.getByRole('checkbox', { name: 'Finalize again', exact: true })
   ).not.toBeChecked();
   await widget.getByRole('radio', { name: 'Grade', exact: true }).check();
   await expect(
@@ -1404,7 +1446,67 @@ test('corrector has contextual controls, folder identity, and an idle summary', 
   await close(page);
 });
 
-test('Sync prompts once per run after cancellation', async ({ page }) => {
+test('Corrector updates collection labels when the provider changes', async ({
+  page
+}) => {
+  await page.goto();
+  await page.evaluate(() =>
+    (window as any).jupyterapp.commands.execute('correxit-corrector:launch', {
+      path: '.'
+    })
+  );
+  const widget = page.locator('#correxit-corrector-widget');
+  await widget.getByRole('radio', { name: 'Finalize', exact: true }).check();
+  await expect(
+    widget.getByRole('button', { name: 'Finalize', exact: true })
+  ).toBeEnabled();
+  await widget
+    .getByRole('checkbox', { name: 'Finalize again', exact: true })
+    .check();
+
+  const select = (provider: 'manual' | 'moodle') =>
+    page.evaluate(async provider => {
+      const registry = await window.galata.getPlugin(
+        '@jupyterlab/apputils-extension:settings'
+      );
+      await registry!.set('correxit:collector', 'provider', provider);
+      return (window as any).jupyterapp.commands.label(
+        'correxit-corrector:collect'
+      );
+    }, provider);
+  expect(await select('moodle')).toContain('sync');
+  await expect(
+    widget.getByRole('radio', { name: 'Sync', exact: true })
+  ).toBeChecked();
+  await expect(
+    widget.getByRole('button', { name: 'Sync', exact: true })
+  ).toBeEnabled();
+  const resync = widget.getByRole('checkbox', { name: 'Resync', exact: true });
+  await expect(resync).not.toBeChecked();
+  await resync.check();
+  expect(await select('manual')).toContain('Finalize');
+  await expect(
+    widget.getByRole('button', { name: 'Finalize', exact: true })
+  ).toBeEnabled();
+  await expect(
+    widget.getByRole('checkbox', { name: 'Finalize again', exact: true })
+  ).not.toBeChecked();
+  await close(page);
+});
+
+test('Corrector applies changes to grading concurrency', async ({ page }) => {
+  await page.goto();
+  const concurrency = await page.evaluate(async () => {
+    const registry = await window.galata.getPlugin(
+      '@jupyterlab/apputils-extension:settings'
+    );
+    await registry!.set('correxit:corrector', 'concurrency', 1);
+    return (window as any).__correxit__.kernels.snapshot().concurrency;
+  });
+  expect(concurrency).toBe(1);
+});
+
+test('Finalize prompts once per run after cancellation', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'print(42)' },
     { id: 'target', source: 'print(42)' }
@@ -1418,15 +1520,21 @@ test('Sync prompts once per run after cancellation', async ({ page }) => {
   await expect(
     widget.getByRole('button', { name: 'Scan', exact: true })
   ).toBeEnabled();
-  await widget.getByRole('radio', { name: 'Sync', exact: true }).check();
-  const sync = widget.getByRole('button', { name: 'Sync', exact: true });
+  await widget.getByRole('radio', { name: 'Finalize', exact: true }).check();
+  const finalize = widget.getByRole('button', {
+    name: 'Finalize',
+    exact: true
+  });
   try {
     for (const _ of [0, 1]) {
-      await sync.click();
+      await finalize.click();
       const dialog = page.getByRole('dialog');
       await expect(dialog).toContainText('Enter passphrase to unlock');
+      await expect(widget.getByRole('status').first()).toContainText(
+        'Finalizing'
+      );
       await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await expect(sync).toBeEnabled();
+      await expect(finalize).toBeEnabled();
       await expect(dialog).toHaveCount(0);
       await expect(widget.getByRole('status').first()).toContainText(
         '0 processed · 2 failed'

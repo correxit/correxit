@@ -11,6 +11,7 @@ import { PromiseDelegate } from '@lumino/coreutils';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ServiceManager } from '@jupyterlab/services';
 import { Assignment, Correxit, Rubric, Workbook } from '..';
+import * as certificate from '../correxit/certificate';
 import * as unlockerService from '../correxit/unlocker';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
@@ -66,7 +67,8 @@ export function commands(
     trans: IRenderMime.TranslationBundle;
     tree: INotebookTree | null;
     unlocker: Correxit.Unlocker;
-  }
+  },
+  finalize: () => boolean = () => false
 ) {
   const { commands, serviceManager: manager, shell } = app;
   const {
@@ -220,7 +222,11 @@ export function commands(
           typeof open(workbook)?.assignment.collected === 'string'
         )
           return { file, completed: false };
-        const completed = await Workbook.record(certified, collector);
+        const completed = await certificate.record(
+          certificate.restore(certified, trans),
+          collector,
+          trans
+        );
         if (completed) await save(workbook);
         return { file, completed };
       } finally {
@@ -396,7 +402,10 @@ export function commands(
   );
   disposables.push(
     commands.addCommand(CommandIDs.collect, {
-      label: trans.__('Save and sync certified workbook grades...'),
+      label: () =>
+        finalize()
+          ? trans.__('Finalize certified workbook grades...')
+          : trans.__('Save and sync certified workbook grades...'),
       execute: (args: Options) => results(args, 'collect')
     })
   );
@@ -406,12 +415,15 @@ export function commands(
       label: trans.__('Launch Correxit Corrector'),
       execute: ({ path }: { path?: string }) => {
         if (!corrector || corrector.isDisposed) {
-          corrector = new Corrector.Widget({
-            commands,
-            path: path || browser?.model.path || '.',
-            indicator,
-            trans
-          });
+          corrector = new Corrector.Widget(
+            {
+              commands,
+              path: path || browser?.model.path || '.',
+              indicator,
+              trans
+            },
+            finalize()
+          );
           corrector.id = 'correxit-corrector-widget';
           corrector.title.closable = true;
           disposables.push(corrector);
@@ -659,6 +671,8 @@ async function correct(
   const cached = reuse(workbook, overwrite);
   if (cached) {
     await Workbook.lock(workbook);
+    const certified = precertified(workbook);
+    if (certified) certificate.restore(certified, trans);
     // A prior attempt may have restored this report but failed to save it.
     await save(workbook);
     return cached;

@@ -19,9 +19,12 @@ import { CommandIDs } from './commands';
 import { Reviewer } from './reviewer';
 
 export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
-  constructor({ commands, indicator, path, trans }: CorrectorWidget.IOptions) {
+  constructor(
+    { commands, indicator, path, trans }: CorrectorWidget.IOptions,
+    finalize = false
+  ) {
     super({
-      content: new CorrectorContent({ commands, path, trans }),
+      content: new CorrectorContent({ commands, finalize, path, trans }),
       toolbar: new Toolbar({ noFocusOnClick: true })
     });
     this.commands = commands;
@@ -30,7 +33,7 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     this.addClass('correxit-corrector-widget');
     this.title.icon = Correxit.Icons.correxit;
     this.identify();
-    this.initialize();
+    this.initialize(finalize);
   }
 
   get path(): string {
@@ -54,6 +57,11 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     return !this.busy;
   }
 
+  setFinalize(finalize: boolean) {
+    this.selector?.setFinalize(finalize);
+    this.content.set({ finalize });
+  }
+
   protected identify() {
     this.title.label = this.trans.__(
       'Corrector · %1',
@@ -73,7 +81,7 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     super.dispose();
   }
 
-  protected initialize() {
+  protected initialize(finalize = false) {
     const { commands, content, indicator, toolbar, trans } = this;
     const go = (
       mode: Corrector.Mode,
@@ -89,7 +97,7 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
       content.set({ stopping: true });
       void commands.execute(CommandIDs.stop, { run: content.run });
     };
-    const selector = new ModeSelector({ go, stop, trans });
+    const selector = new ModeSelector({ go, finalize, stop, trans });
     const notify = (updates: Corrector.Notification) => {
       this.busy = !(updates.graded && updates.scanned);
       indicator?.set(updates);
@@ -133,7 +141,11 @@ export namespace CorrectorWidget {
 }
 
 class CorrectorContent extends ReactWidget {
-  constructor(props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'>) {
+  constructor(
+    props: Pick<Corrector.Props, 'commands' | 'path' | 'trans'> & {
+      finalize: boolean;
+    }
+  ) {
     super();
     this.props = {
       ...props,
@@ -163,7 +175,7 @@ class CorrectorContent extends ReactWidget {
     this.set({ ...updates, run: UUID.uuid4(), stopping: false });
   }
 
-  set(updates: Partial<Corrector.Props>) {
+  set(updates: Partial<Corrector.Props & { finalize: boolean }>) {
     this.props = { ...this.props, ...updates };
     this.update();
   }
@@ -178,7 +190,7 @@ class CorrectorContent extends ReactWidget {
     );
   }
 
-  protected props: Corrector.Props;
+  protected props: Corrector.Props & { finalize: boolean };
 }
 
 export class CorrectorStatus extends ReactWidget {
@@ -223,18 +235,20 @@ export class CorrectorStatus extends ReactWidget {
 class ModeSelector extends ReactWidget {
   constructor(options: {
     go: (mode: Corrector.Mode, overwrite: boolean, submitted: boolean) => void;
+    finalize: boolean;
     stop: () => void;
     trans: IRenderMime.TranslationBundle;
   }) {
     super();
     this.go = options.go;
+    this.finalize = options.finalize;
     this.stop = options.stop;
     this.trans = options.trans;
     this.addClass('correxit-corrector-mode');
   }
 
   render() {
-    const { busy, mode, stopping, submitted, trans } = this;
+    const { busy, finalize, mode, stopping, submitted, trans } = this;
     const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
       {
         value: 'scan',
@@ -248,11 +262,19 @@ class ModeSelector extends ReactWidget {
       },
       {
         value: 'collect',
-        label: trans.__('Sync'),
-        tooltip: trans.__('Find and sync certified workbook grades')
+        label: finalize ? trans.__('Finalize') : trans.__('Sync'),
+        tooltip: finalize
+          ? trans.__('Record local receipts for certified workbook grades')
+          : trans.__('Find and sync certified workbook grades')
       }
     ];
     const label = modes.find(item => item.value === mode)!.label;
+    const repeat =
+      mode === 'grade'
+        ? trans.__('Regrade')
+        : finalize
+          ? trans.__('Finalize again')
+          : trans.__('Resync');
     return (
       <>
         <fieldset
@@ -306,27 +328,27 @@ class ModeSelector extends ReactWidget {
                 ? trans.__(
                     'Re-execute workbooks instead of reusing authenticated grades'
                   )
-                : trans.__(
-                    'Sync again even when a collection receipt already exists'
-                  )
+                : finalize
+                  ? trans.__(
+                      'Record a local receipt even when a collection receipt already exists'
+                    )
+                  : trans.__(
+                      'Sync again even when a collection receipt already exists'
+                    )
             }
           >
             <input
               type="checkbox"
-              checked={mode === 'grade' ? this.regrade : this.resync}
+              checked={mode === 'grade' ? this.regrade : this.recollect}
               disabled={busy}
               onChange={({ target }) => {
                 if (mode === 'grade') this.regrade = target.checked;
-                else this.resync = target.checked;
+                else this.recollect = target.checked;
                 this.update();
               }}
-              aria-label={
-                mode === 'grade' ? trans.__('Regrade') : trans.__('Resync')
-              }
+              aria-label={repeat}
             />
-            <span>
-              {mode === 'grade' ? trans.__('Regrade') : trans.__('Resync')}
-            </span>
+            <span>{repeat}</span>
           </label>
         )}
         <button
@@ -340,7 +362,7 @@ class ModeSelector extends ReactWidget {
               this.busy = true;
               this.go(
                 mode,
-                mode === 'grade' ? this.regrade : this.resync,
+                mode === 'grade' ? this.regrade : this.recollect,
                 submitted
               );
             }
@@ -359,7 +381,14 @@ class ModeSelector extends ReactWidget {
   reset() {
     this.mode = 'scan';
     this.busy = true;
-    this.stopping = this.regrade = this.resync = this.submitted = false;
+    this.stopping = this.regrade = this.recollect = this.submitted = false;
+    this.update();
+  }
+
+  setFinalize(finalize: boolean) {
+    if (this.finalize === finalize) return;
+    this.finalize = finalize;
+    this.recollect = false;
     this.update();
   }
 
@@ -378,7 +407,8 @@ class ModeSelector extends ReactWidget {
   ) => void;
   protected stop: () => void;
   protected regrade = false;
-  protected resync = false;
+  protected recollect = false;
+  protected finalize: boolean;
   protected mode: Corrector.Mode = 'scan';
   protected submitted = false;
   protected trans: IRenderMime.TranslationBundle;

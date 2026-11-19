@@ -13,6 +13,7 @@ import { Correxit, Rubric, Workbook } from '..';
 import * as unlockerService from './unlocker';
 import { Propagator } from '../ui/propagator';
 import * as input from './input';
+import * as certificate from './certificate';
 import * as io from './io';
 import * as nbgrader from './nbgrader';
 import * as propagator from './propagator';
@@ -418,7 +419,7 @@ export function commands(
         const certified = await Workbook.certify(workbook, trans, true);
         // Persist the local grade even if the collector declines or fails.
         await save(workbook, false);
-        if (await Workbook.record(certified, collector)) await save(workbook, false);
+        if (await certificate.record(certified, collector, trans)) await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }

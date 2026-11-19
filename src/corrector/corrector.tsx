@@ -180,8 +180,8 @@ const status = (
   const unscored = status === 'unscored';
   if (phase === 'collected') {
     return unscored
-      ? trans.__('unscored \u00b7 synced')
-      : trans.__('%1 of %2 \u00b7 synced', points, possible);
+      ? trans.__('unscored \u00b7 recorded')
+      : trans.__('%1 of %2 \u00b7 recorded', points, possible);
   }
   if (phase === 'certified') {
     return unscored
@@ -198,9 +198,12 @@ const status = (
     : trans.__('%1 of %2', points, possible);
 };
 
-export function Corrector(props: Corrector.Props) {
+export function Corrector(
+  props: Corrector.Props & Partial<{ finalize: boolean }>
+) {
   const {
     commands,
+    finalize = false,
     mode,
     notify,
     overwrite,
@@ -234,7 +237,7 @@ export function Corrector(props: Corrector.Props) {
     () => match(available, walk.selected),
     [available, walk.selected]
   );
-  const message = describe(summary, mode, stopping, trans);
+  const message = describe(summary, mode, stopping, finalize, trans);
   useEffect(
     () => () => {
       void commands.execute(COMMAND_IDS.stop, { run, release: true });
@@ -299,7 +302,7 @@ export function Corrector(props: Corrector.Props) {
                 });
           const label =
             phase === 'failed'
-              ? diagnostic(error || 'grade', trans)
+              ? diagnostic(error || 'grade', finalize, trans)
               : phase === 'processing' && !idle
                 ? trans.__('Processing…')
                 : summary.stopped
@@ -320,20 +323,27 @@ export function Corrector(props: Corrector.Props) {
   );
 }
 
-const diagnostic = (code: Diagnostic, trans: TranslationBundle) =>
+const diagnostic = (
+  code: Diagnostic,
+  finalize: boolean,
+  trans: TranslationBundle
+) =>
   ({
     directory: trans.__('Could not read directory'),
     read: trans.__('Could not read workbook'),
     authenticate: trans.__('Could not authenticate workbook'),
     invalid: trans.__('Workbook is invalid or unavailable'),
     grade: trans.__('Could not grade workbook'),
-    sync: trans.__('Could not sync workbook')
+    sync: finalize
+      ? trans.__('Could not finalize workbook')
+      : trans.__('Could not sync workbook')
   })[code];
 
 const describe = (
   summary: session.Progress,
   mode: Mode,
   stopping: boolean,
+  finalize: boolean,
   trans: TranslationBundle
 ) => {
   if (summary.error) {
@@ -354,7 +364,9 @@ const describe = (
               ? trans.__('Scanning…')
               : mode === 'grade'
                 ? trans.__('Grading…')
-                : trans.__('Syncing…');
+                : finalize
+                  ? trans.__('Finalizing…')
+                  : trans.__('Syncing…');
   const read = trans.__('%1/%2 checked', summary.checked, summary.total);
   const processed =
     mode === 'scan' ? '' : trans.__(' · %1 processed', summary.completed);

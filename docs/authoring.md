@@ -423,12 +423,15 @@ Choose a mode, then click its matching action button:
 - **Scan** finds workbooks without grading them.
 - **Grade** authenticates, grades, and saves workbooks. Existing authenticated
   grades are reused; select **Regrade** to execute them again.
-- **Sync** sends certified grades to the configured collector. Select **Resync**
-  to send grades that already have a collection receipt.
+- **Finalize** records a local receipt for certified grades when the manual
+  collector is selected. Select **Finalize again** to include grades that
+  already have a receipt.
+- **Sync** sends certified grades to the configured external collector. Select
+  **Resync** to include grades that already have a receipt.
 
 For manual review, click a cell segment in a workbook's score breakdown to open
 Reviewer. Score the pending cells; the workbook is certified automatically when
-all cells are scored. Finish manual review before syncing.
+all cells are scored. Finish manual review before finalizing or syncing.
 
 Run **Grade** before using the spreadsheet button to export scores to CSV.
 Scan alone leaves score fields blank, even for previously graded workbooks.
