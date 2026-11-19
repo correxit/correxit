@@ -5,7 +5,7 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
-import * as unlockerService from './unlocker';
+import { Unlocker } from './unlocker';
 
 type Rack = {
   count: number;
@@ -256,9 +256,8 @@ export async function request(
     if (!rubric.locked || unlock === false || !(key || passphrase || unlock)) {
       await Workbook.lock(workbook);
     } else {
-      await unlockerService.Unlocker.unlock(
-        workbook, unlocker, silent ? { ...handle, silent } : handle
-      );
+      const credentials = silent ? { ...handle, silent } : handle;
+      await Unlocker.unlock(workbook, unlocker, credentials);
     }
     return workbook;
   } catch (error) {

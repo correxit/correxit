@@ -12,10 +12,10 @@ import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ServiceManager } from '@jupyterlab/services';
 import { Assignment, Correxit, Rubric, Workbook } from '..';
 import * as certificate from '../correxit/certificate';
-import * as unlockerService from '../correxit/unlocker';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import * as state from '../correxit/state';
+import { Unlocker } from '../correxit/unlocker';
 import { Corrector, Reviewer } from '.';
 import * as session from './session';
 import * as csv from './csv';
@@ -634,12 +634,8 @@ async function authenticate(
   unlocker: Correxit.Unlocker,
   silent: boolean
 ): Promise<void> {
-  const { path } = workbook.context;
-  const unlocked = await unlockerService.Unlocker.unlock(workbook, unlocker, {
-    ...handle,
-    path,
-    silent
-  });
+  const credentials = { ...handle, path: workbook.context.path, silent };
+  const unlocked = await Unlocker.unlock(workbook, unlocker, credentials);
   const rubric = open(workbook);
   if (!unlocked || !rubric || rubric.locked)
     throw new Correxit.Error.Unlock('Workbook authentication failed');
