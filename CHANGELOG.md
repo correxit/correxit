@@ -1,3 +1,15 @@
+# 3.0.1
+
+<!-- START GENERATED CHANGELOG: 3.0.1 -->
+
+## What's Changed
+* fix: grade report regression, language updates by @afshin in https://github.com/correxit/correxit/pull/113
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v3.0.0...v3.0.1
+
+<!-- END GENERATED CHANGELOG: 3.0.1 -->
+
 # 3.0.0
 
 <!-- START GENERATED CHANGELOG: 3.0.0 -->
