@@ -1,3 +1,5 @@
+import type { IJupyterLabPageFixture } from '@jupyterlab/galata';
+import type { Request } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { cd, cleanup, close, setup } from './utils';
 
@@ -105,6 +107,25 @@ async function batch(page: any, directory: string) {
     },
     { directory, key }
   );
+}
+
+async function rerun(page: IJupyterLabPageFixture, directory: string) {
+  await page.evaluate(() => (window as any).__correxit__.kernels.drain());
+  let starts = 0;
+  const count = (request: Request) => {
+    if (
+      request.method() === 'POST' &&
+      new URL(request.url()).pathname.endsWith('/api/sessions')
+    )
+      starts++;
+  };
+  page.on('request', count);
+  try {
+    const grades = await batch(page, directory);
+    return { grades, starts };
+  } finally {
+    page.off('request', count);
+  }
 }
 
 async function collect(page: any, directory: string) {
@@ -656,43 +677,189 @@ test('authentic submissions grade and collect; authenticated cached reports skip
       score: { points: 0, possible: 1 }
     });
     expect(grades[0].certification).not.toBeNull();
-    const cached = await page.evaluate(
-      async ({ directory, key }: any) => {
-        const app = (window as any).jupyterapp;
-        const { Workbook, kernels } = (window as any).__correxit__;
-        kernels.drain();
-        const manager = app.serviceManager.kernels;
-        const start = manager.startNew;
-        let starts = 0;
-        manager.startNew = function (...args: any[]) {
-          starts++;
-          return start.apply(this, args);
-        };
-        try {
-          const stream = await app.commands.execute(
-            'correxit-corrector:batch',
-            { path: directory, key }
+    expect(await rerun(page, issued.directory)).toEqual({ grades, starts: 0 });
+    expect(await collect(page, issued.directory)).toBe(1);
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
+for (const extra of [
+  'missing-given',
+  'missing-reference',
+  'earned score',
+  'intervention'
+]) {
+  test(`regrades a certified report with an extra ${extra}`, async ({
+    page
+  }) => {
+    const fixture = await setup(page, cells);
+    const issued = await issue(page);
+    const [path] = issued.paths;
+    try {
+      await cd(page, '.');
+      const [initial] = await batch(page, issued.directory);
+      expect(initial.certification).not.toBeNull();
+      await page.evaluate(
+        async ({ path, key, extra }) => {
+          const { Rubric } = (window as any).__correxit__;
+          const contents = (window as any).jupyterapp.serviceManager.contents;
+          const file = await contents.get(path);
+          const rubric = await Rubric.unlock(
+            file.content.metadata.correxit,
+            key
           );
-          const grades: any[] = [];
-          for await (const [, { grade, workbook }] of stream) {
-            grades.push({
-              verified: grade.verified,
-              points: grade.score.points
-            });
-            workbook.context.dispose();
-          }
-          return { starts, grades };
+          const { report } = rubric.assignment;
+          const field = extra === 'intervention' ? 'interventions' : 'scores';
+          const score = extra.startsWith('missing-')
+            ? { ...report.scores.answer, code: extra }
+            : {
+                ...Rubric.Score.CORRECT,
+                code: field === 'interventions' ? 'intervene' : ''
+              };
+          const obsolete = { ...score, id: 'obsolete' };
+          const signed = await Rubric.sign(rubric, {
+            ...report,
+            [field]: { ...report[field], obsolete }
+          });
+          file.content.metadata.correxit = await Rubric.lock(signed);
+          await contents.save(path, file);
+        },
+        { path, key, extra }
+      );
+
+      expect(await collect(page, issued.directory)).toBe(0);
+      const { grades, starts } = await rerun(page, issued.directory);
+      expect(starts).toBeGreaterThan(0);
+      expect(grades).toMatchObject([
+        { verified: true, resolved: true, score: initial.score }
+      ]);
+      expect(grades[0].certification).toBeGreaterThan(initial.certification);
+      const saved = await page.evaluate(async path => {
+        const { contents } = (window as any).jupyterapp.serviceManager;
+        const { content } = await contents.get(path);
+        const { report } = content.metadata.correxit.assignment;
+        return {
+          scores: Object.keys(report.scores),
+          interventions: Object.keys(report.interventions),
+          reports: content.cells
+            .filter((cell: any) => cell.id === 'correxit-workbook-certificate')
+            .map((cell: any) => cell.source),
+          frozen: content.cells.every(
+            (cell: any) => cell.metadata.editable === false
+          )
+        };
+      }, path);
+      expect(saved).toMatchObject({
+        scores: ['answer'],
+        interventions: [],
+        frozen: true
+      });
+      expect(saved.reports).toHaveLength(1);
+      expect(JSON.stringify(saved.reports[0])).toContain('0 / 1');
+    } finally {
+      await cleanup(page, issued);
+      await fixture.dispose();
+    }
+  });
+}
+
+test('collects and reuses a certification with an intervention-only reviewable cell', async ({
+  page
+}) => {
+  const fixture = await setup(page, [
+    ...cells,
+    { id: 'manual', type: 'markdown', source: 'Explain the answer.' }
+  ]);
+  const issued = await issue(page, true, 'manual');
+  try {
+    await cd(page, '.');
+    const certified = await page.evaluate(
+      async ({ path, key }) => {
+        const { Rubric, Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const workbook = await app.commands.execute('correxit:fetch', {
+          path,
+          unlock: false
+        });
+        try {
+          await Workbook.unlock(workbook, key);
+          await Workbook.correct(workbook, 'answer');
+          const review = Rubric.Score.intervene('manual', {
+            points: 1,
+            possible: 1,
+            comment: 'Reviewed'
+          });
+          await Workbook.intervene(workbook, 'manual', review);
+          const { grade, rubric } = await Workbook.certify(
+            workbook,
+            { __: (text: string) => text },
+            true
+          );
+          await workbook.context.save();
+          const { certification, report } = rubric.assignment;
+          return {
+            grade: { ...grade, certification },
+            scores: Object.keys(report.scores)
+          };
         } finally {
-          manager.startNew = start;
+          workbook.context.dispose();
         }
       },
-      { directory: issued.directory, key }
+      { path: issued.paths[0], key }
     );
-    expect(cached).toEqual({
-      starts: 0,
-      grades: [{ verified: true, points: 0 }]
-    });
+    expect(certified.scores).toEqual(['answer']);
+    expect(certified.grade.score).toMatchObject({ points: 1, possible: 2 });
     expect(await collect(page, issued.directory)).toBe(1);
+    expect(await rerun(page, issued.directory)).toEqual({
+      grades: [certified.grade],
+      starts: 0
+    });
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
+test('reuses automated scores while manual review is pending', async ({
+  page
+}) => {
+  const fixture = await setup(page, [
+    ...cells,
+    { id: 'manual', type: 'markdown', source: 'Explain the answer.' }
+  ]);
+  const issued = await issue(page, true, 'manual');
+  try {
+    await cd(page, '.');
+    const grades = await batch(page, issued.directory);
+    expect(grades).toMatchObject([
+      {
+        verified: true,
+        resolved: true,
+        certification: null,
+        score: { points: 0, possible: 2 }
+      }
+    ]);
+    expect(await rerun(page, issued.directory)).toEqual({ grades, starts: 0 });
+    const saved = await page.evaluate(async path => {
+      const { contents } = (window as any).jupyterapp.serviceManager;
+      const { content } = await contents.get(path);
+      const { certification, report } = content.metadata.correxit.assignment;
+      return {
+        certification,
+        scores: report.scores,
+        interventions: report.interventions
+      };
+    }, issued.paths[0]);
+    expect(saved).toMatchObject({
+      certification: null,
+      scores: {
+        answer: { points: 0, possible: 1 },
+        manual: { code: 'intervene', status: 'unscored' }
+      }
+    });
+    expect(saved.interventions).toEqual({});
   } finally {
     await cleanup(page, issued);
     await fixture.dispose();

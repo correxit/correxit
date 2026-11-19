@@ -54,6 +54,10 @@ export class CorrectorWidget extends MainAreaWidget<CorrectorContent> {
     return !this.busy;
   }
 
+  setFinalize(finalize: boolean) {
+    this.selector?.setFinalize(finalize);
+  }
+
   protected identify() {
     this.title.label = this.trans.__(
       'Corrector · %1',
@@ -234,7 +238,7 @@ class ModeSelector extends ReactWidget {
   }
 
   render() {
-    const { busy, mode, stopping, submitted, trans } = this;
+    const { busy, finalize, mode, stopping, submitted, trans } = this;
     const modes: { label: string; tooltip: string; value: Corrector.Mode }[] = [
       {
         value: 'scan',
@@ -248,11 +252,19 @@ class ModeSelector extends ReactWidget {
       },
       {
         value: 'collect',
-        label: trans.__('Sync'),
-        tooltip: trans.__('Find and sync certified workbook grades')
+        label: finalize ? trans.__('Finalize') : trans.__('Sync'),
+        tooltip: finalize
+          ? trans.__('Record local receipts for certified workbook grades')
+          : trans.__('Find and sync certified workbook grades')
       }
     ];
     const label = modes.find(item => item.value === mode)!.label;
+    const repeat =
+      mode === 'grade'
+        ? trans.__('Regrade')
+        : finalize
+          ? trans.__('Finalize again')
+          : trans.__('Resync');
     return (
       <>
         <fieldset
@@ -306,27 +318,27 @@ class ModeSelector extends ReactWidget {
                 ? trans.__(
                     'Re-execute workbooks instead of reusing authenticated grades'
                   )
-                : trans.__(
-                    'Sync again even when a collection receipt already exists'
-                  )
+                : finalize
+                  ? trans.__(
+                      'Record a local receipt even when a collection receipt already exists'
+                    )
+                  : trans.__(
+                      'Sync again even when a collection receipt already exists'
+                    )
             }
           >
             <input
               type="checkbox"
-              checked={mode === 'grade' ? this.regrade : this.resync}
+              checked={mode === 'grade' ? this.regrade : this.recollect}
               disabled={busy}
               onChange={({ target }) => {
                 if (mode === 'grade') this.regrade = target.checked;
-                else this.resync = target.checked;
+                else this.recollect = target.checked;
                 this.update();
               }}
-              aria-label={
-                mode === 'grade' ? trans.__('Regrade') : trans.__('Resync')
-              }
+              aria-label={repeat}
             />
-            <span>
-              {mode === 'grade' ? trans.__('Regrade') : trans.__('Resync')}
-            </span>
+            <span>{repeat}</span>
           </label>
         )}
         <button
@@ -340,7 +352,7 @@ class ModeSelector extends ReactWidget {
               this.busy = true;
               this.go(
                 mode,
-                mode === 'grade' ? this.regrade : this.resync,
+                mode === 'grade' ? this.regrade : this.recollect,
                 submitted
               );
             }
@@ -359,13 +371,25 @@ class ModeSelector extends ReactWidget {
   reset() {
     this.mode = 'scan';
     this.busy = true;
-    this.stopping = this.regrade = this.resync = this.submitted = false;
+    this.stopping = this.regrade = this.recollect = this.submitted = false;
+    this.update();
+  }
+
+  setFinalize(finalize: boolean) {
+    this.preferred = finalize;
+    if (this.busy && this.mode === 'collect') return;
+    if (this.finalize === finalize) return;
+    this.finalize = finalize;
+    this.recollect = false;
     this.update();
   }
 
   set({ graded, scanned }: Corrector.Notification) {
     this.busy = !(graded && scanned);
-    if (!this.busy) this.stopping = false;
+    if (!this.busy) {
+      this.stopping = false;
+      this.setFinalize(this.preferred);
+    }
     this.update();
   }
 
@@ -378,7 +402,9 @@ class ModeSelector extends ReactWidget {
   ) => void;
   protected stop: () => void;
   protected regrade = false;
-  protected resync = false;
+  protected recollect = false;
+  protected finalize = false;
+  protected preferred = false;
   protected mode: Corrector.Mode = 'scan';
   protected submitted = false;
   protected trans: IRenderMime.TranslationBundle;

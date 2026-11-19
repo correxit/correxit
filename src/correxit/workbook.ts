@@ -699,7 +699,6 @@ export namespace Workbook {
     if (!current(workbook, locked))
       throw new Error.Certify('certify error: workbook changed');
     certificate.render(workbook, grade, trans);
-    freeze(workbook);
     return { grade, identifier, rubric: locked, revision: revision(workbook), workbook };
   }
 

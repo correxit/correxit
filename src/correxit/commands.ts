@@ -10,14 +10,15 @@ import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { Correxit, Rubric, Workbook } from '..';
-import * as unlockerService from './unlocker';
 import { Propagator } from '../ui/propagator';
+import * as certificate from './certificate';
 import * as input from './input';
 import * as io from './io';
 import * as nbgrader from './nbgrader';
 import * as propagator from './propagator';
 import * as security from './security';
 import * as state from './state';
+import { Unlocker } from './unlocker';
 
 export namespace CommandIDs {
   export const assign = 'correxit:assign';
@@ -97,11 +98,7 @@ export function commands(
     credentials?: Partial<Credentials & { silent?: boolean }> | null
   ) => {
     try {
-      return await unlockerService.Unlocker.request(
-        unlocker,
-        request,
-        credentials
-      );
+      return await Unlocker.request(unlocker, request, credentials);
     } catch (error) {
       void showErrorMessage(...Error.interpret(error, trans));
       return null;
@@ -418,7 +415,7 @@ export function commands(
         const certified = await Workbook.certify(workbook, trans, true);
         // Persist the local grade even if the collector declines or fails.
         await save(workbook, false);
-        if (await Workbook.record(certified, collector)) await save(workbook, false);
+        if (await certificate.record(certified, collector, trans)) await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }
@@ -1189,11 +1186,7 @@ successful, an unlocked rubric.
       try {
         const { handle, workbook } = await reify(args);
         if (!workbook) return null;
-        return await unlockerService.Unlocker.unlock(
-          workbook,
-          unlocker,
-          handle
-        );
+        return await Unlocker.unlock(workbook, unlocker, handle);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }

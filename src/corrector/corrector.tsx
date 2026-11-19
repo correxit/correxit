@@ -142,7 +142,7 @@ const lifecycle = (workbook: Scanned, grade: Grade | 'pending'): Phase => {
   if (!rubric) return 'scanned';
 
   const { assignment } = rubric;
-  if (assignment.collected) return 'collected';
+  if (typeof assignment.collected === 'string') return 'collected';
   if (assignment.certification) return 'certified';
 
   return Rubric.pending(rubric) ? 'review' : 'scanned';
@@ -180,8 +180,8 @@ const status = (
   const unscored = status === 'unscored';
   if (phase === 'collected') {
     return unscored
-      ? trans.__('unscored \u00b7 synced')
-      : trans.__('%1 of %2 \u00b7 synced', points, possible);
+      ? trans.__('unscored \u00b7 recorded')
+      : trans.__('%1 of %2 \u00b7 recorded', points, possible);
   }
   if (phase === 'certified') {
     return unscored
@@ -201,6 +201,7 @@ const status = (
 export function Corrector(props: Corrector.Props) {
   const {
     commands,
+    finalize = false,
     mode,
     notify,
     overwrite,
@@ -234,7 +235,7 @@ export function Corrector(props: Corrector.Props) {
     () => match(available, walk.selected),
     [available, walk.selected]
   );
-  const message = describe(summary, mode, stopping, trans);
+  const message = describe(summary, mode, stopping, finalize, trans);
   useEffect(
     () => () => {
       void commands.execute(COMMAND_IDS.stop, { run, release: true });
@@ -327,13 +328,14 @@ const diagnostic = (code: Diagnostic, trans: TranslationBundle) =>
     authenticate: trans.__('Could not authenticate workbook'),
     invalid: trans.__('Workbook is invalid or unavailable'),
     grade: trans.__('Could not grade workbook'),
-    sync: trans.__('Could not sync workbook')
+    sync: trans.__('Could not record certified grade')
   })[code];
 
 const describe = (
   summary: session.Progress,
   mode: Mode,
   stopping: boolean,
+  finalize: boolean,
   trans: TranslationBundle
 ) => {
   if (summary.error) {
@@ -341,6 +343,11 @@ const describe = (
       'Could not read this folder. Choose another folder or try Scan again.'
     );
   }
+  const action = {
+    scan: trans.__('Scanning…'),
+    grade: trans.__('Grading…'),
+    collect: finalize ? trans.__('Finalizing…') : trans.__('Syncing…')
+  }[mode];
   const state =
     stopping && !summary.done
       ? trans.__('Stopping…')
@@ -350,11 +357,7 @@ const describe = (
           ? trans.__('Complete')
           : !summary.listed
             ? trans.__('Reading folder…')
-            : mode === 'scan'
-              ? trans.__('Scanning…')
-              : mode === 'grade'
-                ? trans.__('Grading…')
-                : trans.__('Syncing…');
+            : action;
   const read = trans.__('%1/%2 checked', summary.checked, summary.total);
   const processed =
     mode === 'scan' ? '' : trans.__(' · %1 processed', summary.completed);
@@ -391,7 +394,7 @@ export namespace Corrector {
     stopping: boolean;
     submitted: boolean;
     trans: TranslationBundle;
-  };
+  } & Partial<{ finalize: boolean }>;
 
   export type Status = CorrectorStatus;
 

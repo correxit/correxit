@@ -1,5 +1,8 @@
+import type { Collector } from '@correxit/contracts';
 import { IRenderMime } from '@jupyterlab/rendermime';
+import { JSONExt } from '@lumino/coreutils';
 import { Rubric } from '.';
+import { Certify } from './error';
 import { Workbook } from './workbook';
 
 type Grade = Workbook.Grade;
@@ -15,7 +18,44 @@ export function remove(workbook: Workbook): void {
   if (index !== -1) notebook.deleteCell(index);
 }
 
-/** Append or replace the score report cell in a certified workbook. */
+const locked = (workbook: Workbook): Rubric.Locked | null => {
+  if (workbook.context.isDisposed) return null;
+  const rubric = Workbook.open(workbook, true);
+  const notebook = workbook.context.model.sharedModel;
+  return rubric?.locked && JSONExt.deepEqual(
+    notebook.getMetadata('correxit') ?? null, rubric
+  ) ? rubric : null;
+};
+
+/** Rebuild feedback from a current, authenticated grade. */
+export function restore(
+  certified: Workbook.Certified,
+  trans: TranslationBundle
+): Workbook.Certified {
+  const { grade, rubric, revision, workbook } = certified;
+  if (locked(workbook) !== rubric || Workbook.revision(workbook) !== revision)
+    throw new Certify('certify error: workbook changed');
+  render(workbook, grade, trans);
+  return { ...certified, revision: Workbook.revision(workbook) };
+}
+
+/** Record a collection receipt and refresh the returned workbook's feedback. */
+export async function record(
+  certified: Workbook.Certified,
+  collector: Collector,
+  trans: TranslationBundle
+): Promise<boolean> {
+  const { grade, rubric, workbook } = certified;
+  if (!await Workbook.record(certified, collector)) return false;
+  const current = locked(workbook);
+  if (!current || current.id !== rubric.id || current.assignment.collected === null ||
+    current.assignment.certification !== rubric.assignment.certification ||
+    current.assignment.report !== rubric.assignment.report) return false;
+  render(workbook, grade, trans);
+  return true;
+}
+
+/** Append or replace the score report cell and freeze the certified workbook. */
 export function render(
   workbook: Workbook,
   grade: Grade,
@@ -66,7 +106,7 @@ export function render(
   lines.push(
     `| **${trans.__('Certified')}** | ${timestamp(certification, 'n/a')} |`
   );
-  if (collected)
+  if (typeof collected === 'string')
     lines.push(`| **${trans.__('Collected')}** | \`${collected}\` |`);
   if (grade.spec)
     lines.push(`| **${trans.__('Kernel')}** | ${grade.spec.display_name} |`);
@@ -106,5 +146,6 @@ export function render(
       metadata,
       source
     });
+    for (const cell of notebook.cells) cell.setMetadata('editable', false);
   }, false);
 }

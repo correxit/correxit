@@ -11,10 +11,12 @@ import { PromiseDelegate } from '@lumino/coreutils';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ServiceManager } from '@jupyterlab/services';
 import { Assignment, Correxit, Rubric, Workbook } from '..';
-import * as unlockerService from '../correxit/unlocker';
+import * as certificate from '../correxit/certificate';
+import { manual } from '../correxit/collectors';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import * as state from '../correxit/state';
+import { Unlocker } from '../correxit/unlocker';
 import { Corrector, Reviewer } from '.';
 import * as session from './session';
 import * as csv from './csv';
@@ -71,7 +73,6 @@ export function commands(
   const { commands, serviceManager: manager, shell } = app;
   const {
     browser,
-    collector,
     editors,
     indicator,
     rendermime,
@@ -136,7 +137,12 @@ export function commands(
       done.resolve();
       throw new Error.Invalid('Invalid Corrector directory or credentials');
     }
-    if (id && corrector?.content.run === id) session.begin(id, mode);
+    // A provider change takes effect on the next run.
+    const { collector } = utilities;
+    if (id && corrector?.content.run === id) {
+      corrector.content.set({ finalize: collector === manual });
+      session.begin(id, mode);
+    }
     let prompted = false;
     const directory = {
       signal: controller.signal,
@@ -203,8 +209,7 @@ export function commands(
         } finally {
           prompted = true;
         }
-        await Workbook.lock(workbook);
-        const certified = precertified(workbook);
+        const certified = await restore(workbook, trans);
         if (!certified) {
           return {
             file: {
@@ -214,13 +219,12 @@ export function commands(
             completed: false
           };
         }
+        await save(workbook);
         const file = { workbook, grade: certified.grade };
-        if (
-          !args.overwrite &&
-          typeof open(workbook)?.assignment.collected === 'string'
-        )
+        const { collected } = certified.rubric.assignment;
+        if (!args.overwrite && typeof collected === 'string')
           return { file, completed: false };
-        const completed = await Workbook.record(certified, collector);
+        const completed = await certificate.record(certified, collector, trans);
         if (completed) await save(workbook);
         return { file, completed };
       } finally {
@@ -396,7 +400,10 @@ export function commands(
   );
   disposables.push(
     commands.addCommand(CommandIDs.collect, {
-      label: trans.__('Save and sync certified workbook grades...'),
+      label: () =>
+        utilities.collector === manual
+          ? trans.__('Finalize certified workbook grades...')
+          : trans.__('Save and sync certified workbook grades...'),
       execute: (args: Options) => results(args, 'collect')
     })
   );
@@ -412,6 +419,7 @@ export function commands(
             indicator,
             trans
           });
+          corrector.setFinalize(utilities.collector === manual);
           corrector.id = 'correxit-corrector-widget';
           corrector.title.closable = true;
           disposables.push(corrector);
@@ -622,12 +630,8 @@ async function authenticate(
   unlocker: Correxit.Unlocker,
   silent: boolean
 ): Promise<void> {
-  const { path } = workbook.context;
-  const unlocked = await unlockerService.Unlocker.unlock(workbook, unlocker, {
-    ...handle,
-    path,
-    silent
-  });
+  const credentials = { ...handle, path: workbook.context.path, silent };
+  const unlocked = await Unlocker.unlock(workbook, unlocker, credentials);
   const rubric = open(workbook);
   if (!unlocked || !rubric || rubric.locked)
     throw new Correxit.Error.Unlock('Workbook authentication failed');
@@ -658,7 +662,7 @@ async function correct(
   await authenticate(workbook, handle, unlocker, silent);
   const cached = reuse(workbook, overwrite);
   if (cached) {
-    await Workbook.lock(workbook);
+    await restore(workbook, trans);
     // A prior attempt may have restored this report but failed to save it.
     await save(workbook);
     return cached;
@@ -698,37 +702,21 @@ function reuse(workbook: Headless, overwrite: boolean): Graded | null {
   const rubric = open(workbook);
   if (!rubric || rubric.locked || overwrite) return null;
 
-  const path = workbook.context.path;
   const { assignment } = rubric;
+  if (Rubric.Assignment.rejected(assignment) || !scored(rubric)) return null;
   const { report } = assignment;
-  if (Rubric.Assignment.rejected(assignment)) return null;
+  const score = Rubric.Assignment.summary(report, assignment);
+  const certified = !!assignment.certification && score.status !== 'unscored';
+  if (!certified && !Rubric.pending(rubric)) return null;
 
-  const summary = Rubric.Assignment.summary(report, assignment);
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
-
-  const grade = (spec: Grade['spec']): Graded => ({
-    grade: { path, resolved: true, score: summary, spec, verified: true },
+  const { path } = workbook.context;
+  return {
+    grade: { path, resolved: true, score, spec: report.kernel, verified: true },
     identifier,
     workbook
-  });
-  const { scores } = report;
-  const ids = Object.keys(rubric.cells);
-  const scored =
-    ids.length > 0 &&
-    ids.every(id => {
-      const score = Rubric.Score.get(scores, id);
-      return score && !unexecuted(score);
-    });
-  if (!scored) return null;
-  if (
-    assignment.certification &&
-    !Rubric.pending(rubric) &&
-    summary.status !== 'unscored'
-  )
-    return grade(report.kernel);
-
-  return Rubric.pending(rubric) ? grade(report.kernel) : null;
+  };
 }
 
 async function grade(
@@ -762,46 +750,40 @@ function open(workbook: Workbook): Rubric | null {
   return Workbook.open(workbook, true);
 }
 
-function precertified(workbook: Headless): Certified | null {
+/** Re-lock the authenticated workbook and restore any certified feedback. */
+async function restore(
+  workbook: Headless,
+  trans: IRenderMime.TranslationBundle
+): Promise<Certified | null> {
+  await Workbook.lock(workbook);
   const rubric = open(workbook);
-  if (!rubric || !rubric.locked) return null;
+  if (!rubric?.locked) return null;
 
-  const { assignment, cells } = rubric;
-  const { kernel, scores } = assignment.report;
-  if (Rubric.Assignment.rejected(assignment)) return null;
-
-  const path = workbook.context.path;
-  const nonexistent = (id: string) => !Rubric.Score.get(scores, id);
-  const incomplete = Object.keys(cells).some(nonexistent);
-  const partial = Object.values(scores).some(unexecuted);
-  const uncertified = !assignment.certification;
-  const summary = Rubric.Assignment.summary(assignment.report, assignment);
-  const unscored = summary.status === 'unscored';
+  const { assignment } = rubric;
   if (
-    incomplete ||
-    partial ||
+    !assignment.certification ||
+    Rubric.Assignment.rejected(assignment) ||
     Rubric.pending(rubric) ||
-    uncertified ||
-    unscored
+    !scored(rubric)
   )
     return null;
 
+  const score = Rubric.Assignment.summary(assignment.report, assignment);
+  const identifier = Workbook.identifier(workbook);
+  if (score.status === 'unscored' || !Workbook.Identifier.assigned(identifier))
+    return null;
   const grade: Workbook.Grade.Verified = {
-    path,
+    path: workbook.context.path,
     resolved: true,
-    score: summary,
-    spec: kernel,
+    score,
+    spec: assignment.report.kernel,
     verified: true
   };
-  const identifier = Workbook.identifier(workbook);
-  if (!Workbook.Identifier.assigned(identifier)) return null;
-  return {
-    grade,
-    identifier,
-    rubric,
-    revision: Workbook.revision(workbook),
-    workbook
-  };
+  const revision = Workbook.revision(workbook);
+  return certificate.restore(
+    { grade, identifier, revision, rubric, workbook },
+    trans
+  );
 }
 
 function unverified(workbook: Headless): Grade & { verified: false } {
@@ -820,6 +802,27 @@ async function save(workbook: Headless | null) {
 
 function submission(workbook: Headless): boolean {
   return open(workbook)?.assignment.submission !== null;
+}
+
+function scored(rubric: Rubric): boolean {
+  const cells = Object.entries(rubric.cells);
+  const { interventions, scores } = rubric.assignment.report;
+  const reported = [...Object.keys(scores), ...Object.keys(interventions)];
+  return (
+    cells.length > 0 &&
+    reported.every(id => Rubric.has(rubric, id)) &&
+    cells.every(([id, { is }]) => {
+      const score = Rubric.Score.get(scores, id);
+      if (!score) {
+        const review = Rubric.Score.get(interventions, id);
+        return is === 'reviewable' && review && review.status !== 'unscored';
+      }
+      return (
+        !unexecuted(score) &&
+        (is === 'reviewable' || score.status !== 'unscored')
+      );
+    })
+  );
 }
 
 function unexecuted({ code }: Pick<Rubric.Score, 'code'>): boolean {

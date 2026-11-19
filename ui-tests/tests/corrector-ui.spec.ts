@@ -1,3 +1,4 @@
+import type { IJupyterLabPageFixture } from '@jupyterlab/galata';
 import { expect, test } from './fixtures';
 import { cd, cleanup, close, corrector, keys, reviewer, setup } from './utils';
 
@@ -143,6 +144,18 @@ async function launch(page: any, path: string) {
     await app.commands.execute('correxit-corrector:launch', { path });
   }, path);
   await corrector(page);
+}
+
+function select(page: IJupyterLabPageFixture, provider: 'manual' | 'moodle') {
+  return page.evaluate(async provider => {
+    const registry = await window.galata.getPlugin(
+      '@jupyterlab/apputils-extension:settings'
+    );
+    await registry!.set('correxit:collector', 'provider', provider);
+    return (window as any).jupyterapp.commands.label(
+      'correxit-corrector:collect'
+    );
+  }, provider);
 }
 
 const selected = (page: any) =>
@@ -492,32 +505,60 @@ test('batch grades and certifies workbooks', async ({ page }) => {
   const result = await page.evaluate(async (directory: string) => {
     const { Workbook } = (window as any).__correxit__;
     const app = (window as any).jupyterapp;
-    const stream: AsyncGenerator<any> = await app.commands.execute(
-      'correxit-corrector:batch',
-      { key: 'secret', path: directory }
-    );
-    const grades: any[] = [];
-    for await (const [path, { grade, workbook }] of stream) {
-      const rubric = Workbook.open(workbook, true);
-      const { certification } = rubric.assignment;
-      grades.push({
-        certification: certification !== null,
-        path,
-        points: grade.score.points,
-        possible: grade.score.possible,
-        status: grade.score.status
-      });
-      workbook.context.dispose();
+    const contents = app.serviceManager.contents;
+    const certificate = 'correxit-workbook-certificate';
+    async function batch() {
+      const stream: AsyncGenerator<any> = await app.commands.execute(
+        'correxit-corrector:batch',
+        { key: 'secret', path: directory }
+      );
+      const grades = [];
+      for await (const [path, { grade, workbook }] of stream) {
+        const rubric = Workbook.open(workbook, true);
+        const { certification } = rubric.assignment;
+        const { content } = await contents.get(path, { content: true });
+        grades.push({
+          certification,
+          frozen: content.cells.every(
+            (cell: any) => cell.metadata.editable === false
+          ),
+          path,
+          points: grade.score.points,
+          possible: grade.score.possible,
+          reports: content.cells.filter((cell: any) => cell.id === certificate),
+          status: grade.score.status,
+          verified: grade.verified
+        });
+        workbook.context.dispose();
+      }
+      return grades.sort((a, b) => a.path.localeCompare(b.path));
     }
-    return grades;
+
+    const initial = await batch();
+    // Simulate an already-certified file whose report was lost.
+    if (initial.length) {
+      const path = initial[0].path;
+      const file = await contents.get(path, { content: true });
+      file.content.cells = file.content.cells.filter(
+        (cell: any) => cell.id !== certificate
+      );
+      await contents.save(path, { ...file, type: 'notebook' });
+    }
+    return { initial, cached: await batch() };
   }, propagated.directory);
 
-  expect(result).toHaveLength(2);
-  for (const grade of result) {
-    expect(grade.certification).toBe(true);
+  expect(result.initial).toHaveLength(2);
+  for (const grade of result.initial) {
+    expect(grade.certification).not.toBeNull();
     expect(grade.status).not.toBe('unscored');
     expect(grade.possible).toBeGreaterThan(0);
+    expect(grade.verified).toBe(true);
+    expect(grade.frozen).toBe(true);
+    expect(grade.reports).toHaveLength(1);
+    expect(grade.reports[0].cell_type).toBe('markdown');
+    expect(JSON.stringify(grade.reports[0].source)).toContain('Score Report');
   }
+  expect(result.cached).toEqual(result.initial);
 
   await cleanup(page, propagated);
   await dispose();
@@ -1230,9 +1271,7 @@ test('collect gathers certified workbooks and records receipts', async ({
       'correxit-corrector:batch',
       { key: 'secret', path: directory }
     );
-    for await (const _ of stream) {
-      /* drain */
-    }
+    for await (const [, { workbook }] of stream) workbook.context.dispose();
   }, propagated.directory);
 
   // Now collect: the collector returns a manual:<sha256> digest receipt.
@@ -1246,12 +1285,21 @@ test('collect gathers certified workbooks and records receipts', async ({
     const collected: any[] = [];
     for await (const [path, { grade, workbook }] of stream) {
       const rubric = Workbook.open(workbook, true);
+      const { content } = await app.serviceManager.contents.get(path, {
+        content: true
+      });
       collected.push({
         assignee: rubric.assignment.assignee,
         collected: rubric.assignment.collected,
+        frozen: content.cells.every(
+          (cell: any) => cell.metadata.editable === false
+        ),
         path,
         points: grade.score.points,
-        possible: grade.score.possible
+        possible: grade.score.possible,
+        reports: content.cells.filter(
+          (cell: any) => cell.id === 'correxit-workbook-certificate'
+        )
       });
       workbook.context.dispose();
     }
@@ -1264,6 +1312,11 @@ test('collect gathers certified workbooks and records receipts', async ({
     expect(entry.collected).toBeTruthy();
     expect(typeof entry.collected).toBe('string');
     expect(entry.possible).toBeGreaterThan(0);
+    expect(entry.frozen).toBe(true);
+    expect(entry.reports).toHaveLength(1);
+    const source = JSON.stringify(entry.reports[0].source);
+    expect(source).toContain('Score Report');
+    expect(source).toContain(entry.collected);
   }
   expect(result[0].assignee).toBe('alice@example.com');
   expect(result[1].assignee).toBe('bob@example.com');
@@ -1298,49 +1351,100 @@ test('collect gathers certified workbooks and records receipts', async ({
   }, propagated.directory);
   expect(again).toEqual({ count: 0, contexts: 2, disposed: true });
 
-  // A provider may decline a requested re-collection. Keep both stored receipts.
-  const declined = await page.evaluate(
-    async ({ directory, paths }) => {
-      const app = (window as any).jupyterapp;
-      const { Workbook } = (window as any).__correxit__;
-      const record = Workbook.record;
-      let attempts = 0;
-      Workbook.record = (certified: any) =>
-        record(certified, async () => {
-          attempts++;
-          return null;
-        });
-      try {
-        const stream = await app.commands.execute(
-          'correxit-corrector:collect',
-          {
-            path: directory,
-            overwrite: true
-          }
-        );
-        let completed = 0;
-        for await (const [, { workbook }] of stream) {
-          completed++;
-          workbook.context.dispose();
+  const [alice, bob] = result.map(entry => entry.path as string);
+  // An external collector may return any string, including the empty string.
+  const receipts = { [alice]: result[0].collected as string, [bob]: '' };
+  for (const overwrite of [false, true]) {
+    const repaired = await page.evaluate(
+      async ({ directory, receipts, overwrite }) => {
+        const app = (window as any).jupyterapp;
+        const { Workbook } = (window as any).__correxit__;
+        const contents = app.serviceManager.contents;
+        const paths = Object.keys(receipts);
+        const certificate = 'correxit-workbook-certificate';
+        const intact = (path: string, notebook: any) => {
+          const reports = notebook.cells.filter(
+            (cell: any) => cell.id === certificate
+          );
+          return (
+            notebook.metadata.correxit.assignment.collected ===
+              receipts[path] &&
+            reports.length === 1 &&
+            JSON.stringify(reports[0].source).includes(
+              `**Collected** | \`${receipts[path]}\``
+            ) &&
+            notebook.cells.every(
+              (cell: any) => cell.metadata.editable === false
+            )
+          );
+        };
+        const saved = async (path: string) =>
+          intact(path, (await contents.get(path)).content);
+        for (const path of paths) {
+          const file = await contents.get(path);
+          file.content.metadata.correxit.assignment.collected = receipts[path];
+          file.content.cells = file.content.cells.filter(
+            (cell: any) => cell.id !== certificate
+          );
+          await contents.save(path, file);
         }
-        const receipts = await Promise.all(
-          paths.map(async path => {
-            const file = await app.serviceManager.contents.get(path);
-            return file.content.metadata.correxit.assignment.collected;
-          })
-        );
-        return { attempts, completed, receipts };
-      } finally {
-        Workbook.record = record;
-      }
-    },
-    { directory: propagated.directory, paths: result.map(entry => entry.path) }
-  );
-  expect(declined).toEqual({
-    attempts: 2,
-    completed: 0,
-    receipts: result.map(entry => entry.collected)
-  });
+
+        const record = Workbook.record;
+        const offered: [string, boolean][] = [];
+        Workbook.record = (certified: any) =>
+          record(certified, async ({ path }: { path: string }) => {
+            offered.push([path, await saved(path)]);
+            if (path === paths[1]) throw new Error('Collector unavailable');
+            return null;
+          });
+        const run = 'repair-feedback';
+        const results: Record<string, boolean | string> = {};
+        const retained: Record<string, boolean> = {};
+        try {
+          const stream = await app.commands.execute('correxit-corrector:run', {
+            run,
+            mode: 'collect',
+            path: directory,
+            overwrite
+          });
+          for await (const event of stream) {
+            if (event.type === 'result') {
+              results[event.path] = event.completed;
+              retained[event.path] = intact(
+                event.path,
+                event.file.workbook.context.model.toJSON()
+              );
+            }
+            if (event.type === 'error') results[event.path] = event.message;
+          }
+          return {
+            offered: offered.sort(([a], [b]) => a.localeCompare(b)),
+            retained,
+            results,
+            saved: await Promise.all(paths.map(saved))
+          };
+        } finally {
+          Workbook.record = record;
+          await app.commands.execute('correxit-corrector:stop', {
+            run,
+            release: true
+          });
+        }
+      },
+      { directory: propagated.directory, receipts, overwrite }
+    );
+    expect(repaired).toEqual({
+      offered: overwrite
+        ? [
+            [alice, true],
+            [bob, true]
+          ]
+        : [],
+      retained: overwrite ? { [alice]: true } : { [alice]: true, [bob]: true },
+      results: { [alice]: false, [bob]: overwrite ? 'sync' : false },
+      saved: [true, true]
+    });
+  }
 
   await cleanup(page, propagated);
   await dispose();
@@ -1376,14 +1480,14 @@ test('corrector has contextual controls, folder identity, and an idle summary', 
   expect(title.icon).toContain('correxit');
   await widget.getByRole('radio', { name: 'Grade', exact: true }).check();
   await widget.getByRole('checkbox', { name: 'Regrade', exact: true }).check();
-  await widget.getByRole('radio', { name: 'Sync', exact: true }).check();
+  await widget.getByRole('radio', { name: 'Finalize', exact: true }).check();
   await expect(
     widget.getByRole('checkbox', {
       name: 'Only include locally submitted workbooks'
     })
   ).toHaveCount(0);
   await expect(
-    widget.getByRole('checkbox', { name: 'Resync', exact: true })
+    widget.getByRole('checkbox', { name: 'Finalize again', exact: true })
   ).not.toBeChecked();
   await widget.getByRole('radio', { name: 'Grade', exact: true }).check();
   await expect(
@@ -1404,7 +1508,139 @@ test('corrector has contextual controls, folder identity, and an idle summary', 
   await close(page);
 });
 
-test('Sync prompts once per run after cancellation', async ({ page }) => {
+test('Corrector updates collection labels when the provider changes', async ({
+  page
+}) => {
+  await page.goto();
+  await page.evaluate(() =>
+    (window as any).jupyterapp.commands.execute('correxit-corrector:launch', {
+      path: '.'
+    })
+  );
+  const widget = page.locator('#correxit-corrector-widget');
+  await widget.getByRole('radio', { name: 'Finalize', exact: true }).check();
+  await expect(
+    widget.getByRole('button', { name: 'Finalize', exact: true })
+  ).toBeEnabled();
+  await widget
+    .getByRole('checkbox', { name: 'Finalize again', exact: true })
+    .check();
+
+  expect(await select(page, 'moodle')).toContain('sync');
+  await expect(
+    widget.getByRole('radio', { name: 'Sync', exact: true })
+  ).toBeChecked();
+  await expect(
+    widget.getByRole('button', { name: 'Sync', exact: true })
+  ).toBeEnabled();
+  const resync = widget.getByRole('checkbox', { name: 'Resync', exact: true });
+  await expect(resync).not.toBeChecked();
+  await resync.check();
+  expect(await select(page, 'manual')).toContain('Finalize');
+  await expect(
+    widget.getByRole('button', { name: 'Finalize', exact: true })
+  ).toBeEnabled();
+  await expect(
+    widget.getByRole('checkbox', { name: 'Finalize again', exact: true })
+  ).not.toBeChecked();
+  await close(page);
+});
+
+test('Finalize keeps its collector and label until the run completes', async ({
+  page
+}) => {
+  const { dispose } = await setup(page, [
+    { id: 'ref', source: 'print(42)' },
+    { id: 'target', source: 'print(42)' }
+  ]);
+  const issued = await propagate(page, [
+    'alice@example.com',
+    'bob@example.com'
+  ]);
+  let resume!: () => void;
+  const paused = new Promise<void>(resolve => (resume = resolve));
+  try {
+    await page.evaluate(async path => {
+      const app = (window as any).jupyterapp;
+      const grades = await app.commands.execute('correxit-corrector:batch', {
+        path,
+        key: 'secret'
+      });
+      for await (const [, { workbook }] of grades) workbook.context.dispose();
+    }, issued.directory);
+    await launch(page, issued.directory);
+    const widget = page.locator('#correxit-corrector-widget');
+    const status = widget.getByRole('status').first();
+    const finalize = widget.getByRole('radio', {
+      name: 'Finalize',
+      exact: true
+    });
+    await finalize.check();
+
+    // Pause the second workbook while changing the provider for the next run.
+    const second = (url: URL) =>
+      decodeURIComponent(url.pathname).endsWith(
+        '/api/contents/' + issued.paths[1]
+      );
+    await page.route(
+      second,
+      async route => {
+        await paused;
+        await route.continue();
+      },
+      { times: 1 }
+    );
+    const waiting = page.waitForRequest(request =>
+      second(new URL(request.url()))
+    );
+    await widget.getByRole('button', { name: 'Finalize', exact: true }).click();
+    await waiting;
+    expect(await select(page, 'moodle')).toContain('sync');
+    await expect(status).toContainText('Finalizing');
+    await expect(finalize).toBeChecked();
+    resume();
+    await expect(status).toContainText('2 processed');
+
+    const receipts = await page.evaluate(async paths => {
+      const { contents } = (window as any).jupyterapp.serviceManager;
+      return Promise.all(
+        paths.map(async path => {
+          const { content } = await contents.get(path);
+          return content.metadata.correxit.assignment.collected;
+        })
+      );
+    }, issued.paths);
+    expect(receipts).toEqual([
+      expect.stringMatching(/^manual:/),
+      expect.stringMatching(/^manual:/)
+    ]);
+
+    // Moodle has no credentials in this fixture.
+    await widget.getByRole('checkbox', { name: 'Resync', exact: true }).check();
+    await widget.getByRole('button', { name: 'Sync', exact: true }).click();
+    await expect(status).toContainText('0 processed · 2 failed');
+  } finally {
+    resume();
+    await select(page, 'manual');
+    await close(page);
+    await cleanup(page, issued);
+    await dispose();
+  }
+});
+
+test('Corrector applies changes to grading concurrency', async ({ page }) => {
+  await page.goto();
+  const concurrency = await page.evaluate(async () => {
+    const registry = await window.galata.getPlugin(
+      '@jupyterlab/apputils-extension:settings'
+    );
+    await registry!.set('correxit:corrector', 'concurrency', 1);
+    return (window as any).__correxit__.kernels.snapshot().concurrency;
+  });
+  expect(concurrency).toBe(1);
+});
+
+test('Finalize prompts once per run after cancellation', async ({ page }) => {
   const { dispose } = await setup(page, [
     { id: 'ref', source: 'print(42)' },
     { id: 'target', source: 'print(42)' }
@@ -1418,15 +1654,21 @@ test('Sync prompts once per run after cancellation', async ({ page }) => {
   await expect(
     widget.getByRole('button', { name: 'Scan', exact: true })
   ).toBeEnabled();
-  await widget.getByRole('radio', { name: 'Sync', exact: true }).check();
-  const sync = widget.getByRole('button', { name: 'Sync', exact: true });
+  await widget.getByRole('radio', { name: 'Finalize', exact: true }).check();
+  const finalize = widget.getByRole('button', {
+    name: 'Finalize',
+    exact: true
+  });
   try {
     for (const _ of [0, 1]) {
-      await sync.click();
+      await finalize.click();
       const dialog = page.getByRole('dialog');
       await expect(dialog).toContainText('Enter passphrase to unlock');
+      await expect(widget.getByRole('status').first()).toContainText(
+        'Finalizing'
+      );
       await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await expect(sync).toBeEnabled();
+      await expect(finalize).toBeEnabled();
       await expect(dialog).toHaveCount(0);
       await expect(widget.getByRole('status').first()).toContainText(
         '0 processed · 2 failed'
