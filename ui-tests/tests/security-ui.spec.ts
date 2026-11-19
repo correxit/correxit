@@ -765,6 +765,63 @@ for (const extra of [
   });
 }
 
+test('collects and reuses a certification with an intervention-only reviewable cell', async ({
+  page
+}) => {
+  const fixture = await setup(page, [
+    ...cells,
+    { id: 'manual', type: 'markdown', source: 'Explain the answer.' }
+  ]);
+  const issued = await issue(page, true, 'manual');
+  try {
+    await cd(page, '.');
+    const certified = await page.evaluate(
+      async ({ path, key }) => {
+        const { Rubric, Workbook } = (window as any).__correxit__;
+        const app = (window as any).jupyterapp;
+        const workbook = await app.commands.execute('correxit:fetch', {
+          path,
+          unlock: false
+        });
+        try {
+          await Workbook.unlock(workbook, key);
+          await Workbook.correct(workbook, 'answer');
+          const review = Rubric.Score.intervene('manual', {
+            points: 1,
+            possible: 1,
+            comment: 'Reviewed'
+          });
+          await Workbook.intervene(workbook, 'manual', review);
+          const { grade, rubric } = await Workbook.certify(
+            workbook,
+            { __: (text: string) => text },
+            true
+          );
+          await workbook.context.save();
+          const { certification, report } = rubric.assignment;
+          return {
+            grade: { ...grade, certification },
+            scores: Object.keys(report.scores)
+          };
+        } finally {
+          workbook.context.dispose();
+        }
+      },
+      { path: issued.paths[0], key }
+    );
+    expect(certified.scores).toEqual(['answer']);
+    expect(certified.grade.score).toMatchObject({ points: 1, possible: 2 });
+    expect(await collect(page, issued.directory)).toBe(1);
+    expect(await rerun(page, issued.directory)).toEqual({
+      grades: [certified.grade],
+      starts: 0
+    });
+  } finally {
+    await cleanup(page, issued);
+    await fixture.dispose();
+  }
+});
+
 test('reuses automated scores while manual review is pending', async ({
   page
 }) => {

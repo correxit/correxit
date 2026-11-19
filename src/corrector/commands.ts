@@ -805,16 +805,23 @@ function submission(workbook: Headless): boolean {
 }
 
 function scored(rubric: Rubric): boolean {
-  const ids = Object.keys(rubric.cells);
+  const cells = Object.entries(rubric.cells);
   const { interventions, scores } = rubric.assignment.report;
+  const reported = [...Object.keys(scores), ...Object.keys(interventions)];
   return (
-    ids.length > 0 &&
-    ids.length === Object.keys(scores).length &&
-    ids.every(id => {
+    cells.length > 0 &&
+    reported.every(id => Rubric.has(rubric, id)) &&
+    cells.every(([id, { is }]) => {
       const score = Rubric.Score.get(scores, id);
-      return score && !unexecuted(score);
-    }) &&
-    Object.keys(interventions).every(id => Rubric.has(rubric, id))
+      if (!score) {
+        const review = Rubric.Score.get(interventions, id);
+        return is === 'reviewable' && review && review.status !== 'unscored';
+      }
+      return (
+        !unexecuted(score) &&
+        (is === 'reviewable' || score.status !== 'unscored')
+      );
+    })
   );
 }
 
