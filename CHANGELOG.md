@@ -1,3 +1,16 @@
+# 3.0.0
+
+<!-- START GENERATED CHANGELOG: 3.0.0 -->
+
+## What's Changed
+* feat: corrector ux by @afshin in https://github.com/correxit/correxit/pull/107
+* feat: Create contracts package by @afshin in https://github.com/correxit/correxit/pull/111
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v2.3.1...v3.0.0
+
+<!-- END GENERATED CHANGELOG: 3.0.0 -->
+
 # 2.3.1
 
 <!-- START GENERATED CHANGELOG: 2.3.1 -->
