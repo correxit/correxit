@@ -37,6 +37,7 @@ namespace Saves {
       const context = window as any;
       const { Rubric } = context.__correxit__;
       const { commands } = context.jupyterapp;
+      const browser: Window = window;
       const save = (context.__correxit_save = {
         execute: commands.execute.bind(commands),
         prepare: Rubric.assign,
@@ -46,28 +47,24 @@ namespace Saves {
         written: false,
         finished: 0,
         errors: [] as string[],
-        timeout: window.setTimeout,
+        timeout: browser.setTimeout,
         timer: null as number | null,
         release: null as (() => void) | null
       });
       const wait = () => new Promise<void>(resolve => (save.release = resolve));
       const crypto = mode === 'signing' || mode === 'encryption';
       if (mode === 'debounce') {
-        window.setTimeout = ((
-          callback: (...args: any[]) => void,
-          delay: number,
-          ...args: any[]
-        ) => {
-          if (delay !== 150)
-            return save.timeout.call(window, callback, delay, ...args);
-          save.timer = save.timeout.call(window, () => {}, 60000);
+        browser.setTimeout = (callback, delay, ...args) => {
+          if (delay !== 150 || typeof callback !== 'function')
+            return save.timeout.call(browser, callback, delay, ...args);
+          save.timer = save.timeout.call(browser, () => {}, 60000);
           save.release = () => {
-            window.setTimeout = save.timeout;
-            window.clearTimeout(save.timer!);
+            browser.setTimeout = save.timeout;
+            browser.clearTimeout(save.timer!);
             callback(...args);
           };
           return save.timer;
-        }) as typeof window.setTimeout;
+        };
       }
       if (crypto) {
         const method = mode === 'signing' ? 'assign' : 'lock';
@@ -1173,8 +1170,10 @@ for (const outcome of ['success', 'encryption failure', 'metadata failure']) {
           lock: Rubric.lock,
           write: notebook.setMetadata,
           first: true,
-          signed: null,
-          encrypted: null,
+          signed: null as (() => void) | null,
+          encrypted: null as (() => void) | null,
+          older: null as Promise<string | null> | null,
+          newer: null as Promise<string | null> | null,
           finished: false
         });
         Rubric.assign = async (...args: any[]) => {
@@ -1307,7 +1306,7 @@ for (const { mode, reversion, named } of [
         const held = ((window as any).__correxit_registration = {
           panel: app.shell.currentWidget,
           execute: app.commands.execute.bind(app.commands),
-          calls: [],
+          calls: [] as string[],
           clone: null
         });
         app.commands.execute = (id: string, args: any) => {
@@ -2922,7 +2921,7 @@ test('rejects an overdue submission before sealing', async ({ page }) => {
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
 
@@ -2981,7 +2980,7 @@ test('submit reuses the checked timestamp when reject is active', async ({
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
 
@@ -3337,7 +3336,7 @@ test('revise rejects tampered sealed cells', async ({ page }) => {
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
     let rubric = Rubric.add(converted, {
@@ -3394,7 +3393,7 @@ test('headed unlock rejects missing issued cells without writing decrypted answe
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     let rubric = await Workbook.convert(workbook, 'secret', unlocker);
     rubric = Rubric.add(rubric, {
@@ -3475,7 +3474,7 @@ test('recovers encrypted cells after metadata corruption', async ({ page }) => {
     // Use convert to get a properly derived key (PBKDF2).
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, passphrase, unlocker);
     const rubric = Rubric.add(
@@ -3552,7 +3551,7 @@ test('recovers zero cells with wrong passphrase', async ({ page }) => {
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
     const rubric = Rubric.add(
@@ -3610,7 +3609,7 @@ test('recovers only encrypted cells, leaves plain cells alone', async ({
 
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, 'secret', unlocker);
     const rubric = Rubric.add(
@@ -3695,7 +3694,7 @@ test('recovers sealed cells using author PGP key from metadata', async ({
     // access to the security module).
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, passphrase, unlocker);
 
@@ -3784,7 +3783,7 @@ test('recovery drops sealed payloads bound to the wrong cell', async ({
     const passphrase = 'secret';
     const unlocker = {
       store: async () => {},
-      unlock: async () => null
+      request: async function* () {}
     };
     const converted = await Workbook.convert(workbook, passphrase, unlocker);
     let rubric = Rubric.add(converted, {

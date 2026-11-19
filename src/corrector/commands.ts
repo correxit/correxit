@@ -11,6 +11,7 @@ import { PromiseDelegate } from '@lumino/coreutils';
 import { IRenderMime, IRenderMimeRegistry } from '@jupyterlab/rendermime';
 import { ServiceManager } from '@jupyterlab/services';
 import { Assignment, Correxit, Rubric, Workbook } from '..';
+import * as unlockerService from '../correxit/unlocker';
 import * as io from '../correxit/io';
 import * as kernels from '../correxit/kernels';
 import * as state from '../correxit/state';
@@ -213,16 +214,15 @@ export function commands(
             completed: false
           };
         }
-        if (open(workbook)?.assignment.collected && !args.overwrite) {
-          return {
-            file: { workbook, grade: certified.grade },
-            completed: false
-          };
-        }
-        const receipt = await collector({ ...certified, workbook });
-        await Workbook.collect(workbook, receipt);
-        await save(workbook);
-        return { file: { workbook, grade: certified.grade }, completed: true };
+        const file = { workbook, grade: certified.grade };
+        if (
+          !args.overwrite &&
+          typeof open(workbook)?.assignment.collected === 'string'
+        )
+          return { file, completed: false };
+        const completed = await Workbook.record(certified, collector);
+        if (completed) await save(workbook);
+        return { file, completed };
       } finally {
         release();
       }
@@ -623,7 +623,11 @@ async function authenticate(
   silent: boolean
 ): Promise<void> {
   const { path } = workbook.context;
-  const unlocked = await unlocker.unlock(workbook, { ...handle, path, silent });
+  const unlocked = await unlockerService.Unlocker.unlock(workbook, unlocker, {
+    ...handle,
+    path,
+    silent
+  });
   const rubric = open(workbook);
   if (!unlocked || !rubric || rubric.locked)
     throw new Correxit.Error.Unlock('Workbook authentication failed');
@@ -664,15 +668,11 @@ async function correct(
   const resources = open(workbook)?.assignment.resources ?? null;
   const capacity = kernels.cap();
   const local = await io.stage({ capacity, dir, manager, notebook, resources });
-  const staged = (await fetch({
-    ...handle,
-    path: local.path
-  })) as Headless | null;
-  if (!staged) {
-    await local.release();
-    throw new Correxit.Error.Certify('correct error: staging failed');
-  }
+  let staged: Headless | null = null;
   try {
+    staged = (await fetch({ ...handle, path: local.path })) as Headless | null;
+    if (!staged)
+      throw new Correxit.Error.Certify('correct error: staging failed');
     const graded = await grade(staged, trans);
     const snapshot = staged.context.model.toJSON() as INotebookContent;
     const restored = Workbook.restore(workbook, snapshot);
@@ -684,13 +684,12 @@ async function correct(
     if (!Workbook.Identifier.assigned(identifier))
       throw new Correxit.Error.Certify('correct error: unassigned');
     return {
-      ...graded,
       grade: { ...graded.grade, path },
       identifier,
       workbook
     };
   } finally {
-    staged.context.dispose();
+    staged?.context.dispose();
     await local.release();
   }
 }
@@ -796,7 +795,13 @@ function precertified(workbook: Headless): Certified | null {
   };
   const identifier = Workbook.identifier(workbook);
   if (!Workbook.Identifier.assigned(identifier)) return null;
-  return { grade, identifier, workbook };
+  return {
+    grade,
+    identifier,
+    rubric,
+    revision: Workbook.revision(workbook),
+    workbook
+  };
 }
 
 function unverified(workbook: Headless): Grade & { verified: false } {

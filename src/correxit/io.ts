@@ -5,6 +5,7 @@ import { NotebookModelFactory } from '@jupyterlab/notebook';
 import { Contents, ServiceManager } from '@jupyterlab/services';
 import { CommandRegistry } from '@lumino/commands';
 import { Correxit, Workbook } from '..';
+import * as unlockerService from './unlocker';
 
 type Rack = {
   count: number;
@@ -243,30 +244,27 @@ export async function request(
   const workbook = { content: null, context };
   try {
     await context.initialize(false);
+
+    const rubric = Workbook.open(workbook, true);
+    if (!rubric) {
+      const notebook = context.model.toJSON() as INotebookContent;
+      if (strict && Object.prototype.hasOwnProperty.call(notebook.metadata, 'correxit'))
+        throw new Correxit.Error.Fetch('Invalid Correxit workbook');
+      context.dispose();
+      return null;
+    }
+    if (!rubric.locked || unlock === false || !(key || passphrase || unlock)) {
+      await Workbook.lock(workbook);
+    } else {
+      await unlockerService.Unlocker.unlock(
+        workbook, unlocker, silent ? { ...handle, silent } : handle
+      );
+    }
+    return workbook;
   } catch (error) {
     context.dispose();
     throw error;
   }
-
-  const rubric = Workbook.open(workbook, true);
-  const unauthenticated = !(key || passphrase || unlock);
-  if (!rubric) {
-    const notebook = context.model.toJSON() as INotebookContent;
-    context.dispose();
-    if (strict && Object.prototype.hasOwnProperty.call(notebook.metadata, 'correxit'))
-      throw new Correxit.Error.Fetch('Invalid Correxit workbook');
-    return null;
-  }
-  if (!rubric.locked || unlock === false || unauthenticated) {
-    await Workbook.lock(workbook);
-    return workbook;
-  }
-  try {
-    await unlocker.unlock(workbook, silent ? { ...handle, silent } : handle);
-  } catch (error) {
-    console.warn(`access error, ${path}`, error);
-  }
-  return workbook;
 }
 
 /** @returns non-notebook files in a directory sorted lexically by name. */

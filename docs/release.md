@@ -1,7 +1,9 @@
 # Making a Correxit release
 
-Publishing a stable GitHub release publishes the npm and PyPI packages and the
-versioned website. Pull requests and pushes to `main` run CI without publishing.
+Publishing a stable Correxit release (`vX.Y.Z`) publishes the npm and PyPI
+packages and the versioned website. The contracts package has a
+[separate release process](#releasing-correxitcontracts). Pull requests and
+pushes to `main` run CI without publishing.
 
 ## Release
 
@@ -66,15 +68,9 @@ using the original tag; do not move the tag or recreate the release.
 
 ## Versioning
 
-For 2.1.0, requiring `Unlocker.request` is an intentional exception to strict
-SemVer while Correxit has no known external plugin consumers. Custom unlockers
-must implement it; that release retained workbook-format compatibility.
-
-For 2.2.0, superseding the unused draft workbook format and requiring
-`Workbook.Grade.verified` are intentional exceptions to strict SemVer. Format 1
-never had usage in the wild; format 2 is the only supported format. Custom
-integrations must follow the authenticated grade-result contract in
-[PLUGINS](plugins.md).
+Correxit and `@correxit/contracts` follow Semantic Versioning with independent
+release cycles. Plugin interfaces are documented in [PLUGINS](plugins.md).
+Persisted notebook data has a separate `cxtformat` version, described below.
 
 Numbered website snapshots, such as `/2.0.0/`, remain fixed. The domain root
 serves the newest stable homepage directly, with links to its guides and demo.
@@ -97,21 +93,52 @@ replaces it with that release's homepage and guides.
 
 ## Workbook format
 
-`cxtformat: 1` was a draft with no usage in the wild. Although Correxit 2.0
-described it as frozen, format 2 supersedes it to authenticate issued contents.
-Format 1 is rejected; no legacy reader or migration path is retained. The
-bundled Chinook workbook has been authenticated and re-signed as format 2.
-See [SECURITY](security.md) for the supported contract.
+Correxit supports `cxtformat: 2`, which authenticates issued contents. Other
+format versions are rejected. See [SECURITY](security.md) for the supported
+contract.
 
 Future incompatible persisted-format changes require a new `cxtformat` and an
 explicit compatibility policy for existing workbooks. Package versions and
 workbook-format versions are independent. Changes to authenticated terms, such
 as the assignment MAC or issue digest surfaces, are persisted-format changes.
 
-When releasing this change, call out the workbook-format transition and the
-CSV contract: exports from scanning alone leave scores blank; authenticated
-batch grading can reuse valid reports without kernel execution. Package
-version selection remains separate from `cxtformat`.
+CSV exports from scanning alone leave scores blank; authenticated batch grading
+can reuse valid reports without kernel execution.
+
+## Releasing `@correxit/contracts`
+
+`@correxit/contracts` is versioned and released independently from `correxit`.
+Both follow the same [public-license schedule](../README.md#license):
+`AGPL-3.0-only` now, with `BSD-3-Clause` available from 00:00 UTC on
+1 January 2028.
+
+1. Set the version in `packages/contracts/package.json` (`1.0.0` for the initial
+   release; increase it for later releases) and update its `CHANGELOG.md`.
+2. Run `pixi run jlpm contracts:update` to build contracts and update
+   `packages/contracts/contracts.api.md`. CI compares this report with the base
+   revision and requires a version increase for API changes.
+3. Commit and merge to `main`. Wait for CI on the merged commit to pass.
+4. Publish a stable GitHub release at that exact commit, with tag `contracts-v`
+   followed by the contracts package version (e.g. `contracts-v1.0.0`).
+5. The `contracts.yml` workflow automatically publishes `@correxit/contracts` to npm.
+   It does not affect PyPI or the Correxit documentation website.
+
+Publish the contracts version before releasing a Correxit version that depends
+on it. The initial npm publication also requires configuring package publishing
+access for the new package and its `contracts.yml` trusted publisher.
+
+For local API checks, the default base is the merge base of `origin/main` and
+`HEAD`. In a fork, fetch the upstream repository and set `CONTRACTS_BASE`
+explicitly so the checks compare against its current `main`:
+
+```bash
+git fetch upstream main
+CONTRACTS_BASE=upstream/main pixi run jlpm test:contracts
+```
+
+Use the remote name that points to `correxit/correxit` in your checkout. The
+same override applies to `pixi run jlpm contracts:check`; CI supplies its base
+revision explicitly.
 
 ## Local packaging
 
@@ -121,6 +148,8 @@ To inspect package archives without publishing:
 pixi run python -m build
 pixi run jlpm build:npm
 pixi run npm pack --ignore-scripts --pack-destination dist
+pixi run jlpm workspace @correxit/contracts build
+(cd packages/contracts && pixi run npm pack --ignore-scripts --pack-destination ../../dist)
 ```
 
 Website development commands are in the [site README](../site/README.md).

@@ -1298,6 +1298,50 @@ test('collect gathers certified workbooks and records receipts', async ({
   }, propagated.directory);
   expect(again).toEqual({ count: 0, contexts: 2, disposed: true });
 
+  // A provider may decline a requested re-collection. Keep both stored receipts.
+  const declined = await page.evaluate(
+    async ({ directory, paths }) => {
+      const app = (window as any).jupyterapp;
+      const { Workbook } = (window as any).__correxit__;
+      const record = Workbook.record;
+      let attempts = 0;
+      Workbook.record = (certified: any) =>
+        record(certified, async () => {
+          attempts++;
+          return null;
+        });
+      try {
+        const stream = await app.commands.execute(
+          'correxit-corrector:collect',
+          {
+            path: directory,
+            overwrite: true
+          }
+        );
+        let completed = 0;
+        for await (const [, { workbook }] of stream) {
+          completed++;
+          workbook.context.dispose();
+        }
+        const receipts = await Promise.all(
+          paths.map(async path => {
+            const file = await app.serviceManager.contents.get(path);
+            return file.content.metadata.correxit.assignment.collected;
+          })
+        );
+        return { attempts, completed, receipts };
+      } finally {
+        Workbook.record = record;
+      }
+    },
+    { directory: propagated.directory, paths: result.map(entry => entry.path) }
+  );
+  expect(declined).toEqual({
+    attempts: 2,
+    completed: 0,
+    receipts: result.map(entry => entry.collected)
+  });
+
   await cleanup(page, propagated);
   await dispose();
 });

@@ -6,6 +6,7 @@
  *
  * @module Browser
  */
+export * from '@correxit/contracts';
 import { Assignment, Correxit, Rubric, Workbook } from './correxit';
 export type { Secret } from './correxit/security';
 export { plugins as default } from './plugins';

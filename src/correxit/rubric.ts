@@ -1,5 +1,9 @@
 import { INotebookContent } from '@jupyterlab/nbformat';
 import { ICodeCellModel } from '@jupyterlab/cells';
+import type {
+  Registrar,
+  Registration as REGISTRATION
+} from '@correxit/contracts';
 import { Kernel, KernelMessage, KernelSpec } from '@jupyterlab/services';
 import { find } from '@lumino/algorithm';
 import * as Error from './error';
@@ -176,8 +180,8 @@ export namespace Rubric {
       if (shape(x) !== shape(y))
         return { ...Score.INCORRECT, code: 'mismatch-congruence' };
       if ('data' in x && 'data' in y) {
-        const equal = JSON.stringify(order(x.data)) ===
-          JSON.stringify(order(y.data));
+        const equal =
+          JSON.stringify(order(x.data)) === JSON.stringify(order(y.data));
         const error: Score = { ...Score.INCORRECT, code: 'mismatch-data' };
         return equal ? Score.CORRECT : error;
       }
@@ -259,7 +263,8 @@ export namespace Rubric {
     ): Promise<Score> {
       const cell = get(rubric, id);
       const given = outputs.get(id);
-      const intervention = Score.get(rubric.assignment.report.interventions, id);
+      const { interventions } = rubric.assignment.report;
+      const intervention = Score.get(interventions, id);
       if (!cell)
         return { ...Score.UNSCORED, code: 'missing-cell-given', id };
 
@@ -290,7 +295,6 @@ export namespace Rubric {
       const visible = rubric.locked
         ? references.filter(reference => !reference.secret)
         : references;
-
       if (cell.is === 'comparable') {
         const [reference] = visible;
         if (!reference)
@@ -301,13 +305,11 @@ export namespace Rubric {
             ...Score.INCORRECT, code: 'missing-reference', id, possible
           };
         }
-
         const points = ({ status }: Score) =>
           status === 'correct' ? possible : 0;
         const score = await compare(expected, given);
         return { ...score, id, points: points(score), possible };
       }
-
       if (cell.is === 'correctable') {
         if (!visible.length)
           return { ...Score.INCORRECT, code: 'locked', id, possible };
@@ -330,7 +332,6 @@ export namespace Rubric {
           points: earned, possible: total, status
         };
       }
-
       return { ...Score.UNSCORED, code: 'error-is-unknown', id };
     }
   }
@@ -367,17 +368,9 @@ export namespace Rubric {
         (sum, id) =>
           sum + (id === referent ? points : get(rubric, id)!.points), 0
       );
-      const cells = {
-        ...rubric.cells,
-        [cell.id]: { ...cell, points: total }
-      };
-      const references = {
-        ...rubric.references, [referent]: updated
-      };
-      return {
-        ...rubric, assignment, cells,
-        references, revised: Date.now()
-      };
+      const cells = { ...rubric.cells, [cell.id]: { ...cell, points: total } };
+      const references = { ...rubric.references, [referent]: updated };
+      return { ...rubric, assignment, cells, references, revised: Date.now() };
     }
   }
 
@@ -424,20 +417,14 @@ export namespace Rubric {
   export namespace Assignment {
     export type Overdue = 'accept' | 'dock' | 'reject' | null;
 
-    export type Registration = Pick<
-      Assignment,
-      'expiration' | 'id' | 'name' | 'roster'
-    >;
+    export type Registration = REGISTRATION;
 
     export namespace Equal {
       /** A named group of assignment registrations. */
-      export type Course = {
-        assignments: Registration[];
-        group: string;
-      };
+      export type Course = REGISTRATION.Group;
 
       /** Registration shapes accepted by a registrar. */
-      export type Registered = Registration[] | Course[] | null;
+      export type Registered = Awaited<ReturnType<Registrar>>;
 
       const course = (x: Course, y: Course): boolean =>
         x.group === y.group &&
@@ -864,8 +851,9 @@ export namespace Rubric {
     rubric: Locked,
     receipt: string | null = null
   ): Locked {
-    if (!rubric.assignment.submission)
+    if (rubric.assignment.submission === null)
       throw new Error.Submit('acknowledge error: not submitted');
+    if (receipt === null) return rubric;
 
     const assignment = { ...rubric.assignment, submitted: receipt };
     return { ...rubric, assignment, revised: Date.now() };
@@ -1029,7 +1017,7 @@ export namespace Rubric {
     rubric: Locked,
     receipt: string | null = null
   ): Locked {
-    if (!rubric.assignment.certification)
+    if (rubric.assignment.certification === null)
       throw new Error.Certify('collect error: not certified');
 
     const revised = Date.now();
@@ -1344,7 +1332,10 @@ export namespace Rubric {
   /** @returns an unlocked rubric after decrypting the roster. */
   export async function unlock(rubric: Locked, key: string): Promise<Unlocked> {
     const { assignment: { roster: [block] } } = rubric;
-    const roster = block ? JSON.parse(await security.decrypt(block, key)) : [];
+    const plaintext = block ? await security.decrypt(block, key).catch(() => {
+      throw new Error.Unlock('unlock error: could not decrypt roster');
+    }) : '[]';
+    const roster = JSON.parse(plaintext);
     const assignment = { ...rubric.assignment, roster };
     const revised = Date.now();
     const unlocked: Unlocked = {

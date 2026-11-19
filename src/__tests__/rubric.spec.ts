@@ -1,6 +1,7 @@
 declare const require: any;
 jest.mock('../correxit/security', () => require('./mocks/security'));
 import { Rubric } from '../correxit/rubric';
+import * as Error from '../correxit/error';
 const format = require('./fixtures/cxtformat-2-metadata.json');
 
 describe('Rubric', () => {
@@ -75,6 +76,18 @@ describe('Rubric', () => {
       expect(locked.key).toBeNull();
       expect(unlocked.locked).toBe(false);
       expect(Rubric.get(unlocked, id)!.payload).toEqual(['42']);
+    });
+
+    it('distinguishes rejected credentials from authenticated metadata tampering', async () => {
+      const rubric = create();
+      const locked = await Rubric.lock(rubric);
+      await expect(Rubric.unlock(locked, 'wrong')).rejects.toBeInstanceOf(
+        Error.Unlock
+      );
+      const assignment = { ...locked.assignment, name: 'tampered' };
+      await expect(
+        Rubric.unlock({ ...locked, assignment }, rubric.key)
+      ).rejects.toBeInstanceOf(Error.Mismatch);
     });
 
     it.each(['constructor', 'toString', 'hasOwnProperty'])(
@@ -954,6 +967,7 @@ describe('Rubric', () => {
       expect(acknowledged.assignment.submission).toBeGreaterThan(0);
       expect(acknowledged.assignment.submitted).toBe(receipt);
       expect(acknowledged.locked).toBe(true);
+      expect(Rubric.acknowledge(acknowledged, null)).toBe(acknowledged);
     });
 
     it('submits a locked rubric without receipt', async () => {

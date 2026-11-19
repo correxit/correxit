@@ -31,5 +31,5 @@ works with notebooks written for Python, R, Julia, and other Jupyter kernels.
 used by this browser demo. The `nbgrader` folder contains notebooks for trying
 Correxit's nbgrader importer.
 
-The demo opens in Jupyter Notebook so the assignment stays front and center.
-[JupyterLab](../lab/) remains available for development and exploration.
+The demo opens in JupyterLab with the example workbook and Correxit panel
+ready to use.

@@ -1,11 +1,10 @@
+import { Secret as ContractSecret } from '@correxit/contracts';
 import * as pgp from 'openpgp';
 
 export type PrivateKey = pgp.PrivateKey;
 
 /** A supplied key or a passphrase from which to derive one. */
-export type Secret =
-  | { key: string; passphrase: null; }
-  | { key: null; passphrase: string; };
+export type Secret = ContractSecret;
 
 /** Resolve credentials using the rubric id as the passphrase salt. */
 export async function derive(

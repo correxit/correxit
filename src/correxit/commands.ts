@@ -10,6 +10,7 @@ import { ITranslator } from '@jupyterlab/translation';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { Correxit, Rubric, Workbook } from '..';
+import * as unlockerService from './unlocker';
 import { Propagator } from '../ui/propagator';
 import * as input from './input';
 import * as io from './io';
@@ -82,6 +83,7 @@ export function commands(
   } = utilities;
   const trans = utilities.translator.load('correxit');
   const factory = new NotebookModelFactory();
+  const conversions = new WeakSet<Workbook['context']['model']['sharedModel']>();
   const fetch = (handle: Credentials, silent = false) =>
     io.request(handle, factory, manager, unlocker, silent);
   const open = (workbook: Workbook | null) => Workbook.open(workbook, true);
@@ -90,11 +92,16 @@ export function commands(
     if (!undo) workbook.context.model.sharedModel.clearUndoHistory();
     await workbook.context.save();
   };
-  const request: Correxit.Unlocker['request'] = async (
-    workbook, purpose, credentials
+  const request = async (
+    request: Correxit.Unlocker.Request,
+    credentials?: Partial<Credentials & { silent?: boolean }> | null
   ) => {
     try {
-      return await unlocker.request(workbook, purpose, credentials);
+      return await unlockerService.Unlocker.request(
+        unlocker,
+        request,
+        credentials
+      );
     } catch (error) {
       void showErrorMessage(...Error.interpret(error, trans));
       return null;
@@ -398,20 +405,20 @@ export function commands(
     icon: Icons.certify,
     isEnabled: () => {
       const rubric = open(state.workbook());
-      const assigned = !!rubric?.assignment.assignee;
-      const certified = !!rubric?.assignment.certification;
-      const collected = !!rubric?.assignment.collected;
-      return assigned && !rubric.locked && certified && !collected;
+      if (!rubric || rubric.locked) return false;
+      const { assignee, certification, collected } = rubric.assignment;
+      return !!assignee && certification !== null && collected === null;
     },
     label: trans.__('Collect workbook...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify(args);
-      if (!rubric || rubric.locked || !rubric.assignment.assignee) return;
+      if (!rubric || rubric.locked || !rubric.assignment.assignee ||
+        rubric.assignment.collected !== null) return;
       try {
         const certified = await Workbook.certify(workbook, trans, true);
-        const receipt = await collector(certified);
-        await Workbook.collect(workbook, receipt);
+        // Persist the local grade even if the collector declines or fails.
         await save(workbook, false);
+        if (await Workbook.record(certified, collector)) await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }
@@ -540,8 +547,11 @@ export function commands(
   disposables.push(commands.addCommand(CommandIDs.convert, {
     icon: Icons.convert,
     isEnabled: () => {
+      const workbook = state.workbook();
+      if (!workbook || conversions.has(workbook.context.model.sharedModel))
+        return false;
       try {
-        void Workbook.open(state.workbook());
+        void Workbook.open(workbook);
         return false;
       } catch (error) {
         return error === Correxit.NO_CORREXIT_METADATA;
@@ -554,69 +564,94 @@ export function commands(
       if (!workbook) return;
 
       const notebook = workbook.context.model.sharedModel;
-      const detected = nbgrader.detect(notebook.cells.map(cell => ({
-        id: cell.id,
-        cell_type: cell.cell_type,
-        source: cell.getSource(),
-        metadata: cell.toJSON().metadata as Record<string, any>
-      })));
-      if (detected) {
-        const { button } = await showDialog({
-          title: trans.__('Convert nbgrader notebook?'),
-          body: trans.__(
+      if (conversions.has(notebook) || open(workbook) ||
+        notebook.getMetadata('correxit')) return;
+      conversions.add(notebook);
+      commands.notifyCommandChanged(CommandIDs.convert);
+      try {
+        const detected = nbgrader.detect(notebook.cells.map(cell => ({
+          id: cell.id,
+          cell_type: cell.cell_type,
+          source: cell.getSource(),
+          metadata: cell.toJSON().metadata as Record<string, any>
+        })));
+        if (detected) {
+          const { button } = await showDialog({
+            title: trans.__('Convert nbgrader notebook?'),
+            body: trans.__(
 `This rewrites the current notebook in place as a Correxit workbook.
 If conversion fails, Correxit restores the original notebook.`
-          ),
-          buttons: [
-            Dialog.cancelButton({ label: trans.__('Cancel') }),
-            Dialog.okButton({ label: trans.__('Convert') })
-          ]
+            ),
+            buttons: [
+              Dialog.cancelButton({ label: trans.__('Cancel') }),
+              Dialog.okButton({ label: trans.__('Convert') })
+            ]
+          });
+          if (!button.accept) return;
+        }
+
+        const created = Rubric.create();
+        const choice = await request({
+          identifier: Workbook.identifier(workbook, created),
+          path: workbook.context.path,
+          purpose: 'create',
+          silent: false
+        }, args);
+        if (!choice?.secret) return;
+        if (workbook.context.isDisposed || open(workbook) ||
+          notebook.getMetadata('correxit')) return;
+
+        let snapshot: INotebookContent | null = null;
+        const overlay = document.createElement('div');
+        const converting = trans.__('Converting...');
+        overlay.classList.add('correxit-overlay', 'cxt-mod-loading');
+        overlay.dataset.label = converting;
+        overlay.setAttribute('role', 'status');
+        overlay.setAttribute('aria-live', 'polite');
+        overlay.setAttribute('aria-label', converting);
+        workbook.content?.node.parentElement?.appendChild(overlay);
+
+        let report: string[] | null;
+        try {
+          await Workbook.convert(workbook, choice.secret, unlocker, created, () => {
+            snapshot = workbook.context.model.toJSON() as INotebookContent;
+          });
+          report = await nbgrader.convert(workbook, trans);
+        } catch (error) {
+          const current = workbook.context.isDisposed ? null : open(workbook);
+          if (!snapshot || workbook.context.isDisposed ||
+            (current ? current.id !== created.id : notebook.getMetadata('correxit'))) {
+            void showErrorMessage(...Error.interpret(error, trans));
+            return;
+          }
+          Workbook.restore(workbook, snapshot);
+
+          const restored = trans.__('The original notebook was restored.');
+          const detail = Error.reason(error);
+          void showErrorMessage(
+            trans.__('Conversion failed; original notebook restored'),
+            new globalThis.Error(`${restored}\n\n${detail}`)
+          );
+          return;
+        } finally {
+          overlay.remove();
+        }
+        if (!report) return;
+
+        const node = document.createElement('span');
+        report.forEach((line, i) => {
+          if (i > 0) node.appendChild(document.createElement('br'));
+          node.appendChild(document.createTextNode(line));
         });
-        if (!button.accept) return;
-      }
-
-      const choice = await request(workbook, 'create', args);
-      if (!choice?.secret) return;
-
-      const snapshot = workbook.context.model.toJSON() as INotebookContent;
-      const overlay = document.createElement('div');
-      const converting = trans.__('Converting...');
-      overlay.classList.add('correxit-overlay', 'cxt-mod-loading');
-      overlay.dataset.label = converting;
-      overlay.setAttribute('role', 'status');
-      overlay.setAttribute('aria-live', 'polite');
-      overlay.setAttribute('aria-label', converting);
-      workbook.content?.node.parentElement?.appendChild(overlay);
-
-      let report: string[] | null;
-      try {
-        await Workbook.convert(workbook, choice.secret, unlocker);
-        report = await nbgrader.convert(workbook, trans);
-      } catch (error) {
-        Workbook.restore(workbook, snapshot);
-
-        const restored = trans.__('The original notebook was restored.');
-        const detail = Error.reason(error);
-        void showErrorMessage(
-          trans.__('Conversion failed; original notebook restored'),
-          new globalThis.Error(`${restored}\n\n${detail}`)
-        );
-        return;
+        void showDialog({
+          title: trans.__('Conversion summary'),
+          body: new Widget({ node }),
+          buttons: [Dialog.okButton({ label: trans.__('Continue') })]
+        });
       } finally {
-        overlay.remove();
+        conversions.delete(notebook);
+        commands.notifyCommandChanged(CommandIDs.convert);
       }
-      if (!report) return;
-
-      const node = document.createElement('span');
-      report.forEach((line, i) => {
-        if (i > 0) node.appendChild(document.createElement('br'));
-        node.appendChild(document.createTextNode(line));
-      });
-      void showDialog({
-        title: trans.__('Conversion summary'),
-        body: new Widget({ node }),
-        buttons: [Dialog.okButton({ label: trans.__('Continue') })]
-      });
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.correct, {
@@ -749,12 +784,7 @@ If conversion fails, Correxit restores the original notebook.`
     execute: async (args: Partial<Credentials & { silent: boolean }>):
       Promise<Headless | null> => {
       const handle = Workbook.Credentials.normalize(args);
-      try {
-        return handle && await fetch(handle, !!args.silent);
-      } catch (error) {
-        console.warn(CommandIDs.fetch, error);
-        return null;
-      }
+      return handle && await fetch(handle, !!args.silent);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.inject, {
@@ -894,7 +924,7 @@ If conversion fails, Correxit restores the original notebook.`
         return null;
       };
       const identifier = Workbook.identifier(workbook);
-      return await registrar(workbook, identifier).catch(warn);
+      return await registrar(identifier).catch(warn);
     }
   }));
   disposables.push(commands.addCommand(CommandIDs.redistribute, {
@@ -983,7 +1013,12 @@ If conversion fails, Correxit restores the original notebook.`
         cell => security.encrypted(cell.getSource())
       );
       if (encrypted) {
-        const choice = await request(workbook, 'recover', args);
+        const choice = await request({
+          identifier: open(workbook) ? Workbook.identifier(workbook) : null,
+          path: workbook.context.path,
+          purpose: 'recover',
+          silent: false
+        }, args);
         if (!choice) return;
         if (choice.secret) {
           const recovered = await Workbook.recover(workbook, choice.secret);
@@ -1062,47 +1097,37 @@ If conversion fails, Correxit restores the original notebook.`
   disposables.push(commands.addCommand(CommandIDs.submit, {
     isEnabled: () => {
       const rubric = open(state.workbook());
-      const locked = !!rubric?.locked;
-      const assigned = !!rubric?.assignment.assignee;
-      const sealed = !!rubric?.assignment.submission;
-      const receipt = !!rubric?.assignment.submitted;
-      const certified = !!rubric?.assignment.certification;
-      return locked && assigned && !certified && (!sealed || !receipt);
+      if (!rubric?.locked || !rubric.assignment.assignee) return false;
+      const { certification, seal, submission, submitted } = rubric.assignment;
+      return certification === null && submitted === null &&
+        (submission === null || seal !== null);
     },
     isVisible: () => commands.isEnabled(CommandIDs.submit),
     label: trans.__('Submit assignment...'),
     execute: async (args: Partial<Credentials>) => {
       const { rubric, workbook } = await reify({ path: args.path });
-      if (!rubric) return;
+      if (!rubric?.locked || rubric.assignment.certification !== null ||
+        rubric.assignment.submitted !== null) return;
 
       const identifier = Workbook.identifier(workbook);
       if (!Workbook.Identifier.assigned(identifier)) return;
-      if (rubric.assignment.submission && !rubric.assignment.submitted) {
-        try {
-          const receipt = await submitter(workbook, identifier);
-          await Workbook.acknowledge(workbook, receipt);
-          await save(workbook, false);
-        } catch (error) {
-          showErrorMessage(...Error.interpret(error, trans));
-        }
-        return;
-      }
-
-      const choice = await request(workbook, 'submit', args);
-      if (!choice) return;
       try {
-        const recipients = await Workbook.recipients(workbook, choice.secret);
-        await Workbook.submit(workbook, recipients);
-        try {
-          const receipt = await submitter(workbook, identifier);
-          await Workbook.acknowledge(workbook, receipt);
-        } catch (error) {
-          const reason = Error.reason(error);
-          const message = `Submission sealed but receipt failed: ${reason}`;
+        let sealed = rubric;
+        if (rubric.assignment.submission === null) {
+          const choice = await request({
+            identifier,
+            path: workbook.context.path,
+            purpose: 'submit',
+            silent: false
+          }, args);
+          if (!choice) return;
+          const recipients = await Workbook.recipients(workbook, choice.secret);
+          sealed = await Workbook.submit(workbook, recipients);
+          // Keep the sealed submission even if the provider declines or fails.
           await save(workbook, false);
-          throw new Error.Plugin(message);
         }
-        await save(workbook, false);
+        if (await Workbook.deliver(workbook, sealed, submitter))
+          await save(workbook, false);
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }
@@ -1122,7 +1147,12 @@ If conversion fails, Correxit restores the original notebook.`
       const { rubric, workbook } = await reify({ path: args.path });
       if (!rubric?.locked) return;
 
-      const choice = await request(workbook, 'revise', args);
+      const choice = await request({
+        identifier: Workbook.identifier(workbook),
+        path: workbook.context.path,
+        purpose: 'revise',
+        silent: false
+      }, args);
       if (!choice?.secret) return;
 
       try {
@@ -1156,10 +1186,14 @@ successful, an unlocked rubric.
     `,
     execute: async (args: Partial<Credentials>):
       Promise<Rubric.Unlocked | null> => {
-      const { handle, workbook } = await reify(args);
-      if (!workbook) return null;
       try {
-        return await unlocker.unlock(workbook, handle);
+        const { handle, workbook } = await reify(args);
+        if (!workbook) return null;
+        return await unlockerService.Unlocker.unlock(
+          workbook,
+          unlocker,
+          handle
+        );
       } catch (error) {
         showErrorMessage(...Error.interpret(error, trans));
       }

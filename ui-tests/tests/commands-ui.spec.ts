@@ -68,7 +68,7 @@ test('assignment saves target a view while path commands fetch headlessly', asyn
 
   try {
     const result = await page.evaluate(async () => {
-      const { Correxit, Rubric, Workbook } = (window as any).__correxit__;
+      const { Rubric, Workbook } = (window as any).__correxit__;
       const app = (window as any).jupyterapp;
       const panel = app.shell.currentWidget;
       const created = Rubric.create();
@@ -111,12 +111,11 @@ test('assignment saves target a view while path commands fetch headlessly', asyn
       await app.commands.execute('correxit:save');
       const grade = await app.commands.execute('correxit:correct', { path });
 
-      const unlocker = await app.resolveRequiredService(Correxit.Unlocker);
-      const previous = unlocker.unlock;
+      const previous = Workbook.unlock;
       const workbooks: any[] = [];
-      unlocker.unlock = async (workbook: any, credentials: any) => {
+      Workbook.unlock = async (workbook: any, key: string) => {
         workbooks.push(workbook);
-        return Workbook.unlock(workbook, credentials.key);
+        return previous(workbook, key);
       };
       try {
         const assignment = await app.commands.execute('correxit:assign', {
@@ -135,7 +134,7 @@ test('assignment saves target a view while path commands fetch headlessly', asyn
           headless: workbooks.map(workbook => Workbook.headless(workbook))
         };
       } finally {
-        unlocker.unlock = previous;
+        Workbook.unlock = previous;
         workbooks.forEach(workbook => workbook.context.dispose());
       }
     });
@@ -273,10 +272,11 @@ for (const { command, path } of [
         );
         if (command === 'draft') await Workbook.lock(first);
         await first.context.save();
+        const operation = command === 'collect' ? 'record' : command;
         (window as any).__correxit_followup = {
           first,
-          original: Workbook[command],
-          command,
+          original: Workbook[operation],
+          operation,
           restores: [],
           target: null,
           release: null,
@@ -325,10 +325,11 @@ for (const { command, path } of [
             });
           };
           watch(record.second, 'other');
-          Workbook[command] = async (workbook: any, ...args: any[]) => {
+          Workbook[record.operation] = async (...args: any[]) => {
+            const workbook = command === 'collect' ? args[0].workbook : args[0];
             record.target = workbook;
             watch(workbook, 'source');
-            const result = await record.original(workbook, ...args);
+            const result = await record.original(...args);
             record.expected =
               workbook.context.model.sharedModel.getMetadata('correxit');
             await new Promise<void>(resolve => {
@@ -402,6 +403,8 @@ for (const { command, path } of [
       expect(result.clears).toEqual(['source']);
       expect(result.headless).toBe(path);
       expect(result.stored).toEqual(result.expected);
+      if (command === 'collect')
+        expect(result.stored.assignment.collected).toEqual(expect.any(String));
     } finally {
       await page
         .evaluate(async () => {
@@ -411,7 +414,7 @@ for (const { command, path } of [
           if (!record) return;
           record.release?.();
           if (record.release) await record.done.catch(() => {});
-          Workbook[record.command] = record.original;
+          Workbook[record.operation] = record.original;
           record.restores.forEach((restore: () => void) => restore());
           if (Workbook.headless(record.target)) record.target.context.dispose();
           record.second?.dispose();
@@ -476,7 +479,9 @@ for (const outcome of [
             write: notebook.setMetadata,
             clear: notebook.clearUndoHistory,
             save: panel.context.save,
-            releases: [],
+            releases: [] as Array<() => void>,
+            intervention: null as Promise<string | null> | null,
+            comment: null as Promise<string | null> | null,
             calls: 0,
             clears: 0,
             saves: 0,

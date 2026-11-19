@@ -158,6 +158,13 @@ Writing metadata and saving the notebook file are separate. Commands perform
 follow-up saves and undo-history clearing only after metadata succeeds, using
 the context they resolved at the start.
 
+Conversion prepares a rubric in memory before requesting credentials. The
+provider receives its proposed identity, and conversion retains that ID through
+key derivation, storage, and metadata writes. No workbook metadata or format
+upgrade is committed before key storage succeeds. The command excludes
+overlapping conversions of the same notebook; cancellation releases the
+proposal, and a later attempt receives a fresh identity.
+
 ### Active workbook
 
 Command arguments must be serializable. Synchronous command logic (`isEnabled`,
@@ -187,9 +194,9 @@ unrepresentable.
 `Workbook.Grade` also discriminates command results with `verified: true |
 false`. Only authenticated grading or collection produces verified scores;
 `Workbook.Graded` requires that provenance but may still await manual review.
-`Workbook.Certified` retains the same structural shape for certification and
-collector APIs; the operation establishes certification. The flag lives in
-memory, not in notebook metadata. Scanning and parsing cannot manufacture it.
+`Workbook.Certified` pairs a verified grade with its locked rubric and the
+notebook revision at certification. Collection checks both before sending the
+grade and before recording the receipt. The verification flag lives in memory.
 Batch cache reuse follows authentication inside the same bounded grading action,
 and CSV exports consume verified results instead of falling back to scanned reports.
 
@@ -331,25 +338,29 @@ identifiers are acceptable when convention demands it (e.g., `useCommand`,
 
 ## Plugins
 
-Correxit provides extension points as JupyterLab plugins, each identified by a
-single token. Core logic is decoupled from IO, e.g. replacing a distributor
-implementation requires no changes to the propagator loop or commands.
+Correxit's public integration points use Lumino tokens from
+`@correxit/contracts`. Plugins receive plain-data payloads without depending on
+internal `Workbook` or `Rubric` models. Core logic is decoupled from IO: replacing
+a distributor requires no changes to the propagator loop or commands.
 
-- **`Distributor`**: delivers one propagated workbook. Default: manual
+- **`Distributor`**: delivers one propagated workbook payload. Default: manual
   no-op.
-- **`Collector`**: collects certified grades. Default: digest receipt.
+- **`Collector`**: records certified grades. Default: digest receipt.
 - **`Registrar`**: provides assignment registrations. Default: `null`
   for manual entry.
-- **`Submitter`**: handles submission receipts. Default: digest receipt.
-- **`Unlocker`**: acquires credentials for creation, submission, revision, and
-  recovery; stores author keys and unlocks rubrics. Default: passphrase prompts
-  and in-memory `SecretsManager`. Hosted providers can supply keys directly.
-- **`Monitor`**: yields the active workbook as the user switches tabs.
-  Default: `Stream`-based async iterable.
+- **`Submitter`**: delivers sealed submissions and returns receipts. Default:
+  digest receipt without external delivery.
+- **`Unlocker`**: yields credentials for creation, unlocking, submission,
+  revision, and recovery; stores author keys. Core handles cryptographic
+  authentication and decryption. Default: passphrase prompts and in-memory
+  `SecretsManager`. Hosted providers can supply keys directly.
 
-Type definitions are in `src/correxit/correxit.ts`. Default implementations are
-in `src/plugins.tsx`. See [PLUGINS.md](plugins.md) for the full integration
-API.
+The internal **`Monitor`** token yields the active workbook as the user switches
+tabs. It uses a `Stream`-based async iterable and is not part of
+`@correxit/contracts`.
+
+Default implementations are in `src/plugins.tsx`. See [PLUGINS.md](plugins.md)
+for the full integration API.
 
 ## Design philosophy
 

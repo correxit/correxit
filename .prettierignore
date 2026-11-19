@@ -6,6 +6,7 @@ node_modules
 !/package.json
 correxit
 CHANGELOG.md
+*.api.md
 lite/_output
 lite/brand/labextension
 site/_output

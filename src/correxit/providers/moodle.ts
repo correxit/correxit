@@ -1,5 +1,5 @@
 import { URLExt } from '@jupyterlab/coreutils';
-import { Assignment, Correxit, Rubric, Workbook } from '..';
+import type { Collector, Distributor, Identifier, Registrar } from '@correxit/contracts';
 import * as Error from '../error';
 
 export namespace Moodle {
@@ -144,7 +144,7 @@ export namespace Moodle {
   };
 
   export async function collector(
-    certified: Workbook.Certified,
+    payload: Collector.Payload,
     settings: Settings
   ): Promise<string | null> {
     const { token, url: raw } = settings;
@@ -152,10 +152,7 @@ export namespace Moodle {
     if (!token || !url)
       throw new Error.Plugin('Moodle URL or token not configured');
 
-    const rubric = Workbook.open(certified.workbook, true);
-    if (!rubric) throw new Error.Plugin('collector error: no rubric');
-
-    const compound = rubric.assignment.id;
+    const compound = payload.identifier.assignment;
     if (!compound) throw new Error.Plugin('collector error: no assignment ID');
 
     const [course, assignment] = compound.split(':');
@@ -163,20 +160,18 @@ export namespace Moodle {
       throw new Error.Plugin('collector error: invalid assignment ID format');
 
     const request = api(url, token);
-    const { assignee } = certified.identifier;
+    const { assignee } = payload.identifier;
     const enrolled = await enroll(request, course);
     const uid = enrolled.get(assignee);
     if (uid === undefined)
       throw new Error.Plugin(`collector error: no Moodle user for ${assignee}`);
 
-    const notebook = certified.workbook.context.model.sharedModel.toJSON();
-    const content = JSON.stringify(notebook);
-    const file = await Assignment.filename(rubric.assignment.name, assignee);
-    const item = await upload(url, token, content, file);
+    const content = JSON.stringify(payload.notebook);
+    const item = await upload(url, token, content, payload.identifier.file);
     if (!item)
       throw new Error.Plugin(`collector error: upload failed (${assignee})`);
 
-    const { points, possible } = certified.grade.score;
+    const { points, possible } = payload.score;
     const max = await scale(request, course, assignment);
     const grade = possible > 0 ? (points / possible) * max : 0;
     await request(
@@ -196,10 +191,10 @@ export namespace Moodle {
   }
 
   export async function distributor(
-    parameters: Parameters<Correxit.Distributor>[0],
+    payload: Distributor.Payload,
     settings: Settings
-  ): ReturnType<Correxit.Distributor> {
-    const { identifier, notebook, overwrite, resources } = parameters;
+  ): ReturnType<Distributor> {
+    const { identifier, notebook, overwrite, resources } = payload;
     const { token, url: raw } = settings;
     const url = URLExt.normalize(raw);
     if (!token || !url)
@@ -226,13 +221,8 @@ export namespace Moodle {
         .some(({ userid }) => userid === user);
       if (assigned) return false;
     }
-    const metadata = notebook.metadata['correxit'] as Partial<Rubric.Locked>;
-    const { name } = metadata.assignment as Partial<Rubric.Assignment>;
-    const base =
-      (name || `moodle-${course}-${assignment}`).toLocaleLowerCase();
-    const file = await Assignment.filename(base, assignee);
     const content = JSON.stringify(notebook);
-    let draft = await upload(url, token, content, file);
+    let draft = await upload(url, token, content, identifier.file);
     if (resources) {
       for (const resource of resources) {
         draft = await upload(
@@ -258,10 +248,9 @@ export namespace Moodle {
   }
 
   export async function registrar(
-    workbook: Workbook,
-    identifier: Workbook.Identifier,
+    _identifier: Identifier,
     settings: Settings
-  ): ReturnType<Correxit.Registrar> {
+  ): ReturnType<Registrar> {
     const { token, url: raw } = settings;
     const url = URLExt.normalize(raw);
     if (!token || !url) return null;

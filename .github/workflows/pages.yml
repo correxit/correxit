@@ -23,7 +23,7 @@ jobs:
       github.repository == 'correxit/correxit' &&
       !github.event.repository.private &&
       ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-       (github.event_name == 'release' && !github.event.release.prerelease))
+       (github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')))
     runs-on: ubuntu-latest
     permissions:
       actions: read

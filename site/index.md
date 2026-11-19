@@ -10,7 +10,7 @@ Correxit converts a notebook into a gradable workbook. All authoring and
 grading logic runs in the browser, and all workbook data stays in the `.ipynb`
 file. There is no Correxit server.
 
-[Try the JupyterLite demo](demo/notebooks/index.html?path=chinook.ipynb){ .md-button .md-button--primary }
+[Try the JupyterLite demo](demo/lab/index.html?path=chinook.ipynb){ .md-button .md-button--primary }
 [Read the authoring guide](authoring.md){ .md-button }
 
 ```bash
