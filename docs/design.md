@@ -59,15 +59,11 @@ The architecture is divided into three layers:
 
 ## Accessibility
 
-Correxit is built for education. That creates an explicit obligation to be
-approachable by as many people as possible. Accessibility is part of the
-product's integrity.
-
-UI work must preserve durable keyboard flows, explicit labels, visible focus,
-live feedback for changing state, and cues that do not rely on color alone.
-Prefer native controls when they fit. When a custom interaction is necessary,
-its accessible name, focus behavior, and keyboard contract must be treated as
-part of the feature.
+Expose every user action through a documented JupyterLab command. Prefer native
+HTML controls so users can invoke the same command with a keyboard, a pointer,
+or assistive technology. Use semantic markup that exposes each control's name,
+role, and state. Keep keyboard focus visible and present status changes as text
+that screen readers can announce.
 
 **Principle:** _All state mutations and actions flow through commands._ UI
 components are declarative. They render state and execute commands, but never
