@@ -1,3 +1,15 @@
+# 3.0.2
+
+<!-- START GENERATED CHANGELOG: 3.0.2 -->
+
+## What's Changed
+* feat: Documentation updates by @afshin in https://github.com/correxit/correxit/pull/115
+
+
+**Full Changelog**: https://github.com/correxit/correxit/compare/v3.0.1...v3.0.2
+
+<!-- END GENERATED CHANGELOG: 3.0.2 -->
+
 # 3.0.1
 
 <!-- START GENERATED CHANGELOG: 3.0.1 -->
