@@ -6,6 +6,11 @@ import type { Diagnostic, Event, File, Mode } from './run';
 
 export type Cursor = { path: string; cell: string };
 
+/**
+ * One row per notebook path in the displayed Corrector run. Commands update
+ * it from run events and manual review. The Corrector table, Reviewer, and
+ * CSV export read the same row.
+ */
 export type Entry = Readonly<{
   workbook: Scanned;
   grade: Workbook.Grade | null;
@@ -13,6 +18,11 @@ export type Entry = Readonly<{
   error: Diagnostic | null;
 }>;
 
+/**
+ * `checked` counts read attempts. `finished` counts paths that produced a
+ * result, were skipped, or failed. `completed` counts grades (including
+ * reused grades) and collections performed.
+ */
 export type Progress = Readonly<{
   total: number;
   checked: number;
@@ -142,7 +152,10 @@ export function advance(run: string, event: Event) {
   update({ ...snapshot, entries, progress });
 }
 
-/** Review replaces the current result; it never reconciles with an old run. */
+/**
+ * A new run can reopen the same path while a review is saving. Update only
+ * the row that still holds the workbook the reviewer edited.
+ */
 export function record(file: File) {
   const path = file.workbook.context.path;
   const entry = snapshot.entries.get(path);
@@ -153,7 +166,10 @@ export function record(file: File) {
   });
 }
 
-/** Processing contexts become reviewable only after their operation settles. */
+/**
+ * A scan makes each workbook reviewable as soon as it is read. Grading and
+ * collection expose each workbook when its result arrives or the run ends.
+ */
 export function available({ entries, mode, progress }: Snapshot) {
   return Array.from(entries.values()).filter(
     (entry): entry is Entry & { workbook: Workbook.Headless } =>
@@ -175,6 +191,7 @@ export function peek(): Snapshot {
   return snapshot;
 }
 
+/** Read the displayed Corrector session and re-render when it changes. */
 export function useSnapshot(): Snapshot {
   return useSyncExternalStore(callback => {
     listeners.add(callback);
